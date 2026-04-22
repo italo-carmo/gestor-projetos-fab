@@ -33,6 +33,16 @@ const REASON_MESSAGES: Record<string, string> = {
     "Não foi possível identificar sua OM no LDAP para validar o cadastro.",
   CPCA_SELF_REGISTRATION_LDAP_LOCALITY_WITHOUT_CPCA:
     "Sua OM no LDAP ainda não está habilitada com CPCA no sistema.",
+  CPCA_PRESIDENT_BULLETIN_FILE_REQUIRED:
+    "Envie o boletim publicado em PDF, PNG ou JPG antes de enviar a solicitação.",
+  CPCA_PRESIDENT_BULLETIN_MAGIC_INVALID:
+    "O arquivo enviado não corresponde a um PDF, PNG ou JPG autêntico.",
+  CPCA_PRESIDENT_BULLETIN_EXTENSION_MISMATCH:
+    "A extensão do arquivo não corresponde ao conteúdo real do boletim.",
+  CPCA_PRESIDENT_BULLETIN_MIME_MISMATCH:
+    "O tipo do arquivo não corresponde ao conteúdo real do boletim.",
+  CPCA_PRESIDENT_BULLETIN_UNAVAILABLE:
+    "O arquivo da publicação não está mais disponível para visualização.",
   CPCA_PRESIDENT_CANNOT_BE_MEMBER:
     "O presidente da comissão não pode ser adicionado como membro.",
   CPCA_COVERAGE_REQUEST_ALREADY_PENDING:

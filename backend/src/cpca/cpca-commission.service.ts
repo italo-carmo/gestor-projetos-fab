@@ -15,14 +15,28 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   normalizeRoleName,
   ROLE_COMANDANTE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_CIPAVD,
   ROLE_CPCA,
   ROLE_TI,
 } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import {
+  deleteCpcaPresidentBulletinFile,
+  persistCpcaPresidentBulletinFile,
+  resolveExistingCpcaPresidentBulletinPath,
+  type StoredCpcaPresidentBulletinFile,
+  validateCpcaPresidentBulletinUpload,
+} from './cpca-president-bulletin-file';
 
 const ROLE_NAMES_ALLOWED_TO_APPROVE = new Set([
   normalizeRoleName(ROLE_TI),
   normalizeRoleName(ROLE_COMANDANTE_COMGEP),
+]);
+const ROLE_NAMES_ALLOWED_TO_VIEW_APPROVALS = new Set([
+  ...ROLE_NAMES_ALLOWED_TO_APPROVE,
+  normalizeRoleName(ROLE_COORDENACAO_CIPAVD),
+  normalizeRoleName(ROLE_CIPAVD),
 ]);
 const CPCA_APPROVAL_REQUEST_TYPES = [
   'SELF_REGISTRATION',
@@ -63,6 +77,7 @@ export class CpcaCommissionService {
       localityId?: string;
       isSubstitution: boolean;
       bulletinNumber: string;
+      bulletinFile?: Express.Multer.File | null;
     },
     ip?: string | null,
   ) {
@@ -104,6 +119,7 @@ export class CpcaCommissionService {
     const locality = await this.assertOmSupportsCpca(ldapLocality.id);
 
     const user = await this.upsertLdapBackedUser(ldapProfile, ldapLocality.id);
+    const applicantName = ldapProfile.name?.trim() || user.name;
 
     const pendingExisting =
       await this.prisma.cpcaPresidentSelfRegistration.findFirst({
@@ -120,21 +136,44 @@ export class CpcaCommissionService {
       });
     }
 
-    const created = await this.prisma.cpcaPresidentSelfRegistration.create({
-      data: {
-        omId: locality.id,
-        applicantUserId: user.id,
-        applicantIdentifier: identifier,
-        applicantUid: ldapProfile.uid,
-        applicantEmail: ldapProfile.email,
-        applicantName: ldapProfile.name?.trim() || user.name,
-        requestedAsSubstitution: Boolean(payload.isSubstitution),
-        bulletinNumber,
-      },
-      include: {
-        om: { select: { id: true, code: true, name: true } },
-      },
-    });
+    const validatedBulletinFile = validateCpcaPresidentBulletinUpload(
+      payload.bulletinFile,
+    );
+    const storedBulletinFile = persistCpcaPresidentBulletinFile(
+      validatedBulletinFile,
+    );
+
+    let created: {
+      id: string;
+      status: CpcaPresidentRequestStatus;
+      createdAt: Date;
+      om: { id: string; code: string; name: string } | null;
+    };
+    try {
+      created = await this.prisma.cpcaPresidentSelfRegistration.create({
+        data: {
+          omId: locality.id,
+          applicantUserId: user.id,
+          applicantIdentifier: identifier,
+          applicantUid: ldapProfile.uid,
+          applicantEmail: ldapProfile.email,
+          applicantName,
+          requestedAsSubstitution: Boolean(payload.isSubstitution),
+          bulletinNumber,
+          bulletinFileName: storedBulletinFile.fileName,
+          bulletinStorageKey: storedBulletinFile.storageKey,
+          bulletinMimeType: storedBulletinFile.mimeType,
+          bulletinFileSize: storedBulletinFile.fileSize,
+          bulletinChecksum: storedBulletinFile.checksum,
+        },
+        include: {
+          om: { select: { id: true, code: true, name: true } },
+        },
+      });
+    } catch (error) {
+      deleteCpcaPresidentBulletinFile(storedBulletinFile.storageKey);
+      throw error;
+    }
 
     await this.audit.log({
       userId: user.id,
@@ -146,9 +185,13 @@ export class CpcaCommissionService {
         omId: locality.id,
         omCode: locality.code,
         omName: locality.name,
-        applicantName: created.applicantName,
+        applicantName,
         requestedAsSubstitution: Boolean(payload.isSubstitution),
         bulletinNumber,
+        bulletinFileName: storedBulletinFile.fileName,
+        bulletinMimeType: storedBulletinFile.mimeType,
+        bulletinFileSize: storedBulletinFile.fileSize,
+        bulletinChecksum: storedBulletinFile.checksum,
         ip: ip || null,
       },
     });
@@ -563,6 +606,7 @@ export class CpcaCommissionService {
       designationBulletin: this.cleanOptionalText(payload.designationBulletin, {
         maxLength: 220,
       }),
+      designationBulletinFile: null,
       requestId: null,
       assignmentSource: 'DIRECT_ASSIGNMENT',
     });
@@ -721,6 +765,8 @@ export class CpcaCommissionService {
         payload.proceedWithExistingPresident,
       ),
       designationBulletin: request.bulletinNumber,
+      designationBulletinFile:
+        this.extractSelfRegistrationBulletinFile(request),
       requestId: request.id,
       assignmentSource: 'SELF_REGISTRATION_APPROVAL',
     });
@@ -911,7 +957,7 @@ export class CpcaCommissionService {
   }
 
   async listApprovalRequests(user: RbacUser | undefined, statusRaw?: string) {
-    this.assertApproverUser(user);
+    this.assertApprovalViewerUser(user);
     const status = this.normalizeCpcaRequestStatus(statusRaw);
     const where = status ? { status } : undefined;
 
@@ -988,11 +1034,12 @@ export class CpcaCommissionService {
     return {
       items,
       pendingCount: pendingCounts.reduce((sum, value) => sum + value, 0),
+      canDecide: this.isApproverUser(user),
     };
   }
 
   async pendingApprovalRequestsCount(user: RbacUser | undefined) {
-    if (!this.isApproverUser(user)) {
+    if (!this.isApprovalViewerUser(user)) {
       return { pendingCount: 0 };
     }
 
@@ -1091,6 +1138,7 @@ export class CpcaCommissionService {
         payload.proceedWithExistingPresident,
       ),
       designationBulletin: request.bulletinNumber,
+      designationBulletinFile: null,
       requestId: request.id,
       assignmentSource: 'PRESIDENT_NOMINATION_APPROVAL',
     });
@@ -1476,6 +1524,46 @@ export class CpcaCommissionService {
     };
   }
 
+  async getApprovalRequestBulletinFile(
+    requestTypeRaw: string,
+    requestId: string,
+    user: RbacUser | undefined,
+  ) {
+    this.assertApprovalViewerUser(user);
+    const requestType = this.normalizeApprovalRequestType(requestTypeRaw);
+    if (requestType !== 'SELF_REGISTRATION') {
+      throwError('NOT_FOUND');
+    }
+
+    const request = await this.prisma.cpcaPresidentSelfRegistration.findUnique({
+      where: { id: requestId },
+      select: {
+        bulletinFileName: true,
+        bulletinStorageKey: true,
+        bulletinMimeType: true,
+      },
+    });
+    if (!request) {
+      throwError('NOT_FOUND');
+    }
+
+    const storageKey = String(request.bulletinStorageKey ?? '').trim();
+    const mimeType = String(request.bulletinMimeType ?? '').trim();
+    const fileName = String(request.bulletinFileName ?? '').trim();
+    const filePath = resolveExistingCpcaPresidentBulletinPath(storageKey);
+    if (!storageKey || !mimeType || !filePath) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_PRESIDENT_BULLETIN_UNAVAILABLE',
+      });
+    }
+
+    return {
+      filePath,
+      mimeType,
+      fileName: fileName || 'publicacao-cpca',
+    };
+  }
+
   private async assignPresidentToLocality(input: {
     localityId: string;
     targetUserId: string;
@@ -1483,6 +1571,7 @@ export class CpcaCommissionService {
     isSubstitution: boolean;
     proceedWithExistingPresident: boolean;
     designationBulletin: string | null;
+    designationBulletinFile: StoredCpcaPresidentBulletinFile | null;
     requestId: string | null;
     assignmentSource: CpcaCommissionPresidentAssignmentSource;
   }) {
@@ -1533,6 +1622,11 @@ export class CpcaCommissionService {
 
     await this.grantCpcaRole(input.targetUserId, input.localityId);
 
+    const previousStorageKey =
+      String(existing?.designationBulletinStorageKey ?? '').trim() || null;
+    const nextStorageKey =
+      input.designationBulletinFile?.storageKey?.trim() || null;
+
     const assigned = await this.prisma.cpcaCommissionPresident.upsert({
       where: { omId: input.localityId },
       update: {
@@ -1540,6 +1634,15 @@ export class CpcaCommissionService {
         assignedByUserId: input.actorUserId,
         assignmentSource: input.assignmentSource,
         designationBulletin: input.designationBulletin,
+        designationBulletinFileName:
+          input.designationBulletinFile?.fileName ?? null,
+        designationBulletinStorageKey: nextStorageKey,
+        designationBulletinMimeType:
+          input.designationBulletinFile?.mimeType ?? null,
+        designationBulletinFileSize:
+          input.designationBulletinFile?.fileSize ?? null,
+        designationBulletinChecksum:
+          input.designationBulletinFile?.checksum ?? null,
         isSubstitution: Boolean(input.isSubstitution),
         assignedAt: new Date(),
       },
@@ -1549,6 +1652,15 @@ export class CpcaCommissionService {
         assignedByUserId: input.actorUserId,
         assignmentSource: input.assignmentSource,
         designationBulletin: input.designationBulletin,
+        designationBulletinFileName:
+          input.designationBulletinFile?.fileName ?? null,
+        designationBulletinStorageKey: nextStorageKey,
+        designationBulletinMimeType:
+          input.designationBulletinFile?.mimeType ?? null,
+        designationBulletinFileSize:
+          input.designationBulletinFile?.fileSize ?? null,
+        designationBulletinChecksum:
+          input.designationBulletinFile?.checksum ?? null,
         isSubstitution: Boolean(input.isSubstitution),
       },
       include: {
@@ -1567,6 +1679,19 @@ export class CpcaCommissionService {
         },
       },
     });
+
+    if (previousStorageKey && previousStorageKey !== nextStorageKey) {
+      await this.prisma.cpcaPresidentSelfRegistration.updateMany({
+        where: { bulletinStorageKey: previousStorageKey },
+        data: {
+          bulletinStorageKey: null,
+          bulletinMimeType: null,
+          bulletinFileSize: null,
+          bulletinChecksum: null,
+        },
+      });
+      deleteCpcaPresidentBulletinFile(previousStorageKey);
+    }
 
     await this.prisma.cpcaCommissionMember.deleteMany({
       where: {
@@ -1597,6 +1722,9 @@ export class CpcaCommissionService {
             : null,
         isSubstitution: Boolean(input.isSubstitution),
         designationBulletin: input.designationBulletin,
+        designationBulletinFileName:
+          input.designationBulletinFile?.fileName ?? null,
+        designationBulletinStorageKey: nextStorageKey,
       },
     });
 
@@ -1952,13 +2080,24 @@ export class CpcaCommissionService {
   }
 
   private isApproverUser(user: RbacUser | undefined) {
+    return this.userHasAnyRole(user, ROLE_NAMES_ALLOWED_TO_APPROVE);
+  }
+
+  private isApprovalViewerUser(user: RbacUser | undefined) {
+    return this.userHasAnyRole(user, ROLE_NAMES_ALLOWED_TO_VIEW_APPROVALS);
+  }
+
+  private userHasAnyRole(
+    user: RbacUser | undefined,
+    allowedRoles: Set<string>,
+  ) {
     const normalizedRoleNames = new Set(
       [...(user?.roles ?? []), ...(user?.allRoles ?? [])].map((role) =>
         normalizeRoleName(role.name),
       ),
     );
 
-    for (const roleName of ROLE_NAMES_ALLOWED_TO_APPROVE) {
+    for (const roleName of allowedRoles) {
       if (normalizedRoleNames.has(roleName)) {
         return true;
       }
@@ -1969,6 +2108,12 @@ export class CpcaCommissionService {
 
   private assertApproverUser(user: RbacUser | undefined) {
     if (!this.isApproverUser(user)) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
+
+  private assertApprovalViewerUser(user: RbacUser | undefined) {
+    if (!this.isApprovalViewerUser(user)) {
       throwError('RBAC_FORBIDDEN');
     }
   }
@@ -2136,6 +2281,8 @@ export class CpcaCommissionService {
         return 'Membro adicionado';
       case 'cpca_commission_member_remove':
         return 'Membro removido';
+      case 'cpca_commission_checklist_update':
+        return 'Checklist atualizado';
       case 'cpca_commission_coverage_request_create':
         return 'Solicitação de cobertura criada';
       case 'cpca_commission_coverage_request_approve':
@@ -2162,6 +2309,8 @@ export class CpcaCommissionService {
     ).trim();
     const replacedUserId = String(diffJson?.replacedUserId ?? '').trim();
     const memberUserId = String(diffJson?.memberUserId ?? '').trim();
+    const completedCount = Number(diffJson?.completedCount ?? 0);
+    const pendingCount = Number(diffJson?.pendingCount ?? 0);
     const managedLocalityIds = Array.isArray(diffJson?.managedLocalityIds)
       ? diffJson.managedLocalityIds
       : [];
@@ -2195,6 +2344,8 @@ export class CpcaCommissionService {
           : memberUserId
             ? `Membro removido da comissão.`
             : 'Membro removido da comissão.';
+      case 'cpca_commission_checklist_update':
+        return `Checklist atualizado: ${completedCount} concluídos e ${pendingCount} pendentes.`;
       case 'cpca_commission_coverage_request_create':
         return `Cobertura proposta para ${managedLocalityIds.length} OM(s).`;
       case 'cpca_commission_coverage_request_approve':
@@ -2306,6 +2457,11 @@ export class CpcaCommissionService {
     applicantName: string;
     requestedAsSubstitution: boolean;
     bulletinNumber: string;
+    bulletinFileName?: string | null;
+    bulletinStorageKey?: string | null;
+    bulletinMimeType?: string | null;
+    bulletinFileSize?: number | null;
+    bulletinChecksum?: string | null;
     createdAt: Date;
     decidedAt?: Date | null;
     decisionNotes?: string | null;
@@ -2332,9 +2488,72 @@ export class CpcaCommissionService {
         email: request.applicantEmail ?? request.applicantUser.email,
         ldapUid: request.applicantUid || request.applicantUser.ldapUid,
       },
+      applicantIdentifier: request.applicantIdentifier,
+      applicantUid: request.applicantUid,
       requestedAsSubstitution: request.requestedAsSubstitution,
       bulletinNumber: request.bulletinNumber,
+      bulletinFile: this.serializeBulletinFile({
+        fileName: request.bulletinFileName,
+        storageKey: request.bulletinStorageKey,
+        mimeType: request.bulletinMimeType,
+        fileSize: request.bulletinFileSize,
+        checksum: request.bulletinChecksum,
+      }),
       decidedByUser: request.decidedByUser ?? null,
+    };
+  }
+
+  private extractSelfRegistrationBulletinFile(request: {
+    bulletinFileName?: string | null;
+    bulletinStorageKey?: string | null;
+    bulletinMimeType?: string | null;
+    bulletinFileSize?: number | null;
+    bulletinChecksum?: string | null;
+  }): StoredCpcaPresidentBulletinFile | null {
+    const storageKey = String(request.bulletinStorageKey ?? '').trim();
+    const mimeType = String(request.bulletinMimeType ?? '').trim();
+    const fileName = String(request.bulletinFileName ?? '').trim();
+    const fileSize =
+      typeof request.bulletinFileSize === 'number'
+        ? request.bulletinFileSize
+        : Number(request.bulletinFileSize ?? 0);
+    const checksum = String(request.bulletinChecksum ?? '').trim();
+    if (!storageKey || !mimeType || !fileName || !checksum || fileSize <= 0) {
+      return null;
+    }
+    return {
+      fileName,
+      storageKey,
+      mimeType,
+      fileSize,
+      checksum,
+    };
+  }
+
+  private serializeBulletinFile(input: {
+    fileName?: string | null;
+    storageKey?: string | null;
+    mimeType?: string | null;
+    fileSize?: number | null;
+    checksum?: string | null;
+  }) {
+    const storageKey = String(input.storageKey ?? '').trim();
+    const mimeType = String(input.mimeType ?? '').trim();
+    const fileName = String(input.fileName ?? '').trim();
+    const fileSize =
+      typeof input.fileSize === 'number'
+        ? input.fileSize
+        : Number(input.fileSize ?? 0);
+    const checksum = String(input.checksum ?? '').trim();
+    if (!storageKey || !mimeType || !fileName || fileSize <= 0) {
+      return null;
+    }
+    return {
+      fileName,
+      mimeType,
+      fileSize,
+      checksum: checksum || null,
+      available: Boolean(resolveExistingCpcaPresidentBulletinPath(storageKey)),
     };
   }
 

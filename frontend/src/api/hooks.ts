@@ -3304,6 +3304,47 @@ export function useCreateCpcaCaseCipavdThread() {
   });
 }
 
+export function useUpdateCpcaCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string; text: string }) =>
+      (
+        await api.put(
+          `/cpca-cases/${args.id}/cipavd-threads/${args.threadId}`,
+          {
+            text: args.text,
+          },
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useRemoveCpcaCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string }) =>
+      (
+        await api.delete(
+          `/cpca-cases/${args.id}/cipavd-threads/${args.threadId}`,
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
 export function useResolveCpcaCaseCipavdThread() {
   const qc = useQueryClient();
   return useMutation({
@@ -3347,10 +3388,11 @@ export function useReopenCpcaCaseCipavdThread() {
 export function useFinalizeCpcaCaseCipavdThread() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { id: string; threadId: string }) =>
+    mutationFn: async (args: { id: string; threadId: string; text: string }) =>
       (
         await api.post(
           `/cpca-cases/${args.id}/cipavd-threads/${args.threadId}/finalize`,
+          { text: args.text },
         )
       ).data,
     onSuccess: (_data, args) => {
@@ -3415,6 +3457,12 @@ export function useUpdateCpcaChecklist() {
         completedAt?: string | null;
         details?: string | null;
         speakerName?: string | null;
+        historyEntries?: Array<{
+          id?: string | null;
+          completedAt: string;
+          details?: string | null;
+          speakerName?: string | null;
+        }>;
       }>;
     }) => (await api.put("/cpca-checklist/locality", payload)).data,
     onSuccess: (_data, payload) => {
@@ -3655,7 +3703,20 @@ export function useCreateCpcaPresidentSelfRegistration() {
       localityId: string;
       isSubstitution: boolean;
       bulletinNumber: string;
-    }) => (await api.post("/cpca-commission/self-registration", payload)).data,
+      bulletinFile: File;
+    }) => {
+      const formData = new FormData();
+      formData.set("identifier", payload.identifier);
+      formData.set("localityId", payload.localityId);
+      formData.set("isSubstitution", String(payload.isSubstitution));
+      formData.set("bulletinNumber", payload.bulletinNumber);
+      formData.set("bulletinFile", payload.bulletinFile);
+      return (
+        await api.post("/cpca-commission/self-registration", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data;
+    },
   });
 }
 
@@ -3773,6 +3834,45 @@ export function useCreateSmifComplaintCaseCipavdThread() {
   });
 }
 
+export function useUpdateSmifComplaintCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string; text: string }) =>
+      (
+        await api.put(
+          `/smif-complaints/${args.id}/cipavd-threads/${args.threadId}`,
+          { text: args.text },
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["smifComplaintPendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useRemoveSmifComplaintCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string }) =>
+      (
+        await api.delete(
+          `/smif-complaints/${args.id}/cipavd-threads/${args.threadId}`,
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["smifComplaintPendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
 export function useResolveSmifComplaintCaseCipavdThread() {
   const qc = useQueryClient();
   return useMutation({
@@ -3816,10 +3916,11 @@ export function useReopenSmifComplaintCaseCipavdThread() {
 export function useFinalizeSmifComplaintCaseCipavdThread() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { id: string; threadId: string }) =>
+    mutationFn: async (args: { id: string; threadId: string; text: string }) =>
       (
         await api.post(
           `/smif-complaints/${args.id}/cipavd-threads/${args.threadId}/finalize`,
+          { text: args.text },
         )
       ).data,
     onSuccess: (_data, args) => {

@@ -1,9 +1,22 @@
 import { CpcaCommissionService } from './cpca-commission.service';
 import { HttpException } from '@nestjs/common';
 import { resolveBestOmByFabOm } from '../catalog/om-resolver';
+import {
+  deleteCpcaPresidentBulletinFile,
+  persistCpcaPresidentBulletinFile,
+  validateCpcaPresidentBulletinUpload,
+} from './cpca-president-bulletin-file';
 
 jest.mock('../catalog/om-resolver', () => ({
   resolveBestOmByFabOm: jest.fn(),
+}));
+jest.mock('./cpca-president-bulletin-file', () => ({
+  validateCpcaPresidentBulletinUpload: jest.fn(),
+  persistCpcaPresidentBulletinFile: jest.fn(),
+  deleteCpcaPresidentBulletinFile: jest.fn(),
+  resolveExistingCpcaPresidentBulletinPath: jest.fn(
+    () => '/tmp/publicacao.pdf',
+  ),
 }));
 
 function createPrismaMock() {
@@ -32,6 +45,7 @@ function createPrismaMock() {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
       count: jest.fn(),
     },
     cpcaPresidentNominationRequest: {
@@ -156,6 +170,22 @@ describe('CpcaCommissionService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (validateCpcaPresidentBulletinUpload as jest.Mock).mockReturnValue({
+      fileName: 'boletim-publicacao.pdf',
+      storageKey: 'bulletin-1.pdf',
+      mimeType: 'application/pdf',
+      fileSize: 1024,
+      checksum: 'checksum-1',
+      buffer: Buffer.from('%PDF-1.4'),
+    });
+    (persistCpcaPresidentBulletinFile as jest.Mock).mockReturnValue({
+      fileName: 'boletim-publicacao.pdf',
+      storageKey: 'bulletin-1.pdf',
+      mimeType: 'application/pdf',
+      fileSize: 1024,
+      checksum: 'checksum-1',
+    });
+    (deleteCpcaPresidentBulletinFile as jest.Mock).mockReturnValue(true);
   });
 
   it('permite autoinscrição de presidente usando a OM resolvida do LDAP mesmo com presidente já existente', async () => {
@@ -199,13 +229,25 @@ describe('CpcaCommissionService', () => {
         identifier: 'presidente@fab.mil.br',
         isSubstitution: false,
         bulletinNumber: 'BOL 001',
+        bulletinFile: {
+          originalname: 'boletim-publicacao.pdf',
+          mimetype: 'application/pdf',
+          size: 1024,
+          buffer: Buffer.from('%PDF-1.4'),
+        } as any,
       },
       '127.0.0.1',
     );
 
+    expect(validateCpcaPresidentBulletinUpload).toHaveBeenCalled();
+    expect(persistCpcaPresidentBulletinFile).toHaveBeenCalled();
     expect(prisma.cpcaPresidentSelfRegistration.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ omId: om.id }),
+        data: expect.objectContaining({
+          omId: om.id,
+          bulletinFileName: 'boletim-publicacao.pdf',
+          bulletinStorageKey: 'bulletin-1.pdf',
+        }),
       }),
     );
     expect(result.request.locality).toEqual(om);
@@ -259,6 +301,129 @@ describe('CpcaCommissionService', () => {
         makeUser({ id: 'approver', roles: ['COMGEP'] }) as any,
       ),
       'CPCA_LOCALITY_ALREADY_HAS_PRESIDENT',
+    );
+  });
+
+  it('remove o arquivo de publicação anterior quando um novo presidente substitui o registro atual', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+
+    prisma.cpcaPresidentSelfRegistration.findUnique.mockResolvedValue({
+      id: 'req-approve-2',
+      status: 'PENDING',
+      omId: om.id,
+      requestedAsSubstitution: true,
+      bulletinNumber: 'BOL 020',
+      bulletinFileName: 'novo-boletim.pdf',
+      bulletinStorageKey: 'new-storage.pdf',
+      bulletinMimeType: 'application/pdf',
+      bulletinFileSize: 2048,
+      bulletinChecksum: 'checksum-new',
+      applicantUserId: 'user-target',
+      om,
+      applicantUser: {
+        id: 'user-target',
+        name: 'Maj Novo',
+        email: 'novo@fab.mil.br',
+        ldapUid: 'uid-novo',
+        omId: om.id,
+        localityId: om.id,
+      },
+    });
+    prisma.om.findUnique.mockResolvedValue(om);
+    prisma.cpcaCommissionPresident.findUnique.mockResolvedValue({
+      id: 'current-president',
+      userId: 'user-current',
+      designationBulletinStorageKey: 'old-storage.pdf',
+      user: {
+        id: 'user-current',
+        name: 'Cel Atual',
+        email: 'atual@fab.mil.br',
+        ldapUid: 'uid-atual',
+        omId: om.id,
+        localityId: om.id,
+      },
+    });
+    prisma.role.findMany.mockResolvedValue([{ id: 'role-cpca', name: 'CPCA' }]);
+    prisma.user.update.mockResolvedValue({
+      id: 'user-target',
+      name: 'Maj Novo',
+      email: 'novo@fab.mil.br',
+      ldapUid: 'uid-novo',
+      omId: om.id,
+      localityId: om.id,
+    });
+    prisma.userRole.createMany.mockResolvedValue({ count: 1 });
+    prisma.userRole.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.cpcaCommissionMember.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.cpcaCommissionPresident.upsert.mockResolvedValue({
+      id: 'president-1',
+      user: {
+        id: 'user-target',
+        name: 'Maj Novo',
+        email: 'novo@fab.mil.br',
+        ldapUid: 'uid-novo',
+        omId: om.id,
+        localityId: om.id,
+      },
+      assignedByUser: {
+        id: 'approver',
+        name: 'Aprovador',
+        email: 'approver@fab.mil.br',
+      },
+    });
+    prisma.cpcaPresidentSelfRegistration.updateMany.mockResolvedValue({
+      count: 1,
+    });
+    prisma.cpcaPresidentSelfRegistration.update.mockResolvedValue({
+      id: 'req-approve-2',
+      status: 'APPROVED',
+      om,
+      applicantUser: {
+        id: 'user-target',
+        name: 'Maj Novo',
+        email: 'novo@fab.mil.br',
+        ldapUid: 'uid-novo',
+      },
+      decidedByUser: {
+        id: 'approver',
+        name: 'Aprovador',
+        email: 'approver@fab.mil.br',
+      },
+    });
+
+    await service.approvePresidentRequest(
+      'req-approve-2',
+      { proceedWithExistingPresident: true },
+      makeUser({ id: 'approver', roles: ['COMGEP'] }) as any,
+    );
+
+    expect(prisma.cpcaCommissionPresident.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          designationBulletinStorageKey: 'new-storage.pdf',
+        }),
+      }),
+    );
+    expect(
+      prisma.cpcaPresidentSelfRegistration.updateMany,
+    ).toHaveBeenCalledWith({
+      where: { bulletinStorageKey: 'old-storage.pdf' },
+      data: {
+        bulletinStorageKey: null,
+        bulletinMimeType: null,
+        bulletinFileSize: null,
+        bulletinChecksum: null,
+      },
+    });
+    expect(deleteCpcaPresidentBulletinFile).toHaveBeenCalledWith(
+      'old-storage.pdf',
     );
   });
 

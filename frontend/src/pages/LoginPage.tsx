@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -16,6 +17,10 @@ import {
 } from "@mui/material";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
+import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
+import ImageRoundedIcon from "@mui/icons-material/ImageRounded";
+import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../app/toast";
@@ -28,6 +33,12 @@ import {
   useLookupCpcaSelfRegistrationCandidate,
   useVerifyTwoFactor,
 } from "../api/hooks";
+import {
+  CPCA_PRESIDENT_BULLETIN_ACCEPT,
+  formatCpcaPresidentBulletinFileSize,
+  type CpcaPresidentBulletinValidationResult,
+  validateCpcaPresidentBulletinFile,
+} from "../features/cpcaPresidentBulletinFile";
 
 type TwoFactorState = {
   twoFactorToken: string;
@@ -56,6 +67,11 @@ type CpcaSelfRegistrationLookupPreview = {
     hasCpca: boolean;
   } | null;
 };
+
+type ValidCpcaPresidentBulletin = Extract<
+  CpcaPresidentBulletinValidationResult,
+  { ok: true }
+>;
 
 function formatOmLabel(
   code: string | null | undefined,
@@ -88,6 +104,12 @@ export function LoginPage() {
   const [cpcaBulletinNumber, setCpcaBulletinNumber] = useState("");
   const [cpcaLookupPreview, setCpcaLookupPreview] =
     useState<CpcaSelfRegistrationLookupPreview | null>(null);
+  const [cpcaBulletinFile, setCpcaBulletinFile] = useState<File | null>(null);
+  const [cpcaBulletinFileValidation, setCpcaBulletinFileValidation] =
+    useState<ValidCpcaPresidentBulletin | null>(null);
+  const [cpcaBulletinFileError, setCpcaBulletinFileError] = useState("");
+  const [cpcaBulletinFileIsValidating, setCpcaBulletinFileIsValidating] =
+    useState(false);
   const loginMutation = useLogin();
   const verifyMutation = useVerifyTwoFactor();
   const cpcaSelfRegistrationLookupMutation =
@@ -213,6 +235,36 @@ export function LoginPage() {
     setCpcaIsSubstitution(false);
     setCpcaBulletinNumber("");
     setCpcaLookupPreview(null);
+    setCpcaBulletinFile(null);
+    setCpcaBulletinFileValidation(null);
+    setCpcaBulletinFileError("");
+    setCpcaBulletinFileIsValidating(false);
+  };
+
+  const handleCpcaBulletinFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const selectedFile = event.target.files?.[0] ?? null;
+    event.target.value = "";
+
+    setCpcaBulletinFile(null);
+    setCpcaBulletinFileValidation(null);
+    setCpcaBulletinFileError("");
+
+    if (!selectedFile) return;
+
+    setCpcaBulletinFileIsValidating(true);
+    try {
+      const validation = await validateCpcaPresidentBulletinFile(selectedFile);
+      if (!validation.ok) {
+        setCpcaBulletinFileError(validation.message);
+        return;
+      }
+      setCpcaBulletinFile(selectedFile);
+      setCpcaBulletinFileValidation(validation);
+    } finally {
+      setCpcaBulletinFileIsValidating(false);
+    }
   };
 
   const handleLookupCpcaSelfRegistrationCandidate = async () => {
@@ -282,6 +334,22 @@ export function LoginPage() {
       });
       return;
     }
+    if (!cpcaBulletinFile || !cpcaBulletinFileValidation) {
+      toast.push({
+        message:
+          cpcaBulletinFileError ||
+          "Anexe o boletim publicado em PDF, PNG ou JPG antes de enviar a solicitação.",
+        severity: "warning",
+      });
+      return;
+    }
+    if (cpcaBulletinFileIsValidating) {
+      toast.push({
+        message: "Aguarde a validação do arquivo do boletim.",
+        severity: "info",
+      });
+      return;
+    }
     if (
       !cpcaLookupPreview ||
       cpcaLookupPreview.identifier.toLowerCase() !== identifier.toLowerCase()
@@ -299,6 +367,7 @@ export function LoginPage() {
         localityId,
         isSubstitution: cpcaIsSubstitution,
         bulletinNumber,
+        bulletinFile: cpcaBulletinFile,
       });
       toast.push({
         message: "Solicitação enviada para homologação da COMGEP.",
@@ -627,7 +696,7 @@ export function LoginPage() {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
             Este fluxo é para o militar que deseja se cadastrar como presidente
             da comissão CPCA da sua OM. A solicitação ficará pendente até
-            homologação por usuário TI ou COMGEP.
+            homologação pela gestão nacional.
           </Typography>
           <Stack spacing={1.2}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
@@ -725,6 +794,123 @@ export function LoginPage() {
               onChange={(event) => setCpcaBulletinNumber(event.target.value)}
               fullWidth
             />
+            <Box
+              sx={{
+                border: "1px dashed",
+                borderColor: cpcaBulletinFileError
+                  ? "error.main"
+                  : cpcaBulletinFile
+                    ? "success.main"
+                    : "divider",
+                borderRadius: 2,
+                px: 1.5,
+                py: 1.4,
+                bgcolor: cpcaBulletinFile
+                  ? "rgba(46, 125, 50, 0.06)"
+                  : "background.paper",
+              }}
+            >
+              <Stack spacing={1.1}>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={1}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", sm: "center" }}
+                >
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={700}>
+                      Publicação do boletim
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Envie a imagem ou PDF do boletim que publicou a comissão
+                      com o seu nome. Tipos aceitos: PDF, PNG e JPG. Limite de
+                      10 MB.
+                    </Typography>
+                  </Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    size="small"
+                    startIcon={<UploadFileRoundedIcon />}
+                    disabled={cpcaBulletinFileIsValidating}
+                  >
+                    {cpcaBulletinFile ? "Trocar arquivo" : "Selecionar arquivo"}
+                    <input
+                      hidden
+                      type="file"
+                      accept={CPCA_PRESIDENT_BULLETIN_ACCEPT}
+                      onChange={(event) => {
+                        void handleCpcaBulletinFileChange(event);
+                      }}
+                    />
+                  </Button>
+                </Stack>
+
+                {cpcaBulletinFileIsValidating ? (
+                  <Alert severity="info">
+                    Validando assinatura e tipo real do arquivo...
+                  </Alert>
+                ) : null}
+
+                {cpcaBulletinFile ? (
+                  <Alert
+                    severity="success"
+                    action={
+                      <Button
+                        size="small"
+                        color="inherit"
+                        startIcon={<DeleteOutlineRoundedIcon />}
+                        onClick={() => {
+                          setCpcaBulletinFile(null);
+                          setCpcaBulletinFileValidation(null);
+                          setCpcaBulletinFileError("");
+                        }}
+                      >
+                        Remover
+                      </Button>
+                    }
+                  >
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1}
+                      alignItems={{ xs: "flex-start", sm: "center" }}
+                    >
+                      <Stack direction="row" spacing={0.8} alignItems="center">
+                        {cpcaBulletinFileValidation?.kind === "pdf" ? (
+                          <PictureAsPdfRoundedIcon fontSize="small" />
+                        ) : (
+                          <ImageRoundedIcon fontSize="small" />
+                        )}
+                        <Typography variant="body2" fontWeight={600}>
+                          {cpcaBulletinFile.name}
+                        </Typography>
+                      </Stack>
+                      <Chip
+                        size="small"
+                        label={formatCpcaPresidentBulletinFileSize(
+                          cpcaBulletinFile.size,
+                        )}
+                        variant="outlined"
+                      />
+                      <Chip
+                        size="small"
+                        label={
+                          cpcaBulletinFileValidation?.kind === "pdf"
+                            ? "PDF validado"
+                            : "Imagem validada"
+                        }
+                        color="success"
+                        variant="outlined"
+                      />
+                    </Stack>
+                  </Alert>
+                ) : null}
+
+                {cpcaBulletinFileError ? (
+                  <Alert severity="error">{cpcaBulletinFileError}</Alert>
+                ) : null}
+              </Stack>
+            </Box>
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -740,7 +926,12 @@ export function LoginPage() {
           <Button
             variant="contained"
             onClick={handleSubmitCpcaSelfRegistration}
-            disabled={cpcaSelfRegistrationMutation.isPending}
+            disabled={
+              cpcaSelfRegistrationMutation.isPending ||
+              cpcaBulletinFileIsValidating ||
+              !cpcaBulletinFile ||
+              !cpcaBulletinFileValidation
+            }
           >
             {cpcaSelfRegistrationMutation.isPending
               ? "Enviando..."

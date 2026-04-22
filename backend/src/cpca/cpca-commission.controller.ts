@@ -8,16 +8,24 @@ import {
   Put,
   Query,
   Req,
+  Res,
+  UploadedFile,
+  UseFilters,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import type { RbacUser } from '../rbac/rbac.types';
+import { MulterExceptionFilter } from '../reports/multer-exception.filter';
 import { CpcaCommissionService } from './cpca-commission.service';
+import { CPCA_PRESIDENT_BULLETIN_MAX_SIZE_BYTES } from './cpca-president-bulletin-file';
 import { ApproveCpcaPresidentRequestDto } from './dto/approve-cpca-president-request.dto';
 import { CreateCpcaCommissionMemberDto } from './dto/create-cpca-commission-member.dto';
 import { CreateCpcaPresidentNominationRequestDto } from './dto/create-cpca-president-nomination-request.dto';
@@ -39,8 +47,16 @@ export class CpcaCommissionController {
   @Post('self-registration')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 8, ttl: 60_000 } })
+  @UseFilters(MulterExceptionFilter)
+  @UseInterceptors(
+    FileInterceptor('bulletinFile', {
+      storage: memoryStorage(),
+      limits: { fileSize: CPCA_PRESIDENT_BULLETIN_MAX_SIZE_BYTES },
+    }),
+  )
   createSelfRegistration(
     @Body() dto: CreateCpcaPresidentSelfRegistrationDto,
+    @UploadedFile() bulletinFile: Express.Multer.File | undefined,
     @Req() req: Request,
   ) {
     return this.cpcaCommission.createSelfRegistration(
@@ -49,6 +65,7 @@ export class CpcaCommissionController {
         localityId: dto.localityId,
         isSubstitution: dto.isSubstitution,
         bulletinNumber: dto.bulletinNumber,
+        bulletinFile,
       },
       req.ip,
     );
@@ -166,6 +183,30 @@ export class CpcaCommissionController {
   @RequirePermission('cpca_cases', 'view')
   pendingApprovalRequestsCount(@CurrentUser() user: RbacUser) {
     return this.cpcaCommission.pendingApprovalRequestsCount(user);
+  }
+
+  @Get('approval-requests/:type/:id/bulletin-file')
+  @UseGuards(JwtAuthGuard, RbacGuard)
+  @RequirePermission('cpca_cases', 'view')
+  async downloadApprovalRequestBulletinFile(
+    @Param('type') type: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RbacUser,
+    @Res() res: Response,
+  ) {
+    const file = await this.cpcaCommission.getApprovalRequestBulletinFile(
+      type,
+      id,
+      user,
+    );
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${file.fileName.replace(/"/g, '')}"`,
+    );
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.sendFile(file.filePath);
   }
 
   @Get('president-requests/pending-count')

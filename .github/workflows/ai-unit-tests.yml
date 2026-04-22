@@ -6,18 +6,20 @@ on:
       - main
       - master
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - '.github/workflows/ai-unit-tests.yml'
-      - 'package.json'
-      - 'package-lock.json'
+      - "backend/**"
+      - "frontend/**"
+      - "ERROR_CODES.json"
+      - ".github/workflows/ai-unit-tests.yml"
+      - "package.json"
+      - "package-lock.json"
   pull_request:
     paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - '.github/workflows/ai-unit-tests.yml'
-      - 'package.json'
-      - 'package-lock.json'
+      - "backend/**"
+      - "frontend/**"
+      - "ERROR_CODES.json"
+      - ".github/workflows/ai-unit-tests.yml"
+      - "package.json"
+      - "package-lock.json"
 
 jobs:
   backend-ai-unit-tests:

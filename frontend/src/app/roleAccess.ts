@@ -112,7 +112,13 @@ export function resolveHomePath(user: MePayload | undefined) {
     can(user, "cpca_checklist", "view") &&
     hasAnyRole(user, [ROLE_TI, ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD]);
   const canSeeCpcaPresidentApprovals =
-    canSeeCpcaCases && hasAnyRole(user, [ROLE_TI, ROLE_COMGEP]);
+    canSeeCpcaCases &&
+    hasAnyRole(user, [
+      ROLE_TI,
+      ROLE_COMGEP,
+      ROLE_COORDENACAO_CIPAVD,
+      ROLE_CIPAVD,
+    ]);
   const canSeeAdminRbac =
     can(user, "users", "view") ||
     can(user, "roles", "view") ||

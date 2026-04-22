@@ -82,6 +82,7 @@ model User {
   cpcaCommissionMemberships               CpcaCommissionMember[]           @relation("CpcaCommissionMemberUser")
   cpcaCommissionMembershipsAdded          CpcaCommissionMember[]           @relation("CpcaCommissionMemberAddedBy")
   cpcaChecklistUpdates                    CpcaChecklistItem[]              @relation("CpcaChecklistUpdatedBy")
+  cpcaChecklistHistoryEntriesCreated      CpcaChecklistHistoryEntry[]      @relation("CpcaChecklistHistoryCreatedBy")
   cpcaPresidentRequests                   CpcaPresidentSelfRegistration[]  @relation("CpcaPresidentSelfRegistrationApplicant")
   cpcaPresidentRequestDecisions           CpcaPresidentSelfRegistration[]  @relation("CpcaPresidentSelfRegistrationDecidedBy")
   cpcaPresidentNominationRequestsCreated  CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationRequester")
@@ -113,6 +114,7 @@ model Om {
   cpcaCommissionPresident         CpcaCommissionPresident?
   cpcaCommissionMembers           CpcaCommissionMember[]
   cpcaChecklistItems              CpcaChecklistItem[]
+  cpcaChecklistHistoryEntries     CpcaChecklistHistoryEntry[]
   cpcaPresidentRequests           CpcaPresidentSelfRegistration[]
   cpcaPresidentNominationRequests CpcaPresidentNominationRequest[]
   cpcaCoverageRequests            CpcaCommissionCoverageRequest[]
@@ -1494,6 +1496,11 @@ model CpcaCommissionPresident {
   assignedByUserId    String?
   assignmentSource    CpcaCommissionPresidentAssignmentSource @default(DIRECT_ASSIGNMENT)
   designationBulletin String?
+  designationBulletinFileName    String?
+  designationBulletinStorageKey  String?
+  designationBulletinMimeType    String?
+  designationBulletinFileSize    Int?
+  designationBulletinChecksum    String?
   isSubstitution      Boolean                                 @default(false)
   assignedAt          DateTime                                @default(now())
   createdAt           DateTime                                @default(now())
@@ -1547,6 +1554,25 @@ model CpcaChecklistItem {
   @@index([itemKey])
 }
 
+model CpcaChecklistHistoryEntry {
+  id              String    @id @default(cuid())
+  omId            String
+  itemKey         String
+  completedAt     DateTime
+  details         String?
+  speakerName     String?
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  om            Om    @relation(fields: [omId], references: [id], onDelete: Cascade)
+  createdByUser User? @relation("CpcaChecklistHistoryCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([omId, itemKey, completedAt])
+  @@index([createdByUserId])
+  @@index([itemKey, completedAt])
+}
+
 model CpcaPresidentSelfRegistration {
   id                      String                     @id @default(cuid())
   omId                    String?
@@ -1557,6 +1583,11 @@ model CpcaPresidentSelfRegistration {
   applicantName           String
   requestedAsSubstitution Boolean                    @default(false)
   bulletinNumber          String
+  bulletinFileName        String?
+  bulletinStorageKey      String?
+  bulletinMimeType        String?
+  bulletinFileSize        Int?
+  bulletinChecksum        String?
   status                  CpcaPresidentRequestStatus @default(PENDING)
   decidedByUserId         String?
   decidedAt               DateTime?
