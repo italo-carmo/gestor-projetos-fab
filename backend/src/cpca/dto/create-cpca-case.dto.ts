@@ -187,6 +187,10 @@ export class CreateCpcaCaseDto {
   @IsISO8601()
   incidentDate?: string;
 
+  @IsOptional()
+  @IsISO8601()
+  reportedAt?: string;
+
   @IsString()
   @MaxLength(120)
   aggressorRank: string;

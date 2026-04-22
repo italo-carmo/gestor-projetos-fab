@@ -59,6 +59,10 @@ export class UpdateCpcaCaseDto {
   incidentDate?: string;
 
   @IsOptional()
+  @IsISO8601()
+  reportedAt?: string;
+
+  @IsOptional()
   @IsString()
   @MaxLength(120)
   aggressorRank?: string;

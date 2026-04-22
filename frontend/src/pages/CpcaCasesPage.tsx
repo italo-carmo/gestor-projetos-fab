@@ -474,62 +474,85 @@ const ACTIVE_STEP_HEADER_SX = {
   gap: 0.75,
 } as const;
 
-const defaultForm = {
-  localityId: "",
-  complaintType: "MORAL",
-  notifierType: "VITIMA",
-  status: "RECEIVED",
-  procedureType: "NOT_DEFINED",
-  incidentDate: "",
-  aggressorRank: "",
-  aggressorGender: "NAO_INFORMADO",
-  aggressorAgeRange: "",
-  victimRank: "",
-  victimGender: "NAO_INFORMADO",
-  victimAgeRange: "",
-  victimIsNotifier: true,
-  notifierRank: "",
-  notifierGender: "NAO_INFORMADO",
-  notifierAgeRange: "",
-  detailedViolenceType: "",
-  harassmentContext: "",
-  occurrenceLocation: "",
-  incidentFrequency: "",
-  hierarchicalFunctionalRelation: "",
-  occurrenceForms: [] as string[],
-  procedureCurrentSituation: "",
-  evidenceSummary: "",
-  confidentialityTermSigned: false,
-  confidentialityHandlingNotes: "",
-  cpcaMembersExcludedFromInquiry: true,
-  immediateProtectionMeasures: "",
-  privateSupportActions: "",
-  psychologicalSupportProvided: false,
-  medicalSupportProvided: false,
-  socialSupportProvided: false,
-  legalSupportProvided: false,
-  contactRestrictionApplied: false,
-  preliminaryReportGenerated: false,
-  preliminaryReportDate: "",
-  procedureReference: "",
-  womenLedHandlingPrioritized: false,
-  victimAccusedSeparationEvaluated: false,
-  victimAccusedSeparationApplied: false,
-  accusedDefenseEnsured: false,
-  outcomeSummary: "",
-  notifierFeedbackSummary: "",
-  victimFeedbackSummary: "",
-  notifierFeedbackDate: "",
-  victimFeedbackDate: "",
-  retaliationRisk: false,
-  retaliationReported: "NAO_INFORMADO",
-  retaliationAgainst: "",
-  retaliationNotes: "",
-  outsourcedAccused: false,
-  contractorReferralDate: "",
-  contractorFollowUpNotes: "",
-  statusChangeNote: "",
-};
+function formatDateInputValue(date: Date) {
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toDateInputValue(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}T00:00:00(\.000)?Z$/.test(raw)) {
+    return raw.slice(0, 10);
+  }
+
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return formatDateInputValue(parsed);
+}
+
+function createDefaultForm() {
+  return {
+    localityId: "",
+    complaintType: "MORAL",
+    notifierType: "VITIMA",
+    status: "RECEIVED",
+    procedureType: "NOT_DEFINED",
+    reportedAt: formatDateInputValue(new Date()),
+    incidentDate: "",
+    aggressorRank: "",
+    aggressorGender: "NAO_INFORMADO",
+    aggressorAgeRange: "",
+    victimRank: "",
+    victimGender: "NAO_INFORMADO",
+    victimAgeRange: "",
+    victimIsNotifier: true,
+    notifierRank: "",
+    notifierGender: "NAO_INFORMADO",
+    notifierAgeRange: "",
+    detailedViolenceType: "",
+    harassmentContext: "",
+    occurrenceLocation: "",
+    incidentFrequency: "",
+    hierarchicalFunctionalRelation: "",
+    occurrenceForms: [] as string[],
+    procedureCurrentSituation: "",
+    evidenceSummary: "",
+    confidentialityTermSigned: false,
+    confidentialityHandlingNotes: "",
+    cpcaMembersExcludedFromInquiry: true,
+    immediateProtectionMeasures: "",
+    privateSupportActions: "",
+    psychologicalSupportProvided: false,
+    medicalSupportProvided: false,
+    socialSupportProvided: false,
+    legalSupportProvided: false,
+    contactRestrictionApplied: false,
+    preliminaryReportGenerated: false,
+    preliminaryReportDate: "",
+    procedureReference: "",
+    womenLedHandlingPrioritized: false,
+    victimAccusedSeparationEvaluated: false,
+    victimAccusedSeparationApplied: false,
+    accusedDefenseEnsured: false,
+    outcomeSummary: "",
+    notifierFeedbackSummary: "",
+    victimFeedbackSummary: "",
+    notifierFeedbackDate: "",
+    victimFeedbackDate: "",
+    retaliationRisk: false,
+    retaliationReported: "NAO_INFORMADO",
+    retaliationAgainst: "",
+    retaliationNotes: "",
+    outsourcedAccused: false,
+    contractorReferralDate: "",
+    contractorFollowUpNotes: "",
+    statusChangeNote: "",
+  };
+}
 
 function formatOmLabel(locality: any) {
   const code = String(locality?.code ?? "").trim();
@@ -667,7 +690,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pendingModalOpen, setPendingModalOpen] = useState(false);
-  const [form, setForm] = useState(defaultForm);
+  const [form, setForm] = useState(() => createDefaultForm());
   const [cipavdDraft, setCipavdDraft] = useState("");
   const [cipavdDraftIsPending, setCipavdDraftIsPending] = useState(true);
   const [threadDrafts, setThreadDrafts] = useState<Record<string, string>>({});
@@ -919,6 +942,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     const notifierType = item.notifierType ?? "VITIMA";
     const nextNotifierIsVictim = notifierType === "VITIMA";
     setForm({
+      reportedAt: toDateInputValue(item.reportedAt),
       localityId: item.localityId ?? "",
       complaintType: inferredComplaintType ?? item.complaintType ?? "MORAL",
       notifierType,
@@ -927,9 +951,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         item.procedureCurrentSituation ?? "",
       ),
       procedureType: item.procedureType ?? "NOT_DEFINED",
-      incidentDate: item.incidentDate
-        ? String(item.incidentDate).slice(0, 10)
-        : "",
+      incidentDate: toDateInputValue(item.incidentDate),
       aggressorRank: item.aggressorRank ?? "",
       aggressorGender: item.aggressorGender ?? "NAO_INFORMADO",
       aggressorAgeRange: item.aggressorAgeRange ?? "",
@@ -1061,7 +1083,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setSelectedId("");
     setConfirmDeleteOpen(false);
     setForm({
-      ...defaultForm,
+      ...createDefaultForm(),
       localityId: isNationalScope ? "" : String(me?.omId ?? ""),
     });
     setCipavdDraft("");
@@ -1090,7 +1112,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setIsCreateMode(false);
     setConfirmDeleteOpen(false);
     setConsistencyPopover({ anchorEl: null, inconsistency: null });
-    setForm(defaultForm);
+    setForm(createDefaultForm());
     setCipavdDraft("");
     setCipavdDraftIsPending(true);
     setThreadDrafts({});
@@ -1126,6 +1148,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     ) {
       toast.push({
         message: "Selecione a OM da ocorrência.",
+        severity: "warning",
+      });
+      return;
+    }
+    if (!form.reportedAt) {
+      toast.push({
+        message: "Informe a data da notificação.",
         severity: "warning",
       });
       return;
@@ -1178,6 +1207,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       notifierType: form.notifierType,
       status: syncedStatus,
       procedureType: form.procedureType,
+      reportedAt: toNullable(form.reportedAt),
       incidentDate: toNullable(form.incidentDate),
       aggressorRank: form.aggressorRank,
       aggressorGender: form.aggressorGender,
@@ -1486,6 +1516,17 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               </MenuItem>
             ))}
           </TextField>
+
+          <TextField
+            size="small"
+            type="date"
+            label="Data da notificação"
+            InputLabelProps={{ shrink: true }}
+            value={form.reportedAt}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, reportedAt: e.target.value }))
+            }
+          />
 
           <TextField
             size="small"
@@ -2617,38 +2658,40 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                             >
                               {item.caseNumber}
                             </Typography>
-                            {inconsistencies.map((inconsistency) => (
-                              <Chip
-                                key={`${item.id}-${inconsistency.code}`}
-                                size="small"
-                                variant="outlined"
-                                clickable
-                                label={inconsistency.badgeLabel}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setConsistencyPopover({
-                                    anchorEl: event.currentTarget,
-                                    inconsistency,
-                                  });
-                                }}
-                                sx={{
-                                  fontWeight: 700,
-                                  borderStyle: "dashed",
-                                  borderColor:
-                                    inconsistency.tone === "warning"
-                                      ? "rgba(245, 124, 0, 0.4)"
-                                      : "rgba(2, 136, 209, 0.35)",
-                                  bgcolor:
-                                    inconsistency.tone === "warning"
-                                      ? "rgba(245, 124, 0, 0.08)"
-                                      : "rgba(2, 136, 209, 0.08)",
-                                  color:
-                                    inconsistency.tone === "warning"
-                                      ? "#B45309"
-                                      : "#0C4A6E",
-                                }}
-                              />
-                            ))}
+                            {inconsistencies.map(
+                              (inconsistency: CpcaCaseInconsistency) => (
+                                <Chip
+                                  key={`${item.id}-${inconsistency.code}`}
+                                  size="small"
+                                  variant="outlined"
+                                  clickable
+                                  label={inconsistency.badgeLabel}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setConsistencyPopover({
+                                      anchorEl: event.currentTarget,
+                                      inconsistency,
+                                    });
+                                  }}
+                                  sx={{
+                                    fontWeight: 700,
+                                    borderStyle: "dashed",
+                                    borderColor:
+                                      inconsistency.tone === "warning"
+                                        ? "rgba(245, 124, 0, 0.4)"
+                                        : "rgba(2, 136, 209, 0.35)",
+                                    bgcolor:
+                                      inconsistency.tone === "warning"
+                                        ? "rgba(245, 124, 0, 0.08)"
+                                        : "rgba(2, 136, 209, 0.08)",
+                                    color:
+                                      inconsistency.tone === "warning"
+                                        ? "#B45309"
+                                        : "#0C4A6E",
+                                  }}
+                                />
+                              ),
+                            )}
                             {pendencyBadge && (
                               <Chip
                                 size="small"

@@ -1430,8 +1430,11 @@ export class CpcaService {
       notifierType: payload.notifierType ?? 'VITIMA',
       status,
       procedureType,
+      reportedAt:
+        this.parseOptionalIsoDateInput(payload.reportedAt, 'reportedAt') ??
+        new Date(),
       incidentDate: payload.incidentDate
-        ? new Date(payload.incidentDate)
+        ? this.parseOptionalIsoDateInput(payload.incidentDate, 'incidentDate')
         : null,
       aggressorRank: this.cleanText(payload.aggressorRank),
       aggressorGender: payload.aggressorGender,
@@ -1480,9 +1483,11 @@ export class CpcaService {
       contactRestrictionApplied: payload.contactRestrictionApplied ?? false,
       preliminaryAnalysis: this.cleanOptional(payload.preliminaryAnalysis),
       preliminaryReportGenerated: payload.preliminaryReportGenerated ?? false,
-      preliminaryReportDate: payload.preliminaryReportDate
-        ? new Date(payload.preliminaryReportDate)
-        : null,
+      preliminaryReportDate:
+        this.parseOptionalIsoDateInput(
+          payload.preliminaryReportDate,
+          'preliminaryReportDate',
+        ) ?? null,
       procedureReference: this.cleanOptional(payload.procedureReference),
       procedureNotes: this.cleanOptional(payload.procedureNotes),
       womenLedHandlingPrioritized:
@@ -1499,18 +1504,24 @@ export class CpcaService {
         payload.notifierFeedbackSummary,
       ),
       victimFeedbackSummary: this.cleanOptional(payload.victimFeedbackSummary),
-      notifierFeedbackDate: payload.notifierFeedbackDate
-        ? new Date(payload.notifierFeedbackDate)
-        : null,
-      victimFeedbackDate: payload.victimFeedbackDate
-        ? new Date(payload.victimFeedbackDate)
-        : null,
+      notifierFeedbackDate:
+        this.parseOptionalIsoDateInput(
+          payload.notifierFeedbackDate,
+          'notifierFeedbackDate',
+        ) ?? null,
+      victimFeedbackDate:
+        this.parseOptionalIsoDateInput(
+          payload.victimFeedbackDate,
+          'victimFeedbackDate',
+        ) ?? null,
       retaliationRisk: payload.retaliationRisk ?? false,
       retaliationNotes: this.cleanOptional(payload.retaliationNotes),
       outsourcedAccused: payload.outsourcedAccused ?? false,
-      contractorReferralDate: payload.contractorReferralDate
-        ? new Date(payload.contractorReferralDate)
-        : null,
+      contractorReferralDate:
+        this.parseOptionalIsoDateInput(
+          payload.contractorReferralDate,
+          'contractorReferralDate',
+        ) ?? null,
       contractorFollowUpNotes: this.cleanOptional(
         payload.contractorFollowUpNotes,
       ),
@@ -1674,9 +1685,10 @@ export class CpcaService {
     const nextPreliminaryReportDate =
       payload.preliminaryReportDate === undefined
         ? current.preliminaryReportDate
-        : payload.preliminaryReportDate
-          ? new Date(payload.preliminaryReportDate)
-          : null;
+        : this.parseOptionalIsoDateInput(
+            payload.preliminaryReportDate,
+            'preliminaryReportDate',
+          );
     const nextVictimAccusedSeparationEvaluated =
       payload.victimAccusedSeparationEvaluated ??
       current.victimAccusedSeparationEvaluated;
@@ -1688,9 +1700,10 @@ export class CpcaService {
     const nextContractorReferralDate =
       payload.contractorReferralDate === undefined
         ? current.contractorReferralDate
-        : payload.contractorReferralDate
-          ? new Date(payload.contractorReferralDate)
-          : null;
+        : this.parseOptionalIsoDateInput(
+            payload.contractorReferralDate,
+            'contractorReferralDate',
+          );
     const nextAccusedDefenseEnsured =
       payload.accusedDefenseEnsured ?? current.accusedDefenseEnsured;
     const nextOutcomeSummary =
@@ -1762,8 +1775,12 @@ export class CpcaService {
         notifierType: payload.notifierType,
         status: nextStatus,
         procedureType: payload.procedureType,
+        reportedAt:
+          payload.reportedAt !== undefined
+            ? this.parseOptionalIsoDateInput(payload.reportedAt, 'reportedAt')
+            : undefined,
         incidentDate: payload.incidentDate
-          ? new Date(payload.incidentDate)
+          ? this.parseOptionalIsoDateInput(payload.incidentDate, 'incidentDate')
           : undefined,
         aggressorRank: payload.aggressorRank
           ? this.cleanText(payload.aggressorRank)
@@ -1850,9 +1867,10 @@ export class CpcaService {
         preliminaryReportGenerated: payload.preliminaryReportGenerated,
         preliminaryReportDate:
           payload.preliminaryReportDate !== undefined
-            ? payload.preliminaryReportDate
-              ? new Date(payload.preliminaryReportDate)
-              : null
+            ? this.parseOptionalIsoDateInput(
+                payload.preliminaryReportDate,
+                'preliminaryReportDate',
+              )
             : undefined,
         procedureReference:
           payload.procedureReference !== undefined
@@ -1881,15 +1899,17 @@ export class CpcaService {
             : undefined,
         notifierFeedbackDate:
           payload.notifierFeedbackDate !== undefined
-            ? payload.notifierFeedbackDate
-              ? new Date(payload.notifierFeedbackDate)
-              : null
+            ? this.parseOptionalIsoDateInput(
+                payload.notifierFeedbackDate,
+                'notifierFeedbackDate',
+              )
             : undefined,
         victimFeedbackDate:
           payload.victimFeedbackDate !== undefined
-            ? payload.victimFeedbackDate
-              ? new Date(payload.victimFeedbackDate)
-              : null
+            ? this.parseOptionalIsoDateInput(
+                payload.victimFeedbackDate,
+                'victimFeedbackDate',
+              )
             : undefined,
         retaliationRisk: payload.retaliationRisk,
         retaliationNotes:
@@ -1899,9 +1919,10 @@ export class CpcaService {
         outsourcedAccused: payload.outsourcedAccused,
         contractorReferralDate:
           payload.contractorReferralDate !== undefined
-            ? payload.contractorReferralDate
-              ? new Date(payload.contractorReferralDate)
-              : null
+            ? this.parseOptionalIsoDateInput(
+                payload.contractorReferralDate,
+                'contractorReferralDate',
+              )
             : undefined,
         contractorFollowUpNotes:
           payload.contractorFollowUpNotes !== undefined
@@ -1909,9 +1930,7 @@ export class CpcaService {
             : undefined,
         archivedAt:
           payload.archivedAt !== undefined
-            ? payload.archivedAt
-              ? new Date(payload.archivedAt)
-              : null
+            ? this.parseOptionalIsoDateInput(payload.archivedAt, 'archivedAt')
             : nextStatus === 'ARCHIVED'
               ? (current.archivedAt ?? new Date())
               : undefined,
@@ -3165,6 +3184,22 @@ export class CpcaService {
 
     if (endOfDay && value.length === 10) {
       parsed.setUTCHours(23, 59, 59, 999);
+    }
+
+    return parsed;
+  }
+
+  private parseOptionalIsoDateInput(
+    rawValue: string | null | undefined,
+    field: string,
+  ) {
+    const value = String(rawValue ?? '').trim();
+    if (!value) return null;
+
+    const normalized = value.length === 10 ? `${value}T12:00:00.000Z` : value;
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) {
+      throwError('VALIDATION_ERROR', { field, reason: 'INVALID_DATE' });
     }
 
     return parsed;
