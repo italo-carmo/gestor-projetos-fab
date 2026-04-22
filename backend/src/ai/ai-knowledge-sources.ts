@@ -5,6 +5,7 @@ export const AI_ANALYSIS_TYPES = [
   'text',
   'geo',
   'chatbot',
+  'cpca_agent',
   'briefing_comgep',
   'priorizacao_intervencao',
   'governanca_cpca',
@@ -150,6 +151,14 @@ export const ANALYSIS_DEFAULT_SOURCES: Record<
     AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_SMIF,
   ],
   chatbot: [...ALL_KNOWLEDGE_SOURCE_IDS],
+  cpca_agent: [
+    AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA,
+    AI_KNOWLEDGE_SOURCE_IDS.MISSIONS,
+    AI_KNOWLEDGE_SOURCE_IDS.ACTIVITIES_SMIF,
+    AI_KNOWLEDGE_SOURCE_IDS.ACTIVITIES_CIPAVD,
+    AI_KNOWLEDGE_SOURCE_IDS.TASKS,
+    AI_KNOWLEDGE_SOURCE_IDS.SURVEY_CPCA_MEETING,
+  ],
   briefing_comgep: [...ALL_KNOWLEDGE_SOURCE_IDS],
   priorizacao_intervencao: [...ALL_KNOWLEDGE_SOURCE_IDS],
   governanca_cpca: [...ALL_KNOWLEDGE_SOURCE_IDS],
@@ -159,3 +168,171 @@ export type AnalysisSourceSelection = Record<
   AiAnalysisType,
   AiKnowledgeSourceId[]
 >;
+
+export const AI_PROFILE_FEATURE_IDS = {
+  STRUCTURED_SITUATIONAL: 'structured_situational',
+  STRUCTURED_COMPLAINTS: 'structured_complaints',
+  STRUCTURED_TEXT: 'structured_text',
+  STRUCTURED_GEO: 'structured_geo',
+  RAG_KNOWLEDGE_BASES: 'rag_knowledge_bases',
+  TRACEABILITY_LINKS: 'traceability_links',
+  SUGGESTED_LINKS: 'suggested_links',
+  SUGGESTED_ACTIONS: 'suggested_actions',
+  CPCA_CASE_INCONSISTENCIES: 'cpca_case_inconsistencies',
+  COMGEP_ROOM: 'comgep_room',
+} as const;
+
+export type AiProfileFeatureId =
+  (typeof AI_PROFILE_FEATURE_IDS)[keyof typeof AI_PROFILE_FEATURE_IDS];
+
+export const ALL_AI_PROFILE_FEATURE_IDS: AiProfileFeatureId[] = [
+  AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
+  AI_PROFILE_FEATURE_IDS.STRUCTURED_COMPLAINTS,
+  AI_PROFILE_FEATURE_IDS.STRUCTURED_TEXT,
+  AI_PROFILE_FEATURE_IDS.STRUCTURED_GEO,
+  AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+  AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+  AI_PROFILE_FEATURE_IDS.SUGGESTED_LINKS,
+  AI_PROFILE_FEATURE_IDS.SUGGESTED_ACTIONS,
+  AI_PROFILE_FEATURE_IDS.CPCA_CASE_INCONSISTENCIES,
+  AI_PROFILE_FEATURE_IDS.COMGEP_ROOM,
+];
+
+export const AI_PROFILE_FEATURE_CATALOG: ReadonlyArray<{
+  id: AiProfileFeatureId;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
+    label: 'Panorama situacional',
+    description:
+      'Permite usar panorama estruturado com pesquisas, denúncias, missões, atividades e tarefas.',
+  },
+  {
+    id: AI_PROFILE_FEATURE_IDS.STRUCTURED_COMPLAINTS,
+    label: 'Perfis de denúncias',
+    description:
+      'Permite usar perfis de agressor, vítima, relações hierárquicas e estatísticas de denúncias.',
+  },
+  {
+    id: AI_PROFILE_FEATURE_IDS.STRUCTURED_TEXT,
+    label: 'Sinais textuais',
+    description:
+      'Permite usar análise textual consolidada a partir de relatórios, observações e textos livres.',
+  },
+  {
+    id: AI_PROFILE_FEATURE_IDS.STRUCTURED_GEO,
+    label: 'Recorte geográfico',
+    description:
+      'Permite usar recortes por UF, localidade e distribuição territorial.',
+  },
+  {
+    id: AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    label: 'RAG em bases de conhecimento',
+    description:
+      'Permite recuperar trechos semânticos e lexicais das bases documentais selecionadas.',
+  },
+  {
+    id: AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+    label: 'Referências e rastreabilidade',
+    description:
+      'Acrescenta referências estruturadas e documentais ao final das respostas.',
+  },
+  {
+    id: AI_PROFILE_FEATURE_IDS.SUGGESTED_LINKS,
+    label: 'Links sugeridos',
+    description:
+      'Permite sugerir telas e registros do sistema ao final da resposta do chatbot.',
+  },
+  {
+    id: AI_PROFILE_FEATURE_IDS.SUGGESTED_ACTIONS,
+    label: 'Ações sugeridas',
+    description:
+      'Permite sugerir atalhos operacionais como criar missão, atividade, tarefa ou cronograma.',
+  },
+  {
+    id: AI_PROFILE_FEATURE_IDS.CPCA_CASE_INCONSISTENCIES,
+    label: 'Inconsistências CPCA',
+    description:
+      'Libera a camada analítica de inconsistências cadastrais, cronológicas e normativas nas denúncias CPCA.',
+  },
+  {
+    id: AI_PROFILE_FEATURE_IDS.COMGEP_ROOM,
+    label: 'Sala COMGEP',
+    description:
+      'Permite consultar o contexto estruturado da Sala COMGEP nos copilotos gerenciais.',
+  },
+] as const;
+
+export type AiProfileFeatureSelection = Record<
+  AiAnalysisType,
+  AiProfileFeatureId[]
+>;
+
+export const ANALYSIS_DEFAULT_FEATURES: AiProfileFeatureSelection = {
+  executive: [
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_COMPLAINTS,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_TEXT,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_GEO,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+  ],
+  situational: [
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+  ],
+  aggressor: [
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_COMPLAINTS,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+  ],
+  text: [
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_TEXT,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+  ],
+  geo: [
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_GEO,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+  ],
+  chatbot: [
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_COMPLAINTS,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_TEXT,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_GEO,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+    AI_PROFILE_FEATURE_IDS.SUGGESTED_LINKS,
+    AI_PROFILE_FEATURE_IDS.SUGGESTED_ACTIONS,
+  ],
+  cpca_agent: [
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_COMPLAINTS,
+    AI_PROFILE_FEATURE_IDS.STRUCTURED_TEXT,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+    AI_PROFILE_FEATURE_IDS.SUGGESTED_LINKS,
+    AI_PROFILE_FEATURE_IDS.CPCA_CASE_INCONSISTENCIES,
+  ],
+  briefing_comgep: [
+    AI_PROFILE_FEATURE_IDS.COMGEP_ROOM,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+  ],
+  priorizacao_intervencao: [
+    AI_PROFILE_FEATURE_IDS.COMGEP_ROOM,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+  ],
+  governanca_cpca: [
+    AI_PROFILE_FEATURE_IDS.COMGEP_ROOM,
+    AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES,
+    AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+  ],
+};

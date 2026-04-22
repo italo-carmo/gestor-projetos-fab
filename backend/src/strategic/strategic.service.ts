@@ -2392,7 +2392,8 @@ export class StrategicService {
       type === 'situational' ||
       type === 'aggressor' ||
       type === 'text' ||
-      type === 'chatbot';
+      type === 'chatbot' ||
+      type === 'cpca_agent';
 
     if (includePanels) {
       if (shouldIncludeSurveys) {

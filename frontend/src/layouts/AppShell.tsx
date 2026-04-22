@@ -49,6 +49,7 @@ import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
 import GradingRoundedIcon from "@mui/icons-material/GradingRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
+import FactCheckRoundedIcon from "@mui/icons-material/FactCheckRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
@@ -60,6 +61,7 @@ import {
   hasAnyRole,
   normalizeRoleName,
   ROLE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from "../app/roleAccess";
 import {
@@ -308,10 +310,22 @@ const navSections: NavSection[] = [
         menuKey: "cpca_cases",
       },
       {
+        label: "IA CPCA",
+        to: "/cpca-ai",
+        icon: <AutoAwesomeRoundedIcon fontSize="small" />,
+        menuKey: "ai",
+      },
+      {
         label: "Comissão CPCA",
         to: "/cpca-commission",
         icon: <GroupsIcon fontSize="small" />,
         menuKey: "cpca_commission",
+      },
+      {
+        label: "Checklist",
+        to: "/cpca-checklist",
+        icon: <FactCheckRoundedIcon fontSize="small" />,
+        menuKey: "cpca_checklist",
       },
       {
         label: "Homologações CPCA",
@@ -516,8 +530,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === "/cpca-cases") {
       return can(me, "cpca_cases", "view");
     }
+    if (item.to === "/cpca-ai") {
+      return (
+        can(me, "ai", "view") &&
+        can(me, "cpca_cases", "view", "NATIONAL")
+      );
+    }
     if (item.to === "/cpca-commission") {
       return can(me, "cpca_cases", "view");
+    }
+    if (item.to === "/cpca-checklist") {
+      return (
+        can(me, "cpca_checklist", "view") &&
+        hasAnyRole(me, [ROLE_TI, ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD])
+      );
     }
     if (item.to === "/cpca-president-approvals") {
       return (

@@ -7,11 +7,20 @@ import {
   stripReasoningPrefix,
 } from '../llm/litellm.service';
 import {
+  ALL_AI_PROFILE_FEATURE_IDS,
   type AiAnalysisType,
+  type AiProfileFeatureId,
   ALL_KNOWLEDGE_SOURCE_IDS,
+  AI_KNOWLEDGE_SOURCE_IDS,
   type AiKnowledgeSourceId,
+  AI_PROFILE_FEATURE_IDS,
 } from './ai-knowledge-sources';
+import {
+  KnowledgeBasesService,
+  type KnowledgeBaseRagHit,
+} from '../knowledge-bases/knowledge-bases.service';
 import { SettingsService } from '../settings/settings.service';
+import { CpcaService, type CpcaAiContext } from '../cpca/cpca.service';
 import {
   StrategicService,
   AiSourceReference,
@@ -30,7 +39,7 @@ export type ActionAgentType =
   | 'priorizacao_intervencao'
   | 'governanca_cpca';
 
-export type ChatProfileType = AnalysisType | 'chatbot';
+export type ChatProfileType = AnalysisType | 'chatbot' | 'cpca_agent';
 
 type ChatSuggestedActionId =
   | 'create_mission'
@@ -110,6 +119,8 @@ type ComgepCopilotSession = {
   focus: ComgepCopilotFocus | null;
   configuredPrompt: string | null;
   configuredSources: AiKnowledgeSourceId[];
+  configuredKnowledgeBaseIds: string[];
+  configuredFeatures: AiProfileFeatureId[];
   messages: ComgepCopilotMessage[];
 };
 
@@ -125,6 +136,10 @@ type ComgepCopilotStreamParams = {
   userMessage: string;
   configuredPrompt: string | null;
   configuredSources: AiKnowledgeSourceId[];
+  configuredKnowledgeBaseIds: string[];
+  configuredFeatures: AiProfileFeatureId[];
+  knowledgeContextText?: string;
+  knowledgeReferences?: AiSourceReference[];
 };
 
 type ActionAgentSourceProfile = {
@@ -139,6 +154,20 @@ type ActionAgentSourceProfile = {
   allowHighRisk: boolean;
   allowPriorityUfs: boolean;
   allowCoverageGaps: boolean;
+};
+
+type AiProfileRuntimeConfig = {
+  configuredPrompt: string | null;
+  configuredSources: AiKnowledgeSourceId[];
+  configuredKnowledgeBaseIds: string[];
+  configuredFeatures: AiProfileFeatureId[];
+};
+
+type ChatContextResult = {
+  contextJson: string;
+  summaryMarkdown: string;
+  sourceLabels: string[];
+  extraRefs?: AiSourceReference[];
 };
 
 export const ANALYSIS_CATALOG: {
@@ -305,6 +334,8 @@ export class AiService {
     private readonly litellm: LitellmService,
     private readonly settings: SettingsService,
     private readonly strategic: StrategicService,
+    private readonly knowledgeBases: KnowledgeBasesService,
+    private readonly cpca: CpcaService,
   ) {}
 
   private async resolveAnalysisSources(
@@ -319,21 +350,46 @@ export class AiService {
     }
   }
 
-  private async resolveChatProfileConfig(profile: ChatProfileType) {
-    const type = (profile === 'chatbot' ? 'chatbot' : profile) as AiAnalysisType;
-    const [configuredPrompt, configuredSources] = await Promise.all([
+  private async resolveProfileRuntimeConfig(
+    type: AiAnalysisType,
+  ): Promise<AiProfileRuntimeConfig> {
+    const [
+      configuredPrompt,
+      configuredSources,
+      configuredKnowledgeBaseIds,
+      configuredFeatures,
+    ] = await Promise.all([
       this.settings.getAnalysisPrompt(type),
       this.resolveAnalysisSources(type),
+      this.settings.getAnalysisKnowledgeBasesForType(type),
+      this.settings.getAnalysisFeaturesForType(type),
     ]);
     return {
       configuredPrompt: configuredPrompt?.trim() || null,
-      configuredSources: configuredSources,
+      configuredSources,
+      configuredKnowledgeBaseIds,
+      configuredFeatures:
+        configuredFeatures.length > 0
+          ? configuredFeatures
+          : [...ALL_AI_PROFILE_FEATURE_IDS],
     };
+  }
+
+  private async resolveChatProfileConfig(profile: ChatProfileType) {
+    const type = profile as AiAnalysisType;
+    return this.resolveProfileRuntimeConfig(type);
   }
 
   private getDefaultChatbotInstruction(profile: ChatProfileType) {
     if (profile === 'chatbot') {
       return 'Responda como um analista conversacional do sistema inteiro, apto a orientar perguntas abertas sobre CIPAVD, SMIF e CPCA.';
+    }
+    if (profile === 'cpca_agent') {
+      return [
+        'Responda como a IA analítica nacional da CPCA.',
+        'Priorize denúncias CPCA, workflow, inconsistências cadastrais e procedimentais, aderência normativa, risco institucional e rastreabilidade por OM e número do caso.',
+        'Quando apontar inconsistência, diferencie fato cadastrado, leitura analítica e base normativa.',
+      ].join(' ');
     }
     const instructionsByType: Record<AnalysisType, string> = {
       executive:
@@ -349,16 +405,15 @@ export class AiService {
   }
 
   private async resolveActionAgentConfig(type: ActionAgentType) {
-    const [configuredPrompt, configuredSources] = await Promise.all([
-      this.settings.getAnalysisPrompt(type),
-      this.resolveAnalysisSources(type),
-    ]);
+    const base = await this.resolveProfileRuntimeConfig(type);
     return {
-      configuredPrompt: configuredPrompt?.trim() || null,
+      configuredPrompt: base.configuredPrompt,
       configuredSources:
-        configuredSources.length > 0
-          ? configuredSources
+        base.configuredSources.length > 0
+          ? base.configuredSources
           : [...ALL_KNOWLEDGE_SOURCE_IDS],
+      configuredKnowledgeBaseIds: base.configuredKnowledgeBaseIds,
+      configuredFeatures: base.configuredFeatures,
     };
   }
 
@@ -426,6 +481,94 @@ export class AiService {
     return ACTION_AGENT_CATALOG;
   }
 
+  private hasFeature(
+    featureIds: readonly AiProfileFeatureId[],
+    featureId: AiProfileFeatureId,
+  ) {
+    return featureIds.includes(featureId);
+  }
+
+  private async resolveKnowledgePromptContext(args: {
+    query: string;
+    knowledgeBaseIds: string[];
+    features: readonly AiProfileFeatureId[];
+    limit?: number;
+  }): Promise<{
+    text: string;
+    references: AiSourceReference[];
+    hits: KnowledgeBaseRagHit[];
+  }> {
+    if (
+      !this.hasFeature(args.features, AI_PROFILE_FEATURE_IDS.RAG_KNOWLEDGE_BASES)
+    ) {
+      return { text: '', references: [], hits: [] };
+    }
+
+    const hits = await this.knowledgeBases.retrieveRelevantChunks({
+      query: args.query,
+      knowledgeBaseIds: args.knowledgeBaseIds,
+      limit: args.limit ?? 6,
+    });
+    if (!hits.length) {
+      return { text: '', references: [], hits: [] };
+    }
+
+    const prompt = this.knowledgeBases.buildPromptContext(hits);
+    return {
+      text: prompt.text,
+      references: prompt.references,
+      hits,
+    };
+  }
+
+  private buildKnowledgeQueryForAnalysis(
+    type: AnalysisType,
+    customPrompt?: string | null,
+  ) {
+    const defaults: Record<AnalysisType, string> = {
+      executive:
+        'normas, diretrizes, legislação e orientações institucionais relevantes para visão executiva de CIPAVD, SMIF e CPCA',
+      situational:
+        'normas e orientações institucionais aplicáveis ao panorama situacional de CIPAVD, SMIF e CPCA',
+      aggressor:
+        'legislação, protocolos, fluxos e orientações sobre assédio, violência, proteção, denúncia e responsabilização em CPCA e SMIF',
+      text:
+        'documentos orientadores, lições, relatórios e normativos que ajudem a interpretar padrões textuais em CIPAVD, SMIF e CPCA',
+      geo:
+        'documentos institucionais e normativos aplicáveis a cobertura territorial, capilaridade e atuação por UF/localidade em CIPAVD, SMIF e CPCA',
+    };
+    return [defaults[type], customPrompt?.trim() || '']
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .join('. ');
+  }
+
+  private getAnalysisTitle(type: AnalysisType) {
+    return (
+      ANALYSIS_CATALOG.find((item) => item.type === type)?.title ??
+      'Consulta de análise'
+    );
+  }
+
+  private buildKnowledgeQueryForComgep(params: {
+    agentType: ActionAgentType;
+    userMessage: string;
+    focus: ComgepCopilotFocus | null;
+    scopeUf: string | null;
+  }) {
+    const focusLabel = this.describeComgepFocus(params.focus, params.scopeUf);
+    const scopeLabel = params.scopeUf ? `UF ${params.scopeUf}` : 'visão nacional';
+    return [
+      `copiloto ${params.agentType}`,
+      `escopo ${scopeLabel}`,
+      `foco ${focusLabel}`,
+      params.userMessage,
+    ]
+      .map((item) => String(item ?? '').trim())
+      .filter(Boolean)
+      .join('. ');
+  }
+
   async *runActionAgentStream(
     type: ActionAgentType,
     options?: {
@@ -449,7 +592,6 @@ export class AiService {
     });
 
     const config = await this.resolveActionAgentConfig(safeType);
-    const room = await this.strategic.comgepSituationRoom();
     const initialUserMessage = this.buildInitialComgepUserMessage(
       safeType,
       mode,
@@ -457,6 +599,12 @@ export class AiService {
       focus,
       scopeUf,
     );
+    const room = this.hasFeature(
+      config.configuredFeatures,
+      AI_PROFILE_FEATURE_IDS.COMGEP_ROOM,
+    )
+      ? await this.strategic.comgepSituationRoom()
+      : {};
     const session = this.createComgepSession({
       agentType: safeType,
       scopeUf,
@@ -465,6 +613,8 @@ export class AiService {
       focus,
       configuredPrompt: config.configuredPrompt,
       configuredSources: config.configuredSources,
+      configuredKnowledgeBaseIds: config.configuredKnowledgeBaseIds,
+      configuredFeatures: config.configuredFeatures,
     });
     this.pushComgepMessage(session, {
       role: 'user',
@@ -494,6 +644,17 @@ export class AiService {
     });
 
     try {
+      const knowledgeContext = await this.resolveKnowledgePromptContext({
+        query: this.buildKnowledgeQueryForComgep({
+          agentType: safeType,
+          userMessage: initialUserMessage,
+          focus,
+          scopeUf,
+        }),
+        knowledgeBaseIds: config.configuredKnowledgeBaseIds,
+        features: config.configuredFeatures,
+        limit: 6,
+      });
       const completion = this.streamComgepAssistantCompletion({
         agentType: safeType,
         room,
@@ -506,6 +667,10 @@ export class AiService {
         userMessage: initialUserMessage,
         configuredPrompt: config.configuredPrompt,
         configuredSources: config.configuredSources,
+        configuredKnowledgeBaseIds: config.configuredKnowledgeBaseIds,
+        configuredFeatures: config.configuredFeatures,
+        knowledgeContextText: knowledgeContext.text,
+        knowledgeReferences: knowledgeContext.references,
       });
 
       let finalResult: { narrative: string; model: string } | undefined;
@@ -524,9 +689,9 @@ export class AiService {
 
       finalResult = {
         ...finalResult,
-        narrative: this.sanitizeComgepNarrative(
-          finalResult.narrative,
-          {
+        narrative: await this.appendTraceabilityReferences(
+          safeType,
+          this.sanitizeComgepNarrative(finalResult.narrative, {
             agentType: safeType,
             room,
             scopeUf,
@@ -538,7 +703,17 @@ export class AiService {
             userMessage: initialUserMessage,
             configuredPrompt: config.configuredPrompt,
             configuredSources: config.configuredSources,
-          },
+            configuredKnowledgeBaseIds: config.configuredKnowledgeBaseIds,
+            configuredFeatures: config.configuredFeatures,
+            knowledgeContextText: knowledgeContext.text,
+            knowledgeReferences: knowledgeContext.references,
+          }),
+          config.configuredSources,
+          knowledgeContext.references,
+          this.hasFeature(
+            config.configuredFeatures,
+            AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+          ),
         ),
       };
 
@@ -607,7 +782,12 @@ export class AiService {
       stage: 'Atualizando o contexto da sessão...',
     });
 
-    const room = await this.strategic.comgepSituationRoom();
+    const room = this.hasFeature(
+      session.configuredFeatures,
+      AI_PROFILE_FEATURE_IDS.COMGEP_ROOM,
+    )
+      ? await this.strategic.comgepSituationRoom()
+      : {};
     const userMessage = this.pushComgepMessage(session, {
       role: 'user',
       content: message,
@@ -631,6 +811,17 @@ export class AiService {
     });
 
     try {
+      const knowledgeContext = await this.resolveKnowledgePromptContext({
+        query: this.buildKnowledgeQueryForComgep({
+          agentType: session.agentType,
+          userMessage: userMessage.content,
+          focus,
+          scopeUf,
+        }),
+        knowledgeBaseIds: session.configuredKnowledgeBaseIds,
+        features: session.configuredFeatures,
+        limit: 6,
+      });
       const completion = this.streamComgepAssistantCompletion({
         agentType: session.agentType,
         room,
@@ -643,6 +834,10 @@ export class AiService {
         userMessage: userMessage.content,
         configuredPrompt: session.configuredPrompt,
         configuredSources: session.configuredSources,
+        configuredKnowledgeBaseIds: session.configuredKnowledgeBaseIds,
+        configuredFeatures: session.configuredFeatures,
+        knowledgeContextText: knowledgeContext.text,
+        knowledgeReferences: knowledgeContext.references,
       });
 
       let finalResult: { narrative: string; model: string } | undefined;
@@ -661,7 +856,9 @@ export class AiService {
 
       finalResult = {
         ...finalResult,
-        narrative: this.sanitizeComgepNarrative(finalResult.narrative, {
+        narrative: await this.appendTraceabilityReferences(
+          session.agentType,
+          this.sanitizeComgepNarrative(finalResult.narrative, {
             agentType: session.agentType,
             room,
             scopeUf,
@@ -670,10 +867,21 @@ export class AiService {
             focus,
             evidences,
             history: session.messages,
-          userMessage: userMessage.content,
-          configuredPrompt: session.configuredPrompt,
-          configuredSources: session.configuredSources,
-        }),
+            userMessage: userMessage.content,
+            configuredPrompt: session.configuredPrompt,
+            configuredSources: session.configuredSources,
+            configuredKnowledgeBaseIds: session.configuredKnowledgeBaseIds,
+            configuredFeatures: session.configuredFeatures,
+            knowledgeContextText: knowledgeContext.text,
+            knowledgeReferences: knowledgeContext.references,
+          }),
+          session.configuredSources,
+          knowledgeContext.references,
+          this.hasFeature(
+            session.configuredFeatures,
+            AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+          ),
+        ),
       };
 
       const assistantMessage = this.pushComgepMessage(session, {
@@ -710,6 +918,25 @@ export class AiService {
     return this.renderComgepSessionPdf(session);
   }
 
+  async chatPdf(
+    profile: ChatProfileType,
+    options?: {
+      narrative?: string;
+      model?: string;
+      generatedAt?: string;
+      question?: string;
+    },
+  ): Promise<Buffer> {
+    const safeProfile = this.normalizeChatProfile(profile);
+    return this.renderChatPdf({
+      profile: safeProfile,
+      narrative: options?.narrative?.trim() || '',
+      model: options?.model?.trim() || 'modelo não informado',
+      generatedAt: options?.generatedAt || new Date().toISOString(),
+      question: options?.question?.trim() || '',
+    });
+  }
+
   async analysisPdf(
     type: AnalysisType,
     options?: {
@@ -723,13 +950,31 @@ export class AiService {
     )
       ? type
       : 'executive';
-    const sources = await this.resolveAnalysisSources(safeType);
-    const data = await this.gatherDataForType(safeType, sources);
+    const config = await this.resolveProfileRuntimeConfig(safeType);
+    const data = await this.gatherDataForType(
+      safeType,
+      config.configuredSources,
+      config.configuredFeatures,
+    );
+    const knowledgeContext = await this.resolveKnowledgePromptContext({
+      query: this.buildKnowledgeQueryForAnalysis(
+        safeType,
+        config.configuredPrompt,
+      ),
+      knowledgeBaseIds: config.configuredKnowledgeBaseIds,
+      features: config.configuredFeatures,
+      limit: 6,
+    });
     const narrativeBase = options?.narrative?.trim() ?? '';
     const narrative = await this.appendTraceabilityReferences(
       safeType,
       narrativeBase,
-      sources,
+      config.configuredSources,
+      knowledgeContext.references,
+      this.hasFeature(
+        config.configuredFeatures,
+        AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+      ),
     );
     const model = options?.model?.trim() || 'modelo não informado';
     const generatedAt = options?.generatedAt || new Date().toISOString();
@@ -748,8 +993,12 @@ export class AiService {
       stage: 'Coletando dados...',
     });
 
-    const sources = await this.resolveAnalysisSources(type);
-    const data = await this.gatherDataForType(type, sources);
+    const config = await this.resolveProfileRuntimeConfig(type);
+    const data = await this.gatherDataForType(
+      type,
+      config.configuredSources,
+      config.configuredFeatures,
+    );
 
     yield this.sseEvent('progress', {
       percent: 25,
@@ -757,8 +1006,16 @@ export class AiService {
     });
 
     const systemPrompt = await this.settings.getSystemPrompt();
-    const customPrompt = await this.settings.getAnalysisPrompt(type);
-    const userPrompt = this.buildUserPrompt(type, data, customPrompt);
+    const knowledgeContext = await this.resolveKnowledgePromptContext({
+      query: this.buildKnowledgeQueryForAnalysis(type, config.configuredPrompt),
+      knowledgeBaseIds: config.configuredKnowledgeBaseIds,
+      features: config.configuredFeatures,
+      limit: 6,
+    });
+    const userPrompt = this.buildUserPrompt(type, data, config.configuredPrompt, {
+      knowledgeContextText: knowledgeContext.text,
+      featureIds: config.configuredFeatures,
+    });
 
     yield this.sseEvent('progress', {
       percent: 30,
@@ -814,7 +1071,12 @@ export class AiService {
           const narrativeWithRefs = await this.appendTraceabilityReferences(
             type,
             fullText,
-            sources,
+            config.configuredSources,
+            knowledgeContext.references,
+            this.hasFeature(
+              config.configuredFeatures,
+              AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+            ),
           );
           yield this.sseEvent('done', {
             percent: 100,
@@ -841,7 +1103,12 @@ export class AiService {
         const narrativeWithRefs = await this.appendTraceabilityReferences(
           type,
           this.buildDeterministicAnalysisNarrative(type, data),
-          sources,
+          config.configuredSources,
+          knowledgeContext.references,
+          this.hasFeature(
+            config.configuredFeatures,
+            AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+          ),
         );
         yield this.sseEvent('done', {
           percent: 100,
@@ -863,7 +1130,12 @@ export class AiService {
         const narrativeWithRefs = await this.appendTraceabilityReferences(
           type,
           this.buildDeterministicAnalysisNarrative(type, data),
-          sources,
+          config.configuredSources,
+          knowledgeContext.references,
+          this.hasFeature(
+            config.configuredFeatures,
+            AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+          ),
         );
         yield this.sseEvent('done', {
           percent: 100,
@@ -880,7 +1152,12 @@ export class AiService {
     const narrativeWithRefs = await this.appendTraceabilityReferences(
       type,
       fullText,
-      sources,
+      config.configuredSources,
+      knowledgeContext.references,
+      this.hasFeature(
+        config.configuredFeatures,
+        AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+      ),
     );
     yield this.sseEvent('done', {
       percent: 100,
@@ -924,7 +1201,14 @@ export class AiService {
       safeMessage,
       safeProfile,
       config.configuredSources,
+      config.configuredFeatures,
     );
+    const knowledgeContext = await this.resolveKnowledgePromptContext({
+      query: safeMessage,
+      knowledgeBaseIds: config.configuredKnowledgeBaseIds,
+      features: config.configuredFeatures,
+      limit: 6,
+    });
 
     const messages: ChatMessage[] = [
       {
@@ -953,6 +1237,8 @@ export class AiService {
           profile: safeProfile,
           contextJson: context.contextJson,
           sourceLabels: context.sourceLabels,
+          knowledgeContextText: knowledgeContext.text,
+          featureIds: config.configuredFeatures,
         }),
       },
     ];
@@ -985,23 +1271,41 @@ export class AiService {
           profile: safeProfile,
           contextSummary: context.summaryMarkdown,
           sourceLabels: context.sourceLabels,
+          knowledgeSummary: this.summarizeKnowledgeHits(knowledgeContext.hits),
         });
       }
 
       finalNarrative = await this.appendTraceabilityReferences(
-        safeProfile === 'chatbot' ? 'chatbot' : safeProfile,
+        safeProfile,
         finalNarrative,
         config.configuredSources,
+        [...(context.extraRefs ?? []), ...knowledgeContext.references],
+        this.hasFeature(
+          config.configuredFeatures,
+          AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+        ),
       );
 
       const [suggestedLinks, suggestedActions] = await Promise.all([
-        this.buildChatSuggestedLinks(
-          finalNarrative,
-          safeMessage,
-          safeProfile,
-          config.configuredSources,
+        this.hasFeature(
+          config.configuredFeatures,
+          AI_PROFILE_FEATURE_IDS.SUGGESTED_LINKS,
+        )
+          ? this.buildChatSuggestedLinks(
+              finalNarrative,
+              safeMessage,
+              safeProfile,
+              config.configuredSources,
+            )
+          : Promise.resolve([]),
+        Promise.resolve(
+          this.hasFeature(
+            config.configuredFeatures,
+            AI_PROFILE_FEATURE_IDS.SUGGESTED_ACTIONS,
+          )
+            ? this.buildChatSuggestedActions(safeMessage, finalNarrative)
+            : [],
         ),
-        Promise.resolve(this.buildChatSuggestedActions(safeMessage, finalNarrative)),
       ]);
 
       yield this.sseEvent('done', {
@@ -1020,23 +1324,41 @@ export class AiService {
         this.shouldUseDeterministicComgepFallback(msg)
       ) {
         const fallback = await this.appendTraceabilityReferences(
-          safeProfile === 'chatbot' ? 'chatbot' : safeProfile,
+          safeProfile,
           this.buildDeterministicChatFallback({
             question: safeMessage,
             profile: safeProfile,
             contextSummary: context.summaryMarkdown,
             sourceLabels: context.sourceLabels,
+            knowledgeSummary: this.summarizeKnowledgeHits(knowledgeContext.hits),
           }),
           config.configuredSources,
+          [...(context.extraRefs ?? []), ...knowledgeContext.references],
+          this.hasFeature(
+            config.configuredFeatures,
+            AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+          ),
         );
         const [suggestedLinks, suggestedActions] = await Promise.all([
-          this.buildChatSuggestedLinks(
-            fallback,
-            safeMessage,
-            safeProfile,
-            config.configuredSources,
+          this.hasFeature(
+            config.configuredFeatures,
+            AI_PROFILE_FEATURE_IDS.SUGGESTED_LINKS,
+          )
+            ? this.buildChatSuggestedLinks(
+                fallback,
+                safeMessage,
+                safeProfile,
+                config.configuredSources,
+              )
+            : Promise.resolve([]),
+          Promise.resolve(
+            this.hasFeature(
+              config.configuredFeatures,
+              AI_PROFILE_FEATURE_IDS.SUGGESTED_ACTIONS,
+            )
+              ? this.buildChatSuggestedActions(safeMessage, fallback)
+              : [],
           ),
-          Promise.resolve(this.buildChatSuggestedActions(safeMessage, fallback)),
         ]);
         yield this.sseEvent('done', {
           model: 'local-fallback',
@@ -1056,6 +1378,7 @@ export class AiService {
     profile: ChatProfileType;
     contextSummary: string;
     sourceLabels: string[];
+    knowledgeSummary?: string;
   }) {
     return [
       '## Resposta estruturada local',
@@ -1071,10 +1394,27 @@ export class AiService {
       '',
       '## Resumo disponível',
       String(args.contextSummary || 'Resumo do sistema indisponível.'),
+      args.knowledgeSummary ? '' : '',
+      args.knowledgeSummary ? '## Base de conhecimento recuperada' : '',
+      args.knowledgeSummary || '',
       '',
       '## Encaminhamento',
       'Se precisar de uma resposta mais específica, refine a pergunta com UF, OM, escopo ou tipo de dado desejado.',
     ].join('\n');
+  }
+
+  private summarizeKnowledgeHits(hits: KnowledgeBaseRagHit[]) {
+    if (!hits.length) return '';
+    return hits
+      .slice(0, 4)
+      .map(
+        (hit, index) =>
+          `${index + 1}. ${hit.knowledgeBaseName} • ${hit.documentTitle}: ${this.truncateText(
+            hit.textContent,
+            220,
+          )}`,
+      )
+      .join('\n');
   }
 
   private async buildChatSuggestedLinks(
@@ -1199,6 +1539,7 @@ export class AiService {
     const value = String(href || '').trim();
     if (
       /[?&](missionId|activityId|id)=/i.test(value) ||
+      /\/cpca-cases\?q=CPCA-/i.test(value) ||
       /\/dashboard\/locality\//i.test(value) ||
       /\/cpca-cases\/[a-z0-9]/i.test(value)
     ) {
@@ -1214,6 +1555,9 @@ export class AiService {
     if (value.includes('/activities')) return 'Abrir atividades';
     if (value.includes('/cipavd-activities')) return 'Abrir atividades CIPAVD';
     if (value.includes('/cpca-cases')) return 'Abrir denúncias CPCA';
+    if (value.includes('/cpca-ai')) return 'Abrir IA CPCA';
+    if (value.includes('/cpca-commission')) return 'Abrir comissão CPCA';
+    if (value.includes('/cpca-checklist')) return 'Abrir checklist CPCA';
     if (value.includes('/smif-complaints')) return 'Abrir denúncias SMIF';
     if (value.includes('/dashboard/estrategico')) return 'Abrir painel estratégico';
     if (value.includes('/ai')) return 'Abrir IA';
@@ -1241,6 +1585,15 @@ export class AiService {
     if (/\b(cpca|denuncia cpca|denúncia cpca)\b/.test(normalized)) {
       push('Abrir denúncias CPCA', '/cpca-cases');
     }
+    if (/\b(checklist|acoes da cpca|ações da cpca)\b/.test(normalized)) {
+      push('Abrir checklist CPCA', '/cpca-checklist');
+    }
+    if (/\b(comissao cpca|comissão cpca|presidente da cpca|membros da cpca)\b/.test(normalized)) {
+      push('Abrir comissão CPCA', '/cpca-commission');
+    }
+    if (/\b(ia cpca|agente cpca|relatorio cpca|relatório cpca|inconsistencia cpca|inconsistência cpca)\b/.test(normalized)) {
+      push('Abrir IA CPCA', '/cpca-ai');
+    }
     if (/\b(smif|denuncia smif|denúncia smif)\b/.test(normalized)) {
       push('Abrir denúncias SMIF', '/smif-complaints');
     }
@@ -1256,6 +1609,7 @@ export class AiService {
   ): ChatProfileType {
     const raw = String(profile ?? '').trim();
     if (raw === 'chatbot') return 'chatbot';
+    if (raw === 'cpca_agent') return 'cpca_agent';
     return ANALYSIS_CATALOG.some((item) => item.type === raw)
       ? (raw as AnalysisType)
       : 'chatbot';
@@ -1271,7 +1625,8 @@ export class AiService {
     message: string,
     profile: ChatProfileType,
     sourceIds: readonly AiKnowledgeSourceId[],
-  ) {
+    featureIds: readonly AiProfileFeatureId[],
+  ): Promise<ChatContextResult> {
     const sourceProfile = this.buildActionAgentSourceProfile(sourceIds);
     const needs = this.selectChatContextNeeds(message, profile);
     if (!sourceProfile.hasAnySource) {
@@ -1291,18 +1646,34 @@ export class AiService {
     }
 
     const filters = { sources: Array.from(sourceIds) };
-    const [dashboard, profileData, textData, geoData] = await Promise.all([
-      needs.includeOverview
+    const [dashboard, profileData, textData, geoData, cpcaContext] =
+      await Promise.all([
+      needs.includeOverview &&
+      this.hasFeature(featureIds, AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL)
         ? this.strategic.situationalDashboard(filters)
         : Promise.resolve(null),
-      needs.includeComplaints
+      needs.includeComplaints &&
+      this.hasFeature(featureIds, AI_PROFILE_FEATURE_IDS.STRUCTURED_COMPLAINTS)
         ? this.strategic.aggressorProfile(filters)
         : Promise.resolve(null),
-      needs.includeText
+      needs.includeText &&
+      this.hasFeature(featureIds, AI_PROFILE_FEATURE_IDS.STRUCTURED_TEXT)
         ? this.strategic.textAnalysis(filters)
         : Promise.resolve(null),
-      needs.includeGeo
+      needs.includeGeo &&
+      this.hasFeature(featureIds, AI_PROFILE_FEATURE_IDS.STRUCTURED_GEO)
         ? this.strategic.geoMap(filters)
+        : Promise.resolve(null),
+      profile === 'cpca_agent' &&
+      Array.from(sourceIds).includes(AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA)
+        ? this.cpca.buildAiContext({
+            query: message,
+            includeInconsistencies: this.hasFeature(
+              featureIds,
+              AI_PROFILE_FEATURE_IDS.CPCA_CASE_INCONSISTENCIES,
+            ),
+            limit: 8,
+          })
         : Promise.resolve(null),
     ]);
 
@@ -1312,8 +1683,16 @@ export class AiService {
     };
 
     const summaryBlocks: string[] = [];
+    const extraRefs: AiSourceReference[] = [];
+    if (cpcaContext) {
+      payload.painelCpca = this.compactCpcaAiContext(cpcaContext);
+      extraRefs.push(...cpcaContext.references);
+      summaryBlocks.push('## Leitura CPCA');
+      summaryBlocks.push(...this.buildCpcaChatHighlights(cpcaContext));
+    }
     if (dashboard) {
       payload.panoramaSituacional = this.compactDashboardForChat(dashboard);
+      if (summaryBlocks.length > 0) summaryBlocks.push('');
       summaryBlocks.push('## Panorama situacional');
       summaryBlocks.push(...this.buildSituationalHighlights(dashboard));
     }
@@ -1347,6 +1726,7 @@ export class AiService {
       contextJson,
       summaryMarkdown: summaryBlocks.join('\n').trim(),
       sourceLabels: sourceProfile.sourceLabels,
+      extraRefs,
     };
   }
 
@@ -1355,19 +1735,34 @@ export class AiService {
     profile: ChatProfileType;
     contextJson: string;
     sourceLabels: string[];
+    knowledgeContextText?: string;
+    featureIds?: AiProfileFeatureId[];
   }) {
     const sourceLine = args.sourceLabels.length
       ? `Fontes permitidas nesta conversa: ${args.sourceLabels.join(', ')}.`
       : 'Nenhuma fonte está liberada para este perfil.';
+    const knowledgeContextText = String(args.knowledgeContextText ?? '').trim();
+    const featureLine = Array.isArray(args.featureIds) && args.featureIds.length
+      ? `Features habilitadas: ${args.featureIds.join(', ')}.`
+      : '';
     return [
       `Pergunta do usuário: ${args.message}`,
       '',
       sourceLine,
+      featureLine,
+      args.profile === 'cpca_agent'
+        ? 'Quando mencionar denúncias CPCA, cite número do caso, OM e diferencie fato cadastrado, inconsistência detectada e base normativa.'
+        : '',
       'Se a resposta depender de base não permitida ou dado ausente, diga isso claramente.',
+      knowledgeContextText
+        ? 'Quando usar trechos documentais, cite o identificador KB correspondente.'
+        : '',
       'Responda com Markdown limpo, sem tabelas desnecessárias e sem raciocínio interno.',
       '',
       'Contexto JSON:',
       args.contextJson,
+      knowledgeContextText ? '\nTrechos recuperados da base de conhecimento:' : '',
+      knowledgeContextText,
     ].join('\n');
   }
 
@@ -1413,6 +1808,13 @@ export class AiService {
         includeGeo: true,
         focusSummary: 'visão ampla do sistema',
       },
+      cpca_agent: {
+        includeOverview: true,
+        includeComplaints: true,
+        includeText: true,
+        includeGeo: false,
+        focusSummary: 'gestão CPCA, denúncias e conformidade',
+      },
       executive: {
         includeOverview: true,
         includeComplaints: true,
@@ -1453,7 +1855,25 @@ export class AiService {
     const base = defaultsByProfile[profile];
     const explicitSignal =
       mentionsGeo || mentionsText || mentionsComplaints || mentionsOperational;
-    if (!explicitSignal || profile !== 'chatbot') return base;
+    if (!explicitSignal || (profile !== 'chatbot' && profile !== 'cpca_agent')) {
+      return base;
+    }
+
+    if (profile === 'cpca_agent') {
+      return {
+        includeOverview: true,
+        includeComplaints: true,
+        includeText: mentionsText || mentionsComplaints,
+        includeGeo: mentionsGeo,
+        focusSummary: mentionsGeo
+          ? 'distribuição territorial dos casos CPCA'
+          : mentionsText
+            ? 'conteúdo textual, narrativas e sinais CPCA'
+            : mentionsComplaints
+              ? 'workflow, inconsistências e denúncias CPCA'
+              : 'governança CPCA e denúncias',
+      };
+    }
 
     return {
       includeOverview: mentionsOperational || mentionsComplaints || mentionsGeo,
@@ -1536,6 +1956,59 @@ export class AiService {
           : [],
       },
     };
+  }
+
+  private compactCpcaAiContext(context: CpcaAiContext) {
+    return {
+      generatedAt: context.generatedAt,
+      summary: context.summary,
+      topStatus: context.topStatus.slice(0, 5),
+      topProcedures: context.topProcedures.slice(0, 5),
+      topOms: context.topOms.slice(0, 5),
+      matchedCases: context.matchedCases.slice(0, 6),
+      criticalCases: context.criticalCases.slice(0, 6),
+      inconsistentCases: context.inconsistentCases.slice(0, 6),
+      inconsistencySummary: context.inconsistencySummary.slice(0, 6),
+      normativeReferences: context.normativeReferences.slice(0, 4),
+    };
+  }
+
+  private buildCpcaChatHighlights(context: CpcaAiContext) {
+    const lines = [
+      `- Casos CPCA: ${this.formatInt(context.summary.totalCases)} total, ${this.formatInt(context.summary.openCases)} em aberto, ${this.formatInt(context.summary.archivedCases)} arquivado(s) e ${this.formatInt(context.summary.concludedCases)} concluído(s).`,
+      `- Tipologias: ${this.formatInt(context.summary.moralCases)} moral(is) e ${this.formatInt(context.summary.sexualCases)} sexual(is).`,
+    ];
+
+    if (context.inconsistencySummary.length > 0) {
+      lines.push(
+        `- Inconsistências detectadas em ${this.formatInt(context.summary.inconsistentCases)} caso(s): ${context.inconsistencySummary
+          .slice(0, 3)
+          .map((item) => `${item.badgeLabel} (${this.formatInt(item.count)})`)
+          .join(', ')}.`,
+      );
+    } else {
+      lines.push('- Não há inconsistências automáticas destacadas no recorte atual.');
+    }
+
+    if (context.matchedCases.length > 0) {
+      lines.push(
+        `- Casos diretamente relacionados à pergunta: ${context.matchedCases
+          .slice(0, 3)
+          .map((item) => `${item.caseNumber} (${item.omLabel})`)
+          .join(', ')}.`,
+      );
+    }
+
+    if (context.criticalCases.length > 0) {
+      lines.push(
+        `- Casos críticos abertos: ${context.criticalCases
+          .slice(0, 3)
+          .map((item) => `${item.caseNumber} • ${item.openDays} dia(s)`)
+          .join(', ')}.`,
+      );
+    }
+
+    return lines;
   }
 
   private buildDeterministicAnalysisNarrative(type: AnalysisType, data: any) {
@@ -2797,6 +3270,8 @@ export class AiService {
     focus: ComgepCopilotFocus | null;
     configuredPrompt: string | null;
     configuredSources: AiKnowledgeSourceId[];
+    configuredKnowledgeBaseIds: string[];
+    configuredFeatures: AiProfileFeatureId[];
   }) {
     const now = new Date().toISOString();
     const session: ComgepCopilotSession = {
@@ -2810,6 +3285,8 @@ export class AiService {
       focus: args.focus,
       configuredPrompt: args.configuredPrompt,
       configuredSources: [...args.configuredSources],
+      configuredKnowledgeBaseIds: [...args.configuredKnowledgeBaseIds],
+      configuredFeatures: [...args.configuredFeatures],
       messages: [],
     };
     this.comgepSessions.set(session.id, session);
@@ -4135,10 +4612,14 @@ export class AiService {
       `Escopo ativo: ${scopeLabel}.`,
       `Foco atual: ${focusLabel}.`,
       `Fontes permitidas nesta análise: ${sourceProfile.sourceLabels.join(', ') || 'nenhuma base selecionada'}.`,
+      `Features habilitadas: ${params.configuredFeatures.join(', ') || 'nenhuma feature ativa'}.`,
       `Intenção desta execução: ${this.describeComgepIntent(params.intent)}.`,
       modeInstruction,
       'Use somente o contexto fornecido. Não invente números nem links.',
       'Quando citar uma conclusão, explicite OM/UF, score e motivo sempre que existirem nas evidências.',
+      params.knowledgeContextText
+        ? 'Quando usar base documental, cite os blocos KB correspondentes.'
+        : '',
       'Não use tabelas markdown.',
       '',
       'Histórico resumido da sessão:',
@@ -4152,6 +4633,11 @@ export class AiService {
       '',
       'Resumo estruturado da Sala COMGEP:',
       compactRoomJson,
+      params.knowledgeContextText ? '' : '',
+      params.knowledgeContextText
+        ? 'Trechos recuperados da base de conhecimento:'
+        : '',
+      params.knowledgeContextText || '',
     ].join('\n');
   }
 
@@ -4208,7 +4694,11 @@ export class AiService {
       `Escopo ativo: ${scopeLabel}.`,
       `Foco atual: ${focusLabel}.`,
       `Fontes permitidas: ${sourceProfile.sourceLabels.join(', ') || 'nenhuma base selecionada'}.`,
+      `Features habilitadas: ${params.configuredFeatures.join(', ') || 'nenhuma feature ativa'}.`,
       'Responda apenas com base no contexto abaixo. Não invente números, causas ou links.',
+      params.knowledgeContextText
+        ? 'Quando usar base documental, cite os blocos KB correspondentes.'
+        : '',
       'Sempre que concluir algo, cite OM/UF, score e motivo quando houver evidência.',
       'Não use tabelas markdown.',
       '',
@@ -4223,6 +4713,11 @@ export class AiService {
       '',
       'Evidências selecionadas:',
       evidenceLines,
+      params.knowledgeContextText ? '' : '',
+      params.knowledgeContextText
+        ? 'Trechos recuperados da base de conhecimento:'
+        : '',
+      params.knowledgeContextText || '',
     ].join('\n');
   }
 
@@ -4739,6 +5234,179 @@ export class AiService {
     });
   }
 
+  private async renderChatPdf(args: {
+    profile: ChatProfileType;
+    narrative: string;
+    model: string;
+    generatedAt: string;
+    question?: string;
+  }): Promise<Buffer> {
+    const narrativeBlocks = this.parseNarrativeBlocksForPdf(args.narrative);
+    const title =
+      args.profile === 'cpca_agent'
+        ? 'Caderno IA CPCA'
+        : args.profile === 'chatbot'
+          ? 'Caderno do Chatbot Institucional'
+          : `Consulta IA • ${this.getAnalysisTitle(args.profile as AnalysisType)}`;
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({
+        size: 'A4',
+        margin: 44,
+        bufferPages: true,
+      });
+      const chunks: Buffer[] = [];
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      const LEFT = 44;
+      const WIDTH = doc.page.width - LEFT * 2;
+      const PAGE_BOTTOM = doc.page.height - 44;
+      const BLUE = args.profile === 'cpca_agent' ? '#8B1E3F' : '#1A3C6E';
+      const DARK = '#1F2937';
+      const GRAY = '#6B7280';
+      const BORDER = '#D7DEE9';
+      const BG = '#F6F8FC';
+
+      const ensureSpace = (height: number) => {
+        if (doc.y + height > PAGE_BOTTOM) doc.addPage();
+      };
+
+      const section = (sectionTitle: string) => {
+        ensureSpace(28);
+        doc.roundedRect(LEFT, doc.y, WIDTH, 22, 4).fill(BLUE);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(10)
+          .fillColor('#FFFFFF')
+          .text(sectionTitle, LEFT + 10, doc.y + 6, { width: WIDTH - 20 });
+        doc.y += 30;
+      };
+
+      doc
+        .font('Helvetica-Bold')
+        .fontSize(18)
+        .fillColor(BLUE)
+        .text(title, LEFT, doc.y, { width: WIDTH });
+      doc.moveDown(0.2);
+      doc
+        .font('Helvetica')
+        .fontSize(10)
+        .fillColor(GRAY)
+        .text(
+          `${args.profile === 'cpca_agent' ? 'Perfil CPCA' : 'Perfil conversacional'} • ${this.formatDateTimePtBr(args.generatedAt)}`,
+          LEFT,
+          doc.y,
+          { width: WIDTH },
+        );
+      doc.moveDown(0.6);
+
+      doc
+        .roundedRect(LEFT, doc.y, WIDTH, 44, 6)
+        .fill(BG)
+        .strokeColor(BORDER)
+        .lineWidth(0.6)
+        .stroke();
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor(DARK)
+        .text(
+          `Modelo: ${args.model}`,
+          LEFT + 12,
+          doc.y + 10,
+          { width: WIDTH - 24 },
+        );
+      doc
+        .font('Helvetica')
+        .fontSize(9)
+        .fillColor(DARK)
+        .text(
+          `Gerado em: ${this.formatDateTimePtBr(args.generatedAt)}`,
+          LEFT + 12,
+          doc.y + 24,
+          { width: WIDTH - 24 },
+        );
+      doc.y += 56;
+
+      if (args.question) {
+        section('Pergunta');
+        doc
+          .font('Helvetica')
+          .fontSize(10)
+          .fillColor(DARK)
+          .text(args.question, LEFT, doc.y, {
+            width: WIDTH,
+            align: 'justify',
+          });
+        doc.moveDown(0.5);
+      }
+
+      section('Resposta');
+      for (const block of narrativeBlocks) {
+        if (block.type === 'heading') {
+          ensureSpace(20);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(12)
+            .fillColor(BLUE)
+            .text(block.text, LEFT, doc.y, { width: WIDTH });
+          doc.moveDown(0.25);
+          continue;
+        }
+        if (block.type === 'table') {
+          ensureSpace(34);
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(9)
+            .fillColor(DARK)
+            .text(block.header.join(' | '), LEFT, doc.y, { width: WIDTH });
+          doc.moveDown(0.15);
+          doc
+            .font('Helvetica')
+            .fontSize(8.8)
+            .fillColor(DARK)
+            .text(
+              block.rows.map((row) => row.join(' | ')).join('\n'),
+              LEFT,
+              doc.y,
+              { width: WIDTH },
+            );
+          doc.moveDown(0.4);
+          continue;
+        }
+        ensureSpace(38);
+        doc
+          .font('Helvetica')
+          .fontSize(10)
+          .fillColor(DARK)
+          .text(block.text, LEFT, doc.y, {
+            width: WIDTH,
+            align: 'justify',
+          });
+        doc.moveDown(0.45);
+      }
+
+      const range = doc.bufferedPageRange();
+      for (let i = 0; i < range.count; i += 1) {
+        doc.switchToPage(i);
+        doc
+          .font('Helvetica')
+          .fontSize(8)
+          .fillColor(GRAY)
+          .text(
+            `Documento restrito • ${title} • Página ${i + 1}/${range.count}`,
+            LEFT,
+            doc.page.height - 28,
+            { width: WIDTH, align: 'center' },
+          );
+      }
+
+      doc.end();
+    });
+  }
+
   private buildCompactActionAgentContext(
     room: any,
     scopeUf: string | null,
@@ -5075,55 +5743,89 @@ export class AiService {
   private async gatherDataForType(
     type: AnalysisType,
     sources?: readonly AiKnowledgeSourceId[],
+    features: readonly AiProfileFeatureId[] = ALL_AI_PROFILE_FEATURE_IDS,
   ): Promise<any> {
+    const allowSituational = this.hasFeature(
+      features,
+      AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
+    );
+    const allowComplaints = this.hasFeature(
+      features,
+      AI_PROFILE_FEATURE_IDS.STRUCTURED_COMPLAINTS,
+    );
+    const allowText = this.hasFeature(
+      features,
+      AI_PROFILE_FEATURE_IDS.STRUCTURED_TEXT,
+    );
+    const allowGeo = this.hasFeature(
+      features,
+      AI_PROFILE_FEATURE_IDS.STRUCTURED_GEO,
+    );
+
     switch (type) {
       case 'executive': {
         const [dashboard, profile, text, geo] = await Promise.all([
-          this.strategic.situationalDashboard(
-            sources ? { sources: Array.from(sources) } : undefined,
-          ),
-          this.strategic.aggressorProfile(
-            sources ? { sources: Array.from(sources) } : undefined,
-          ),
-          this.strategic.textAnalysis(
-            sources ? { sources: Array.from(sources) } : undefined,
-          ),
-          this.strategic.geoMap(
-            sources ? { sources: Array.from(sources) } : undefined,
-          ),
+          allowSituational
+            ? this.strategic.situationalDashboard(
+                sources ? { sources: Array.from(sources) } : undefined,
+              )
+            : Promise.resolve(null),
+          allowComplaints
+            ? this.strategic.aggressorProfile(
+                sources ? { sources: Array.from(sources) } : undefined,
+              )
+            : Promise.resolve(null),
+          allowText
+            ? this.strategic.textAnalysis(
+                sources ? { sources: Array.from(sources) } : undefined,
+              )
+            : Promise.resolve(null),
+          allowGeo
+            ? this.strategic.geoMap(
+                sources ? { sources: Array.from(sources) } : undefined,
+              )
+            : Promise.resolve(null),
         ]);
         return {
-          dashboard,
-          profile,
-          textSummary: this.compactText(text),
-          geoSummary: this.compactGeo(geo),
+          dashboard: dashboard ?? {},
+          profile: profile ?? {},
+          textSummary: text ? this.compactText(text) : {},
+          geoSummary: geo ? this.compactGeo(geo) : {},
         };
       }
       case 'situational':
         return {
-          dashboard: await this.strategic.situationalDashboard(
-            sources ? { sources: Array.from(sources) } : undefined,
-          ),
+          dashboard: allowSituational
+            ? await this.strategic.situationalDashboard(
+                sources ? { sources: Array.from(sources) } : undefined,
+              )
+            : {},
         };
       case 'aggressor':
         return {
-          profile: await this.strategic.aggressorProfile(
-            sources ? { sources: Array.from(sources) } : undefined,
-          ),
+          profile: allowComplaints
+            ? await this.strategic.aggressorProfile(
+                sources ? { sources: Array.from(sources) } : undefined,
+              )
+            : {},
         };
       case 'text':
         return {
-          textSummary: this.compactText(
-            await this.strategic.textAnalysis(
-              sources ? { sources: Array.from(sources) } : undefined,
-            ),
-          ),
+          textSummary: allowText
+            ? this.compactText(
+                await this.strategic.textAnalysis(
+                  sources ? { sources: Array.from(sources) } : undefined,
+                ),
+              )
+            : {},
         };
       case 'geo':
         return {
-          geoMap: await this.strategic.geoMap(
-            sources ? { sources: Array.from(sources) } : undefined,
-          ),
+          geoMap: allowGeo
+            ? await this.strategic.geoMap(
+                sources ? { sources: Array.from(sources) } : undefined,
+              )
+            : {},
         };
       default:
         return {};
@@ -5134,6 +5836,10 @@ export class AiService {
     type: AnalysisType,
     data: any,
     customPrompt?: string | null,
+    options?: {
+      knowledgeContextText?: string;
+      featureIds?: AiProfileFeatureId[];
+    },
   ): string {
     let payloadJson = JSON.stringify(data);
     if (payloadJson.length > 28_000) {
@@ -5152,20 +5858,39 @@ export class AiService {
     };
 
     const instruction = customPrompt?.trim() || defaultDescriptions[type];
+    const knowledgeContextText = String(
+      options?.knowledgeContextText ?? '',
+    ).trim();
+    const enabledFeatures = Array.from(new Set(options?.featureIds ?? []));
 
-    return (
-      `${instruction}\n\n` +
-      `IMPORTANTE: Responda diretamente com a análise final em português. ` +
-      `NÃO inclua raciocínio intermediário, cálculos auxiliares ou pensamentos internos. ` +
-      `Quando fizer afirmações analíticas, cite claramente a origem dos dados (ex.: pesquisa de recrutas, denúncias, relatórios, missões).\n\n` +
-      `Dados JSON:\n${payloadJson}`
-    );
+    return [
+      instruction,
+      '',
+      'IMPORTANTE: Responda diretamente com a análise final em português.',
+      'NÃO inclua raciocínio intermediário, cálculos auxiliares ou pensamentos internos.',
+      'Quando fizer afirmações analíticas, cite claramente a origem dos dados.',
+      knowledgeContextText
+        ? 'Ao usar base documental, cite os blocos KB correspondentes.'
+        : '',
+      enabledFeatures.length
+        ? `Features ativas nesta execução: ${enabledFeatures.join(', ')}.`
+        : '',
+      '',
+      'Dados JSON:',
+      payloadJson,
+      knowledgeContextText ? '\nTrechos recuperados da base de conhecimento:\n' : '',
+      knowledgeContextText,
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   private async appendTraceabilityReferences(
-    type: AnalysisType | 'chatbot',
+    type: AiAnalysisType,
     narrative: string,
     sources?: readonly AiKnowledgeSourceId[],
+    extraRefs: AiSourceReference[] = [],
+    includeStructuredRefs = true,
   ): Promise<string> {
     const base = this.normalizeReferenceLinks(String(narrative || '')).trim();
     if (!base) return base;
@@ -5173,17 +5898,27 @@ export class AiService {
       return base;
     }
 
-    let refs: AiSourceReference[] = [];
-    try {
-      refs = await this.strategic.aiSourceReferences(type, {
-        sources: Array.isArray(sources) ? sources : undefined,
-      });
-    } catch {
-      refs = [];
+    let refs: AiSourceReference[] = [...extraRefs];
+    if (includeStructuredRefs) {
+      try {
+        refs = [
+          ...refs,
+          ...(await this.strategic.aiSourceReferences(type, {
+            sources: Array.isArray(sources) ? sources : undefined,
+          })),
+        ];
+      } catch {
+        refs = [...extraRefs];
+      }
     }
     if (!refs.length) return base;
 
-    const lines = refs.map((ref) => {
+    const uniqueRefs = refs.filter(
+      (ref, index, arr) =>
+        arr.findIndex((candidate) => candidate.href === ref.href) === index,
+    );
+
+    const lines = uniqueRefs.map((ref) => {
       const href = String(ref.href || '').trim();
       if (!href) return '';
       const label = String(ref.label || 'Referência').trim();

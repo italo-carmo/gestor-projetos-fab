@@ -6,8 +6,16 @@ import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { hasPermission } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import {
+  getCpcaCaseInconsistencies,
+  type CpcaCaseInconsistency,
+} from './cpca-case-inconsistency';
 import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
+import {
+  isJudicialArchiveProcedureSituation,
+  syncWorkflowStatusWithProcedureSituation,
+} from './cpca-workflow';
 
 const CPCA_STATUS_ORDER = [
   'RECEIVED',
@@ -58,6 +66,72 @@ export type ComplaintWorkflowContext = {
   workflowScope: ComplaintWorkflowScope;
   resource: 'cpca_cases' | 'smif_complaints';
   caseNumberPrefix: 'CPCA' | 'SMIF';
+};
+
+export type CpcaAiContextReference = {
+  id: string;
+  label: string;
+  description?: string;
+  href: string;
+};
+
+export type CpcaAiContextCase = {
+  caseId: string;
+  caseNumber: string;
+  omId: string | null;
+  omLabel: string;
+  status: string;
+  complaintType: string;
+  detailedViolenceType: string;
+  procedureType: string;
+  procedureCurrentSituation: string;
+  reportedAt: string | null;
+  incidentDate: string | null;
+  openDays: number;
+  retaliationRisk: boolean;
+  link: string;
+  inconsistencyCodes: string[];
+  inconsistencies: Array<{
+    code: string;
+    badgeLabel: string;
+    headline: string;
+    summary: string;
+    referenceTitle: string;
+    tone: 'warning' | 'info';
+  }>;
+};
+
+export type CpcaAiContext = {
+  generatedAt: string;
+  summary: {
+    totalCases: number;
+    openCases: number;
+    concludedCases: number;
+    archivedCases: number;
+    moralCases: number;
+    sexualCases: number;
+    inconsistentCases: number;
+  };
+  topStatus: Array<{ status: string; count: number }>;
+  topProcedures: Array<{ procedureType: string; count: number }>;
+  topOms: Array<{ omId: string; omLabel: string; count: number }>;
+  recentCases: CpcaAiContextCase[];
+  matchedCases: CpcaAiContextCase[];
+  criticalCases: CpcaAiContextCase[];
+  inconsistentCases: CpcaAiContextCase[];
+  inconsistencySummary: Array<{
+    code: string;
+    badgeLabel: string;
+    headline: string;
+    tone: 'warning' | 'info';
+    count: number;
+  }>;
+  normativeReferences: Array<{
+    code: string;
+    referenceTitle: string;
+    referenceBody: string;
+  }>;
+  references: CpcaAiContextReference[];
 };
 
 export const CPCA_WORKFLOW_CONTEXT: ComplaintWorkflowContext = {
@@ -190,9 +264,7 @@ export class CpcaService {
 
     return {
       items: (items ?? []).map((item: any) => ({
-        ...item,
-        localityId: item.omId ?? item.localityId ?? null,
-        locality: item.om ?? item.locality ?? null,
+        ...this.serializeComplaint(item),
         lastCommentAt: item.comments?.[0]?.createdAt ?? null,
         comments: undefined,
       })),
@@ -297,11 +369,9 @@ export class CpcaService {
         },
       },
     });
-    const items = (rawItems ?? []).map((item: any) => ({
-      ...item,
-      localityId: item.omId ?? item.localityId ?? '',
-      locality: item.om ?? item.locality ?? null,
-    }));
+    const items = (rawItems ?? []).map((item: any) =>
+      this.serializeComplaint(item),
+    );
 
     const statusCounter = new Map<string, number>(
       CPCA_STATUS_ORDER.map((status) => [status, 0]),
@@ -843,6 +913,251 @@ export class CpcaService {
     };
   }
 
+  async buildAiContext(args?: {
+    query?: string;
+    includeInconsistencies?: boolean;
+    limit?: number;
+  }): Promise<CpcaAiContext> {
+    const complaintModel = (this.prisma as any).cpcComplaintCase;
+    const now = new Date();
+    const safeLimit = Math.min(
+      12,
+      Math.max(4, Number(args?.limit ?? 8) || 8),
+    );
+    const includeInconsistencies = args?.includeInconsistencies !== false;
+    const rows = await complaintModel.findMany({
+      where: { workflowScope: CPCA_WORKFLOW_CONTEXT.workflowScope },
+      select: {
+        id: true,
+        caseNumber: true,
+        omId: true,
+        localityId: true,
+        complaintType: true,
+        detailedViolenceType: true,
+        incidentFrequency: true,
+        hierarchicalFunctionalRelation: true,
+        status: true,
+        procedureType: true,
+        procedureCurrentSituation: true,
+        reportedAt: true,
+        incidentDate: true,
+        updatedAt: true,
+        retaliationRisk: true,
+        om: { select: { id: true, code: true, name: true } },
+        locality: { select: { id: true, code: true, name: true } },
+      },
+      orderBy: [{ reportedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    const statusCounter = new Map<string, number>();
+    const procedureCounter = new Map<string, number>();
+    const omCounter = new Map<string, { omId: string; omLabel: string; count: number }>();
+    const inconsistencyCounter = new Map<
+      string,
+      {
+        code: string;
+        badgeLabel: string;
+        headline: string;
+        tone: 'warning' | 'info';
+        count: number;
+      }
+    >();
+    const normativeReferences = new Map<
+      string,
+      { code: string; referenceTitle: string; referenceBody: string }
+    >();
+
+    let moralCases = 0;
+    let sexualCases = 0;
+    let openCases = 0;
+    let concludedCases = 0;
+    let archivedCases = 0;
+
+    const caseItems: CpcaAiContextCase[] = (rows ?? []).map((raw: any) => {
+      const item = this.serializeComplaint(raw);
+      const status = String(item.status ?? '').trim();
+      const complaintType = String(item.complaintType ?? '').trim();
+      const reportedAt =
+        item.reportedAt instanceof Date && !Number.isNaN(item.reportedAt.getTime())
+          ? item.reportedAt
+          : null;
+      const incidentDate =
+        item.incidentDate instanceof Date &&
+        !Number.isNaN(item.incidentDate.getTime())
+          ? item.incidentDate
+          : null;
+      const isOpen = CPCA_OPEN_STATUS_SET.has(status);
+      const om = item.locality ?? item.om ?? null;
+      const omId = String(item.omId ?? item.localityId ?? om?.id ?? '').trim() || null;
+      const omLabel = this.formatCpcaAiOmLabel(om);
+      const inconsistencies = includeInconsistencies
+        ? getCpcaCaseInconsistencies(
+            {
+              complaintType,
+              detailedViolenceType: item.detailedViolenceType,
+              incidentFrequency: item.incidentFrequency,
+              hierarchicalFunctionalRelation: item.hierarchicalFunctionalRelation,
+              reportedAt,
+              incidentDate,
+            },
+            now,
+          )
+        : [];
+
+      statusCounter.set(status || 'NAO_INFORMADO', (statusCounter.get(status || 'NAO_INFORMADO') ?? 0) + 1);
+      const procedureType = String(item.procedureType ?? '').trim() || 'NAO_INFORMADO';
+      procedureCounter.set(
+        procedureType,
+        (procedureCounter.get(procedureType) ?? 0) + 1,
+      );
+      if (complaintType === 'MORAL') moralCases += 1;
+      if (complaintType === 'SEXUAL') sexualCases += 1;
+      if (isOpen) openCases += 1;
+      if (status === 'CONCLUDED') concludedCases += 1;
+      if (status === 'ARCHIVED') archivedCases += 1;
+      if (omId) {
+        const current = omCounter.get(omId) ?? { omId, omLabel, count: 0 };
+        current.count += 1;
+        omCounter.set(omId, current);
+      }
+      for (const inconsistency of inconsistencies) {
+        const current = inconsistencyCounter.get(inconsistency.code) ?? {
+          code: inconsistency.code,
+          badgeLabel: inconsistency.badgeLabel,
+          headline: inconsistency.headline,
+          tone: inconsistency.tone,
+          count: 0,
+        };
+        current.count += 1;
+        inconsistencyCounter.set(inconsistency.code, current);
+        if (!normativeReferences.has(inconsistency.code)) {
+          normativeReferences.set(inconsistency.code, {
+            code: inconsistency.code,
+            referenceTitle: inconsistency.referenceTitle,
+            referenceBody: inconsistency.referenceBody,
+          });
+        }
+      }
+
+      return {
+        caseId: String(item.id ?? ''),
+        caseNumber: String(item.caseNumber ?? ''),
+        omId,
+        omLabel,
+        status,
+        complaintType,
+        detailedViolenceType: String(item.detailedViolenceType ?? ''),
+        procedureType,
+        procedureCurrentSituation:
+          String(item.procedureCurrentSituation ?? '').trim() || 'NAO_INFORMADO',
+        reportedAt: reportedAt ? reportedAt.toISOString() : null,
+        incidentDate: incidentDate ? incidentDate.toISOString() : null,
+        openDays: reportedAt && isOpen ? this.daysBetween(reportedAt, now) : 0,
+        retaliationRisk: Boolean(item.retaliationRisk),
+        link: `/cpca-cases?q=${encodeURIComponent(String(item.caseNumber ?? ''))}`,
+        inconsistencyCodes: inconsistencies.map((entry) => entry.code),
+        inconsistencies: inconsistencies.map((entry) => ({
+          code: entry.code,
+          badgeLabel: entry.badgeLabel,
+          headline: entry.headline,
+          summary: entry.summary,
+          referenceTitle: entry.referenceTitle,
+          tone: entry.tone,
+        })),
+      };
+    });
+
+    const query = String(args?.query ?? '').trim();
+    const matchedCases = caseItems
+      .filter((item) => this.matchesCpcaAiQuery(item, query))
+      .slice(0, safeLimit);
+    const recentCases = caseItems
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.reportedAt ?? 0).getTime() -
+          new Date(a.reportedAt ?? 0).getTime(),
+      )
+      .slice(0, safeLimit);
+    const criticalCases = caseItems
+      .filter((item) => CPCA_OPEN_STATUS_SET.has(item.status))
+      .sort((a, b) => {
+        if (Number(b.retaliationRisk) !== Number(a.retaliationRisk)) {
+          return Number(b.retaliationRisk) - Number(a.retaliationRisk);
+        }
+        if (b.openDays !== a.openDays) return b.openDays - a.openDays;
+        return a.caseNumber.localeCompare(b.caseNumber, 'pt-BR');
+      })
+      .slice(0, safeLimit);
+    const allInconsistentCases = caseItems.filter(
+      (item) => item.inconsistencyCodes.length > 0,
+    );
+    const inconsistentCases = allInconsistentCases
+      .filter((item) => item.inconsistencyCodes.length > 0)
+      .sort((a, b) => {
+        if (b.inconsistencyCodes.length !== a.inconsistencyCodes.length) {
+          return b.inconsistencyCodes.length - a.inconsistencyCodes.length;
+        }
+        if (Number(b.retaliationRisk) !== Number(a.retaliationRisk)) {
+          return Number(b.retaliationRisk) - Number(a.retaliationRisk);
+        }
+        return (
+          new Date(b.reportedAt ?? 0).getTime() -
+          new Date(a.reportedAt ?? 0).getTime()
+        );
+      })
+      .slice(0, safeLimit);
+
+    const references = Array.from(
+      new Map<string, CpcaAiContextReference>(
+        [...matchedCases, ...inconsistentCases, ...criticalCases].map((item) => [
+          item.link,
+          {
+            id: item.caseId,
+            label: `${item.caseNumber} • ${item.omLabel}`,
+            description:
+              item.inconsistencies[0]?.headline ??
+              `${item.status} • ${item.complaintType || 'tipo não informado'}`,
+            href: item.link,
+          },
+        ]),
+      ).values(),
+    ).slice(0, safeLimit + 4);
+
+    return {
+      generatedAt: now.toISOString(),
+      summary: {
+        totalCases: caseItems.length,
+        openCases,
+        concludedCases,
+        archivedCases,
+        moralCases,
+        sexualCases,
+        inconsistentCases: allInconsistentCases.length,
+      },
+      topStatus: Array.from(statusCounter.entries())
+        .map(([status, count]) => ({ status, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6),
+      topProcedures: Array.from(procedureCounter.entries())
+        .map(([procedureType, count]) => ({ procedureType, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6),
+      topOms: Array.from(omCounter.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 6),
+      recentCases,
+      matchedCases,
+      criticalCases,
+      inconsistentCases,
+      inconsistencySummary: Array.from(inconsistencyCounter.values()).sort(
+        (a, b) => b.count - a.count,
+      ),
+      normativeReferences: Array.from(normativeReferences.values()),
+      references,
+    };
+  }
+
   async getById(
     id: string,
     user?: RbacUser,
@@ -880,9 +1195,7 @@ export class CpcaService {
       workflowContext,
     );
     return {
-      ...item,
-      localityId: item.omId ?? item.localityId ?? null,
-      locality: item.om ?? item.locality ?? null,
+      ...this.serializeComplaint(item),
     };
   }
 
@@ -1144,6 +1457,7 @@ export class CpcaService {
         confidentialityTermSigned: true,
         status: true,
         procedureType: true,
+        procedureCurrentSituation: true,
         preliminaryReportGenerated: true,
         preliminaryReportDate: true,
         victimAccusedSeparationEvaluated: true,
@@ -1152,6 +1466,7 @@ export class CpcaService {
         contractorReferralDate: true,
         accusedDefenseEnsured: true,
         outcomeSummary: true,
+        archivedAt: true,
       },
     });
     if (!current) throwError('NOT_FOUND');
@@ -1174,9 +1489,20 @@ export class CpcaService {
         )
       : current.omId ?? current.localityId ?? null;
 
-    const nextStatus = payload.status ?? current.status;
+    const nextProcedureCurrentSituation =
+      payload.procedureCurrentSituation === undefined
+        ? this.cleanOptional(current.procedureCurrentSituation)
+        : this.cleanOptional(payload.procedureCurrentSituation);
+    const nextStatus = syncWorkflowStatusWithProcedureSituation({
+      status: payload.status ?? current.status,
+      procedureCurrentSituation: nextProcedureCurrentSituation,
+    });
     const nextProcedure = payload.procedureType ?? current.procedureType;
-    this.assertStatusTransition(current.status, nextStatus);
+    this.assertStatusTransition(
+      current.status,
+      nextStatus,
+      nextProcedureCurrentSituation,
+    );
     const nextComplaintType = payload.complaintType ?? current.complaintType;
     const nextConfidentialityTermSigned =
       payload.confidentialityTermSigned ?? current.confidentialityTermSigned;
@@ -1260,6 +1586,7 @@ export class CpcaService {
       contractorReferralDate: nextContractorReferralDate,
       outcomeSummary: nextOutcomeSummary,
       accusedDefenseEnsured: nextAccusedDefenseEnsured,
+      procedureCurrentSituation: nextProcedureCurrentSituation,
     });
 
     const updated = await complaintModel.update({
@@ -1270,7 +1597,7 @@ export class CpcaService {
         localityId: null,
         complaintType: payload.complaintType,
         notifierType: payload.notifierType,
-        status: payload.status,
+        status: nextStatus,
         procedureType: payload.procedureType,
         incidentDate: payload.incidentDate
           ? new Date(payload.incidentDate)
@@ -1320,10 +1647,7 @@ export class CpcaService {
           payload.administrativeProcedure !== undefined
             ? this.cleanOptional(payload.administrativeProcedure)
             : undefined,
-        procedureCurrentSituation:
-          payload.procedureCurrentSituation !== undefined
-            ? this.cleanOptional(payload.procedureCurrentSituation)
-            : undefined,
+        procedureCurrentSituation: nextProcedureCurrentSituation,
         retaliationReported:
           payload.retaliationReported !== undefined
             ? this.cleanOptional(payload.retaliationReported)
@@ -1426,7 +1750,7 @@ export class CpcaService {
               ? new Date(payload.archivedAt)
               : null
             : nextStatus === 'ARCHIVED'
-              ? new Date()
+              ? current.archivedAt ?? new Date()
               : undefined,
         updatedBy: { connect: { id: actorId } },
       },
@@ -1467,9 +1791,7 @@ export class CpcaService {
     });
 
     return {
-      ...updated,
-      localityId: updated.omId ?? updated.localityId ?? null,
-      locality: updated.om ?? updated.locality ?? null,
+      ...this.serializeComplaint(updated),
     };
   }
 
@@ -1814,6 +2136,64 @@ export class CpcaService {
     return sanitizeText(String(value ?? '')).trim();
   }
 
+  private formatCpcaAiOmLabel(item: any) {
+    const code = String(item?.code ?? '').trim();
+    const name = String(item?.name ?? '').trim();
+    if (code && name && code !== name) {
+      return `${code} • ${name}`;
+    }
+    return code || name || 'OM não identificada';
+  }
+
+  private matchesCpcaAiQuery(item: CpcaAiContextCase, query: string) {
+    const normalizedQuery = this.cleanText(query).toUpperCase();
+    if (!normalizedQuery) return false;
+
+    const caseMatches = normalizedQuery.match(/CPCA-\d{4}-[A-Z0-9]+-\d+/g) ?? [];
+    if (
+      caseMatches.length > 0 &&
+      caseMatches.some(
+        (caseNumber) => caseNumber === String(item.caseNumber ?? '').toUpperCase(),
+      )
+    ) {
+      return true;
+    }
+
+    const tokens = normalizedQuery
+      .split(/[^A-Z0-9À-Ü]+/g)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 4);
+    if (!tokens.length) return false;
+
+    const haystack = [
+      item.caseNumber,
+      item.omLabel,
+      item.status,
+      item.complaintType,
+      item.detailedViolenceType,
+      item.procedureType,
+      item.procedureCurrentSituation,
+      ...item.inconsistencyCodes,
+      ...item.inconsistencies.map((entry) => entry.headline),
+    ]
+      .join(' ')
+      .toUpperCase();
+
+    return tokens.some((token) => haystack.includes(token));
+  }
+
+  private serializeComplaint(item: any) {
+    return {
+      ...item,
+      status: syncWorkflowStatusWithProcedureSituation({
+        status: item?.status,
+        procedureCurrentSituation: item?.procedureCurrentSituation,
+      }),
+      localityId: item?.omId ?? item?.localityId ?? null,
+      locality: item?.om ?? item?.locality ?? null,
+    };
+  }
+
   private cleanOptional(value?: string | null) {
     if (value === undefined) return undefined;
     if (value === null) return null;
@@ -1936,6 +2316,7 @@ export class CpcaService {
   private assertIcaConsistency(input: {
     status: string;
     complaintType: string;
+    procedureCurrentSituation?: string | null | undefined;
     confidentialityTermSigned: boolean | null | undefined;
     preliminaryReportGenerated: boolean | null | undefined;
     preliminaryReportDate: Date | string | null | undefined;
@@ -1977,7 +2358,10 @@ export class CpcaService {
       });
     }
 
-    if (input.status === 'CONCLUDED' || input.status === 'ARCHIVED') {
+    if (
+      (input.status === 'CONCLUDED' || input.status === 'ARCHIVED') &&
+      !isJudicialArchiveProcedureSituation(input.procedureCurrentSituation)
+    ) {
       if (!this.cleanOptional(input.outcomeSummary)) {
         throwError('VALIDATION_ERROR', {
           field: 'outcomeSummary',
@@ -1993,8 +2377,18 @@ export class CpcaService {
     }
   }
 
-  private assertStatusTransition(currentStatus: string, nextStatus: string) {
+  private assertStatusTransition(
+    currentStatus: string,
+    nextStatus: string,
+    nextProcedureCurrentSituation?: string | null,
+  ) {
     if (!nextStatus || currentStatus === nextStatus) return;
+    if (
+      nextStatus === 'ARCHIVED' &&
+      isJudicialArchiveProcedureSituation(nextProcedureCurrentSituation)
+    ) {
+      return;
+    }
 
     const allowed: Record<string, string[]> = {
       RECEIVED: ['PROTECTION_MEASURES', 'PRELIMINARY_ANALYSIS'],

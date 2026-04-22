@@ -10,6 +10,10 @@ import {
 } from '../llm/litellm.service';
 import {
   ANALYSIS_DEFAULT_SOURCES,
+  ANALYSIS_DEFAULT_FEATURES,
+  ALL_AI_PROFILE_FEATURE_IDS,
+  type AiProfileFeatureId,
+  type AiProfileFeatureSelection,
   type AnalysisSourceSelection,
   ALL_KNOWLEDGE_SOURCE_IDS,
   type AiAnalysisType,
@@ -29,7 +33,10 @@ export const AI_SETTING_KEYS = {
   baseUrl: 'ai.litellm.baseUrl',
   apiKey: 'ai.litellm.apiKey',
   model: 'ai.litellm.model',
+  embeddingModel: 'ai.litellm.embeddingModel',
   analysisSources: 'ai.analysisSources',
+  analysisKnowledgeBases: 'ai.analysisKnowledgeBases',
+  analysisFeatures: 'ai.analysisFeatures',
 } as const;
 
 export const ANALYSIS_PROMPT_KEYS: Record<string, string> = {
@@ -39,6 +46,7 @@ export const ANALYSIS_PROMPT_KEYS: Record<string, string> = {
   text: 'ai.prompt.text',
   geo: 'ai.prompt.geo',
   chatbot: 'ai.prompt.chatbot',
+  cpca_agent: 'ai.prompt.cpca_agent',
   briefing_comgep: 'ai.prompt.briefing_comgep',
   priorizacao_intervencao: 'ai.prompt.priorizacao_intervencao',
   governanca_cpca: 'ai.prompt.governanca_cpca',
@@ -73,6 +81,26 @@ const mergeUniqueSources = (values: unknown): AiKnowledgeSourceId[] => {
   return parsed;
 };
 
+const mergeUniqueStringIds = (values: unknown): string[] => {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .filter((value, idx, arr) => arr.indexOf(value) === idx);
+};
+
+const mergeUniqueFeatures = (values: unknown): AiProfileFeatureId[] => {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .filter((value, idx, arr) => arr.indexOf(value) === idx)
+    .filter(
+      (value): value is AiProfileFeatureId =>
+        ALL_AI_PROFILE_FEATURE_IDS.includes(value as AiProfileFeatureId),
+    );
+};
+
 const parseAnalysisSources = (raw: unknown): AnalysisSourceSelection => {
   const fallback = { ...ANALYSIS_DEFAULT_SOURCES } as AnalysisSourceSelection;
   if (!raw || typeof raw !== 'string') return fallback;
@@ -104,6 +132,82 @@ const normalizeSourceSelectionForStorage = (
     if (!(type in input)) continue;
     const normalized = mergeUniqueSources(input[type]);
     (result as Record<string, AiKnowledgeSourceId[]>)[type] = normalized;
+  }
+  return result;
+};
+
+const parseAnalysisKnowledgeBases = (
+  raw: unknown,
+): Record<AiAnalysisType, string[]> => {
+  const fallback = AI_ANALYSIS_TYPES.reduce<Record<AiAnalysisType, string[]>>(
+    (acc, type) => {
+      acc[type] = [];
+      return acc;
+    },
+    {} as Record<AiAnalysisType, string[]>,
+  );
+  if (!raw || typeof raw !== 'string') return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return fallback;
+    const entries = Object.entries(parsed as Record<string, unknown>);
+    for (const [type, values] of entries) {
+      if (!AI_ANALYSIS_TYPES.includes(type as AiAnalysisType)) continue;
+      fallback[type as AiAnalysisType] = mergeUniqueStringIds(values);
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const normalizeAnalysisKnowledgeBasesForStorage = (
+  input: Partial<Record<AiAnalysisType, unknown>>,
+): Record<AiAnalysisType, string[]> => {
+  const result = AI_ANALYSIS_TYPES.reduce<Record<AiAnalysisType, string[]>>(
+    (acc, type) => {
+      acc[type] = [];
+      return acc;
+    },
+    {} as Record<AiAnalysisType, string[]>,
+  );
+  for (const type of AI_ANALYSIS_TYPES) {
+    if (!(type in input)) continue;
+    result[type] = mergeUniqueStringIds(input[type]);
+  }
+  return result;
+};
+
+const parseAnalysisFeatures = (raw: unknown): AiProfileFeatureSelection => {
+  const fallback = {
+    ...ANALYSIS_DEFAULT_FEATURES,
+  } as AiProfileFeatureSelection;
+  if (!raw || typeof raw !== 'string') return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return fallback;
+    const entries = Object.entries(parsed as Record<string, unknown>);
+    for (const [type, values] of entries) {
+      if (!AI_ANALYSIS_TYPES.includes(type as AiAnalysisType)) continue;
+      (fallback as Record<string, AiProfileFeatureId[]>)[type] =
+        mergeUniqueFeatures(values);
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const normalizeFeatureSelectionForStorage = (
+  input: Partial<Record<AiAnalysisType, unknown>>,
+): AiProfileFeatureSelection => {
+  const result = {
+    ...ANALYSIS_DEFAULT_FEATURES,
+  } as AiProfileFeatureSelection;
+  for (const type of AI_ANALYSIS_TYPES) {
+    if (!(type in input)) continue;
+    (result as Record<string, AiProfileFeatureId[]>)[type] =
+      mergeUniqueFeatures(input[type]);
   }
   return result;
 };
@@ -153,8 +257,11 @@ export class SettingsService implements OnModuleInit {
     apiKey: string;
     apiKeyMasked: string;
     model: string;
+    embeddingModel: string;
     analysisPrompts: Record<string, string>;
     analysisSources: AnalysisSourceSelection;
+    analysisKnowledgeBases: Record<AiAnalysisType, string[]>;
+    analysisFeatures: AiProfileFeatureSelection;
   }> {
     const allKeys = [
       ...Object.values(AI_SETTING_KEYS),
@@ -167,6 +274,12 @@ export class SettingsService implements OnModuleInit {
     const map = new Map<string, string>(rows.map((r) => [r.key, r.value]));
     const rawSources = map.get(AI_SETTING_KEYS.analysisSources);
     const analysisSources = parseAnalysisSources(rawSources);
+    const analysisKnowledgeBases = parseAnalysisKnowledgeBases(
+      map.get(AI_SETTING_KEYS.analysisKnowledgeBases),
+    );
+    const analysisFeatures = parseAnalysisFeatures(
+      map.get(AI_SETTING_KEYS.analysisFeatures),
+    );
 
     const analysisPrompts: Record<string, string> = {};
     for (const [type, key] of Object.entries(ANALYSIS_PROMPT_KEYS)) {
@@ -191,6 +304,10 @@ export class SettingsService implements OnModuleInit {
         ...LITELLM_MODEL_ENV_KEYS,
       ]),
     );
+    const runtimeEmbeddingModel = pickConfiguredValue(
+      map.get(AI_SETTING_KEYS.embeddingModel),
+      firstConfig(this.config, ['API_LITELLM_EMBEDDING_MODEL', 'LITELLM_EMBEDDING_MODEL']),
+    );
 
     return {
       systemPrompt:
@@ -201,8 +318,11 @@ export class SettingsService implements OnModuleInit {
         ? `${runtimeApiKey.slice(0, 5)}${'*'.repeat(Math.max(0, runtimeApiKey.length - 5))}`
         : '',
       model: runtimeModel,
+      embeddingModel: runtimeEmbeddingModel,
       analysisPrompts,
       analysisSources,
+      analysisKnowledgeBases,
+      analysisFeatures,
     };
   }
 
@@ -218,6 +338,34 @@ export class SettingsService implements OnModuleInit {
   ): Promise<AiKnowledgeSourceId[]> {
     const rows = await this.getAnalysisSources();
     return rows[type] ?? ANALYSIS_DEFAULT_SOURCES[type];
+  }
+
+  async getAnalysisKnowledgeBases(): Promise<Record<AiAnalysisType, string[]>> {
+    const row = await this.appSetting.findUnique({
+      where: { key: AI_SETTING_KEYS.analysisKnowledgeBases },
+    });
+    return parseAnalysisKnowledgeBases(row?.value ?? null);
+  }
+
+  async getAnalysisKnowledgeBasesForType(
+    type: AiAnalysisType,
+  ): Promise<string[]> {
+    const rows = await this.getAnalysisKnowledgeBases();
+    return rows[type] ?? [];
+  }
+
+  async getAnalysisFeatures(): Promise<AiProfileFeatureSelection> {
+    const row = await this.appSetting.findUnique({
+      where: { key: AI_SETTING_KEYS.analysisFeatures },
+    });
+    return parseAnalysisFeatures(row?.value ?? null);
+  }
+
+  async getAnalysisFeaturesForType(
+    type: AiAnalysisType,
+  ): Promise<AiProfileFeatureId[]> {
+    const rows = await this.getAnalysisFeatures();
+    return rows[type] ?? ANALYSIS_DEFAULT_FEATURES[type];
   }
 
   async getComgepScoringWeights(): Promise<ComgepScoringWeights> {
@@ -258,8 +406,11 @@ export class SettingsService implements OnModuleInit {
       baseUrl: string;
       apiKey: string;
       model: string;
+      embeddingModel: string;
       analysisPrompts: Record<string, string>;
       analysisSources: Partial<Record<string, AiKnowledgeSourceId[]>>;
+      analysisKnowledgeBases: Partial<Record<AiAnalysisType, string[]>>;
+      analysisFeatures: Partial<Record<AiAnalysisType, AiProfileFeatureId[]>>;
     }>,
   ): Promise<void> {
     const ops: Promise<any>[] = [];
@@ -275,6 +426,9 @@ export class SettingsService implements OnModuleInit {
     if (patch.model !== undefined) {
       ops.push(this.set(AI_SETTING_KEYS.model, patch.model));
     }
+    if (patch.embeddingModel !== undefined) {
+      ops.push(this.set(AI_SETTING_KEYS.embeddingModel, patch.embeddingModel));
+    }
     if (patch.analysisPrompts) {
       for (const [type, value] of Object.entries(patch.analysisPrompts)) {
         const key = ANALYSIS_PROMPT_KEYS[type];
@@ -289,6 +443,30 @@ export class SettingsService implements OnModuleInit {
       ops.push(
         this.set(
           AI_SETTING_KEYS.analysisSources,
+          stringifyAnalysisSources(normalized),
+        ),
+      );
+    }
+
+    if (patch.analysisKnowledgeBases) {
+      const normalized = normalizeAnalysisKnowledgeBasesForStorage(
+        patch.analysisKnowledgeBases,
+      );
+      ops.push(
+        this.set(
+          AI_SETTING_KEYS.analysisKnowledgeBases,
+          stringifyAnalysisSources(normalized),
+        ),
+      );
+    }
+
+    if (patch.analysisFeatures) {
+      const normalized = normalizeFeatureSelectionForStorage(
+        patch.analysisFeatures,
+      );
+      ops.push(
+        this.set(
+          AI_SETTING_KEYS.analysisFeatures,
           stringifyAnalysisSources(normalized),
         ),
       );
@@ -322,5 +500,10 @@ export class SettingsService implements OnModuleInit {
     if (!key) return null;
     const val = await this.get(key);
     return val || null;
+  }
+
+  async getEmbeddingModel(): Promise<string | null> {
+    const settings = await this.getAiSettings();
+    return settings.embeddingModel?.trim() || null;
   }
 }

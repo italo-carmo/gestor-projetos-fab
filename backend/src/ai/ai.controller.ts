@@ -133,7 +133,7 @@ export class AiController {
     body: {
       message: string;
       history?: { role: string; content: string }[];
-      analysisType?: AnalysisType | 'chatbot';
+      analysisType?: AnalysisType | 'chatbot' | 'cpca_agent';
       profile?: ChatProfileType;
     },
     @Res() res: Response,
@@ -161,6 +161,35 @@ export class AiController {
       );
     }
     res.end();
+  }
+
+  @Post('chat/pdf')
+  @RequirePermission('ai', 'view', PermissionScope.NATIONAL)
+  async chatPdf(
+    @Body()
+    body: {
+      profile?: ChatProfileType;
+      narrative?: string;
+      model?: string;
+      generatedAt?: string;
+      question?: string;
+    },
+    @Res() res: Response,
+  ) {
+    const profile = body.profile ?? 'chatbot';
+    const buffer = await this.ai.chatPdf(profile, {
+      narrative: body.narrative,
+      model: body.model,
+      generatedAt: body.generatedAt,
+      question: body.question,
+    });
+    const filename = `consulta-ia-${profile}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length,
+    });
+    res.end(buffer);
   }
 
   @Post('action-agents/run')

@@ -48,13 +48,17 @@ import {
   useComgepScoringSettings,
   useMe,
   usePhases,
+  useSelectableKnowledgeBases,
   useUpdateAiSettings,
   useUpdateComgepScoringSettings,
   useUpdatePhase,
   useTestAiConnection,
+  type AdminKnowledgeBase,
   type AiAnalysisSourceSelection,
   type AiAnalysisType,
   type AiKnowledgeSourceId,
+  type AiProfileFeatureId,
+  type AiProfileFeatureSelection,
   type AiSettingsPatch,
   type AiSettingsResponse,
   type ComgepScoringGroupId,
@@ -98,6 +102,7 @@ import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
 import { getTargetLocalityKey, selectTargetLocalities } from '../constants/localities';
 import { BiNormalizationTab } from '../components/admin/BiNormalizationTab';
+import { KnowledgeBasesTab } from '../components/admin/KnowledgeBasesTab';
 
 const UF_OPTIONS = [
   'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
@@ -178,6 +183,72 @@ const ANALYSIS_SOURCE_CATALOG: Array<{
   },
 ];
 
+const AI_PROFILE_FEATURE_CATALOG: Array<{
+  id: AiProfileFeatureId;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: 'structured_situational',
+    label: 'Panorama situacional',
+    description:
+      'Libera panorama estruturado com pesquisas, denúncias, missões, atividades e tarefas.',
+  },
+  {
+    id: 'structured_complaints',
+    label: 'Perfis de denúncias',
+    description:
+      'Libera perfil de agressor, vítima, relações hierárquicas e estatísticas de denúncias.',
+  },
+  {
+    id: 'structured_text',
+    label: 'Sinais textuais',
+    description:
+      'Libera análise textual consolidada a partir de relatórios, observações e textos livres.',
+  },
+  {
+    id: 'structured_geo',
+    label: 'Recorte geográfico',
+    description: 'Libera recortes por UF, localidade e distribuição territorial.',
+  },
+  {
+    id: 'rag_knowledge_bases',
+    label: 'RAG documental',
+    description:
+      'Permite consultar as bases de conhecimento selecionadas com busca lexical e vetorial.',
+  },
+  {
+    id: 'traceability_links',
+    label: 'Referências',
+    description:
+      'Acrescenta referências estruturadas e documentais ao final das respostas.',
+  },
+  {
+    id: 'suggested_links',
+    label: 'Links sugeridos',
+    description:
+      'Permite sugerir telas e registros do sistema ao final da resposta.',
+  },
+  {
+    id: 'suggested_actions',
+    label: 'Ações sugeridas',
+    description:
+      'Permite sugerir atalhos operacionais como criar missão, atividade, tarefa ou cronograma.',
+  },
+  {
+    id: 'cpca_case_inconsistencies',
+    label: 'Inconsistências CPCA',
+    description:
+      'Libera a camada analítica de inconsistências cadastrais, cronológicas e normativas nas denúncias CPCA.',
+  },
+  {
+    id: 'comgep_room',
+    label: 'Sala COMGEP',
+    description:
+      'Permite consultar o contexto estruturado da Sala COMGEP nos copilotos gerenciais.',
+  },
+];
+
 const ANALYSIS_TYPES: AiAnalysisType[] = [
   'executive',
   'situational',
@@ -185,12 +256,19 @@ const ANALYSIS_TYPES: AiAnalysisType[] = [
   'text',
   'geo',
   'chatbot',
+  'cpca_agent',
   'briefing_comgep',
   'priorizacao_intervencao',
   'governanca_cpca',
 ];
 
 const normalizeSourceArray = (value: AiKnowledgeSourceId[] | undefined) =>
+  Array.from(new Set((value ?? []).filter(Boolean).sort()));
+
+const normalizeKnowledgeBaseArray = (value: string[] | undefined) =>
+  Array.from(new Set((value ?? []).map((item) => String(item ?? '').trim()).filter(Boolean)));
+
+const normalizeFeatureArray = (value: AiProfileFeatureId[] | undefined) =>
   Array.from(new Set((value ?? []).filter(Boolean).sort()));
 
 const buildDefaultAnalysisSources = (): AiAnalysisSourceSelection => ({
@@ -200,9 +278,74 @@ const buildDefaultAnalysisSources = (): AiAnalysisSourceSelection => ({
   text: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   geo: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   chatbot: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+  cpca_agent: [
+    'complaints_cpca',
+    'missions',
+    'activities_smif',
+    'activities_cipavd',
+    'tasks',
+    'survey_cpca_meeting',
+  ],
   briefing_comgep: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   priorizacao_intervencao: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
   governanca_cpca: [...ANALYSIS_SOURCE_CATALOG.map((entry) => entry.id)],
+});
+
+const buildDefaultAnalysisKnowledgeBases = (): Record<AiAnalysisType, string[]> =>
+  ANALYSIS_TYPES.reduce<Record<AiAnalysisType, string[]>>((acc, type) => {
+    acc[type] = [];
+    return acc;
+  }, {} as Record<AiAnalysisType, string[]>);
+
+const buildDefaultAnalysisFeatures = (): AiProfileFeatureSelection => ({
+  executive: [
+    'structured_situational',
+    'structured_complaints',
+    'structured_text',
+    'structured_geo',
+    'rag_knowledge_bases',
+    'traceability_links',
+  ],
+  situational: [
+    'structured_situational',
+    'rag_knowledge_bases',
+    'traceability_links',
+  ],
+  aggressor: [
+    'structured_situational',
+    'structured_complaints',
+    'rag_knowledge_bases',
+    'traceability_links',
+  ],
+  text: ['structured_text', 'rag_knowledge_bases', 'traceability_links'],
+  geo: [
+    'structured_situational',
+    'structured_geo',
+    'rag_knowledge_bases',
+    'traceability_links',
+  ],
+  chatbot: [
+    'structured_situational',
+    'structured_complaints',
+    'structured_text',
+    'structured_geo',
+    'rag_knowledge_bases',
+    'traceability_links',
+    'suggested_links',
+    'suggested_actions',
+  ],
+  cpca_agent: [
+    'structured_situational',
+    'structured_complaints',
+    'structured_text',
+    'rag_knowledge_bases',
+    'traceability_links',
+    'suggested_links',
+    'cpca_case_inconsistencies',
+  ],
+  briefing_comgep: ['comgep_room', 'rag_knowledge_bases', 'traceability_links'],
+  priorizacao_intervencao: ['comgep_room', 'rag_knowledge_bases', 'traceability_links'],
+  governanca_cpca: ['comgep_room', 'rag_knowledge_bases', 'traceability_links'],
 });
 
 type LocalityForm = {
@@ -1714,6 +1857,16 @@ const ANALYSIS_PROMPTS_CONFIG: {
     icon: <SmartToyRoundedIcon sx={{ fontSize: 28 }} />,
   },
   {
+    type: 'cpca_agent',
+    group: 'chatbot',
+    label: 'IA CPCA',
+    short: 'Denúncias CPCA, inconsistências, relatórios e base normativa.',
+    placeholder:
+      'Responda como a IA analítica da CPCA, com foco em denúncias CPCA, workflow, inconsistências cadastrais e procedimentais, aderência normativa, risco institucional e relatórios executivos com rastreabilidade por caso e OM.',
+    accent: '#8B1E3F',
+    icon: <ShieldRoundedIcon sx={{ fontSize: 28 }} />,
+  },
+  {
     type: 'briefing_comgep',
     group: 'copilot',
     label: 'Briefing COMGEP',
@@ -1758,9 +1911,9 @@ const AI_SETTINGS_GROUPS: Array<{
   },
   {
     id: 'chatbot',
-    label: 'Chatbot',
+    label: 'Chatbots e agentes conversacionais',
     description:
-      'Configura o chatbot livre da aba IA, incluindo as bases que ele pode enxergar e a instrução-base usada nas respostas.',
+      'Configura o chatbot livre da aba IA e a IA CPCA, incluindo bases, fontes estruturadas, features e instruções específicas.',
   },
   {
     id: 'copilot',
@@ -1794,8 +1947,49 @@ const sanitizeAnalysisSources = (input: AiSettingsResponse['analysisSources']) =
   }, defaults);
 };
 
+const sanitizeAnalysisKnowledgeBases = (
+  input: AiSettingsResponse['analysisKnowledgeBases'],
+) => {
+  const defaults = buildDefaultAnalysisKnowledgeBases();
+  return ANALYSIS_TYPES.reduce<Record<AiAnalysisType, string[]>>((acc, type) => {
+    acc[type] = normalizeKnowledgeBaseArray(input?.[type]);
+    return acc;
+  }, defaults);
+};
+
+const sanitizeAnalysisFeatures = (
+  input: AiSettingsResponse['analysisFeatures'],
+) => {
+  const defaults = buildDefaultAnalysisFeatures();
+  return ANALYSIS_TYPES.reduce<AiProfileFeatureSelection>((acc, type) => {
+    acc[type] = normalizeFeatureArray(input?.[type]);
+    return acc;
+  }, defaults);
+};
+
+const sameStringSelections = (
+  valuesA: string[] = [],
+  valuesB: string[] = [],
+) => {
+  const normalizedA = normalizeKnowledgeBaseArray(valuesA);
+  const normalizedB = normalizeKnowledgeBaseArray(valuesB);
+  if (normalizedA.length !== normalizedB.length) return false;
+  return normalizedA.every((value, index) => value === normalizedB[index]);
+};
+
+const sameFeatureSelections = (
+  valuesA: AiProfileFeatureId[] = [],
+  valuesB: AiProfileFeatureId[] = [],
+) => {
+  const normalizedA = normalizeFeatureArray(valuesA);
+  const normalizedB = normalizeFeatureArray(valuesB);
+  if (normalizedA.length !== normalizedB.length) return false;
+  return normalizedA.every((value, index) => value === normalizedB[index]);
+};
+
 function AiSettingsTab() {
   const settingsQuery = useAiSettings();
+  const selectableKnowledgeBasesQuery = useSelectableKnowledgeBases();
   const updateSettings = useUpdateAiSettings();
   const testConnection = useTestAiConnection();
   const toast = useToast();
@@ -1806,16 +2000,22 @@ function AiSettingsTab() {
     baseUrl: '',
     apiKey: '',
     model: '',
+    embeddingModel: '',
     systemPrompt: '',
   });
   const [analysisSources, setAnalysisSources] =
     useState<AiAnalysisSourceSelection>(buildDefaultAnalysisSources());
+  const [analysisKnowledgeBases, setAnalysisKnowledgeBases] =
+    useState<Record<AiAnalysisType, string[]>>(buildDefaultAnalysisKnowledgeBases());
+  const [analysisFeatures, setAnalysisFeatures] =
+    useState<AiProfileFeatureSelection>(buildDefaultAnalysisFeatures());
   const [analysisPrompts, setAnalysisPrompts] =
     useState<Record<string, string>>(buildDefaultAnalysisPrompts());
   const [showKey, setShowKey] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [availableModels, setAvailableModels] = useState<string[]>([]);
   const [modelMode, setModelMode] = useState<'list' | 'manual'>('manual');
+  const [embeddingModelMode, setEmbeddingModelMode] = useState<'list' | 'manual'>('manual');
 
   useEffect(() => {
     if (settingsQuery.data && !loaded) {
@@ -1823,9 +2023,14 @@ function AiSettingsTab() {
         baseUrl: settingsQuery.data.baseUrl ?? '',
         apiKey: '',
         model: settingsQuery.data.model ?? '',
+        embeddingModel: settingsQuery.data.embeddingModel ?? '',
         systemPrompt: settingsQuery.data.systemPrompt ?? '',
       });
       setAnalysisSources(sanitizeAnalysisSources(settingsQuery.data.analysisSources));
+      setAnalysisKnowledgeBases(
+        sanitizeAnalysisKnowledgeBases(settingsQuery.data.analysisKnowledgeBases),
+      );
+      setAnalysisFeatures(sanitizeAnalysisFeatures(settingsQuery.data.analysisFeatures));
       const serverPrompts = settingsQuery.data.analysisPrompts ?? {};
       setAnalysisPrompts(
         ANALYSIS_PROMPTS_CONFIG.reduce<Record<string, string>>((acc, item) => {
@@ -1862,6 +2067,11 @@ function AiSettingsTab() {
           } else {
             setModelMode('list');
           }
+          if (form.embeddingModel && !models.includes(form.embeddingModel)) {
+            setEmbeddingModelMode('manual');
+          } else {
+            setEmbeddingModelMode('list');
+          }
         }
 
         if (notify) {
@@ -1878,10 +2088,19 @@ function AiSettingsTab() {
         });
       }
     },
-    [form.model, testConnection, toast],
+    [form.embeddingModel, form.model, testConnection, toast],
   );
 
   const allSourceIds = ANALYSIS_SOURCE_CATALOG.map((source) => source.id);
+  const selectableKnowledgeBases = useMemo(
+    () => (selectableKnowledgeBasesQuery.data?.items ?? []) as AdminKnowledgeBase[],
+    [selectableKnowledgeBasesQuery.data],
+  );
+  const allKnowledgeBaseIds = useMemo(
+    () => selectableKnowledgeBases.map((item) => item.id),
+    [selectableKnowledgeBases],
+  );
+  const allFeatureIds = AI_PROFILE_FEATURE_CATALOG.map((feature) => feature.id);
 
   const toggleSource = (
     analysisType: AiAnalysisType,
@@ -1917,6 +2136,72 @@ function AiSettingsTab() {
     }));
   };
 
+  const toggleKnowledgeBase = (
+    analysisType: AiAnalysisType,
+    knowledgeBaseId: string,
+    checked: boolean,
+  ) => {
+    setAnalysisKnowledgeBases((prev) => {
+      const next = new Set(normalizeKnowledgeBaseArray(prev[analysisType]));
+      if (checked) {
+        next.add(knowledgeBaseId);
+      } else {
+        next.delete(knowledgeBaseId);
+      }
+      return {
+        ...prev,
+        [analysisType]: Array.from(next),
+      };
+    });
+  };
+
+  const setAllKnowledgeBases = (analysisType: AiAnalysisType) => {
+    setAnalysisKnowledgeBases((prev) => ({
+      ...prev,
+      [analysisType]: [...allKnowledgeBaseIds],
+    }));
+  };
+
+  const clearKnowledgeBases = (analysisType: AiAnalysisType) => {
+    setAnalysisKnowledgeBases((prev) => ({
+      ...prev,
+      [analysisType]: [],
+    }));
+  };
+
+  const toggleFeature = (
+    analysisType: AiAnalysisType,
+    featureId: AiProfileFeatureId,
+    checked: boolean,
+  ) => {
+    setAnalysisFeatures((prev) => {
+      const next = new Set(normalizeFeatureArray(prev[analysisType]));
+      if (checked) {
+        next.add(featureId);
+      } else {
+        next.delete(featureId);
+      }
+      return {
+        ...prev,
+        [analysisType]: Array.from(next),
+      };
+    });
+  };
+
+  const setAllFeatures = (analysisType: AiAnalysisType) => {
+    setAnalysisFeatures((prev) => ({
+      ...prev,
+      [analysisType]: [...allFeatureIds],
+    }));
+  };
+
+  const clearFeatures = (analysisType: AiAnalysisType) => {
+    setAnalysisFeatures((prev) => ({
+      ...prev,
+      [analysisType]: [],
+    }));
+  };
+
   const getSourceSelectionSummary = (analysisType: AiAnalysisType) => {
     const selected = analysisSources[analysisType] ?? [];
     const selectedLabels = ANALYSIS_SOURCE_CATALOG.filter((source) =>
@@ -1928,6 +2213,26 @@ function AiSettingsTab() {
     if (selectedLabels.length <= 2) {
       return selectedLabels.join(' • ');
     }
+    return `${selectedLabels.slice(0, 2).join(' • ')} +${selectedLabels.length - 2}`;
+  };
+
+  const getKnowledgeBaseSelectionSummary = (analysisType: AiAnalysisType) => {
+    const selected = analysisKnowledgeBases[analysisType] ?? [];
+    const selectedLabels = selectableKnowledgeBases
+      .filter((knowledgeBase) => selected.includes(knowledgeBase.id))
+      .map((knowledgeBase) => knowledgeBase.name);
+    if (selectedLabels.length === 0) return 'Nenhuma base documental';
+    if (selectedLabels.length <= 2) return selectedLabels.join(' • ');
+    return `${selectedLabels.slice(0, 2).join(' • ')} +${selectedLabels.length - 2}`;
+  };
+
+  const getFeatureSelectionSummary = (analysisType: AiAnalysisType) => {
+    const selected = analysisFeatures[analysisType] ?? [];
+    const selectedLabels = AI_PROFILE_FEATURE_CATALOG.filter((feature) =>
+      selected.includes(feature.id),
+    ).map((feature) => feature.label);
+    if (selectedLabels.length === 0) return 'Nenhuma feature liberada';
+    if (selectedLabels.length <= 2) return selectedLabels.join(' • ');
     return `${selectedLabels.slice(0, 2).join(' • ')} +${selectedLabels.length - 2}`;
   };
 
@@ -1946,6 +2251,8 @@ function AiSettingsTab() {
     if (form.apiKey) patch.apiKey = form.apiKey;
     if (form.model !== (settingsQuery.data?.model ?? ''))
       patch.model = form.model;
+    if (form.embeddingModel !== (settingsQuery.data?.embeddingModel ?? ''))
+      patch.embeddingModel = form.embeddingModel;
 
     const serverPrompts = settingsQuery.data?.analysisPrompts ?? {};
     const changedPrompts: Record<string, string> = {};
@@ -1968,6 +2275,30 @@ function AiSettingsTab() {
     }
     if (Object.keys(changedSources).length > 0) {
       patch.analysisSources = changedSources;
+    }
+
+    const changedKnowledgeBases: Partial<Record<AiAnalysisType, string[]>> = {};
+    for (const analysisType of ANALYSIS_TYPES) {
+      const baseline = settingsQuery.data?.analysisKnowledgeBases?.[analysisType] ?? [];
+      const selected = analysisKnowledgeBases[analysisType] ?? [];
+      if (!sameStringSelections(selected, baseline)) {
+        changedKnowledgeBases[analysisType] = selected;
+      }
+    }
+    if (Object.keys(changedKnowledgeBases).length > 0) {
+      patch.analysisKnowledgeBases = changedKnowledgeBases;
+    }
+
+    const changedFeatures: Partial<Record<AiAnalysisType, AiProfileFeatureId[]>> = {};
+    for (const analysisType of ANALYSIS_TYPES) {
+      const baseline = settingsQuery.data?.analysisFeatures?.[analysisType] ?? [];
+      const selected = analysisFeatures[analysisType] ?? [];
+      if (!sameFeatureSelections(selected, baseline)) {
+        changedFeatures[analysisType] = selected;
+      }
+    }
+    if (Object.keys(changedFeatures).length > 0) {
+      patch.analysisFeatures = changedFeatures;
     }
 
     if (Object.keys(patch).length === 0) {
@@ -2013,10 +2344,10 @@ function AiSettingsTab() {
             Configuração de IA
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Prompts, escopo de fontes e conexão do LiteLLM para as análises estruturadas da
-            página IA, para o chatbot livre e para os copilotos gerenciais da aba
-            Assistente. Valores salvos aqui substituem o <code>.env</code> do servidor
-            para URL, chave e modelo.
+            Prompts, fontes estruturadas, bases do RAG, features por perfil e conexão do
+            LiteLLM para as análises estruturadas da página IA, para o chatbot livre e
+            para os copilotos gerenciais da aba Assistente. Valores salvos aqui substituem
+            o <code>.env</code> do servidor para URL, chave e modelo.
           </Typography>
         </Box>
       </Stack>
@@ -2127,6 +2458,51 @@ function AiSettingsTab() {
               helperText="Use somente se o ID estiver correto no LiteLLM."
             />
           )}
+          <TextField
+            size="small"
+            select
+            label="Modelo de embeddings"
+            value={embeddingModelMode === 'manual' ? '__manual__' : form.embeddingModel}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === '__manual__') {
+                setEmbeddingModelMode('manual');
+                return;
+              }
+              setEmbeddingModelMode('list');
+              setForm({ ...form, embeddingModel: value });
+            }}
+            fullWidth
+            helperText="Opcional. Se vazio, o RAG usa somente busca lexical."
+          >
+            <MenuItem value="">
+              <em>Sem embeddings configurados</em>
+            </MenuItem>
+            {availableModels.map((model) => (
+              <MenuItem key={`embedding-${model}`} value={model}>
+                {model}
+              </MenuItem>
+            ))}
+            {form.embeddingModel && !availableModels.includes(form.embeddingModel) && (
+              <MenuItem value={form.embeddingModel}>
+                {`${form.embeddingModel} (atual, não listado)`}
+              </MenuItem>
+            )}
+            <MenuItem value="__manual__">
+              <em>Outro (digitar manualmente)</em>
+            </MenuItem>
+          </TextField>
+          {embeddingModelMode === 'manual' && (
+            <TextField
+              size="small"
+              label="Modelo de embeddings personalizado"
+              value={form.embeddingModel}
+              onChange={(e) => setForm({ ...form, embeddingModel: e.target.value })}
+              placeholder="Ex.: bge-m3 ou e5-large"
+              fullWidth
+              helperText="Use o identificador exposto pelo LiteLLM para o endpoint /v1/embeddings."
+            />
+          )}
         </Stack>
       )}
 
@@ -2170,11 +2546,31 @@ function AiSettingsTab() {
                     variant="outlined"
                     label={`${ANALYSIS_SOURCE_CATALOG.length} fontes`}
                   />
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={`${selectableKnowledgeBases.length} bases RAG`}
+                  />
+                  <Chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    label={`${AI_PROFILE_FEATURE_CATALOG.length} features`}
+                  />
                   <Chip size="small" color="primary" variant="outlined" label="1 system prompt" />
                 </Stack>
               </Stack>
             </Stack>
           </Paper>
+
+          {selectableKnowledgeBasesQuery.isError && (
+            <Alert severity="warning" variant="outlined">
+              Não foi possível carregar as bases de conhecimento disponíveis. Você ainda pode
+              editar prompts e fontes estruturadas, mas a seleção do RAG ficará incompleta até
+              a aba de bases voltar a responder.
+            </Alert>
+          )}
 
           {ANALYSIS_PROMPTS_CONFIG.length === 0 ? (
             <Alert severity="warning" variant="outlined">
@@ -2199,6 +2595,9 @@ function AiSettingsTab() {
                     <Stack spacing={1}>
                       {items.map((item, index) => {
                         const selectedCount = (analysisSources[item.type] ?? []).length;
+                        const selectedKnowledgeBasesCount =
+                          (analysisKnowledgeBases[item.type] ?? []).length;
+                        const selectedFeaturesCount = (analysisFeatures[item.type] ?? []).length;
                         const hasCustomPrompt = Boolean((analysisPrompts[item.type] ?? '').trim());
                         const isExpanded = expandedAiProfile === item.type;
 
@@ -2307,6 +2706,16 @@ function AiSettingsTab() {
                                       />
                                       <Chip
                                         size="small"
+                                        variant="outlined"
+                                        label={`${selectedKnowledgeBasesCount} base(s)`}
+                                      />
+                                      <Chip
+                                        size="small"
+                                        variant="outlined"
+                                        label={`${selectedFeaturesCount} feature(s)`}
+                                      />
+                                      <Chip
+                                        size="small"
                                         color={hasCustomPrompt ? 'success' : 'default'}
                                         variant={hasCustomPrompt ? 'filled' : 'outlined'}
                                         label={hasCustomPrompt ? 'Prompt customizado' : 'Prompt padrão'}
@@ -2318,7 +2727,11 @@ function AiSettingsTab() {
                                     color="text.secondary"
                                     sx={{ display: 'block', mt: 0.9 }}
                                   >
-                                    {getSourceSelectionSummary(item.type)}
+                                    {[
+                                      getSourceSelectionSummary(item.type),
+                                      getKnowledgeBaseSelectionSummary(item.type),
+                                      getFeatureSelectionSummary(item.type),
+                                    ].join(' • ')}
                                   </Typography>
                                 </Box>
                               </Stack>
@@ -2337,98 +2750,301 @@ function AiSettingsTab() {
                                     borderBottom: { xs: '1px solid #EEF2F7', lg: 'none' },
                                   }}
                                 >
-                                  <Stack spacing={1.25}>
-                                    <Stack
-                                      direction={{ xs: 'column', sm: 'row' }}
-                                      spacing={1}
-                                      justifyContent="space-between"
-                                      alignItems={{ sm: 'center' }}
-                                    >
-                                      <Box>
-                                        <Typography variant="subtitle2" fontWeight={800}>
-                                          Fontes permitidas
-                                        </Typography>
-                                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
-                                          Selecione apenas as bases que este perfil pode consultar.
-                                        </Typography>
-                                      </Box>
-                                      <Stack direction="row" spacing={1}>
-                                        <Button
-                                          size="small"
-                                          variant="text"
-                                          onClick={() => setAllSources(item.type)}
-                                        >
-                                          Todas
-                                        </Button>
-                                        <Button
-                                          size="small"
-                                          variant="text"
-                                          onClick={() => clearSources(item.type)}
-                                        >
-                                          Nenhuma
-                                        </Button>
+                                  <Stack spacing={2}>
+                                    <Stack spacing={1.25}>
+                                      <Stack
+                                        direction={{ xs: 'column', sm: 'row' }}
+                                        spacing={1}
+                                        justifyContent="space-between"
+                                        alignItems={{ sm: 'center' }}
+                                      >
+                                        <Box>
+                                          <Typography variant="subtitle2" fontWeight={800}>
+                                            Fontes estruturadas permitidas
+                                          </Typography>
+                                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                                            Defina quais tabelas e agregados internos este perfil pode consultar.
+                                          </Typography>
+                                        </Box>
+                                        <Stack direction="row" spacing={1}>
+                                          <Button
+                                            size="small"
+                                            variant="text"
+                                            onClick={() => setAllSources(item.type)}
+                                          >
+                                            Todas
+                                          </Button>
+                                          <Button
+                                            size="small"
+                                            variant="text"
+                                            onClick={() => clearSources(item.type)}
+                                          >
+                                            Nenhuma
+                                          </Button>
+                                        </Stack>
                                       </Stack>
+                                      <Box
+                                        sx={{
+                                          display: 'grid',
+                                          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                          gap: 1,
+                                        }}
+                                      >
+                                        {ANALYSIS_SOURCE_CATALOG.map((source) => (
+                                          <Paper
+                                            key={`${item.type}-${source.id}`}
+                                            variant="outlined"
+                                            sx={{
+                                              p: 1.1,
+                                              borderRadius: 2,
+                                              borderColor:
+                                                analysisSources[item.type]?.includes(source.id)
+                                                  ? alpha(item.accent, 0.45)
+                                                  : '#E6ECF5',
+                                              bgcolor:
+                                                analysisSources[item.type]?.includes(source.id)
+                                                  ? alpha(item.accent, 0.06)
+                                                  : '#fff',
+                                            }}
+                                          >
+                                            <FormControlLabel
+                                              control={
+                                                <Checkbox
+                                                  size="small"
+                                                  checked={
+                                                    analysisSources[item.type]?.includes(source.id) ??
+                                                    false
+                                                  }
+                                                  onChange={(event) =>
+                                                    toggleSource(
+                                                      item.type,
+                                                      source.id,
+                                                      event.target.checked,
+                                                    )
+                                                  }
+                                                />
+                                              }
+                                              label={
+                                                <Stack spacing={0.1}>
+                                                  <Typography variant="body2" fontWeight={700}>
+                                                    {source.label}
+                                                  </Typography>
+                                                  <Typography variant="caption" color="text.secondary">
+                                                    {source.description}
+                                                  </Typography>
+                                                </Stack>
+                                              }
+                                              sx={{
+                                                m: 0,
+                                                alignItems: 'flex-start',
+                                                width: '100%',
+                                              }}
+                                            />
+                                          </Paper>
+                                        ))}
+                                      </Box>
                                     </Stack>
-                                    <Box
-                                      sx={{
-                                        display: 'grid',
-                                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-                                        gap: 1,
-                                      }}
-                                    >
-                                      {ANALYSIS_SOURCE_CATALOG.map((source) => (
-                                        <Paper
-                                          key={`${item.type}-${source.id}`}
-                                          variant="outlined"
+
+                                    <Stack spacing={1.25}>
+                                      <Stack
+                                        direction={{ xs: 'column', sm: 'row' }}
+                                        spacing={1}
+                                        justifyContent="space-between"
+                                        alignItems={{ sm: 'center' }}
+                                      >
+                                        <Box>
+                                          <Typography variant="subtitle2" fontWeight={800}>
+                                            Bases de conhecimento do RAG
+                                          </Typography>
+                                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                                            Selecione uma ou mais bases documentais que este perfil poderá consultar.
+                                          </Typography>
+                                        </Box>
+                                        <Stack direction="row" spacing={1}>
+                                          <Button
+                                            size="small"
+                                            variant="text"
+                                            onClick={() => setAllKnowledgeBases(item.type)}
+                                            disabled={allKnowledgeBaseIds.length === 0}
+                                          >
+                                            Todas
+                                          </Button>
+                                          <Button
+                                            size="small"
+                                            variant="text"
+                                            onClick={() => clearKnowledgeBases(item.type)}
+                                          >
+                                            Nenhuma
+                                          </Button>
+                                        </Stack>
+                                      </Stack>
+                                      {selectableKnowledgeBasesQuery.isLoading ? (
+                                        <Typography variant="body2" color="text.secondary">
+                                          Carregando bases de conhecimento...
+                                        </Typography>
+                                      ) : selectableKnowledgeBases.length === 0 ? (
+                                        <Alert severity="warning" variant="outlined">
+                                          Nenhuma base cadastrada. Crie bases na aba
+                                          {' '}<strong>Bases de conhecimento</strong> antes de ativar o RAG.
+                                        </Alert>
+                                      ) : (
+                                        <Box
                                           sx={{
-                                            p: 1.1,
-                                            borderRadius: 2,
-                                            borderColor:
-                                              analysisSources[item.type]?.includes(source.id)
-                                                ? alpha(item.accent, 0.45)
-                                                : '#E6ECF5',
-                                            bgcolor:
-                                              analysisSources[item.type]?.includes(source.id)
-                                                ? alpha(item.accent, 0.06)
-                                                : '#fff',
+                                            display: 'grid',
+                                            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                            gap: 1,
                                           }}
                                         >
-                                          <FormControlLabel
-                                            control={
-                                              <Checkbox
-                                                size="small"
-                                                checked={
-                                                  analysisSources[item.type]?.includes(source.id) ??
-                                                  false
+                                          {selectableKnowledgeBases.map((knowledgeBase) => (
+                                            <Paper
+                                              key={`${item.type}-kb-${knowledgeBase.id}`}
+                                              variant="outlined"
+                                              sx={{
+                                                p: 1.1,
+                                                borderRadius: 2,
+                                                borderColor:
+                                                  analysisKnowledgeBases[item.type]?.includes(knowledgeBase.id)
+                                                    ? alpha(item.accent, 0.45)
+                                                    : '#E6ECF5',
+                                                bgcolor:
+                                                  analysisKnowledgeBases[item.type]?.includes(knowledgeBase.id)
+                                                    ? alpha(item.accent, 0.06)
+                                                    : '#fff',
+                                              }}
+                                            >
+                                              <FormControlLabel
+                                                control={
+                                                  <Checkbox
+                                                    size="small"
+                                                    checked={
+                                                      analysisKnowledgeBases[item.type]?.includes(
+                                                        knowledgeBase.id,
+                                                      ) ?? false
+                                                    }
+                                                    onChange={(event) =>
+                                                      toggleKnowledgeBase(
+                                                        item.type,
+                                                        knowledgeBase.id,
+                                                        event.target.checked,
+                                                      )
+                                                    }
+                                                  />
                                                 }
-                                                onChange={(event) =>
-                                                  toggleSource(
-                                                    item.type,
-                                                    source.id,
-                                                    event.target.checked,
-                                                  )
+                                                label={
+                                                  <Stack spacing={0.1}>
+                                                    <Typography variant="body2" fontWeight={700}>
+                                                      {knowledgeBase.name}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                      {knowledgeBase.theme} • {knowledgeBase.description?.trim() || knowledgeBase.key}
+                                                    </Typography>
+                                                  </Stack>
                                                 }
+                                                sx={{
+                                                  m: 0,
+                                                  alignItems: 'flex-start',
+                                                  width: '100%',
+                                                }}
                                               />
-                                            }
-                                            label={
-                                              <Stack spacing={0.1}>
-                                                <Typography variant="body2" fontWeight={700}>
-                                                  {source.label}
-                                                </Typography>
-                                                <Typography variant="caption" color="text.secondary">
-                                                  {source.description}
-                                                </Typography>
-                                              </Stack>
-                                            }
+                                            </Paper>
+                                          ))}
+                                        </Box>
+                                      )}
+                                    </Stack>
+
+                                    <Stack spacing={1.25}>
+                                      <Stack
+                                        direction={{ xs: 'column', sm: 'row' }}
+                                        spacing={1}
+                                        justifyContent="space-between"
+                                        alignItems={{ sm: 'center' }}
+                                      >
+                                        <Box>
+                                          <Typography variant="subtitle2" fontWeight={800}>
+                                            Features liberadas
+                                          </Typography>
+                                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.35 }}>
+                                            Controle o que o perfil pode fazer além dos prompts: RAG, rastreabilidade, ações sugeridas e contexto COMGEP.
+                                          </Typography>
+                                        </Box>
+                                        <Stack direction="row" spacing={1}>
+                                          <Button
+                                            size="small"
+                                            variant="text"
+                                            onClick={() => setAllFeatures(item.type)}
+                                          >
+                                            Todas
+                                          </Button>
+                                          <Button
+                                            size="small"
+                                            variant="text"
+                                            onClick={() => clearFeatures(item.type)}
+                                          >
+                                            Nenhuma
+                                          </Button>
+                                        </Stack>
+                                      </Stack>
+                                      <Box
+                                        sx={{
+                                          display: 'grid',
+                                          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                                          gap: 1,
+                                        }}
+                                      >
+                                        {AI_PROFILE_FEATURE_CATALOG.map((feature) => (
+                                          <Paper
+                                            key={`${item.type}-feature-${feature.id}`}
+                                            variant="outlined"
                                             sx={{
-                                              m: 0,
-                                              alignItems: 'flex-start',
-                                              width: '100%',
+                                              p: 1.1,
+                                              borderRadius: 2,
+                                              borderColor:
+                                                analysisFeatures[item.type]?.includes(feature.id)
+                                                  ? alpha(item.accent, 0.45)
+                                                  : '#E6ECF5',
+                                              bgcolor:
+                                                analysisFeatures[item.type]?.includes(feature.id)
+                                                  ? alpha(item.accent, 0.06)
+                                                  : '#fff',
                                             }}
-                                          />
-                                        </Paper>
-                                      ))}
-                                    </Box>
+                                          >
+                                            <FormControlLabel
+                                              control={
+                                                <Checkbox
+                                                  size="small"
+                                                  checked={
+                                                    analysisFeatures[item.type]?.includes(feature.id) ??
+                                                    false
+                                                  }
+                                                  onChange={(event) =>
+                                                    toggleFeature(
+                                                      item.type,
+                                                      feature.id,
+                                                      event.target.checked,
+                                                    )
+                                                  }
+                                                />
+                                              }
+                                              label={
+                                                <Stack spacing={0.1}>
+                                                  <Typography variant="body2" fontWeight={700}>
+                                                    {feature.label}
+                                                  </Typography>
+                                                  <Typography variant="caption" color="text.secondary">
+                                                    {feature.description}
+                                                  </Typography>
+                                                </Stack>
+                                              }
+                                              sx={{
+                                                m: 0,
+                                                alignItems: 'flex-start',
+                                                width: '100%',
+                                              }}
+                                            />
+                                          </Paper>
+                                        ))}
+                                      </Box>
+                                    </Stack>
                                   </Stack>
                                 </Box>
 
@@ -2964,6 +3580,7 @@ export function AdminPage() {
   const [currentTab, setCurrentTab] = useState(tabParam);
   const canViewCipavdLocalities = can(me, 'localities_cipavd', 'view');
   const canViewAiSettings = hasAnyRole(me, [ROLE_TI]);
+  const canViewKnowledgeBases = canViewAiSettings;
   const canViewComgepSettings = canViewAiSettings;
   const canViewBiNormalization = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
 
@@ -2986,6 +3603,15 @@ export function AdminPage() {
   }, [canViewBiNormalization, currentTab, searchParams, setSearchParams]);
 
   useEffect(() => {
+    if (currentTab !== 'knowledge-bases' || canViewKnowledgeBases) return;
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', 'postos');
+    params.delete('baseId');
+    params.delete('docId');
+    setSearchParams(params, { replace: true });
+  }, [canViewKnowledgeBases, currentTab, searchParams, setSearchParams]);
+
+  useEffect(() => {
     if (currentTab !== 'comgep-settings' || canViewComgepSettings) return;
     const params = new URLSearchParams(searchParams);
     params.set('tab', 'postos');
@@ -3006,8 +3632,8 @@ export function AdminPage() {
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         Gerencie localidades SMIF e CIPAVD, postos, fases, papéis de elo e o
-        mapeamento institucional do sistema, além das configurações de IA e
-        dos parâmetros executivos do COMGEP.
+        mapeamento institucional do sistema, além das bases de conhecimento,
+        das configurações de IA e dos parâmetros executivos do COMGEP.
       </Typography>
 
       <Card>
@@ -3028,6 +3654,9 @@ export function AdminPage() {
             {canViewBiNormalization && (
               <Tab label="Normalização BI" value="bi-normalization" />
             )}
+            {canViewKnowledgeBases && (
+              <Tab label="Bases de Conhecimento" value="knowledge-bases" />
+            )}
             {canViewComgepSettings && (
               <Tab label="Configuração COMGEP" value="comgep-settings" />
             )}
@@ -3044,6 +3673,9 @@ export function AdminPage() {
           {currentTab === 'institutional-mapping' && <InstitutionalMappingTab />}
           {canViewBiNormalization && currentTab === 'bi-normalization' && (
             <BiNormalizationTab />
+          )}
+          {canViewKnowledgeBases && currentTab === 'knowledge-bases' && (
+            <KnowledgeBasesTab />
           )}
           {canViewComgepSettings && currentTab === 'comgep-settings' && (
             <ComgepSettingsTab />

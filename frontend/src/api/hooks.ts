@@ -3288,6 +3288,69 @@ export function useCpcaCommissionOverview(
   });
 }
 
+export function useCpcaChecklistLocality(
+  localityId: string | undefined,
+  enabled = true,
+) {
+  const normalizedLocalityId = String(localityId ?? "").trim();
+  return useQuery({
+    queryKey: qk.cpcaChecklistLocality(normalizedLocalityId),
+    queryFn: async () =>
+      (
+        await api.get("/cpca-checklist/locality", {
+          params: normalizedLocalityId
+            ? { localityId: normalizedLocalityId }
+            : undefined,
+        })
+      ).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useUpdateCpcaChecklist() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      localityId?: string;
+      items: Array<{
+        itemKey: string;
+        isCompleted: boolean;
+        completedAt?: string | null;
+        details?: string | null;
+        speakerName?: string | null;
+      }>;
+    }) => (await api.put("/cpca-checklist/locality", payload)).data,
+    onSuccess: (_data, payload) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["cpcaChecklist"] });
+      const localityId = String(payload.localityId ?? "").trim();
+      if (localityId) {
+        qc.invalidateQueries({
+          queryKey: qk.cpcaChecklistLocality(localityId),
+        });
+      }
+      qc.invalidateQueries({
+        queryKey: ["cpcaChecklist", "national"],
+        exact: false,
+      });
+    },
+  });
+}
+
+export function useCpcaChecklistNational(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.cpcaChecklistNational(filters),
+    queryFn: async () =>
+      (await api.get("/cpca-checklist/national", { params: filters })).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useAssignCpcaPresident() {
   const qc = useQueryClient();
   return useMutation({
@@ -5146,6 +5209,7 @@ export type AiAnalysisType =
   | "text"
   | "geo"
   | "chatbot"
+  | "cpca_agent"
   | "briefing_comgep"
   | "priorizacao_intervencao"
   | "governanca_cpca";
@@ -5171,14 +5235,89 @@ export type AiAnalysisSourceSelection = Record<
   AiKnowledgeSourceId[]
 >;
 
+export type AiProfileFeatureId =
+  | "structured_situational"
+  | "structured_complaints"
+  | "structured_text"
+  | "structured_geo"
+  | "rag_knowledge_bases"
+  | "traceability_links"
+  | "suggested_links"
+  | "suggested_actions"
+  | "cpca_case_inconsistencies"
+  | "comgep_room";
+
+export type AiProfileFeatureSelection = Record<
+  AiAnalysisType,
+  AiProfileFeatureId[]
+>;
+
+export type AiKnowledgeBaseTheme = "CIPAVD" | "SMIF" | "CPCA" | "SHARED";
+
+export type AdminKnowledgeBase = {
+  id: string;
+  key: string;
+  name: string;
+  description?: string | null;
+  theme: AiKnowledgeBaseTheme;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    documents?: number;
+    chunks?: number;
+  };
+  documentStatusSummary?: {
+    pending: number;
+    indexing: number;
+    ready: number;
+    failed: number;
+  };
+};
+
+export type AdminKnowledgeBaseDocument = {
+  id: string;
+  knowledgeBaseId: string;
+  title: string;
+  fileName: string;
+  fileUrl: string;
+  storageKey?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  checksum?: string | null;
+  status: "PENDING" | "INDEXING" | "READY" | "FAILED";
+  contentText?: string | null;
+  parsedAt?: string | null;
+  lastIndexedAt?: string | null;
+  chunkCount: number;
+  indexError?: string | null;
+  metadataJson?: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+  knowledgeBase?: {
+    id: string;
+    key: string;
+    name: string;
+    theme: AiKnowledgeBaseTheme;
+  };
+  _count?: {
+    chunks?: number;
+  };
+  downloadUrl?: string;
+};
+
 export type AiSettingsResponse = {
   systemPrompt: string;
   baseUrl: string;
   apiKey: string;
   apiKeyMasked: string;
   model: string;
+  embeddingModel: string;
   analysisPrompts: Record<string, string>;
   analysisSources: AiAnalysisSourceSelection;
+  analysisKnowledgeBases: Record<AiAnalysisType, string[]>;
+  analysisFeatures: AiProfileFeatureSelection;
 };
 
 export type AiSettingsPatch = {
@@ -5186,8 +5325,11 @@ export type AiSettingsPatch = {
   baseUrl?: string;
   apiKey?: string;
   model?: string;
+  embeddingModel?: string;
   analysisPrompts?: Record<string, string>;
   analysisSources?: Partial<Record<AiAnalysisType, AiKnowledgeSourceId[]>>;
+  analysisKnowledgeBases?: Partial<Record<AiAnalysisType, string[]>>;
+  analysisFeatures?: Partial<Record<AiAnalysisType, AiProfileFeatureId[]>>;
 };
 
 export type ComgepScoringWeightKey =
@@ -5254,6 +5396,47 @@ export function useAiSettings() {
     queryKey: qk.aiSettings,
     queryFn: async () =>
       (await api.get<AiSettingsResponse>("/admin/ai-settings")).data,
+  });
+}
+
+export function useKnowledgeBases() {
+  return useQuery({
+    queryKey: qk.knowledgeBases,
+    queryFn: async () =>
+      (
+        await api.get<{ items: AdminKnowledgeBase[] }>("/admin/knowledge-bases")
+      ).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useSelectableKnowledgeBases() {
+  return useQuery({
+    queryKey: qk.knowledgeBasesSelectable,
+    queryFn: async () =>
+      (
+        await api.get<{ items: AdminKnowledgeBase[] }>(
+          "/admin/knowledge-bases/selectable",
+        )
+      ).data,
+    staleTime: 10_000,
+  });
+}
+
+export function useKnowledgeBaseDocuments(
+  knowledgeBaseId: string,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.knowledgeBaseDocuments(knowledgeBaseId),
+    queryFn: async () =>
+      (
+        await api.get<{ items: AdminKnowledgeBaseDocument[] }>(
+          `/admin/knowledge-bases/${knowledgeBaseId}/documents`,
+        )
+      ).data,
+    enabled: Boolean(knowledgeBaseId) && enabled,
+    staleTime: 5_000,
   });
 }
 
@@ -5426,6 +5609,176 @@ export function useUpdateAiSettings() {
       (await api.put("/admin/ai-settings", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.aiSettings });
+    },
+  });
+}
+
+export function useCreateKnowledgeBase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      key?: string;
+      name: string;
+      description?: string | null;
+      theme?: AiKnowledgeBaseTheme | null;
+      isActive?: boolean;
+      sortOrder?: number | null;
+    }) => (await api.post("/admin/knowledge-bases", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.knowledgeBases });
+      qc.invalidateQueries({ queryKey: qk.knowledgeBasesSelectable });
+      qc.invalidateQueries({ queryKey: qk.aiSettings });
+    },
+  });
+}
+
+export function useUpdateKnowledgeBase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        key?: string;
+        name?: string;
+        description?: string | null;
+        theme?: AiKnowledgeBaseTheme | null;
+        isActive?: boolean;
+        sortOrder?: number | null;
+      };
+    }) => (await api.put(`/admin/knowledge-bases/${args.id}`, args.payload)).data,
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.knowledgeBases });
+      qc.invalidateQueries({ queryKey: qk.knowledgeBasesSelectable });
+      qc.invalidateQueries({
+        queryKey: qk.knowledgeBaseDocuments(variables.id),
+      });
+      qc.invalidateQueries({ queryKey: qk.aiSettings });
+    },
+  });
+}
+
+export function useDeleteKnowledgeBase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/admin/knowledge-bases/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.knowledgeBases });
+      qc.invalidateQueries({ queryKey: qk.knowledgeBasesSelectable });
+      qc.invalidateQueries({ queryKey: qk.aiSettings });
+    },
+  });
+}
+
+export function useUploadKnowledgeBaseDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      knowledgeBaseId: string;
+      file: File;
+      title?: string;
+    }) => {
+      const formData = new FormData();
+      formData.append("file", args.file);
+      if (args.title) formData.append("title", args.title);
+      return (
+        await api.post(
+          `/admin/knowledge-bases/${args.knowledgeBaseId}/documents/upload`,
+          formData,
+          {
+            headers: { "Content-Type": "multipart/form-data" },
+          },
+        )
+      ).data;
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.knowledgeBases });
+      qc.invalidateQueries({
+        queryKey: qk.knowledgeBaseDocuments(variables.knowledgeBaseId),
+      });
+    },
+  });
+}
+
+export function useUpdateKnowledgeBaseDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      knowledgeBaseId: string;
+      payload: { title?: string | null };
+    }) =>
+      (await api.put(`/admin/knowledge-bases/documents/${args.id}`, args.payload))
+        .data,
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.knowledgeBases });
+      qc.invalidateQueries({
+        queryKey: qk.knowledgeBaseDocuments(variables.knowledgeBaseId),
+      });
+    },
+  });
+}
+
+export function useDeleteKnowledgeBaseDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; knowledgeBaseId: string }) =>
+      (await api.delete(`/admin/knowledge-bases/documents/${args.id}`)).data,
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.knowledgeBases });
+      qc.invalidateQueries({
+        queryKey: qk.knowledgeBaseDocuments(variables.knowledgeBaseId),
+      });
+    },
+  });
+}
+
+export function useReindexKnowledgeBase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (knowledgeBaseId: string) =>
+      (await api.post(`/admin/knowledge-bases/${knowledgeBaseId}/reindex`)).data,
+    onSuccess: (_data, knowledgeBaseId) => {
+      qc.invalidateQueries({ queryKey: qk.knowledgeBases });
+      qc.invalidateQueries({ queryKey: qk.knowledgeBaseDocuments(knowledgeBaseId) });
+    },
+  });
+}
+
+export function useReindexKnowledgeBaseDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; knowledgeBaseId: string }) =>
+      (await api.post(`/admin/knowledge-bases/documents/${args.id}/reindex`))
+        .data,
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.knowledgeBases });
+      qc.invalidateQueries({
+        queryKey: qk.knowledgeBaseDocuments(variables.knowledgeBaseId),
+      });
+    },
+  });
+}
+
+export function useDownloadKnowledgeBaseDocument() {
+  return useMutation({
+    mutationFn: async (args: { id: string; fileName: string }) => {
+      const response = await api.get(
+        `/admin/knowledge-bases/documents/${args.id}/download`,
+        {
+          responseType: "blob",
+        },
+      );
+      const blob = new Blob([response.data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = args.fileName || `base-conhecimento-${args.id}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
     },
   });
 }

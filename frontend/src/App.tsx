@@ -34,6 +34,8 @@ import { ComgepSituationRoomPage } from "./pages/ComgepSituationRoomPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
+import { CpcaAiPage } from "./pages/CpcaAiPage";
+import { CpcaChecklistPage } from "./pages/CpcaChecklistPage";
 import { CpcaCommissionPage } from "./pages/CpcaCommissionPage";
 import { CpcaPresidentApprovalsPage } from "./pages/CpcaPresidentApprovalsPage";
 import { CpcaStatsPage } from "./pages/CpcaStatsPage";
@@ -44,7 +46,13 @@ import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
 import { can, canAccessAdminCatalog } from "./app/rbac";
-import { hasAnyRole, resolveHomePath, ROLE_COMGEP, ROLE_TI } from "./app/roleAccess";
+import {
+  hasAnyRole,
+  resolveHomePath,
+  ROLE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from "./app/roleAccess";
 import { useMe } from "./api/hooks";
 
 function HomeRedirect() {
@@ -256,12 +264,42 @@ function App() {
                   }
                 />
                 <Route
+                  path="/cpca-ai"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "ai", "view") &&
+                        can(user, "cpca_cases", "view", "NATIONAL")
+                      }
+                    >
+                      <CpcaAiPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
                   path="/cpca-commission"
                   element={
                     <RequireRoleAccess
                       allow={(user) => can(user, "cpca_cases", "view")}
                     >
                       <CpcaCommissionPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/cpca-checklist"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "cpca_checklist", "view") &&
+                        hasAnyRole(user, [
+                          ROLE_TI,
+                          ROLE_COMGEP,
+                          ROLE_COORDENACAO_CIPAVD,
+                        ])
+                      }
+                    >
+                      <CpcaChecklistPage />
                     </RequireRoleAccess>
                   }
                 />

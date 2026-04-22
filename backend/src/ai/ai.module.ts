@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ActivitiesModule } from '../activities/activities.module';
+import { CpcaModule } from '../cpca/cpca.module';
+import { KnowledgeBasesModule } from '../knowledge-bases/knowledge-bases.module';
 import { LitellmModule } from '../llm/litellm.module';
 import { MissionsModule } from '../missions/missions.module';
 import { RbacModule } from '../rbac/rbac.module';
@@ -15,8 +17,10 @@ import { AiService } from './ai.service';
   imports: [
     RbacModule,
     StrategicModule,
+    CpcaModule,
     MissionsModule,
     ActivitiesModule,
+    KnowledgeBasesModule,
     TasksModule,
     SocialCommunicationModule,
     LitellmModule,

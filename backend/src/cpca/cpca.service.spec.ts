@@ -6,6 +6,9 @@ function createPrismaMock() {
     cpcaCommissionCoverageOm: {
       findMany: jest.fn(),
     },
+    cpcComplaintCase: {
+      findMany: jest.fn(),
+    },
     om: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
@@ -102,5 +105,81 @@ describe('CpcaService security scope', () => {
         CPCA_WORKFLOW_CONTEXT,
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('CpcaService AI context', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('resume casos CPCA, casos críticos e inconsistências para a IA', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+
+    prisma.cpcComplaintCase.findMany.mockResolvedValue([
+      {
+        id: 'case-1',
+        caseNumber: 'CPCA-2026-BACG-00001',
+        omId: 'om-1',
+        localityId: 'om-1',
+        complaintType: 'MORAL',
+        detailedViolenceType: 'ASSEDIO_MORAL',
+        incidentFrequency: 'UMA_VEZ',
+        hierarchicalFunctionalRelation: 'SUPERIOR_HIERARQUICO',
+        status: 'RECEIVED',
+        procedureType: 'NOT_DEFINED',
+        procedureCurrentSituation: null,
+        reportedAt: new Date('2026-04-10T12:00:00.000Z'),
+        incidentDate: new Date('2026-04-08T12:00:00.000Z'),
+        updatedAt: new Date('2026-04-11T12:00:00.000Z'),
+        retaliationRisk: true,
+        om: { id: 'om-1', code: 'BACG', name: 'Base Aérea de Campo Grande' },
+        locality: null,
+      },
+      {
+        id: 'case-2',
+        caseNumber: 'CPCA-2026-DCTA-00002',
+        omId: 'om-2',
+        localityId: 'om-2',
+        complaintType: 'SEXUAL',
+        detailedViolenceType: 'IMPORTUNACAO_SEXUAL',
+        incidentFrequency: 'MAIS_DE_UMA_VEZ',
+        hierarchicalFunctionalRelation: 'MESMA_GRADUACAO',
+        status: 'ARCHIVED',
+        procedureType: 'IPM',
+        procedureCurrentSituation: 'ARQUIVADO_PELA_JUSTICA',
+        reportedAt: new Date('2026-03-20T12:00:00.000Z'),
+        incidentDate: new Date('2026-05-01T12:00:00.000Z'),
+        updatedAt: new Date('2026-04-20T12:00:00.000Z'),
+        retaliationRisk: false,
+        om: { id: 'om-2', code: 'DCTA', name: 'Departamento de Ciência e Tecnologia Aeroespacial' },
+        locality: null,
+      },
+    ]);
+
+    const result = await service.buildAiContext({
+      query: 'Verifique o caso CPCA-2026-BACG-00001 e inconsistências',
+      includeInconsistencies: true,
+      limit: 6,
+    });
+
+    expect(result.summary.totalCases).toBe(2);
+    expect(result.summary.openCases).toBe(1);
+    expect(result.summary.archivedCases).toBe(1);
+    expect(result.summary.inconsistentCases).toBe(2);
+    expect(result.inconsistencySummary.map((item) => item.code)).toEqual(
+      expect.arrayContaining([
+        'ICA_25_26',
+        'DATE_IN_FUTURE',
+        'INCIDENT_AFTER_REPORT',
+        'ICA_32_II_IMPORTUNACAO',
+      ]),
+    );
+    expect(result.matchedCases[0]?.caseNumber).toBe('CPCA-2026-BACG-00001');
+    expect(result.references[0]?.href).toContain('/cpca-cases?q=CPCA-2026-BACG-00001');
+    expect(result.normativeReferences.map((item) => item.code)).toContain(
+      'ICA_25_26',
+    );
   });
 });

@@ -46,7 +46,8 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description:
       "Assistentes, análises, copilotos e fluxos assistidos por IA.",
     route: "/ai",
-    sidebarItems: ["Inteligência Artificial"],
+    routeAliases: ["/cpca-ai"],
+    sidebarItems: ["Inteligência Artificial", "IA CPCA"],
     expectedActions: VIEW_ONLY,
   },
   kpis: {
@@ -233,6 +234,16 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     routeAliases: ["/cpca-commission", "/cpca-president-approvals"],
     sidebarItems: ["Denúncias", "Comissão CPCA", "Homologações CPCA"],
     expectedActions: CRUD_COMMENT,
+  },
+  cpca_checklist: {
+    menu: "CPCA",
+    menuOrder: 60,
+    title: "Checklist CPCA",
+    description:
+      "Visão nacional do checklist de ações executadas pelas comissões CPCA nas OMs.",
+    route: "/cpca-checklist",
+    sidebarItems: ["Checklist"],
+    expectedActions: VIEW_ONLY,
   },
   cpca_dashboard: {
     menu: "CPCA",
