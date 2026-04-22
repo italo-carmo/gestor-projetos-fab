@@ -10,6 +10,7 @@ import {
   CardContent,
   Chip,
   IconButton,
+  LinearProgress,
   MenuItem,
   Stack,
   Table,
@@ -21,29 +22,63 @@ import {
   Typography,
 } from "@mui/material";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
+import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
 import PersonSearchRoundedIcon from "@mui/icons-material/PersonSearchRounded";
+import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
 import WorkspacePremiumRoundedIcon from "@mui/icons-material/WorkspacePremiumRounded";
 import GroupRoundedIcon from "@mui/icons-material/GroupRounded";
+import CampaignRoundedIcon from "@mui/icons-material/CampaignRounded";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
+import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
+import RadioButtonUncheckedRoundedIcon from "@mui/icons-material/RadioButtonUncheckedRounded";
+import RestartAltRoundedIcon from "@mui/icons-material/RestartAltRounded";
+import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
+import ShareRoundedIcon from "@mui/icons-material/ShareRounded";
+import TodayRoundedIcon from "@mui/icons-material/TodayRounded";
+import TouchAppRoundedIcon from "@mui/icons-material/TouchAppRounded";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   useAddCpcaCommissionMember,
   useAssignCpcaPresident,
+  useCpcaCasePendingSummary,
+  useCpcaChecklistLocality,
   useCpcaCommissionOverview,
   useCreateCpcaPresidentNominationRequest,
   useMe,
   useOmsCatalog,
   useRemoveCpcaCommissionMember,
+  useSmifComplaintPendingSummary,
+  useUpdateCpcaChecklist,
   useUpdateCpcaCommissionCoverage,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
+import { can } from "../app/rbac";
 import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import {
+  areCpcaChecklistDraftsEqual,
+  buildCpcaChecklistDraft,
+  formatCpcaChecklistDate,
+  getCpcaChecklistStatusTone,
+  getCpcaChecklistFieldConfig,
+  isCpcaChecklistBinaryQuestionItem,
+  type CpcaChecklistDraftItem,
+  type CpcaChecklistItem,
+  type CpcaChecklistItemKey,
+  type CpcaChecklistSummary,
+} from "../features/cpcaChecklist";
+import {
+  getComplaintPendencyBadge,
+  sortComplaintPendingItems,
+} from "../features/cpcaCipavdThreads";
 
 type OmsCatalogItem = {
   id: string;
@@ -111,6 +146,16 @@ type NominationRequestItem = {
   requestedAsSubstitution?: boolean;
 };
 
+type ChecklistLocalityResponse = {
+  locality: { id: string; code: string; name: string };
+  checklist: {
+    summary: CpcaChecklistSummary;
+    items: CpcaChecklistItem[];
+  };
+  canEdit: boolean;
+  userIsPresident: boolean;
+};
+
 function extractReason(error: unknown) {
   const responseData = (
     error as { response?: { data?: { details?: { reason?: string } } } }
@@ -143,8 +188,30 @@ function formatDateTime(value: string | null | undefined) {
   return date.toLocaleString("pt-BR");
 }
 
+function resolveChecklistIcon(itemKey: CpcaChecklistItemKey) {
+  if (itemKey === "EMAIL_DIRETO_RELATOS") {
+    return <MailOutlineRoundedIcon fontSize="small" />;
+  }
+  if (itemKey === "LINK_INTRAER_CPCA") {
+    return <LinkRoundedIcon fontSize="small" />;
+  }
+  if (itemKey === "PALESTRA") return <CampaignRoundedIcon fontSize="small" />;
+  if (itemKey === "SEMINARIO_EVENTO") {
+    return <EventAvailableRoundedIcon fontSize="small" />;
+  }
+  if (itemKey === "MATERIAIS_INFORMATIVOS") {
+    return <DescriptionRoundedIcon fontSize="small" />;
+  }
+  if (itemKey === "COMPARTILHAMENTO_APLICATIVOS_MENSAGEM") {
+    return <ShareRoundedIcon fontSize="small" />;
+  }
+  if (itemKey === "POP_US") return <TouchAppRoundedIcon fontSize="small" />;
+  return <GroupRoundedIcon fontSize="small" />;
+}
+
 export function CpcaCommissionPage() {
   const toast = useToast();
+  const navigate = useNavigate();
   const { data: me } = useMe();
   const isApprover = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
   const ownLocalityId = String(me?.omId ?? "").trim();
@@ -216,12 +283,42 @@ export function CpcaCommissionPage() {
     isApprover ? selectedLocalityId : undefined,
     Boolean(me?.id),
   );
+  const checklistLocalityId = String(
+    isApprover ? selectedLocalityId : ownLocalityId,
+  ).trim();
+  const checklistQuery = useCpcaChecklistLocality(
+    checklistLocalityId,
+    Boolean(me?.id) && Boolean(checklistLocalityId),
+  );
+  const cpcaPendingSummaryQuery = useCpcaCasePendingSummary(
+    {
+      localityId: checklistLocalityId || undefined,
+      pageSize: "all",
+    },
+    Boolean(me?.id) && Boolean(checklistLocalityId),
+  );
+  const smifPendingSummaryQuery = useSmifComplaintPendingSummary(
+    {
+      localityId: checklistLocalityId || undefined,
+      pageSize: "all",
+    },
+    Boolean(me?.id) &&
+      Boolean(checklistLocalityId) &&
+      can(me, "smif_complaints", "view"),
+  );
 
   const assignPresidentMutation = useAssignCpcaPresident();
   const createNominationMutation = useCreateCpcaPresidentNominationRequest();
   const addMemberMutation = useAddCpcaCommissionMember();
   const removeMemberMutation = useRemoveCpcaCommissionMember();
   const updateCoverageMutation = useUpdateCpcaCommissionCoverage();
+  const updateChecklistMutation = useUpdateCpcaChecklist();
+
+  const [checklistDraft, setChecklistDraft] = useState<
+    CpcaChecklistDraftItem[]
+  >([]);
+  const [checklistDraftLocalityId, setChecklistDraftLocalityId] = useState("");
+  const [checklistAppliedVersion, setChecklistAppliedVersion] = useState("");
 
   const canManageMembers = Boolean(overviewQuery.data?.canManageMembers);
   const canAssignPresident = Boolean(overviewQuery.data?.canAssignPresident);
@@ -283,6 +380,18 @@ export function CpcaCommissionPage() {
       | undefined) ?? null;
   const history =
     (overviewQuery.data?.history as CommissionHistoryItem[] | undefined) ?? [];
+  const checklistData = checklistQuery.data as
+    | ChecklistLocalityResponse
+    | undefined;
+  const checklistSummary = checklistData?.checklist?.summary;
+  const checklistItems = (checklistData?.checklist?.items ??
+    []) as CpcaChecklistItem[];
+  const canEditChecklist = Boolean(checklistData?.canEdit);
+  const checklistVersion = String(
+    checklistSummary?.lastUpdatedAt ??
+      checklistSummary?.lastCompletedAt ??
+      "empty",
+  );
 
   useEffect(() => {
     if (isApprover) return;
@@ -297,6 +406,27 @@ export function CpcaCommissionPage() {
     setManagedLocalityIds(managedLocalities.map((item) => item.id));
   }, [locality?.id, managedLocalities]);
 
+  useEffect(() => {
+    if (!checklistLocalityId) return;
+    if (
+      checklistDraftLocalityId === checklistLocalityId &&
+      checklistAppliedVersion === checklistVersion
+    ) {
+      return;
+    }
+
+    const nextDraft = buildCpcaChecklistDraft(checklistItems);
+    setChecklistDraft(nextDraft);
+    setChecklistDraftLocalityId(checklistLocalityId);
+    setChecklistAppliedVersion(checklistVersion);
+  }, [
+    checklistAppliedVersion,
+    checklistDraftLocalityId,
+    checklistItems,
+    checklistLocalityId,
+    checklistVersion,
+  ]);
+
   const selectedLocalityCode =
     locality?.code ??
     cpcaLocalities.find((item) => item.id === selectedLocalityId)?.code ??
@@ -308,6 +438,74 @@ export function CpcaCommissionPage() {
   const selectedLocalityLabel = formatOmLabel(
     selectedLocalityCode,
     selectedLocalityName,
+  );
+  const checklistDirty = useMemo(
+    () =>
+      !areCpcaChecklistDraftsEqual(
+        checklistDraft,
+        buildCpcaChecklistDraft(checklistItems),
+      ),
+    [checklistDraft, checklistItems],
+  );
+  const checklistTone = getCpcaChecklistStatusTone(
+    checklistSummary?.status ?? "NOT_STARTED",
+  );
+  const cpcaOpenPendingItems = (
+    ((cpcaPendingSummaryQuery.data as any)?.openItems ?? []) as any[]
+  ).map((item) => ({
+    ...item,
+    workflow: "CPCA",
+    route: "/cpca-cases",
+  }));
+  const cpcaResolvedPendingItems = (
+    ((cpcaPendingSummaryQuery.data as any)?.resolvedItems ?? []) as any[]
+  ).map((item) => ({
+    ...item,
+    workflow: "CPCA",
+    route: "/cpca-cases",
+  }));
+  const smifOpenPendingItems = (
+    ((smifPendingSummaryQuery.data as any)?.openItems ?? []) as any[]
+  ).map((item) => ({
+    ...item,
+    workflow: "SMIF",
+    route: "/smif-complaints",
+  }));
+  const smifResolvedPendingItems = (
+    ((smifPendingSummaryQuery.data as any)?.resolvedItems ?? []) as any[]
+  ).map((item) => ({
+    ...item,
+    workflow: "SMIF",
+    route: "/smif-complaints",
+  }));
+  const commissionOpenPendingItems = sortComplaintPendingItems([
+    ...cpcaOpenPendingItems,
+    ...smifOpenPendingItems,
+  ]).slice(0, 8);
+  const commissionResolvedPendingItems = sortComplaintPendingItems([
+    ...cpcaResolvedPendingItems,
+    ...smifResolvedPendingItems,
+  ]).slice(0, 4);
+  const commissionOpenPendingCount =
+    Number(
+      (cpcaPendingSummaryQuery.data as any)?.summary?.openPendingCount ?? 0,
+    ) +
+    Number(
+      (smifPendingSummaryQuery.data as any)?.summary?.openPendingCount ?? 0,
+    );
+  const commissionResolvedPendingCount =
+    Number(
+      (cpcaPendingSummaryQuery.data as any)?.summary?.resolvedPendingCount ?? 0,
+    ) +
+    Number(
+      (smifPendingSummaryQuery.data as any)?.summary?.resolvedPendingCount ?? 0,
+    );
+  const commissionPendingBadge = getComplaintPendencyBadge(
+    {
+      openPendingCount: commissionOpenPendingCount,
+      resolvedPendingCount: commissionResolvedPendingCount,
+    },
+    { showResolved: true },
   );
 
   const handleSaveCoverage = async () => {
@@ -457,7 +655,85 @@ export function CpcaCommissionPage() {
     }
   };
 
-  if (overviewQuery.isLoading || (isApprover && omsCatalogQuery.isLoading)) {
+  const handleChecklistFieldChange = (
+    itemKey: CpcaChecklistItemKey,
+    field: keyof CpcaChecklistDraftItem,
+    value: string | boolean,
+  ) => {
+    setChecklistDraft((current) =>
+      current.map((item) => {
+        if (item.itemKey !== itemKey) return item;
+        const nextItem = {
+          ...item,
+          [field]: value,
+        } as CpcaChecklistDraftItem;
+
+        if (field === "isCompleted" && value === false) {
+          nextItem.completedAt = "";
+          nextItem.details = "";
+          nextItem.speakerName = "";
+        }
+
+        return nextItem;
+      }),
+    );
+  };
+
+  const handleResetChecklist = () => {
+    const nextDraft = buildCpcaChecklistDraft(checklistItems);
+    setChecklistDraft(nextDraft);
+    setChecklistAppliedVersion(checklistVersion);
+  };
+
+  const handleSaveChecklist = async () => {
+    if (!checklistLocalityId) {
+      toast.push({
+        message: "Selecione uma OM para preencher o checklist.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    try {
+      const response = await updateChecklistMutation.mutateAsync({
+        localityId: checklistLocalityId,
+        items: checklistDraft.map((item) => ({
+          itemKey: item.itemKey,
+          isCompleted: item.isCompleted,
+          completedAt: item.completedAt || null,
+          details: item.details.trim() || null,
+          speakerName: item.speakerName.trim() || null,
+        })),
+      });
+      const savedItems = (response?.checklist?.items ??
+        []) as CpcaChecklistItem[];
+      setChecklistDraft(buildCpcaChecklistDraft(savedItems));
+      setChecklistAppliedVersion(
+        String(
+          response?.checklist?.summary?.lastUpdatedAt ??
+            response?.checklist?.summary?.lastCompletedAt ??
+            "empty",
+        ),
+      );
+      toast.push({
+        message: "Checklist da comissão salvo com sucesso.",
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ??
+          "Erro ao salvar o checklist da comissão.",
+        severity: "error",
+      });
+    }
+  };
+
+  if (
+    overviewQuery.isLoading ||
+    checklistQuery.isLoading ||
+    (isApprover && omsCatalogQuery.isLoading)
+  ) {
     return <SkeletonState />;
   }
   if (overviewQuery.isError) {
@@ -465,6 +741,14 @@ export function CpcaCommissionPage() {
       <ErrorState
         error={overviewQuery.error}
         onRetry={() => overviewQuery.refetch()}
+      />
+    );
+  }
+  if (checklistQuery.isError) {
+    return (
+      <ErrorState
+        error={checklistQuery.error}
+        onRetry={() => checklistQuery.refetch()}
       />
     );
   }
@@ -574,6 +858,555 @@ export function CpcaCommissionPage() {
                 Boletim atual:{" "}
                 {currentPresident?.designationBulletin || "Não informado"}
               </Typography>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card
+          sx={{
+            borderRadius: 4,
+            overflow: "hidden",
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack spacing={2}>
+              <Stack
+                direction={{ xs: "column", lg: "row" }}
+                spacing={1.5}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", lg: "center" }}
+              >
+                <Box sx={{ maxWidth: 760 }}>
+                  <Typography variant="h6" fontWeight={800}>
+                    Checklist da Comissão
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5 }}
+                  >
+                    O presidente da CPCA registra aqui as ações executadas na
+                    OM. TI e COMGEP visualizam esta mesma execução na visão
+                    nacional do módulo CPCA &gt; Checklist.
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  <Chip
+                    label={checklistSummary?.statusLabel ?? "Não iniciado"}
+                    color={checklistTone.color}
+                    sx={{
+                      fontWeight: 700,
+                      background: checklistTone.background,
+                    }}
+                  />
+                  <Chip
+                    label={`${checklistSummary?.completedCount ?? 0}/${checklistSummary?.totalCount ?? checklistItems.length} concluídos`}
+                    variant="outlined"
+                  />
+                </Stack>
+              </Stack>
+
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 3,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  background:
+                    "linear-gradient(135deg, rgba(15,23,42,0.03), rgba(148,163,184,0.06))",
+                }}
+              >
+                <Stack spacing={1}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      Progresso do checklist
+                    </Typography>
+                    <Typography variant="caption" fontWeight={800}>
+                      {checklistSummary?.completionRate ?? 0}%
+                    </Typography>
+                  </Stack>
+                  <LinearProgress
+                    variant="determinate"
+                    value={checklistSummary?.completionRate ?? 0}
+                    color={
+                      checklistTone.color === "default"
+                        ? "inherit"
+                        : checklistTone.color
+                    }
+                    sx={{
+                      height: 10,
+                      borderRadius: 999,
+                      bgcolor: "action.hover",
+                    }}
+                  />
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1}
+                    sx={{ pt: 0.5 }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      Última ação:{" "}
+                      <strong>
+                        {formatCpcaChecklistDate(
+                          checklistSummary?.lastUpdatedAt,
+                        )}
+                      </strong>
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Última entrega:{" "}
+                      <strong>
+                        {formatCpcaChecklistDate(
+                          checklistSummary?.lastCompletedAt,
+                        )}
+                      </strong>
+                    </Typography>
+                  </Stack>
+                </Stack>
+              </Box>
+
+              {!canEditChecklist ? (
+                <Alert severity="info">
+                  Apenas o presidente atualmente designado para a OM pode
+                  preencher este checklist.
+                </Alert>
+              ) : null}
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    xl: "repeat(2, minmax(0, 1fr))",
+                  },
+                  gap: 1.5,
+                }}
+              >
+                {checklistItems.map((item) => {
+                  const draftItem = checklistDraft.find(
+                    (entry) => entry.itemKey === item.itemKey,
+                  ) ?? {
+                    itemKey: item.itemKey,
+                    isCompleted: Boolean(item.isCompleted),
+                    completedAt: item.completedAt
+                      ? item.completedAt.slice(0, 10)
+                      : "",
+                    details: String(item.details ?? ""),
+                    speakerName: String(item.speakerName ?? ""),
+                  };
+                  const itemCompleted = Boolean(draftItem?.isCompleted);
+                  const fieldConfig = getCpcaChecklistFieldConfig(item.itemKey);
+                  const isBinaryQuestion = isCpcaChecklistBinaryQuestionItem(
+                    item.itemKey,
+                  );
+                  return (
+                    <Box
+                      key={item.itemKey}
+                      sx={{
+                        p: 2,
+                        borderRadius: 3,
+                        border: "1px solid",
+                        borderColor: itemCompleted
+                          ? "success.light"
+                          : "divider",
+                        background: itemCompleted
+                          ? "linear-gradient(135deg, rgba(46,125,50,0.08), rgba(129,199,132,0.03))"
+                          : "linear-gradient(135deg, rgba(15,23,42,0.02), rgba(148,163,184,0.05))",
+                      }}
+                    >
+                      <Stack spacing={1.25}>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={1}
+                          justifyContent="space-between"
+                          alignItems={{ xs: "flex-start", sm: "center" }}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            <Box
+                              sx={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: 2.5,
+                                display: "grid",
+                                placeItems: "center",
+                                bgcolor: itemCompleted
+                                  ? "rgba(46,125,50,0.12)"
+                                  : "rgba(15,23,42,0.06)",
+                                color: itemCompleted
+                                  ? "success.main"
+                                  : "text.secondary",
+                              }}
+                            >
+                              {resolveChecklistIcon(item.itemKey)}
+                            </Box>
+                            <Box>
+                              <Typography variant="subtitle2" fontWeight={800}>
+                                {item.label}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {item.description}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                          {itemCompleted ? (
+                            <CheckCircleRoundedIcon
+                              color="success"
+                              fontSize="small"
+                            />
+                          ) : (
+                            <RadioButtonUncheckedRoundedIcon
+                              color="disabled"
+                              fontSize="small"
+                            />
+                          )}
+                        </Stack>
+
+                        <Stack
+                          direction={{ xs: "column", md: "row" }}
+                          spacing={1.2}
+                          alignItems={{ xs: "stretch", md: "center" }}
+                        >
+                          <TextField
+                            select
+                            label={isBinaryQuestion ? "Resposta" : "Situação"}
+                            size="small"
+                            value={draftItem?.isCompleted ? "done" : "pending"}
+                            onChange={(event) =>
+                              handleChecklistFieldChange(
+                                item.itemKey,
+                                "isCompleted",
+                                event.target.value === "done",
+                              )
+                            }
+                            disabled={!canEditChecklist}
+                            sx={{ minWidth: { xs: "100%", md: 170 } }}
+                          >
+                            <MenuItem value="pending">
+                              {fieldConfig.statusPendingLabel}
+                            </MenuItem>
+                            <MenuItem value="done">
+                              {fieldConfig.statusDoneLabel}
+                            </MenuItem>
+                          </TextField>
+                          <TextField
+                            label={
+                              isBinaryQuestion ? "Data do registro" : "Data"
+                            }
+                            type="date"
+                            size="small"
+                            value={draftItem?.completedAt ?? ""}
+                            onChange={(event) =>
+                              handleChecklistFieldChange(
+                                item.itemKey,
+                                "completedAt",
+                                event.target.value,
+                              )
+                            }
+                            disabled={!canEditChecklist || !itemCompleted}
+                            InputLabelProps={{ shrink: true }}
+                            sx={{ minWidth: { xs: "100%", md: 170 } }}
+                          />
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            alignItems="center"
+                          >
+                            <TodayRoundedIcon
+                              sx={{ fontSize: 16, color: "text.secondary" }}
+                            />
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Último registro:{" "}
+                              {formatCpcaChecklistDate(item.completedAt)}
+                            </Typography>
+                          </Stack>
+                        </Stack>
+
+                        <TextField
+                          label={fieldConfig.detailsLabel}
+                          size="small"
+                          multiline
+                          minRows={2}
+                          value={draftItem?.details ?? ""}
+                          onChange={(event) =>
+                            handleChecklistFieldChange(
+                              item.itemKey,
+                              "details",
+                              event.target.value,
+                            )
+                          }
+                          disabled={!canEditChecklist || !itemCompleted}
+                          placeholder={fieldConfig.detailsPlaceholder}
+                          helperText={
+                            itemCompleted
+                              ? fieldConfig.detailsHelperText
+                              : undefined
+                          }
+                        />
+
+                        {item.requiresSpeakerName ? (
+                          <TextField
+                            label="Quem ministrou a palestra"
+                            size="small"
+                            value={draftItem?.speakerName ?? ""}
+                            onChange={(event) =>
+                              handleChecklistFieldChange(
+                                item.itemKey,
+                                "speakerName",
+                                event.target.value,
+                              )
+                            }
+                            disabled={!canEditChecklist || !itemCompleted}
+                            placeholder="Informe o nome do palestrante"
+                          />
+                        ) : null}
+                      </Stack>
+                    </Box>
+                  );
+                })}
+              </Box>
+
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={1}
+                justifyContent="space-between"
+                alignItems={{ xs: "stretch", md: "center" }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  O checklist nacional consolida automaticamente estas marcações
+                  para TI, COMGEP e Coordenação CIPAVD.
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="text"
+                    color="inherit"
+                    startIcon={<RestartAltRoundedIcon />}
+                    onClick={handleResetChecklist}
+                    disabled={!canEditChecklist || !checklistDirty}
+                  >
+                    Restaurar
+                  </Button>
+                  <Button
+                    variant="contained"
+                    startIcon={<SaveRoundedIcon />}
+                    onClick={handleSaveChecklist}
+                    disabled={
+                      !canEditChecklist ||
+                      !checklistDirty ||
+                      updateChecklistMutation.isPending
+                    }
+                  >
+                    Salvar checklist
+                  </Button>
+                </Stack>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        <Card
+          sx={{
+            borderRadius: 4,
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+            <Stack spacing={2}>
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={1.25}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", md: "center" }}
+              >
+                <Box>
+                  <Typography variant="h6" fontWeight={800}>
+                    Pendências das denúncias
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5 }}
+                  >
+                    Visão operacional das pendências abertas para a OM e, quando
+                    disponível, das resoluções aguardando validação.
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {commissionPendingBadge ? (
+                    <Chip
+                      label={commissionPendingBadge.label}
+                      sx={{
+                        fontWeight: 700,
+                        color:
+                          commissionPendingBadge.tone === "warning"
+                            ? "#B45309"
+                            : "#166534",
+                        bgcolor:
+                          commissionPendingBadge.tone === "warning"
+                            ? "rgba(245, 158, 11, 0.14)"
+                            : "rgba(34, 197, 94, 0.12)",
+                        border: "1px solid",
+                        borderColor:
+                          commissionPendingBadge.tone === "warning"
+                            ? "rgba(245, 158, 11, 0.28)"
+                            : "rgba(34, 197, 94, 0.24)",
+                      }}
+                    />
+                  ) : (
+                    <Chip label="Sem pendências" variant="outlined" />
+                  )}
+                </Stack>
+              </Stack>
+
+              {commissionOpenPendingItems.length === 0 &&
+              commissionResolvedPendingItems.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Nenhuma pendência de denúncia encontrada para a OM
+                  selecionada.
+                </Typography>
+              ) : (
+                <Stack spacing={1.25}>
+                  {commissionOpenPendingItems.map((item: any) => (
+                    <Box
+                      key={`${item.workflow}-${item.threadId}`}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2.5,
+                        border: "1px solid",
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Stack spacing={0.8}>
+                        <Stack
+                          direction={{ xs: "column", md: "row" }}
+                          spacing={1}
+                          justifyContent="space-between"
+                          alignItems={{ xs: "flex-start", md: "center" }}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            alignItems="center"
+                          >
+                            <Chip
+                              size="small"
+                              label={item.workflow}
+                              variant="outlined"
+                            />
+                            <Typography fontWeight={700}>
+                              {item.case.caseNumber}
+                            </Typography>
+                          </Stack>
+                          <Button
+                            size="small"
+                            variant="text"
+                            onClick={() =>
+                              navigate(
+                                `${item.route}?q=${encodeURIComponent(item.case.caseNumber)}`,
+                              )
+                            }
+                          >
+                            Abrir denúncia
+                          </Button>
+                        </Stack>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatOmLabel(
+                            item.case.locality?.code ?? null,
+                            item.case.locality?.name ?? null,
+                          )}
+                        </Typography>
+                        <Typography variant="body2">
+                          {item.lastMessage?.body ?? "Sem detalhe informado."}
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  ))}
+
+                  {commissionResolvedPendingItems.length > 0 && (
+                    <Box sx={{ pt: 0.5 }}>
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={700}
+                        color="text.secondary"
+                        sx={{ mb: 1 }}
+                      >
+                        Resolvidas aguardando validação
+                      </Typography>
+                      <Stack spacing={1}>
+                        {commissionResolvedPendingItems.map((item: any) => (
+                          <Box
+                            key={`${item.workflow}-${item.threadId}`}
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 2.5,
+                              border: "1px solid",
+                              borderColor: "divider",
+                              backgroundColor: "rgba(34, 197, 94, 0.04)",
+                            }}
+                          >
+                            <Stack spacing={0.8}>
+                              <Stack
+                                direction={{ xs: "column", md: "row" }}
+                                spacing={1}
+                                justifyContent="space-between"
+                                alignItems={{ xs: "flex-start", md: "center" }}
+                              >
+                                <Stack
+                                  direction="row"
+                                  spacing={0.75}
+                                  alignItems="center"
+                                >
+                                  <Chip
+                                    size="small"
+                                    label={item.workflow}
+                                    variant="outlined"
+                                  />
+                                  <Typography fontWeight={700}>
+                                    {item.case.caseNumber}
+                                  </Typography>
+                                </Stack>
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  onClick={() =>
+                                    navigate(
+                                      `${item.route}?q=${encodeURIComponent(item.case.caseNumber)}`,
+                                    )
+                                  }
+                                >
+                                  Revisar denúncia
+                                </Button>
+                              </Stack>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                {item.lastMessage?.body ??
+                                  "Sem resolução registrada."}
+                              </Typography>
+                            </Stack>
+                          </Box>
+                        ))}
+                      </Stack>
+                    </Box>
+                  )}
+                </Stack>
+              )}
             </Stack>
           </CardContent>
         </Card>

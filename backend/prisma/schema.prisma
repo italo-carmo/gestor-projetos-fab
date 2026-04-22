@@ -9,113 +9,117 @@ datasource db {
 }
 
 model User {
-  id               String         @id @default(cuid())
-  email            String         @unique
-  ldapUid          String?        @unique
-  name             String
-  passwordHash     String
-  isActive         Boolean        @default(true)
-  executiveHidePii Boolean        @default(false)
-  loginFailedCount Int            @default(0)
-  lockUntil        DateTime?
-  omId             String?
-  localityId       String?
-  specialtyId      String?
-  eloRoleId        String?        // Responsável por este elo (ex: Psicologia a nível Brasil)
-  commissionFunction String?
-  commissionPhone    String?
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  ldapUid             String?   @unique
+  name                String
+  passwordHash        String
+  isActive            Boolean   @default(true)
+  executiveHidePii    Boolean   @default(false)
+  loginFailedCount    Int       @default(0)
+  lockUntil           DateTime?
+  omId                String?
+  localityId          String?
+  specialtyId         String?
+  eloRoleId           String? // Responsável por este elo (ex: Psicologia a nível Brasil)
+  commissionFunction  String?
+  commissionPhone     String?
   commissionSeniority Int?
-  totpSecret       String?
-  totpEnabled      Boolean        @default(false)
-  totpBackupCodes  String[]       @default([])
-  flagsJson        Json?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  totpSecret          String?
+  totpEnabled         Boolean   @default(false)
+  totpBackupCodes     String[]  @default([])
+  flagsJson           Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  om               Om?            @relation(fields: [omId], references: [id], onDelete: SetNull)
-  locality         Locality?      @relation(fields: [localityId], references: [id])
-  specialty        Specialty?     @relation(fields: [specialtyId], references: [id])
-  eloRole          EloRole?      @relation(fields: [eloRoleId], references: [id])
-  roles            UserRole[]
-  moduleAccessOverrides UserModuleAccessOverride[]
-  menuUpdateReads  UserMenuUpdateRead[]
-  refreshTokens    RefreshToken[]
-  assignedTasks    TaskInstance[] @relation("TaskAssignee")
-  taskResponsibilities TaskResponsible[] @relation("TaskResponsibleUser")
-  taskResponsibilityAssignments TaskResponsible[] @relation("TaskResponsibleAssigner")
-  taskComments     TaskComment[]  @relation("TaskCommentAuthor")
-  taskCommentReads TaskCommentRead[]
-  createdActivities Activity[]    @relation("ActivityCreator")
-  createdMissions  Mission[]     @relation("MissionCreator")
-  createdSocialCommunicationArticles SocialCommunicationArticle[] @relation("SocialCommunicationArticleCreator")
-  createdSocialCommunicationHighlights SocialCommunicationHighlight[] @relation("SocialCommunicationHighlightCreator")
-  missionParticipations MissionParticipant[]
-  activityResponsibilities ActivityResponsible[] @relation("ActivityResponsibleUser")
-  activityResponsibilityAssignments ActivityResponsible[] @relation("ActivityResponsibleAssigner")
-  activityComments ActivityComment[] @relation("ActivityCommentAuthor")
-  activityCommentReads ActivityCommentRead[]
-  signedActivityReports ActivityReport[] @relation("ActivityReportSigner")
-  auditLogs        AuditLog[]
-  meetingParticipations MeetingParticipant[]
-  biSurveyImportBatches BiSurveyImportBatch[]
-  biSurveyCardSettings BiSurveyCardSetting[] @relation("BiSurveyCardSettingUpdatedBy")
-  biDomesticViolenceImportBatches BiDomesticViolenceImportBatch[]
-  biDomesticViolenceCardSettings BiDomesticViolenceCardSetting[] @relation("BiDomesticViolenceCardSettingUpdatedBy")
-  biRecruitsImportBatches BiRecruitsImportBatch[]
-  biRecruitsCardSettings BiRecruitsCardSetting[] @relation("BiRecruitsCardSettingUpdatedBy")
-  biBestPracticeCycleImportBatches BiBestPracticeCycleImportBatch[]
-  biBestPracticeCycleCardSettings BiBestPracticeCycleCardSetting[] @relation("BiBestPracticeCycleCardSettingUpdatedBy")
-  biCpcaMeetingImportBatches BiCpcaMeetingImportBatch[]
-  biCpcaMeetingCardSettings BiCpcaMeetingCardSetting[] @relation("BiCpcaMeetingCardSettingUpdatedBy")
-  biGsdEvaluationImportBatches BiGsdEvaluationImportBatch[]
-  biGsdEvaluationCardSettings BiGsdEvaluationCardSetting[] @relation("BiGsdEvaluationCardSettingUpdatedBy")
-  cpcaCasesCreated CpcComplaintCase[] @relation("CpcComplaintCaseCreatedBy")
-  cpcaCasesUpdated CpcComplaintCase[] @relation("CpcComplaintCaseUpdatedBy")
-  cpcaCaseComments CpcComplaintComment[] @relation("CpcComplaintCommentAuthor")
-  cpcaCaseStatusChanges CpcComplaintStatusHistory[] @relation("CpcComplaintStatusChangedBy")
-  cpcaCommissionPresidentAssignments CpcaCommissionPresident[] @relation("CpcaCommissionPresidentUser")
-  cpcaCommissionPresidentAssignmentsMade CpcaCommissionPresident[] @relation("CpcaCommissionPresidentAssignedBy")
-  cpcaCommissionMemberships CpcaCommissionMember[] @relation("CpcaCommissionMemberUser")
-  cpcaCommissionMembershipsAdded CpcaCommissionMember[] @relation("CpcaCommissionMemberAddedBy")
-  cpcaChecklistUpdates     CpcaChecklistItem[]     @relation("CpcaChecklistUpdatedBy")
-  cpcaPresidentRequests CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationApplicant")
-  cpcaPresidentRequestDecisions CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationDecidedBy")
-  cpcaPresidentNominationRequestsCreated CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationRequester")
-  cpcaPresidentNominationRequestsNominee CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationNominee")
+  om                                      Om?                              @relation(fields: [omId], references: [id], onDelete: SetNull)
+  locality                                Locality?                        @relation(fields: [localityId], references: [id])
+  specialty                               Specialty?                       @relation(fields: [specialtyId], references: [id])
+  eloRole                                 EloRole?                         @relation(fields: [eloRoleId], references: [id])
+  roles                                   UserRole[]
+  moduleAccessOverrides                   UserModuleAccessOverride[]
+  menuUpdateReads                         UserMenuUpdateRead[]
+  refreshTokens                           RefreshToken[]
+  assignedTasks                           TaskInstance[]                   @relation("TaskAssignee")
+  taskResponsibilities                    TaskResponsible[]                @relation("TaskResponsibleUser")
+  taskResponsibilityAssignments           TaskResponsible[]                @relation("TaskResponsibleAssigner")
+  taskComments                            TaskComment[]                    @relation("TaskCommentAuthor")
+  taskCommentReads                        TaskCommentRead[]
+  createdActivities                       Activity[]                       @relation("ActivityCreator")
+  createdMissions                         Mission[]                        @relation("MissionCreator")
+  createdSocialCommunicationArticles      SocialCommunicationArticle[]     @relation("SocialCommunicationArticleCreator")
+  createdSocialCommunicationHighlights    SocialCommunicationHighlight[]   @relation("SocialCommunicationHighlightCreator")
+  missionParticipations                   MissionParticipant[]
+  activityResponsibilities                ActivityResponsible[]            @relation("ActivityResponsibleUser")
+  activityResponsibilityAssignments       ActivityResponsible[]            @relation("ActivityResponsibleAssigner")
+  activityComments                        ActivityComment[]                @relation("ActivityCommentAuthor")
+  activityCommentReads                    ActivityCommentRead[]
+  signedActivityReports                   ActivityReport[]                 @relation("ActivityReportSigner")
+  auditLogs                               AuditLog[]
+  meetingParticipations                   MeetingParticipant[]
+  biSurveyImportBatches                   BiSurveyImportBatch[]
+  biSurveyCardSettings                    BiSurveyCardSetting[]            @relation("BiSurveyCardSettingUpdatedBy")
+  biDomesticViolenceImportBatches         BiDomesticViolenceImportBatch[]
+  biDomesticViolenceCardSettings          BiDomesticViolenceCardSetting[]  @relation("BiDomesticViolenceCardSettingUpdatedBy")
+  biRecruitsImportBatches                 BiRecruitsImportBatch[]
+  biRecruitsCardSettings                  BiRecruitsCardSetting[]          @relation("BiRecruitsCardSettingUpdatedBy")
+  biBestPracticeCycleImportBatches        BiBestPracticeCycleImportBatch[]
+  biBestPracticeCycleCardSettings         BiBestPracticeCycleCardSetting[] @relation("BiBestPracticeCycleCardSettingUpdatedBy")
+  biCpcaMeetingImportBatches              BiCpcaMeetingImportBatch[]
+  biCpcaMeetingCardSettings               BiCpcaMeetingCardSetting[]       @relation("BiCpcaMeetingCardSettingUpdatedBy")
+  biGsdEvaluationImportBatches            BiGsdEvaluationImportBatch[]
+  biGsdEvaluationCardSettings             BiGsdEvaluationCardSetting[]     @relation("BiGsdEvaluationCardSettingUpdatedBy")
+  cpcaCasesCreated                        CpcComplaintCase[]               @relation("CpcComplaintCaseCreatedBy")
+  cpcaCasesUpdated                        CpcComplaintCase[]               @relation("CpcComplaintCaseUpdatedBy")
+  cpcaCaseComments                        CpcComplaintComment[]            @relation("CpcComplaintCommentAuthor")
+  cpcaCaseCipavdThreadsCreated            CpcComplaintCipavdThread[]       @relation("CpcComplaintCipavdThreadCreatedBy")
+  cpcaCaseCipavdThreadsResolved           CpcComplaintCipavdThread[]       @relation("CpcComplaintCipavdThreadResolvedBy")
+  cpcaCaseCipavdThreadsClosed             CpcComplaintCipavdThread[]       @relation("CpcComplaintCipavdThreadClosedBy")
+  cpcaCaseCipavdMessages                  CpcComplaintCipavdMessage[]      @relation("CpcComplaintCipavdMessageAuthor")
+  cpcaCaseStatusChanges                   CpcComplaintStatusHistory[]      @relation("CpcComplaintStatusChangedBy")
+  cpcaCommissionPresidentAssignments      CpcaCommissionPresident[]        @relation("CpcaCommissionPresidentUser")
+  cpcaCommissionPresidentAssignmentsMade  CpcaCommissionPresident[]        @relation("CpcaCommissionPresidentAssignedBy")
+  cpcaCommissionMemberships               CpcaCommissionMember[]           @relation("CpcaCommissionMemberUser")
+  cpcaCommissionMembershipsAdded          CpcaCommissionMember[]           @relation("CpcaCommissionMemberAddedBy")
+  cpcaChecklistUpdates                    CpcaChecklistItem[]              @relation("CpcaChecklistUpdatedBy")
+  cpcaPresidentRequests                   CpcaPresidentSelfRegistration[]  @relation("CpcaPresidentSelfRegistrationApplicant")
+  cpcaPresidentRequestDecisions           CpcaPresidentSelfRegistration[]  @relation("CpcaPresidentSelfRegistrationDecidedBy")
+  cpcaPresidentNominationRequestsCreated  CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationRequester")
+  cpcaPresidentNominationRequestsNominee  CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationNominee")
   cpcaPresidentNominationRequestDecisions CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationDecider")
-  cpcaCoverageRequestsCreated CpcaCommissionCoverageRequest[] @relation("CpcaCoverageRequestRequester")
-  cpcaCoverageRequestDecisions CpcaCommissionCoverageRequest[] @relation("CpcaCoverageRequestDecider")
-  strategicRecommendationsCreated StrategicRecommendation[] @relation("StrategicRecommendationCreator")
-  libraryPhotosCreated LibraryPhoto[] @relation("LibraryPhotoCreator")
-  libraryDocumentsCreated LibraryDocument[] @relation("LibraryDocumentCreator")
-  bestPracticesCreated BestPracticePost[] @relation("BestPracticeCreator")
-  lessonsLearnedCreated LessonLearnedPost[] @relation("LessonLearnedCreator")
-  smifComplaintsCreated SmifComplaint[] @relation("SmifComplaintCreatedBy")
-  smifComplaintsUpdated SmifComplaint[] @relation("SmifComplaintUpdatedBy")
+  cpcaCoverageRequestsCreated             CpcaCommissionCoverageRequest[]  @relation("CpcaCoverageRequestRequester")
+  cpcaCoverageRequestDecisions            CpcaCommissionCoverageRequest[]  @relation("CpcaCoverageRequestDecider")
+  strategicRecommendationsCreated         StrategicRecommendation[]        @relation("StrategicRecommendationCreator")
+  libraryPhotosCreated                    LibraryPhoto[]                   @relation("LibraryPhotoCreator")
+  libraryDocumentsCreated                 LibraryDocument[]                @relation("LibraryDocumentCreator")
+  bestPracticesCreated                    BestPracticePost[]               @relation("BestPracticeCreator")
+  lessonsLearnedCreated                   LessonLearnedPost[]              @relation("LessonLearnedCreator")
+  smifComplaintsCreated                   SmifComplaint[]                  @relation("SmifComplaintCreatedBy")
+  smifComplaintsUpdated                   SmifComplaint[]                  @relation("SmifComplaintUpdatedBy")
 }
 
 model Om {
-  id                         String                    @id @default(cuid())
-  code                       String                    @unique
-  name                       String
-  uf                         String?
-  hasCpca                    Boolean                   @default(false)
-  notes                      String?
-  createdAt                  DateTime                  @default(now())
-  updatedAt                  DateTime                  @updatedAt
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  uf        String?
+  hasCpca   Boolean  @default(false)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  users                      User[]
-  cpcaCases                  CpcComplaintCase[]
-  cpcaCommissionPresident    CpcaCommissionPresident?
-  cpcaCommissionMembers      CpcaCommissionMember[]
-  cpcaChecklistItems         CpcaChecklistItem[]
-  cpcaPresidentRequests      CpcaPresidentSelfRegistration[]
+  users                           User[]
+  cpcaCases                       CpcComplaintCase[]
+  cpcaCommissionPresident         CpcaCommissionPresident?
+  cpcaCommissionMembers           CpcaCommissionMember[]
+  cpcaChecklistItems              CpcaChecklistItem[]
+  cpcaPresidentRequests           CpcaPresidentSelfRegistration[]
   cpcaPresidentNominationRequests CpcaPresidentNominationRequest[]
-  cpcaCoverageRequests       CpcaCommissionCoverageRequest[]
-  cpcaCoverageAsManager      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManager")
-  cpcaCoverageAsManaged      CpcaCommissionCoverageOm[] @relation("CpcaCoverageOmManaged")
-  biNormalizationLinks       BiNormalizationLink[]
-  strategicRecommendations   StrategicRecommendation[]
+  cpcaCoverageRequests            CpcaCommissionCoverageRequest[]
+  cpcaCoverageAsManager           CpcaCommissionCoverageOm[]       @relation("CpcaCoverageOmManager")
+  cpcaCoverageAsManaged           CpcaCommissionCoverageOm[]       @relation("CpcaCoverageOmManaged")
+  biNormalizationLinks            BiNormalizationLink[]
+  strategicRecommendations        StrategicRecommendation[]
 
   @@index([hasCpca])
   @@index([uf])
@@ -129,7 +133,7 @@ model UserModuleAccessOverride {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, resource])
   @@index([userId])
@@ -137,52 +141,52 @@ model UserModuleAccessOverride {
 }
 
 model Role {
-  id                     String           @id @default(cuid())
-  name                   String           @unique
-  description            String?
-  isSystemRole           Boolean          @default(false)
-  wildcard               Boolean          @default(false)
-  flagsJson              Json?
+  id                      String   @id @default(cuid())
+  name                    String   @unique
+  description             String?
+  isSystemRole            Boolean  @default(false)
+  wildcard                Boolean  @default(false)
+  flagsJson               Json?
   constraintsTemplateJson Json?
-  createdAt              DateTime         @default(now())
-  updatedAt              DateTime         @updatedAt
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
-  permissions            RolePermission[]
-  users                  UserRole[]
+  permissions RolePermission[]
+  users       UserRole[]
 }
 
 model Permission {
-  id          String           @id @default(cuid())
+  id          String          @id @default(cuid())
   resource    String
   action      String
   scope       PermissionScope
   description String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
 
-  roles       RolePermission[]
+  roles RolePermission[]
 
   @@unique([resource, action, scope])
 }
 
 model RolePermission {
-  id           String      @id @default(cuid())
+  id           String @id @default(cuid())
   roleId       String
   permissionId String
 
-  role         Role        @relation(fields: [roleId], references: [id])
-  permission   Permission  @relation(fields: [permissionId], references: [id])
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
 
   @@unique([roleId, permissionId])
 }
 
 model UserRole {
-  id      String @id @default(cuid())
-  userId  String
-  roleId  String
+  id     String @id @default(cuid())
+  userId String
+  roleId String
 
-  user    User   @relation(fields: [userId], references: [id])
-  role    Role   @relation(fields: [roleId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
 
   @@unique([userId, roleId])
 }
@@ -194,53 +198,53 @@ model RefreshToken {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
 model Locality {
-  id                         String          @id @default(cuid())
+  id                         String              @id @default(cuid())
   code                       String
   name                       String
-  uf                         String?         // Sigla do estado (ex: SP, RJ, DF)
-  hasCpca                    Boolean         @default(false)
+  uf                         String? // Sigla do estado (ex: SP, RJ, DF)
+  hasCpca                    Boolean             @default(false)
   catalogType                LocalityCatalogType @default(SMIF)
   commandName                String?
   commanderName              String?
-  individualMeetingDate      DateTime?       // Data da Reunião Individual
-  visitDate                  DateTime?       // Data da Visita da CIPAV
+  individualMeetingDate      DateTime? // Data da Reunião Individual
+  visitDate                  DateTime? // Data da Visita da CIPAV
   recruitsFemaleCountCurrent Int?
   notes                      String?
-  createdAt                  DateTime        @default(now())
-  updatedAt                  DateTime        @updatedAt
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
 
-  users                      User[]
-  taskInstances              TaskInstance[]
-  activities                 Activity[]
-  missions                   Mission[]
-  meetings                   Meeting[]
-  recruitsHistory            RecruitsHistory[]
-  notices                    Notice[]
-  elos                       Elo[]
-  documents                  DocumentAsset[]
-  checklistItemStatuses      ChecklistItemStatus[]
-  kpiValues                  KpiValue[]
-  auditLogs                  AuditLog[]
-  cpcaCases                  CpcComplaintCase[]
-  recruitDesignationsFrom    RecruitOmAssignment[] @relation("RecruitOmAssignmentSource")
-  recruitDesignationsTo      RecruitOmAssignment[] @relation("RecruitOmAssignmentDestination")
-  recruitMembers             RecruitFemale[]       @relation("RecruitSourceLocality")
-  recruitsDesignatedHere     RecruitFemale[]       @relation("RecruitDestinationLocality")
-  libraryPhotos              LibraryPhoto[]
-  bestPracticePosts          BestPracticePost[]
+  users                         User[]
+  taskInstances                 TaskInstance[]
+  activities                    Activity[]
+  missions                      Mission[]
+  meetings                      Meeting[]
+  recruitsHistory               RecruitsHistory[]
+  notices                       Notice[]
+  elos                          Elo[]
+  documents                     DocumentAsset[]
+  checklistItemStatuses         ChecklistItemStatus[]
+  kpiValues                     KpiValue[]
+  auditLogs                     AuditLog[]
+  cpcaCases                     CpcComplaintCase[]
+  recruitDesignationsFrom       RecruitOmAssignment[]          @relation("RecruitOmAssignmentSource")
+  recruitDesignationsTo         RecruitOmAssignment[]          @relation("RecruitOmAssignmentDestination")
+  recruitMembers                RecruitFemale[]                @relation("RecruitSourceLocality")
+  recruitsDesignatedHere        RecruitFemale[]                @relation("RecruitDestinationLocality")
+  libraryPhotos                 LibraryPhoto[]
+  bestPracticePosts             BestPracticePost[]
   socialCommunicationHighlights SocialCommunicationHighlight[]
-  smifComplaints             SmifComplaint[]
-  cpcaCoverageAsManager      CpcaCommissionCoverage[] @relation("CpcaCoverageManager")
-  cpcaCoverageAsManaged      CpcaCommissionCoverage[] @relation("CpcaCoverageManaged")
+  smifComplaints                SmifComplaint[]
+  cpcaCoverageAsManager         CpcaCommissionCoverage[]       @relation("CpcaCoverageManager")
+  cpcaCoverageAsManaged         CpcaCommissionCoverage[]       @relation("CpcaCoverageManaged")
 
-  @@index([catalogType])
   @@unique([code, catalogType])
+  @@index([catalogType])
 }
 
 model CpcaCommissionCoverage {
@@ -250,8 +254,8 @@ model CpcaCommissionCoverage {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  managerLocality   Locality @relation("CpcaCoverageManager", fields: [managerLocalityId], references: [id], onDelete: Cascade)
-  managedLocality   Locality @relation("CpcaCoverageManaged", fields: [managedLocalityId], references: [id], onDelete: Cascade)
+  managerLocality Locality @relation("CpcaCoverageManager", fields: [managerLocalityId], references: [id], onDelete: Cascade)
+  managedLocality Locality @relation("CpcaCoverageManaged", fields: [managedLocalityId], references: [id], onDelete: Cascade)
 
   @@unique([managerLocalityId, managedLocalityId])
   @@index([managerLocalityId])
@@ -265,8 +269,8 @@ model CpcaCommissionCoverageOm {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  managerOm   Om       @relation("CpcaCoverageOmManager", fields: [managerOmId], references: [id], onDelete: Cascade)
-  managedOm   Om       @relation("CpcaCoverageOmManaged", fields: [managedOmId], references: [id], onDelete: Cascade)
+  managerOm Om @relation("CpcaCoverageOmManager", fields: [managerOmId], references: [id], onDelete: Cascade)
+  managedOm Om @relation("CpcaCoverageOmManaged", fields: [managedOmId], references: [id], onDelete: Cascade)
 
   @@unique([managerOmId, managedOmId])
   @@index([managerOmId])
@@ -274,31 +278,31 @@ model CpcaCommissionCoverageOm {
 }
 
 model Activity {
-  id            String        @id @default(cuid())
-  title         String
-  description   String?
-  localityId    String?
+  id             String         @id @default(cuid())
+  title          String
+  description    String?
+  localityId     String?
   activityTypeId String?
-  specialtyId   String?
-  eventDate     DateTime?
-  status        ActivityStatus @default(NOT_STARTED)
-  scope         ActivityScope  @default(SMIF)
-  reportRequired Boolean      @default(false)
-  createdById   String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  specialtyId    String?
+  eventDate      DateTime?
+  status         ActivityStatus @default(NOT_STARTED)
+  scope          ActivityScope  @default(SMIF)
+  reportRequired Boolean        @default(false)
+  createdById    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  locality      Locality?     @relation(fields: [localityId], references: [id])
-  activityType  ActivityType? @relation(fields: [activityTypeId], references: [id])
-  specialty     Specialty?    @relation(fields: [specialtyId], references: [id])
-  specialties   ActivitySpecialty[]
-  createdBy     User?         @relation("ActivityCreator", fields: [createdById], references: [id])
-  report        ActivityReport?
-  documents     DocumentAsset[]
+  locality           Locality?                   @relation(fields: [localityId], references: [id])
+  activityType       ActivityType?               @relation(fields: [activityTypeId], references: [id])
+  specialty          Specialty?                  @relation(fields: [specialtyId], references: [id])
+  specialties        ActivitySpecialty[]
+  createdBy          User?                       @relation("ActivityCreator", fields: [createdById], references: [id])
+  report             ActivityReport?
+  documents          DocumentAsset[]
   visitScheduleItems ActivityVisitScheduleItem[]
-  responsibles  ActivityResponsible[]
-  comments      ActivityComment[]
-  commentReads  ActivityCommentRead[]
+  responsibles       ActivityResponsible[]
+  comments           ActivityComment[]
+  commentReads       ActivityCommentRead[]
 
   @@index([localityId])
   @@index([activityTypeId])
@@ -309,23 +313,23 @@ model Activity {
 }
 
 model ActivitySpecialty {
-  activityId   String
-  specialtyId  String
-  createdAt    DateTime @default(now())
+  activityId  String
+  specialtyId String
+  createdAt   DateTime @default(now())
 
-  activity     Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  specialty    Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+  activity  Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  specialty Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
 
   @@id([activityId, specialtyId])
   @@index([specialtyId])
 }
 
 model ActivityType {
-  id         String     @id @default(cuid())
-  name       String
-  scope      ActivityScope @default(SMIF)
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id        String        @id @default(cuid())
+  name      String
+  scope     ActivityScope @default(SMIF)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   activities Activity[]
 
@@ -334,23 +338,23 @@ model ActivityType {
 }
 
 model Mission {
-  id          String         @id @default(cuid())
-  title       String
-  description String?
+  id            String        @id @default(cuid())
+  title         String
+  description   String?
   checklistJson Json?
-  localityId  String
-  scope       ActivityScope  @default(SMIF)
-  startDate   DateTime
-  endDate     DateTime
-  createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  localityId    String
+  scope         ActivityScope @default(SMIF)
+  startDate     DateTime
+  endDate       DateTime
+  createdById   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  locality    Locality @relation(fields: [localityId], references: [id])
-  createdBy   User?    @relation("MissionCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  participants MissionParticipant[]
+  locality      Locality              @relation(fields: [localityId], references: [id])
+  createdBy     User?                 @relation("MissionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  participants  MissionParticipant[]
   scheduleItems MissionScheduleItem[]
-  banners     MissionBanner[]
+  banners       MissionBanner[]
 
   @@index([localityId, startDate])
   @@index([startDate, endDate])
@@ -368,8 +372,8 @@ model MissionParticipant {
   fabom     String?
   createdAt DateTime @default(now())
 
-  mission   Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  mission Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([missionId, createdAt])
   @@index([userId])
@@ -387,7 +391,7 @@ model MissionScheduleItem {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  mission         Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  mission Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
 
   @@index([missionId, startAt])
 }
@@ -404,7 +408,7 @@ model MissionBanner {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  mission           Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  mission Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
 
   @@index([missionId, eventDate, eventTime])
 }
@@ -444,114 +448,114 @@ model DashboardNationalCardSetting {
 }
 
 model ActivityVisitScheduleItem {
-  id               String   @id @default(cuid())
-  activityId       String
-  title            String
-  startTime        String
-  durationMinutes  Int
-  location         String
-  responsible      String
-  participants     String
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id              String   @id @default(cuid())
+  activityId      String
+  title           String
+  startTime       String
+  durationMinutes Int
+  location        String
+  responsible     String
+  participants    String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  activity         Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
 
   @@index([activityId, startTime])
 }
 
 model ActivityReport {
-  id                        String   @id @default(cuid())
-  activityId                String   @unique
-  date                      DateTime
-  location                  String
-  responsible               String
-  missionSupport            String
-  introduction              String
-  missionObjectives         String
-  executionSchedule         String
-  activitiesPerformed       String
-  participantsCount         Int
-  participantsMaleCount     Int?
-  participantsFemaleCount   Int?
-  publicProfile             String?
-  instructorsCount          Int      @default(0)
-  recruitsCount             Int      @default(0)
-  eloPsychologyCount        Int      @default(0)
-  eloSocialAssistanceCount  Int      @default(0)
-  eloJuridicoCount          Int      @default(0)
-  eloCpcaCount              Int      @default(0)
-  eloGraduadoMasterCount    Int      @default(0)
+  id                          String    @id @default(cuid())
+  activityId                  String    @unique
+  date                        DateTime
+  location                    String
+  responsible                 String
+  missionSupport              String
+  introduction                String
+  missionObjectives           String
+  executionSchedule           String
+  activitiesPerformed         String
+  participantsCount           Int
+  participantsMaleCount       Int?
+  participantsFemaleCount     Int?
+  publicProfile               String?
+  instructorsCount            Int       @default(0)
+  recruitsCount               Int       @default(0)
+  eloPsychologyCount          Int       @default(0)
+  eloSocialAssistanceCount    Int       @default(0)
+  eloJuridicoCount            Int       @default(0)
+  eloCpcaCount                Int       @default(0)
+  eloGraduadoMasterCount      Int       @default(0)
   participantsCharacteristics String
-  mainPointsObserved        String?
-  attentionPoints           String?
-  nextSteps                 String?
-  referencesAndAttachments   String?
-  conclusion                String
-  city                      String
-  closingDate               DateTime
-  signaturePayloadHash      String?
-  signatureHash             String?
-  signatureAlgorithm        String?
-  signatureVersion          Int?
-  signedAt                  DateTime?
-  signedById                String?
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  mainPointsObserved          String?
+  attentionPoints             String?
+  nextSteps                   String?
+  referencesAndAttachments    String?
+  conclusion                  String
+  city                        String
+  closingDate                 DateTime
+  signaturePayloadHash        String?
+  signatureHash               String?
+  signatureAlgorithm          String?
+  signatureVersion            Int?
+  signedAt                    DateTime?
+  signedById                  String?
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
 
-  activity                  Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  signedBy                  User?    @relation("ActivityReportSigner", fields: [signedById], references: [id], onDelete: SetNull)
-  photos                    ActivityReportPhoto[]
+  activity Activity              @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  signedBy User?                 @relation("ActivityReportSigner", fields: [signedById], references: [id], onDelete: SetNull)
+  photos   ActivityReportPhoto[]
 }
 
 model ActivityReportPhoto {
-  id          String   @id @default(cuid())
-  reportId    String
-  fileName    String
-  fileUrl     String
-  storageKey  String?
-  mimeType    String?
-  fileSize    Int?
-  checksum    String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  reportId   String
+  fileName   String
+  fileUrl    String
+  storageKey String?
+  mimeType   String?
+  fileSize   Int?
+  checksum   String?
+  createdAt  DateTime @default(now())
 
-  report      ActivityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report ActivityReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
 }
 
 model Specialty {
-  id         String         @id @default(cuid())
-  name       String         @unique
-  color      String?
-  icon       String?
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id        String   @id @default(cuid())
+  name      String   @unique
+  color     String?
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  users      User[]
-  activities Activity[]
+  users         User[]
+  activities    Activity[]
   activityLinks ActivitySpecialty[]
-  templates  TaskTemplate[]
+  templates     TaskTemplate[]
   taskInstances TaskInstance[]
-  notices    Notice[]
-  checklists Checklist[]
-  kpiValues  KpiValue[]
+  notices       Notice[]
+  checklists    Checklist[]
+  kpiValues     KpiValue[]
 }
 
 model Phase {
-  id        String      @id @default(cuid())
-  name      PhaseName   @unique
+  id          String    @id @default(cuid())
+  name        PhaseName @unique
   displayName String?
-  order     Int
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  order       Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  templates TaskTemplate[]
+  templates  TaskTemplate[]
   checklists Checklist[]
 }
 
 model TaskTemplate {
-  id                     String        @id @default(cuid())
+  id                     String    @id @default(cuid())
   title                  String
   description            String?
   phaseId                String
@@ -560,13 +564,13 @@ model TaskTemplate {
   appliesToAllLocalities Boolean
   reportRequiredDefault  Boolean
   deletedAt              DateTime?
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
-  phase        Phase         @relation(fields: [phaseId], references: [id])
-  specialty    Specialty?    @relation(fields: [specialtyId], references: [id])
-  eloRole      EloRole?     @relation(fields: [eloRoleId], references: [id])
-  instances    TaskInstance[]
+  phase          Phase           @relation(fields: [phaseId], references: [id])
+  specialty      Specialty?      @relation(fields: [specialtyId], references: [id])
+  eloRole        EloRole?        @relation(fields: [eloRoleId], references: [id])
+  instances      TaskInstance[]
   checklistItems ChecklistItem[]
 
   @@index([phaseId])
@@ -574,40 +578,40 @@ model TaskTemplate {
 }
 
 model TaskInstance {
-  id              String        @id @default(cuid())
-  taskTemplateId  String
-  localityId      String
-  scope           ActivityScope @default(SMIF)
-  groupKey        String?
-  titleOverride   String?
-  specialtyId     String?
-  meetingId       String?
-  eloRoleId       String?
-  dueDate         DateTime
-  status          TaskStatus
-  priority        TaskPriority
-  progressPercent Int
-  assignedToId    String?
-  assignedEloId   String?
-  assigneeType    TaskAssigneeType?
+  id                   String            @id @default(cuid())
+  taskTemplateId       String
+  localityId           String
+  scope                ActivityScope     @default(SMIF)
+  groupKey             String?
+  titleOverride        String?
+  specialtyId          String?
+  meetingId            String?
+  eloRoleId            String?
+  dueDate              DateTime
+  status               TaskStatus
+  priority             TaskPriority
+  progressPercent      Int
+  assignedToId         String?
+  assignedEloId        String?
+  assigneeType         TaskAssigneeType?
   externalAssigneeName String?
   externalAssigneeRole String?
-  reportRequired  Boolean
-  blockedByIdsJson Json?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  reportRequired       Boolean
+  blockedByIdsJson     Json?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
 
-  taskTemplate    TaskTemplate  @relation(fields: [taskTemplateId], references: [id])
-  locality        Locality      @relation(fields: [localityId], references: [id])
-  specialty       Specialty?    @relation(fields: [specialtyId], references: [id])
-  meeting         Meeting?      @relation(fields: [meetingId], references: [id])
-  eloRole         EloRole?      @relation(fields: [eloRoleId], references: [id])
-  assignedTo      User?         @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  assignedElo     Elo?          @relation("TaskAssigneeElo", fields: [assignedEloId], references: [id])
-  reports         Report[]
-  responsibles    TaskResponsible[]
-  comments        TaskComment[]
-  commentReads    TaskCommentRead[]
+  taskTemplate TaskTemplate      @relation(fields: [taskTemplateId], references: [id])
+  locality     Locality          @relation(fields: [localityId], references: [id])
+  specialty    Specialty?        @relation(fields: [specialtyId], references: [id])
+  meeting      Meeting?          @relation(fields: [meetingId], references: [id])
+  eloRole      EloRole?          @relation(fields: [eloRoleId], references: [id])
+  assignedTo   User?             @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedElo  Elo?              @relation("TaskAssigneeElo", fields: [assignedEloId], references: [id])
+  reports      Report[]
+  responsibles TaskResponsible[]
+  comments     TaskComment[]
+  commentReads TaskCommentRead[]
 
   @@index([localityId])
   @@index([scope])
@@ -621,15 +625,15 @@ model TaskInstance {
 }
 
 model TaskResponsible {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   taskInstanceId String
   userId         String
   assignedById   String?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime @default(now())
 
-  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
-  user           User         @relation("TaskResponsibleUser", fields: [userId], references: [id], onDelete: Cascade)
-  assignedBy     User?        @relation("TaskResponsibleAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  taskInstance TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  user         User         @relation("TaskResponsibleUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy   User?        @relation("TaskResponsibleAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
 
   @@unique([taskInstanceId, userId])
   @@index([taskInstanceId, createdAt])
@@ -643,9 +647,9 @@ model ActivityResponsible {
   assignedById String?
   createdAt    DateTime @default(now())
 
-  activity     Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  user         User     @relation("ActivityResponsibleUser", fields: [userId], references: [id], onDelete: Cascade)
-  assignedBy   User?    @relation("ActivityResponsibleAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user       User     @relation("ActivityResponsibleUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User?    @relation("ActivityResponsibleAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
 
   @@unique([activityId, userId])
   @@index([activityId, createdAt])
@@ -653,42 +657,42 @@ model ActivityResponsible {
 }
 
 model Posto {
-  id         String   @id @default(cuid())
-  code       String   @unique  // ex: SGT, CAP, SOLD
-  name       String   // ex: Sargento, Capitão, Soldado
-  sortOrder  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  code      String   @unique // ex: SGT, CAP, SOLD
+  name      String // ex: Sargento, Capitão, Soldado
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Meeting {
-  id              String        @id @default(cuid())
-  datetime        DateTime
-  scope           String        @default("")  // texto livre: o que será tratado na reunião
-  status          MeetingStatus
-  meetingType     MeetingType   @default(PRESENCIAL)
-  location        String?
-  meetingLink     String?
-  agenda          String?
-  localityId      String?
+  id               String        @id @default(cuid())
+  datetime         DateTime
+  scope            String        @default("") // texto livre: o que será tratado na reunião
+  status           MeetingStatus
+  meetingType      MeetingType   @default(PRESENCIAL)
+  location         String?
+  meetingLink      String?
+  agenda           String?
+  localityId       String?
   participantsJson Json?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  locality        Locality?     @relation(fields: [localityId], references: [id])
-  participants    MeetingParticipant[]
-  tasks           TaskInstance[]
-  decisions       MeetingDecision[]
-  documents       DocumentAsset[]
+  locality     Locality?            @relation(fields: [localityId], references: [id])
+  participants MeetingParticipant[]
+  tasks        TaskInstance[]
+  decisions    MeetingDecision[]
+  documents    DocumentAsset[]
 }
 
 model MeetingParticipant {
-  id        String   @id @default(cuid())
+  id        String @id @default(cuid())
   meetingId String
   userId    String
 
-  meeting   Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([meetingId, userId])
   @@index([meetingId])
@@ -696,18 +700,18 @@ model MeetingParticipant {
 }
 
 model MeetingDecision {
-  id         String   @id @default(cuid())
-  meetingId  String
-  text       String
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  meetingId String
+  text      String
+  createdAt DateTime @default(now())
 
-  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
 
   @@index([meetingId])
 }
 
 model Report {
-  id             String       @id @default(cuid())
+  id             String   @id @default(cuid())
   taskInstanceId String
   fileName       String
   fileUrl        String
@@ -715,35 +719,35 @@ model Report {
   mimeType       String?
   fileSize       Int?
   checksum       String?
-  approved       Boolean      @default(false)
-  createdAt      DateTime     @default(now())
+  approved       Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
-  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id])
+  taskInstance TaskInstance @relation(fields: [taskInstanceId], references: [id])
 }
 
 model DocumentAsset {
-  id          String           @id @default(cuid())
-  title       String
-  category    DocumentCategory
+  id            String           @id @default(cuid())
+  title         String
+  category      DocumentCategory
   subcategoryId String?
-  sourcePath  String
-  fileName    String
-  fileUrl     String
-  storageKey  String?
-  mimeType    String?
-  fileSize    Int?
-  checksum    String?
-  localityId  String?
-  activityId  String?
-  meetingId   String?
-  tagsJson    Json?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  sourcePath    String
+  fileName      String
+  fileUrl       String
+  storageKey    String?
+  mimeType      String?
+  fileSize      Int?
+  checksum      String?
+  localityId    String?
+  activityId    String?
+  meetingId     String?
+  tagsJson      Json?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
-  locality    Locality?        @relation(fields: [localityId], references: [id])
+  locality    Locality?            @relation(fields: [localityId], references: [id])
   subcategory DocumentSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
-  activity    Activity?        @relation(fields: [activityId], references: [id], onDelete: SetNull)
-  meeting     Meeting?         @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  activity    Activity?            @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  meeting     Meeting?             @relation(fields: [meetingId], references: [id], onDelete: SetNull)
   content     DocumentContent?
   links       DocumentLink[]
 
@@ -754,16 +758,16 @@ model DocumentAsset {
 }
 
 model DocumentSubcategory {
-  id          String           @id @default(cuid())
-  category    DocumentCategory
-  name        String
-  parentId    String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id        String           @id @default(cuid())
+  category  DocumentCategory
+  name      String
+  parentId  String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
-  parent      DocumentSubcategory?  @relation("DocumentSubcategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children    DocumentSubcategory[] @relation("DocumentSubcategoryTree")
-  documents   DocumentAsset[]
+  parent    DocumentSubcategory?  @relation("DocumentSubcategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  DocumentSubcategory[] @relation("DocumentSubcategoryTree")
+  documents DocumentAsset[]
 
   @@unique([category, parentId, name])
   @@index([category, createdAt])
@@ -771,29 +775,29 @@ model DocumentSubcategory {
 }
 
 model DocumentContent {
-  id          String              @id @default(cuid())
-  documentId  String              @unique
-  parseStatus DocumentParseStatus @default(PENDING)
-  textContent String?
-  parsedAt    DateTime?
+  id           String              @id @default(cuid())
+  documentId   String              @unique
+  parseStatus  DocumentParseStatus @default(PENDING)
+  textContent  String?
+  parsedAt     DateTime?
   metadataJson Json?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
 
-  document    DocumentAsset       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document DocumentAsset @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([parseStatus, parsedAt])
 }
 
 model DocumentLink {
-  id          String             @id @default(cuid())
-  documentId  String
-  entityType  DocumentLinkEntity
-  entityId    String
-  label       String?
-  createdAt   DateTime           @default(now())
+  id         String             @id @default(cuid())
+  documentId String
+  entityType DocumentLinkEntity
+  entityId   String
+  label      String?
+  createdAt  DateTime           @default(now())
 
-  document    DocumentAsset      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document DocumentAsset @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, entityType, entityId])
   @@index([documentId, entityType])
@@ -801,18 +805,18 @@ model DocumentLink {
 }
 
 model KnowledgeBase {
-  id          String                  @id @default(cuid())
-  key         String                  @unique
+  id          String             @id @default(cuid())
+  key         String             @unique
   name        String
   description String?
-  theme       KnowledgeBaseTheme      @default(SHARED)
-  isActive    Boolean                 @default(true)
-  sortOrder   Int                     @default(0)
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
+  theme       KnowledgeBaseTheme @default(SHARED)
+  isActive    Boolean            @default(true)
+  sortOrder   Int                @default(0)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
-  documents   KnowledgeBaseDocument[]
-  chunks      KnowledgeBaseChunk[]
+  documents KnowledgeBaseDocument[]
+  chunks    KnowledgeBaseChunk[]
 
   @@index([theme, isActive, sortOrder, createdAt])
   @@index([isActive, sortOrder, createdAt])
@@ -838,15 +842,15 @@ model KnowledgeBaseDocument {
   createdAt       DateTime                    @default(now())
   updatedAt       DateTime                    @updatedAt
 
-  knowledgeBase   KnowledgeBase               @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
-  chunks          KnowledgeBaseChunk[]
+  knowledgeBase KnowledgeBase        @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunks        KnowledgeBaseChunk[]
 
   @@index([knowledgeBaseId, status, createdAt])
   @@index([status, lastIndexedAt])
 }
 
 model KnowledgeBaseChunk {
-  id              String                @id @default(cuid())
+  id              String                 @id @default(cuid())
   knowledgeBaseId String
   documentId      String
   chunkIndex      Int
@@ -854,10 +858,10 @@ model KnowledgeBaseChunk {
   tokenCount      Int?
   metadataJson    Json?
   embedding       Unsupported("vector")?
-  createdAt       DateTime              @default(now())
+  createdAt       DateTime               @default(now())
 
-  knowledgeBase   KnowledgeBase         @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
-  document        KnowledgeBaseDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  knowledgeBase KnowledgeBase         @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  document      KnowledgeBaseDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@unique([documentId, chunkIndex])
   @@index([knowledgeBaseId, documentId])
@@ -871,8 +875,8 @@ model TaskComment {
   text           String
   createdAt      DateTime @default(now())
 
-  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
-  author         User         @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  taskInstance TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  author       User         @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([taskInstanceId, createdAt])
   @@index([authorId])
@@ -885,8 +889,8 @@ model TaskCommentRead {
   seenAt         DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  taskInstance   TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskInstance TaskInstance @relation(fields: [taskInstanceId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([taskInstanceId, userId])
   @@index([userId, seenAt])
@@ -899,8 +903,8 @@ model ActivityComment {
   text       String
   createdAt  DateTime @default(now())
 
-  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  author     User     @relation("ActivityCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  author   User     @relation("ActivityCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([activityId, createdAt])
   @@index([authorId])
@@ -913,21 +917,21 @@ model ActivityCommentRead {
   seenAt     DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([activityId, userId])
   @@index([userId, seenAt])
 }
 
 model UserMenuUpdateRead {
-  id         String   @id @default(cuid())
-  userId     String
-  menuKey    String
-  seenAt     DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  userId    String
+  menuKey   String
+  seenAt    DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, menuKey])
   @@index([userId, seenAt])
@@ -935,46 +939,46 @@ model UserMenuUpdateRead {
 }
 
 model Kpi {
-  id         String         @id @default(cuid())
-  key        String         @unique
+  id         String        @id @default(cuid())
+  key        String        @unique
   label      String
-  visibility KpiVisibility  @default(DEFAULT)
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  visibility KpiVisibility @default(DEFAULT)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
-  values     KpiValue[]
+  values KpiValue[]
 }
 
 model KpiValue {
-  id          String      @id @default(cuid())
+  id          String   @id @default(cuid())
   kpiId       String
   date        DateTime
   value       Float
   localityId  String?
   specialtyId String?
-  createdAt   DateTime    @default(now())
+  createdAt   DateTime @default(now())
 
-  kpi         Kpi         @relation(fields: [kpiId], references: [id], onDelete: Cascade)
-  locality    Locality?   @relation(fields: [localityId], references: [id])
-  specialty   Specialty?  @relation(fields: [specialtyId], references: [id])
+  kpi       Kpi        @relation(fields: [kpiId], references: [id], onDelete: Cascade)
+  locality  Locality?  @relation(fields: [localityId], references: [id])
+  specialty Specialty? @relation(fields: [specialtyId], references: [id])
 
   @@index([kpiId, date])
 }
 
 model Notice {
-  id           String          @id @default(cuid())
-  title        String
-  body         String
-  localityId   String?
-  specialtyId  String?
-  dueDate      DateTime?
-  priority     NoticePriority @default(MEDIUM)
-  pinned       Boolean         @default(false)
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id          String         @id @default(cuid())
+  title       String
+  body        String
+  localityId  String?
+  specialtyId String?
+  dueDate     DateTime?
+  priority    NoticePriority @default(MEDIUM)
+  pinned      Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
-  locality     Locality?      @relation(fields: [localityId], references: [id])
-  specialty    Specialty?     @relation(fields: [specialtyId], references: [id])
+  locality  Locality?  @relation(fields: [localityId], references: [id])
+  specialty Specialty? @relation(fields: [specialtyId], references: [id])
 
   @@index([localityId, specialtyId, dueDate])
 }
@@ -995,8 +999,8 @@ model StrategicRecommendation {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  om              Om?      @relation(fields: [omId], references: [id], onDelete: SetNull)
-  createdBy       User?    @relation("StrategicRecommendationCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  om        Om?   @relation(fields: [omId], references: [id], onDelete: SetNull)
+  createdBy User? @relation("StrategicRecommendationCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([createdById])
@@ -1015,20 +1019,20 @@ enum SocialCommunicationHighlightImpact {
 }
 
 model SocialCommunicationArticle {
-  id            String                        @id @default(cuid())
+  id            String                      @id @default(cuid())
   sourceUrl     String
   title         String
   coverImageUrl String?
   summary       String?
   contentText   String?
-  tags          String[]                      @default([])
-  audience      SocialCommunicationAudience   @default(INTERNAL)
+  tags          String[]                    @default([])
+  audience      SocialCommunicationAudience @default(INTERNAL)
   publishedAt   DateTime?
   createdById   String?
-  createdAt     DateTime                      @default(now())
-  updatedAt     DateTime                      @updatedAt
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
 
-  createdBy     User?                         @relation("SocialCommunicationArticleCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy User? @relation("SocialCommunicationArticleCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([publishedAt])
@@ -1051,8 +1055,8 @@ model SocialCommunicationHighlight {
   createdAt     DateTime                           @default(now())
   updatedAt     DateTime                           @updatedAt
 
-  locality      Locality                           @relation(fields: [localityId], references: [id], onDelete: Restrict)
-  createdBy     User?                              @relation("SocialCommunicationHighlightCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  locality  Locality @relation(fields: [localityId], references: [id], onDelete: Restrict)
+  createdBy User?    @relation("SocialCommunicationHighlightCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([impact, createdAt])
   @@index([localityId, createdAt])
@@ -1060,21 +1064,21 @@ model SocialCommunicationHighlight {
 }
 
 model LibraryPhoto {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   title       String
   scope       ActivityScope @default(SMIF)
-  fileUrl     String?  // Mantido para compatibilidade, mas não mais usado
-  storageKey  String?  // Mantido para compatibilidade, mas não mais usado
-  imageData   String   @db.Text // Base64 da imagem
-  mimeType    String?  // Tipo MIME da imagem (ex: image/jpeg)
-  sortOrder   Int      @default(0)
+  fileUrl     String? // Mantido para compatibilidade, mas não mais usado
+  storageKey  String? // Mantido para compatibilidade, mas não mais usado
+  imageData   String        @db.Text // Base64 da imagem
+  mimeType    String? // Tipo MIME da imagem (ex: image/jpeg)
+  sortOrder   Int           @default(0)
   localityId  String?
   createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
-  locality    Locality? @relation(fields: [localityId], references: [id], onDelete: SetNull)
-  createdBy   User?     @relation("LibraryPhotoCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  locality  Locality? @relation(fields: [localityId], references: [id], onDelete: SetNull)
+  createdBy User?     @relation("LibraryPhotoCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([sortOrder, createdAt])
   @@index([scope, sortOrder, createdAt])
@@ -1082,7 +1086,7 @@ model LibraryPhoto {
 }
 
 model LibraryDocument {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   title       String
   scope       ActivityScope @default(SMIF)
   fileName    String
@@ -1091,10 +1095,10 @@ model LibraryDocument {
   mimeType    String?
   fileSize    Int?
   createdById String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
-  createdBy   User?    @relation("LibraryDocumentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy User? @relation("LibraryDocumentCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([scope, createdAt])
@@ -1108,20 +1112,20 @@ model LibrarySetting {
 }
 
 model BestPracticePost {
-  id             String    @id @default(cuid())
-  title          String
-  content        String
-  localityId     String?
-  typeId         String?
-  isCommission   Boolean   @default(false)
-  createdById    String?
-  authorLabel    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id           String   @id @default(cuid())
+  title        String
+  content      String
+  localityId   String?
+  typeId       String?
+  isCommission Boolean  @default(false)
+  createdById  String?
+  authorLabel  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  locality       Locality? @relation(fields: [localityId], references: [id], onDelete: SetNull)
-  type           BestPracticeType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
-  createdBy      User?     @relation("BestPracticeCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  locality  Locality?         @relation(fields: [localityId], references: [id], onDelete: SetNull)
+  type      BestPracticeType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  createdBy User?             @relation("BestPracticeCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([isCommission, createdAt])
   @@index([localityId, createdAt])
@@ -1130,30 +1134,30 @@ model BestPracticePost {
 }
 
 model BestPracticeType {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  colorHex    String
-  textColorHex String? @default("#FFFFFF")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String   @unique
+  colorHex     String
+  textColorHex String?  @default("#FFFFFF")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  posts       BestPracticePost[]
+  posts BestPracticePost[]
 
   @@index([createdAt])
 }
 
 model LessonLearnedPost {
-  id             String    @id @default(cuid())
-  title          String
-  content        String
-  typeId         String
-  createdById    String?
-  authorLabel    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  typeId      String
+  createdById String?
+  authorLabel String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  type           LessonLearnedType @relation(fields: [typeId], references: [id], onDelete: Restrict)
-  createdBy      User?     @relation("LessonLearnedCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  type      LessonLearnedType @relation(fields: [typeId], references: [id], onDelete: Restrict)
+  createdBy User?             @relation("LessonLearnedCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([createdAt])
   @@index([typeId, createdAt])
@@ -1161,58 +1165,58 @@ model LessonLearnedPost {
 }
 
 model LessonLearnedType {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  colorHex    String
-  textColorHex String? @default("#FFFFFF")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String   @unique
+  colorHex     String
+  textColorHex String?  @default("#FFFFFF")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  posts       LessonLearnedPost[]
+  posts LessonLearnedPost[]
 
   @@index([createdAt])
 }
 
 model Checklist {
-  id          String      @id @default(cuid())
+  id          String   @id @default(cuid())
   title       String
   phaseId     String?
   specialtyId String?
-  eloRoleId   String?     // Elo responsável por acompanhar este checklist (ex: Psicologia)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  eloRoleId   String? // Elo responsável por acompanhar este checklist (ex: Psicologia)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  phase       Phase?      @relation(fields: [phaseId], references: [id])
-  specialty   Specialty?  @relation(fields: [specialtyId], references: [id])
-  eloRole     EloRole?    @relation(fields: [eloRoleId], references: [id])
-  items       ChecklistItem[]
+  phase     Phase?          @relation(fields: [phaseId], references: [id])
+  specialty Specialty?      @relation(fields: [specialtyId], references: [id])
+  eloRole   EloRole?        @relation(fields: [eloRoleId], references: [id])
+  items     ChecklistItem[]
 }
 
 model ChecklistItem {
-  id             String      @id @default(cuid())
+  id             String   @id @default(cuid())
   checklistId    String
   title          String
   taskTemplateId String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  checklist      Checklist   @relation(fields: [checklistId], references: [id], onDelete: Cascade)
-  taskTemplate   TaskTemplate? @relation(fields: [taskTemplateId], references: [id])
-  statuses       ChecklistItemStatus[]
+  checklist    Checklist             @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  taskTemplate TaskTemplate?         @relation(fields: [taskTemplateId], references: [id])
+  statuses     ChecklistItemStatus[]
 
   @@index([checklistId])
   @@index([taskTemplateId])
 }
 
 model ChecklistItemStatus {
-  id              String               @id @default(cuid())
+  id              String                  @id @default(cuid())
   checklistItemId String
   localityId      String
   status          ChecklistItemStatusType
-  updatedAt       DateTime             @updatedAt
+  updatedAt       DateTime                @updatedAt
 
-  checklistItem   ChecklistItem        @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
-  locality        Locality             @relation(fields: [localityId], references: [id])
+  checklistItem ChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  locality      Locality      @relation(fields: [localityId], references: [id])
 
   @@unique([checklistItemId, localityId])
   @@index([localityId])
@@ -1220,17 +1224,17 @@ model ChecklistItemStatus {
 
 model EloRole {
   id        String   @id @default(cuid())
-  code      String   @unique  // ex: PSICOLOGIA, SSO, JURIDICO, CPCA, GRAD_MASTER
-  name      String   // ex: Psicologia, SSO, Jurídico
+  code      String   @unique // ex: PSICOLOGIA, SSO, JURIDICO, CPCA, GRAD_MASTER
+  name      String // ex: Psicologia, SSO, Jurídico
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  elos            Elo[]
-  taskInstances   TaskInstance[]
-  taskTemplates   TaskTemplate[]
-  users           User[]
-  checklists      Checklist[]
+  elos          Elo[]
+  taskInstances TaskInstance[]
+  taskTemplates TaskTemplate[]
+  users         User[]
+  checklists    Checklist[]
 }
 
 model Elo {
@@ -1245,37 +1249,37 @@ model Elo {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  locality  Locality  @relation(fields: [localityId], references: [id])
-  eloRole   EloRole   @relation(fields: [eloRoleId], references: [id])
+  locality      Locality       @relation(fields: [localityId], references: [id])
+  eloRole       EloRole        @relation(fields: [eloRoleId], references: [id])
   assignedTasks TaskInstance[] @relation("TaskAssigneeElo")
 
   @@index([localityId, eloRoleId])
 }
 
 model RecruitsHistory {
-  id                  String    @id @default(cuid())
+  id                  String   @id @default(cuid())
   localityId          String
   date                DateTime
   recruitsFemaleCount Int
   turnoverCount       Int
   dismissalReason     String?
-  createdAt           DateTime  @default(now())
+  createdAt           DateTime @default(now())
 
-  locality            Locality  @relation(fields: [localityId], references: [id])
+  locality Locality @relation(fields: [localityId], references: [id])
 
   @@unique([localityId, date])
 }
 
 model RecruitOmAssignment {
-  id                   String   @id @default(cuid())
-  sourceLocalityId     String
+  id                    String   @id @default(cuid())
+  sourceLocalityId      String
   destinationLocalityId String
-  assignedCount        Int
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  assignedCount         Int
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
-  sourceLocality       Locality @relation("RecruitOmAssignmentSource", fields: [sourceLocalityId], references: [id], onDelete: Cascade)
-  destinationLocality  Locality @relation("RecruitOmAssignmentDestination", fields: [destinationLocalityId], references: [id], onDelete: Restrict)
+  sourceLocality      Locality @relation("RecruitOmAssignmentSource", fields: [sourceLocalityId], references: [id], onDelete: Cascade)
+  destinationLocality Locality @relation("RecruitOmAssignmentDestination", fields: [destinationLocalityId], references: [id], onDelete: Restrict)
 
   @@unique([sourceLocalityId, destinationLocalityId])
   @@index([sourceLocalityId])
@@ -1283,7 +1287,7 @@ model RecruitOmAssignment {
 }
 
 model RecruitFemale {
-  id                    String             @id @default(cuid())
+  id                    String              @id @default(cuid())
   localityId            String
   name                  String
   status                RecruitFemaleStatus @default(RECRUITMENT_TO_START)
@@ -1292,11 +1296,11 @@ model RecruitFemale {
   dismissedAt           DateTime?
   destinationLocalityId String?
   designatedAt          DateTime?
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
-  locality              Locality           @relation("RecruitSourceLocality", fields: [localityId], references: [id], onDelete: Cascade)
-  destinationLocality   Locality?          @relation("RecruitDestinationLocality", fields: [destinationLocalityId], references: [id], onDelete: SetNull)
+  locality            Locality  @relation("RecruitSourceLocality", fields: [localityId], references: [id], onDelete: Cascade)
+  destinationLocality Locality? @relation("RecruitDestinationLocality", fields: [destinationLocalityId], references: [id], onDelete: SetNull)
 
   @@index([localityId, status])
   @@index([destinationLocalityId, status])
@@ -1315,9 +1319,9 @@ model SmifComplaint {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
-  locality    Locality            @relation(fields: [localityId], references: [id])
-  createdBy   User                @relation("SmifComplaintCreatedBy", fields: [createdById], references: [id])
-  updatedBy   User?               @relation("SmifComplaintUpdatedBy", fields: [updatedById], references: [id])
+  locality  Locality @relation(fields: [localityId], references: [id])
+  createdBy User     @relation("SmifComplaintCreatedBy", fields: [createdById], references: [id])
+  updatedBy User?    @relation("SmifComplaintUpdatedBy", fields: [updatedById], references: [id])
 
   @@index([status, reportedAt])
   @@index([localityId, reportedAt])
@@ -1325,82 +1329,83 @@ model SmifComplaint {
 }
 
 model CpcComplaintCase {
-  id                              String             @id @default(cuid())
-  caseNumber                      String             @unique
-  workflowScope                   CpcComplaintWorkflowScope @default(CPCA)
-  legacySmifComplaintId           String?            @unique
-  omId                            String?
-  localityId                      String?
-  complaintType                   CpcComplaintType
-  notifierType                    CpcNotifierType    @default(VITIMA)
-  status                          CpcComplaintStatus @default(RECEIVED)
-  procedureType                   CpcProcedureType   @default(NOT_DEFINED)
-  incidentDate                    DateTime?
-  reportedAt                      DateTime           @default(now())
-  aggressorRank                   String
-  aggressorGender                 CpcGender
-  aggressorAgeRange               String?
-  victimRank                      String
-  victimGender                    CpcGender
-  victimAgeRange                  String?
-  victimIsNotifier                Boolean            @default(true)
-  notifierRank                    String             @default("NAO INFORMADO")
-  notifierGender                  CpcGender          @default(NAO_INFORMADO)
-  notifierAgeRange                String?
-  detailedViolenceType            String?
-  harassmentContext               String?
-  occurrenceLocation              String?
-  incidentFrequency               String?
-  hierarchicalFunctionalRelation  String?
-  occurrenceForm                  String?
-  occurrenceForms                 String[]           @default([])
-  administrativeProcedure         String?
-  procedureCurrentSituation       String?
-  retaliationReported             String?
-  retaliationAgainst              String?
-  evidenceCount                   Int                @default(0)
-  evidenceSummary                 String?
-  confidentialityTermSigned       Boolean            @default(false)
-  confidentialityHandlingNotes    String?
-  cpcaMembersExcludedFromInquiry  Boolean            @default(true)
-  immediateProtectionMeasures     String?
-  privateSupportActions           String?
-  psychologicalSupportProvided    Boolean            @default(false)
-  medicalSupportProvided          Boolean            @default(false)
-  socialSupportProvided           Boolean            @default(false)
-  legalSupportProvided            Boolean            @default(false)
-  contactRestrictionApplied       Boolean            @default(false)
-  preliminaryAnalysis             String?
-  preliminaryReportGenerated      Boolean            @default(false)
-  preliminaryReportDate           DateTime?
-  procedureReference              String?
-  procedureNotes                  String?
-  womenLedHandlingPrioritized     Boolean?
-  victimAccusedSeparationEvaluated Boolean           @default(false)
-  victimAccusedSeparationApplied  Boolean            @default(false)
-  accusedDefenseEnsured           Boolean            @default(false)
-  outcomeSummary                  String?
-  notifierFeedbackSummary         String?
-  victimFeedbackSummary           String?
-  notifierFeedbackDate            DateTime?
-  victimFeedbackDate              DateTime?
-  retaliationRisk                 Boolean            @default(false)
-  retaliationNotes                String?
-  outsourcedAccused               Boolean            @default(false)
-  contractorReferralDate          DateTime?
-  contractorFollowUpNotes         String?
-  archivedAt                      DateTime?
-  createdById                     String
-  updatedById                     String?
-  createdAt                       DateTime           @default(now())
-  updatedAt                       DateTime           @updatedAt
+  id                               String                    @id @default(cuid())
+  caseNumber                       String                    @unique
+  workflowScope                    CpcComplaintWorkflowScope @default(CPCA)
+  legacySmifComplaintId            String?                   @unique
+  omId                             String?
+  localityId                       String?
+  complaintType                    CpcComplaintType
+  notifierType                     CpcNotifierType           @default(VITIMA)
+  status                           CpcComplaintStatus        @default(RECEIVED)
+  procedureType                    CpcProcedureType          @default(NOT_DEFINED)
+  incidentDate                     DateTime?
+  reportedAt                       DateTime                  @default(now())
+  aggressorRank                    String
+  aggressorGender                  CpcGender
+  aggressorAgeRange                String?
+  victimRank                       String
+  victimGender                     CpcGender
+  victimAgeRange                   String?
+  victimIsNotifier                 Boolean                   @default(true)
+  notifierRank                     String                    @default("NAO INFORMADO")
+  notifierGender                   CpcGender                 @default(NAO_INFORMADO)
+  notifierAgeRange                 String?
+  detailedViolenceType             String?
+  harassmentContext                String?
+  occurrenceLocation               String?
+  incidentFrequency                String?
+  hierarchicalFunctionalRelation   String?
+  occurrenceForm                   String?
+  occurrenceForms                  String[]                  @default([])
+  administrativeProcedure          String?
+  procedureCurrentSituation        String?
+  retaliationReported              String?
+  retaliationAgainst               String?
+  evidenceCount                    Int                       @default(0)
+  evidenceSummary                  String?
+  confidentialityTermSigned        Boolean                   @default(false)
+  confidentialityHandlingNotes     String?
+  cpcaMembersExcludedFromInquiry   Boolean                   @default(true)
+  immediateProtectionMeasures      String?
+  privateSupportActions            String?
+  psychologicalSupportProvided     Boolean                   @default(false)
+  medicalSupportProvided           Boolean                   @default(false)
+  socialSupportProvided            Boolean                   @default(false)
+  legalSupportProvided             Boolean                   @default(false)
+  contactRestrictionApplied        Boolean                   @default(false)
+  preliminaryAnalysis              String?
+  preliminaryReportGenerated       Boolean                   @default(false)
+  preliminaryReportDate            DateTime?
+  procedureReference               String?
+  procedureNotes                   String?
+  womenLedHandlingPrioritized      Boolean?
+  victimAccusedSeparationEvaluated Boolean                   @default(false)
+  victimAccusedSeparationApplied   Boolean                   @default(false)
+  accusedDefenseEnsured            Boolean                   @default(false)
+  outcomeSummary                   String?
+  notifierFeedbackSummary          String?
+  victimFeedbackSummary            String?
+  notifierFeedbackDate             DateTime?
+  victimFeedbackDate               DateTime?
+  retaliationRisk                  Boolean                   @default(false)
+  retaliationNotes                 String?
+  outsourcedAccused                Boolean                   @default(false)
+  contractorReferralDate           DateTime?
+  contractorFollowUpNotes          String?
+  archivedAt                       DateTime?
+  createdById                      String
+  updatedById                      String?
+  createdAt                        DateTime                  @default(now())
+  updatedAt                        DateTime                  @updatedAt
 
-  om                              Om?                @relation(fields: [omId], references: [id], onDelete: SetNull)
-  locality                        Locality?          @relation(fields: [localityId], references: [id])
-  createdBy                       User               @relation("CpcComplaintCaseCreatedBy", fields: [createdById], references: [id])
-  updatedBy                       User?              @relation("CpcComplaintCaseUpdatedBy", fields: [updatedById], references: [id])
-  comments                        CpcComplaintComment[]
-  statusHistory                   CpcComplaintStatusHistory[]
+  om            Om?                         @relation(fields: [omId], references: [id], onDelete: SetNull)
+  locality      Locality?                   @relation(fields: [localityId], references: [id])
+  createdBy     User                        @relation("CpcComplaintCaseCreatedBy", fields: [createdById], references: [id])
+  updatedBy     User?                       @relation("CpcComplaintCaseUpdatedBy", fields: [updatedById], references: [id])
+  comments      CpcComplaintComment[]
+  cipavdThreads CpcComplaintCipavdThread[]
+  statusHistory CpcComplaintStatusHistory[]
 
   @@index([omId, status])
   @@index([localityId, status])
@@ -1413,20 +1418,60 @@ model CpcComplaintCase {
 }
 
 model CpcComplaintComment {
-  id              String            @id @default(cuid())
+  id              String   @id @default(cuid())
   complaintCaseId String
   text            String
   createdById     String
-  createdAt       DateTime          @default(now())
+  createdAt       DateTime @default(now())
 
-  complaintCase   CpcComplaintCase  @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)
-  createdBy       User              @relation("CpcComplaintCommentAuthor", fields: [createdById], references: [id])
+  complaintCase CpcComplaintCase @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)
+  createdBy     User             @relation("CpcComplaintCommentAuthor", fields: [createdById], references: [id])
 
   @@index([complaintCaseId, createdAt])
 }
 
+model CpcComplaintCipavdThread {
+  id              String                         @id @default(cuid())
+  complaintCaseId String
+  type            CpcComplaintCipavdThreadType
+  status          CpcComplaintCipavdThreadStatus
+  createdById     String
+  resolvedById    String?
+  closedById      String?
+  reopenedCount   Int                            @default(0)
+  createdAt       DateTime                       @default(now())
+  updatedAt       DateTime                       @updatedAt
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  lastMessageAt   DateTime                       @default(now())
+
+  complaintCase CpcComplaintCase            @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)
+  createdBy     User                        @relation("CpcComplaintCipavdThreadCreatedBy", fields: [createdById], references: [id])
+  resolvedBy    User?                       @relation("CpcComplaintCipavdThreadResolvedBy", fields: [resolvedById], references: [id])
+  closedBy      User?                       @relation("CpcComplaintCipavdThreadClosedBy", fields: [closedById], references: [id])
+  messages      CpcComplaintCipavdMessage[]
+
+  @@index([complaintCaseId, type, status])
+  @@index([complaintCaseId, lastMessageAt])
+}
+
+model CpcComplaintCipavdMessage {
+  id          String                        @id @default(cuid())
+  threadId    String
+  body        String
+  createdById String
+  authorKind  CpcComplaintCipavdAuthorKind
+  type        CpcComplaintCipavdMessageType @default(MESSAGE)
+  createdAt   DateTime                      @default(now())
+
+  thread    CpcComplaintCipavdThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  createdBy User                     @relation("CpcComplaintCipavdMessageAuthor", fields: [createdById], references: [id])
+
+  @@index([threadId, createdAt])
+}
+
 model CpcComplaintStatusHistory {
-  id              String             @id @default(cuid())
+  id              String              @id @default(cuid())
   complaintCaseId String
   fromStatus      CpcComplaintStatus?
   toStatus        CpcComplaintStatus
@@ -1434,29 +1479,29 @@ model CpcComplaintStatusHistory {
   toProcedure     CpcProcedureType
   note            String?
   changedById     String
-  changedAt       DateTime           @default(now())
+  changedAt       DateTime            @default(now())
 
-  complaintCase   CpcComplaintCase   @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)
-  changedBy       User               @relation("CpcComplaintStatusChangedBy", fields: [changedById], references: [id])
+  complaintCase CpcComplaintCase @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)
+  changedBy     User             @relation("CpcComplaintStatusChangedBy", fields: [changedById], references: [id])
 
   @@index([complaintCaseId, changedAt])
 }
 
 model CpcaCommissionPresident {
-  id                    String   @id @default(cuid())
-  omId                  String?   @unique
-  userId                String
-  assignedByUserId      String?
-  assignmentSource      CpcaCommissionPresidentAssignmentSource @default(DIRECT_ASSIGNMENT)
-  designationBulletin   String?
-  isSubstitution        Boolean  @default(false)
-  assignedAt            DateTime @default(now())
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                  String                                  @id @default(cuid())
+  omId                String?                                 @unique
+  userId              String
+  assignedByUserId    String?
+  assignmentSource    CpcaCommissionPresidentAssignmentSource @default(DIRECT_ASSIGNMENT)
+  designationBulletin String?
+  isSubstitution      Boolean                                 @default(false)
+  assignedAt          DateTime                                @default(now())
+  createdAt           DateTime                                @default(now())
+  updatedAt           DateTime                                @updatedAt
 
-  om                    Om?       @relation(fields: [omId], references: [id], onDelete: SetNull)
-  user                  User     @relation("CpcaCommissionPresidentUser", fields: [userId], references: [id], onDelete: Restrict)
-  assignedByUser        User?    @relation("CpcaCommissionPresidentAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  om             Om?   @relation(fields: [omId], references: [id], onDelete: SetNull)
+  user           User  @relation("CpcaCommissionPresidentUser", fields: [userId], references: [id], onDelete: Restrict)
+  assignedByUser User? @relation("CpcaCommissionPresidentAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([assignedByUserId])
@@ -1464,16 +1509,16 @@ model CpcaCommissionPresident {
 }
 
 model CpcaCommissionMember {
-  id               String   @id @default(cuid())
-  omId             String?
-  userId           String
-  addedByUserId    String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id            String   @id @default(cuid())
+  omId          String?
+  userId        String
+  addedByUserId String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  om               Om?       @relation(fields: [omId], references: [id], onDelete: SetNull)
-  user             User     @relation("CpcaCommissionMemberUser", fields: [userId], references: [id], onDelete: Restrict)
-  addedByUser      User?    @relation("CpcaCommissionMemberAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
+  om          Om?   @relation(fields: [omId], references: [id], onDelete: SetNull)
+  user        User  @relation("CpcaCommissionMemberUser", fields: [userId], references: [id], onDelete: Restrict)
+  addedByUser User? @relation("CpcaCommissionMemberAddedBy", fields: [addedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([omId, userId])
   @@index([omId])
@@ -1482,19 +1527,19 @@ model CpcaCommissionMember {
 }
 
 model CpcaChecklistItem {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   omId            String
   itemKey         String
-  isCompleted     Boolean  @default(false)
+  isCompleted     Boolean   @default(false)
   completedAt     DateTime?
   details         String?
   speakerName     String?
   updatedByUserId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  om              Om       @relation(fields: [omId], references: [id], onDelete: Cascade)
-  updatedByUser   User?    @relation("CpcaChecklistUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  om            Om    @relation(fields: [omId], references: [id], onDelete: Cascade)
+  updatedByUser User? @relation("CpcaChecklistUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
 
   @@unique([omId, itemKey])
   @@index([omId, isCompleted])
@@ -1503,25 +1548,25 @@ model CpcaChecklistItem {
 }
 
 model CpcaPresidentSelfRegistration {
-  id                       String                    @id @default(cuid())
-  omId                     String?
-  applicantUserId          String
-  applicantIdentifier      String
-  applicantUid             String
-  applicantEmail           String?
-  applicantName            String
-  requestedAsSubstitution  Boolean                   @default(false)
-  bulletinNumber           String
-  status                   CpcaPresidentRequestStatus @default(PENDING)
-  decidedByUserId          String?
-  decidedAt                DateTime?
-  decisionNotes            String?
-  createdAt                DateTime                  @default(now())
-  updatedAt                DateTime                  @updatedAt
+  id                      String                     @id @default(cuid())
+  omId                    String?
+  applicantUserId         String
+  applicantIdentifier     String
+  applicantUid            String
+  applicantEmail          String?
+  applicantName           String
+  requestedAsSubstitution Boolean                    @default(false)
+  bulletinNumber          String
+  status                  CpcaPresidentRequestStatus @default(PENDING)
+  decidedByUserId         String?
+  decidedAt               DateTime?
+  decisionNotes           String?
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
 
-  om                       Om?       @relation(fields: [omId], references: [id], onDelete: SetNull)
-  applicantUser            User     @relation("CpcaPresidentSelfRegistrationApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict)
-  decidedByUser            User?    @relation("CpcaPresidentSelfRegistrationDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  om            Om?   @relation(fields: [omId], references: [id], onDelete: SetNull)
+  applicantUser User  @relation("CpcaPresidentSelfRegistrationApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict)
+  decidedByUser User? @relation("CpcaPresidentSelfRegistrationDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([omId, status])
@@ -1530,27 +1575,27 @@ model CpcaPresidentSelfRegistration {
 }
 
 model CpcaPresidentNominationRequest {
-  id                       String                     @id @default(cuid())
-  omId                     String?
-  requestedByUserId        String
-  nomineeUserId            String
-  nomineeIdentifier        String
-  nomineeUid               String
-  nomineeEmail             String?
-  nomineeName              String
-  requestedAsSubstitution  Boolean                    @default(true)
-  bulletinNumber           String?
-  status                   CpcaPresidentRequestStatus @default(PENDING)
-  decidedByUserId          String?
-  decidedAt                DateTime?
-  decisionNotes            String?
-  createdAt                DateTime                   @default(now())
-  updatedAt                DateTime                   @updatedAt
+  id                      String                     @id @default(cuid())
+  omId                    String?
+  requestedByUserId       String
+  nomineeUserId           String
+  nomineeIdentifier       String
+  nomineeUid              String
+  nomineeEmail            String?
+  nomineeName             String
+  requestedAsSubstitution Boolean                    @default(true)
+  bulletinNumber          String?
+  status                  CpcaPresidentRequestStatus @default(PENDING)
+  decidedByUserId         String?
+  decidedAt               DateTime?
+  decisionNotes           String?
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
 
-  om                       Om?      @relation(fields: [omId], references: [id], onDelete: SetNull)
-  requestedByUser          User     @relation("CpcaPresidentNominationRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  nomineeUser             User      @relation("CpcaPresidentNominationNominee", fields: [nomineeUserId], references: [id], onDelete: Restrict)
-  decidedByUser           User?     @relation("CpcaPresidentNominationDecider", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  om              Om?   @relation(fields: [omId], references: [id], onDelete: SetNull)
+  requestedByUser User  @relation("CpcaPresidentNominationRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  nomineeUser     User  @relation("CpcaPresidentNominationNominee", fields: [nomineeUserId], references: [id], onDelete: Restrict)
+  decidedByUser   User? @relation("CpcaPresidentNominationDecider", fields: [decidedByUserId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([omId, status])
@@ -1571,9 +1616,9 @@ model CpcaCommissionCoverageRequest {
   createdAt             DateTime                   @default(now())
   updatedAt             DateTime                   @updatedAt
 
-  om                    Om?       @relation(fields: [omId], references: [id], onDelete: SetNull)
-  requestedByUser       User      @relation("CpcaCoverageRequestRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
-  decidedByUser         User?     @relation("CpcaCoverageRequestDecider", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  om              Om?   @relation(fields: [omId], references: [id], onDelete: SetNull)
+  requestedByUser User  @relation("CpcaCoverageRequestRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  decidedByUser   User? @relation("CpcaCoverageRequestDecider", fields: [decidedByUserId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([omId, status])
@@ -1582,24 +1627,24 @@ model CpcaCommissionCoverageRequest {
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
+  id         String   @id @default(cuid())
+  userId     String?
   localityId String?
-  resource  String
-  action    String
-  entityId  String?
-  diffJson  Json?
-  createdAt DateTime @default(now())
+  resource   String
+  action     String
+  entityId   String?
+  diffJson   Json?
+  createdAt  DateTime @default(now())
 
-  user      User?    @relation(fields: [userId], references: [id])
-  locality  Locality? @relation(fields: [localityId], references: [id])
+  user     User?     @relation(fields: [userId], references: [id])
+  locality Locality? @relation(fields: [localityId], references: [id])
 
   @@index([createdAt, resource, entityId])
   @@index([localityId])
 }
 
 model BiSurveyImportBatch {
-  id            String          @id @default(cuid())
+  id            String         @id @default(cuid())
   fileName      String
   format        BiImportFormat
   sheetName     String?
@@ -1608,34 +1653,34 @@ model BiSurveyImportBatch {
   duplicateRows Int
   invalidRows   Int
   importedById  String?
-  importedAt    DateTime        @default(now())
+  importedAt    DateTime       @default(now())
 
-  importedBy    User?           @relation(fields: [importedById], references: [id], onDelete: SetNull)
-  responses     BiSurveyResponse[]
+  importedBy User?              @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses  BiSurveyResponse[]
 
   @@index([importedAt])
   @@index([importedById, importedAt])
 }
 
 model BiSurveyResponse {
-  id                 String              @id @default(cuid())
-  batchId            String?
-  submittedAt        DateTime?
+  id                  String    @id @default(cuid())
+  batchId             String?
+  submittedAt         DateTime?
   sufferedViolenceRaw String?
-  sufferedViolence   Boolean?
-  violenceTypes      String[]            @default([])
-  postoGraduacao     String?
-  om                 String?
-  posto              String?
-  autodeclara        String?
-  extraColumn        String?
-  rawPayload         Json?
-  sourceRow          Int?
-  sourceHash         String              @unique
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  sufferedViolence    Boolean?
+  violenceTypes       String[]  @default([])
+  postoGraduacao      String?
+  om                  String?
+  posto               String?
+  autodeclara         String?
+  extraColumn         String?
+  rawPayload          Json?
+  sourceRow           Int?
+  sourceHash          String    @unique
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  batch              BiSurveyImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batch BiSurveyImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   @@index([submittedAt])
   @@index([sufferedViolence, om])
@@ -1646,7 +1691,7 @@ model BiSurveyResponse {
 }
 
 model BiDomesticViolenceImportBatch {
-  id            String                         @id @default(cuid())
+  id            String         @id @default(cuid())
   fileName      String
   format        BiImportFormat
   sheetName     String?
@@ -1655,52 +1700,52 @@ model BiDomesticViolenceImportBatch {
   duplicateRows Int
   invalidRows   Int
   importedById  String?
-  importedAt    DateTime                       @default(now())
+  importedAt    DateTime       @default(now())
 
-  importedBy    User?                          @relation(fields: [importedById], references: [id], onDelete: SetNull)
-  responses     BiDomesticViolenceResponse[]
+  importedBy User?                        @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses  BiDomesticViolenceResponse[]
 
   @@index([importedAt])
   @@index([importedById, importedAt])
 }
 
 model BiDomesticViolenceResponse {
-  id                     String                          @id @default(cuid())
-  batchId                String?
-  submittedAt            DateTime?
-  age                    Int?
-  organization           String?
-  maritalStatus          String?
-  education              String?
-  naturality             String?
-  fabBond                String?
-  rank                   String?
-  situationScope         String?
-  sufferedLifetimeRaw    String?
-  sufferedLifetime       Boolean?
+  id                      String    @id @default(cuid())
+  batchId                 String?
+  submittedAt             DateTime?
+  age                     Int?
+  organization            String?
+  maritalStatus           String?
+  education               String?
+  naturality              String?
+  fabBond                 String?
+  rank                    String?
+  situationScope          String?
+  sufferedLifetimeRaw     String?
+  sufferedLifetime        Boolean?
   sufferedLast12MonthsRaw String?
-  sufferedLast12Months   Boolean?
-  frequency              String?
-  affectiveBond          String?
-  violenceTypes          String[]                        @default([])
-  authorRelation         String?
-  authorMilitaryLink     String?
-  occurrencePlace        String?
-  witnessesRaw           String?
-  witnesses              Boolean?
-  impactIntensity        String?
-  impactAreas            String[]                        @default([])
-  soughtHelpRaw          String?
-  soughtHelp             Boolean?
-  complaintChannels      String[]                        @default([])
-  noComplaintReasons     String[]                        @default([])
-  rawPayload             Json?
-  sourceRow              Int?
-  sourceHash             String                          @unique
-  createdAt              DateTime                        @default(now())
-  updatedAt              DateTime                        @updatedAt
+  sufferedLast12Months    Boolean?
+  frequency               String?
+  affectiveBond           String?
+  violenceTypes           String[]  @default([])
+  authorRelation          String?
+  authorMilitaryLink      String?
+  occurrencePlace         String?
+  witnessesRaw            String?
+  witnesses               Boolean?
+  impactIntensity         String?
+  impactAreas             String[]  @default([])
+  soughtHelpRaw           String?
+  soughtHelp              Boolean?
+  complaintChannels       String[]  @default([])
+  noComplaintReasons      String[]  @default([])
+  rawPayload              Json?
+  sourceRow               Int?
+  sourceHash              String    @unique
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
-  batch                  BiDomesticViolenceImportBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batch BiDomesticViolenceImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   @@index([submittedAt])
   @@index([organization, rank])
@@ -1711,7 +1756,7 @@ model BiDomesticViolenceResponse {
 }
 
 model BiRecruitsImportBatch {
-  id            String                   @id @default(cuid())
+  id            String         @id @default(cuid())
   fileName      String
   format        BiImportFormat
   sheetName     String?
@@ -1720,36 +1765,36 @@ model BiRecruitsImportBatch {
   duplicateRows Int
   invalidRows   Int
   importedById  String?
-  importedAt    DateTime                 @default(now())
+  importedAt    DateTime       @default(now())
 
-  importedBy    User?                    @relation(fields: [importedById], references: [id], onDelete: SetNull)
-  responses     BiRecruitsResponse[]
+  importedBy User?                @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses  BiRecruitsResponse[]
 
   @@index([importedAt])
   @@index([importedById, importedAt])
 }
 
 model BiRecruitsResponse {
-  id                             String                  @id @default(cuid())
-  batchId                        String?
-  submittedAt                    DateTime?
-  education                      String?
-  gender                         String?
-  identifyHarassment             String?
-  conductLimits                  String?
-  knowOrientation                String?
-  knowReportProcess              String?
-  willingnessOrientation         String?
-  willingnessReport              String?
+  id                              String    @id @default(cuid())
+  batchId                         String?
+  submittedAt                     DateTime?
+  education                       String?
+  gender                          String?
+  identifyHarassment              String?
+  conductLimits                   String?
+  knowOrientation                 String?
+  knowReportProcess               String?
+  willingnessOrientation          String?
+  willingnessReport               String?
   enlistmentDecisionInfluenceText String?
-  suggestionComment              String?
-  rawPayload                     Json?
-  sourceRow                      Int?
-  sourceHash                     String                  @unique
-  createdAt                      DateTime                @default(now())
-  updatedAt                      DateTime                @updatedAt
+  suggestionComment               String?
+  rawPayload                      Json?
+  sourceRow                       Int?
+  sourceHash                      String    @unique
+  createdAt                       DateTime  @default(now())
+  updatedAt                       DateTime  @updatedAt
 
-  batch                          BiRecruitsImportBatch?  @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batch BiRecruitsImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   @@index([submittedAt])
   @@index([education, gender])
@@ -1769,7 +1814,7 @@ model BiSurveyCardSetting {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  updatedBy   User?    @relation("BiSurveyCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("BiSurveyCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
 }
@@ -1783,7 +1828,7 @@ model BiDomesticViolenceCardSetting {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  updatedBy   User?    @relation("BiDomesticViolenceCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("BiDomesticViolenceCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
 }
@@ -1797,13 +1842,13 @@ model BiRecruitsCardSetting {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  updatedBy   User?    @relation("BiRecruitsCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("BiRecruitsCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
 }
 
 model BiBestPracticeCycleImportBatch {
-  id            String                           @id @default(cuid())
+  id            String         @id @default(cuid())
   fileName      String
   format        BiImportFormat
   sheetName     String?
@@ -1812,35 +1857,35 @@ model BiBestPracticeCycleImportBatch {
   duplicateRows Int
   invalidRows   Int
   importedById  String?
-  importedAt    DateTime                         @default(now())
+  importedAt    DateTime       @default(now())
 
-  importedBy    User?                            @relation(fields: [importedById], references: [id], onDelete: SetNull)
-  responses     BiBestPracticeCycleResponse[]
+  importedBy User?                         @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses  BiBestPracticeCycleResponse[]
 
   @@index([importedAt])
   @@index([importedById, importedAt])
 }
 
 model BiBestPracticeCycleResponse {
-  id                            String                          @id @default(cuid())
-  batchId                       String?
-  submittedAt                   DateTime?
-  technicalRigorPerception      String?
-  preparednessToLeadMixedClass  String?
-  genderBiasImpact              String?
-  interactionDifference         String?
-  interactionDifferenceComment  String?
-  supportNeedRecognition        String?
-  mainChallengeOptions          String[]                        @default([])
-  identification                String?
-  specialty                     String?
-  rawPayload                    Json?
-  sourceRow                     Int?
-  sourceHash                    String                          @unique
-  createdAt                     DateTime                        @default(now())
-  updatedAt                     DateTime                        @updatedAt
+  id                           String    @id @default(cuid())
+  batchId                      String?
+  submittedAt                  DateTime?
+  technicalRigorPerception     String?
+  preparednessToLeadMixedClass String?
+  genderBiasImpact             String?
+  interactionDifference        String?
+  interactionDifferenceComment String?
+  supportNeedRecognition       String?
+  mainChallengeOptions         String[]  @default([])
+  identification               String?
+  specialty                    String?
+  rawPayload                   Json?
+  sourceRow                    Int?
+  sourceHash                   String    @unique
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
 
-  batch                         BiBestPracticeCycleImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batch BiBestPracticeCycleImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   @@index([submittedAt])
   @@index([technicalRigorPerception, preparednessToLeadMixedClass])
@@ -1859,13 +1904,13 @@ model BiBestPracticeCycleCardSetting {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  updatedBy   User?    @relation("BiBestPracticeCycleCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("BiBestPracticeCycleCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
 }
 
 model BiCpcaMeetingImportBatch {
-  id            String                     @id @default(cuid())
+  id            String         @id @default(cuid())
   fileName      String
   format        BiImportFormat
   sheetName     String?
@@ -1875,27 +1920,27 @@ model BiCpcaMeetingImportBatch {
   duplicateRows Int
   invalidRows   Int
   importedById  String?
-  importedAt    DateTime                   @default(now())
+  importedAt    DateTime       @default(now())
 
-  importedBy    User?                      @relation(fields: [importedById], references: [id], onDelete: SetNull)
-  responses     BiCpcaMeetingResponse[]
+  importedBy User?                   @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses  BiCpcaMeetingResponse[]
 
   @@index([importedAt])
   @@index([importedById, importedAt])
 }
 
 model BiCpcaMeetingResponse {
-  id          String                   @id @default(cuid())
+  id          String    @id @default(cuid())
   batchId     String?
   submittedAt DateTime?
   answersJson Json?
   rawPayload  Json?
   sourceRow   Int?
-  sourceHash  String                   @unique
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
+  sourceHash  String    @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  batch       BiCpcaMeetingImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batch BiCpcaMeetingImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   @@index([submittedAt])
   @@index([batchId])
@@ -1910,13 +1955,13 @@ model BiCpcaMeetingCardSetting {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  updatedBy   User?    @relation("BiCpcaMeetingCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("BiCpcaMeetingCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
 }
 
 model BiGsdEvaluationImportBatch {
-  id            String                       @id @default(cuid())
+  id            String         @id @default(cuid())
   fileName      String
   format        BiImportFormat
   sheetName     String?
@@ -1926,27 +1971,27 @@ model BiGsdEvaluationImportBatch {
   duplicateRows Int
   invalidRows   Int
   importedById  String?
-  importedAt    DateTime                     @default(now())
+  importedAt    DateTime       @default(now())
 
-  importedBy    User?                        @relation(fields: [importedById], references: [id], onDelete: SetNull)
-  responses     BiGsdEvaluationResponse[]
+  importedBy User?                     @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  responses  BiGsdEvaluationResponse[]
 
   @@index([importedAt])
   @@index([importedById, importedAt])
 }
 
 model BiGsdEvaluationResponse {
-  id          String                      @id @default(cuid())
+  id          String    @id @default(cuid())
   batchId     String?
   submittedAt DateTime?
   answersJson Json?
   rawPayload  Json?
   sourceRow   Int?
-  sourceHash  String                      @unique
-  createdAt   DateTime                    @default(now())
-  updatedAt   DateTime                    @updatedAt
+  sourceHash  String    @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  batch       BiGsdEvaluationImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  batch BiGsdEvaluationImportBatch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
 
   @@index([submittedAt])
   @@index([batchId])
@@ -1961,27 +2006,27 @@ model BiGsdEvaluationCardSetting {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  updatedBy   User?    @relation("BiGsdEvaluationCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedBy User? @relation("BiGsdEvaluationCardSettingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@index([updatedAt])
 }
 
 model BiNormalizationLink {
-  id               String                    @id @default(cuid())
-  sourceType       BiNormalizationSourceType
-  sourceRecordId   String
-  sourceBatchId    String?
-  rawReference     String?
+  id                 String                    @id @default(cuid())
+  sourceType         BiNormalizationSourceType
+  sourceRecordId     String
+  sourceBatchId      String?
+  rawReference       String?
   secondaryReference String?
-  omId             String?
-  uf               String?
-  status           BiNormalizationStatus
-  confidence       Float?
-  resolutionMethod String?
-  createdAt        DateTime                  @default(now())
-  updatedAt        DateTime                  @updatedAt
+  omId               String?
+  uf                 String?
+  status             BiNormalizationStatus
+  confidence         Float?
+  resolutionMethod   String?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
 
-  om               Om?                       @relation(fields: [omId], references: [id], onDelete: SetNull)
+  om Om? @relation(fields: [omId], references: [id], onDelete: SetNull)
 
   @@unique([sourceType, sourceRecordId])
   @@index([sourceType, status])
@@ -2111,6 +2156,30 @@ enum CpcComplaintType {
 enum CpcComplaintWorkflowScope {
   CPCA
   SMIF
+}
+
+enum CpcComplaintCipavdThreadType {
+  NOTE
+  PENDENCY
+}
+
+enum CpcComplaintCipavdThreadStatus {
+  OPEN
+  RESOLVED
+  CLOSED
+}
+
+enum CpcComplaintCipavdAuthorKind {
+  MANAGEMENT
+  PRESIDENT
+  SYSTEM
+}
+
+enum CpcComplaintCipavdMessageType {
+  MESSAGE
+  RESOLUTION
+  REOPEN
+  FINALIZATION
 }
 
 enum CpcNotifierType {

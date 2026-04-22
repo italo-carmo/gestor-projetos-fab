@@ -3209,6 +3209,20 @@ export function useCpcaCase(id: string, enabled = true) {
   });
 }
 
+export function useCpcaCasePendingSummary(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.cpcaCasePendingSummary(filters),
+    queryFn: async () =>
+      (await api.get("/cpca-cases/cipavd-pending-summary", { params: filters }))
+        .data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useCpcaCaseStats(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.cpcaCaseStats(filters),
@@ -3263,6 +3277,88 @@ export function useAddCpcaCaseComment() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+    },
+  });
+}
+
+export function useCreateCpcaCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      text: string;
+      isPending?: boolean;
+    }) =>
+      (
+        await api.post(`/cpca-cases/${args.id}/cipavd-threads`, {
+          text: args.text,
+          isPending: args.isPending,
+        })
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useResolveCpcaCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string; text: string }) =>
+      (
+        await api.post(
+          `/cpca-cases/${args.id}/cipavd-threads/${args.threadId}/resolve`,
+          { text: args.text },
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useReopenCpcaCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string; text: string }) =>
+      (
+        await api.post(
+          `/cpca-cases/${args.id}/cipavd-threads/${args.threadId}/reopen`,
+          { text: args.text },
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useFinalizeCpcaCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string }) =>
+      (
+        await api.post(
+          `/cpca-cases/${args.id}/cipavd-threads/${args.threadId}/finalize`,
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
 }
@@ -3586,6 +3682,23 @@ export function useSmifComplaintCase(id: string, enabled = true) {
   });
 }
 
+export function useSmifComplaintPendingSummary(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.smifComplaintPendingSummary(filters),
+    queryFn: async () =>
+      (
+        await api.get("/smif-complaints/cipavd-pending-summary", {
+          params: filters,
+        })
+      ).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useCreateSmifComplaintCase() {
   const qc = useQueryClient();
   return useMutation({
@@ -3633,6 +3746,88 @@ export function useAddSmifComplaintCaseComment() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["smifComplaints"] });
       qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
+    },
+  });
+}
+
+export function useCreateSmifComplaintCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      text: string;
+      isPending?: boolean;
+    }) =>
+      (
+        await api.post(`/smif-complaints/${args.id}/cipavd-threads`, {
+          text: args.text,
+          isPending: args.isPending,
+        })
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["smifComplaintPendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useResolveSmifComplaintCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string; text: string }) =>
+      (
+        await api.post(
+          `/smif-complaints/${args.id}/cipavd-threads/${args.threadId}/resolve`,
+          { text: args.text },
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["smifComplaintPendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useReopenSmifComplaintCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string; text: string }) =>
+      (
+        await api.post(
+          `/smif-complaints/${args.id}/cipavd-threads/${args.threadId}/reopen`,
+          { text: args.text },
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["smifComplaintPendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
+export function useFinalizeSmifComplaintCaseCipavdThread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; threadId: string }) =>
+      (
+        await api.post(
+          `/smif-complaints/${args.id}/cipavd-threads/${args.threadId}/finalize`,
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["smifComplaintPendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
 }
@@ -5403,9 +5598,8 @@ export function useKnowledgeBases() {
   return useQuery({
     queryKey: qk.knowledgeBases,
     queryFn: async () =>
-      (
-        await api.get<{ items: AdminKnowledgeBase[] }>("/admin/knowledge-bases")
-      ).data,
+      (await api.get<{ items: AdminKnowledgeBase[] }>("/admin/knowledge-bases"))
+        .data,
     staleTime: 10_000,
   });
 }
@@ -5645,7 +5839,8 @@ export function useUpdateKnowledgeBase() {
         isActive?: boolean;
         sortOrder?: number | null;
       };
-    }) => (await api.put(`/admin/knowledge-bases/${args.id}`, args.payload)).data,
+    }) =>
+      (await api.put(`/admin/knowledge-bases/${args.id}`, args.payload)).data,
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: qk.knowledgeBases });
       qc.invalidateQueries({ queryKey: qk.knowledgeBasesSelectable });
@@ -5708,8 +5903,12 @@ export function useUpdateKnowledgeBaseDocument() {
       knowledgeBaseId: string;
       payload: { title?: string | null };
     }) =>
-      (await api.put(`/admin/knowledge-bases/documents/${args.id}`, args.payload))
-        .data,
+      (
+        await api.put(
+          `/admin/knowledge-bases/documents/${args.id}`,
+          args.payload,
+        )
+      ).data,
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: qk.knowledgeBases });
       qc.invalidateQueries({
@@ -5737,10 +5936,13 @@ export function useReindexKnowledgeBase() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (knowledgeBaseId: string) =>
-      (await api.post(`/admin/knowledge-bases/${knowledgeBaseId}/reindex`)).data,
+      (await api.post(`/admin/knowledge-bases/${knowledgeBaseId}/reindex`))
+        .data,
     onSuccess: (_data, knowledgeBaseId) => {
       qc.invalidateQueries({ queryKey: qk.knowledgeBases });
-      qc.invalidateQueries({ queryKey: qk.knowledgeBaseDocuments(knowledgeBaseId) });
+      qc.invalidateQueries({
+        queryKey: qk.knowledgeBaseDocuments(knowledgeBaseId),
+      });
     },
   });
 }

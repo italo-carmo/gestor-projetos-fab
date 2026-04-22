@@ -15,7 +15,10 @@ import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import type { RbacUser } from '../rbac/rbac.types';
 import { AddCpcaCaseCommentDto } from './dto/add-cpca-case-comment.dto';
+import { CreateCpcaCaseCipavdThreadDto } from './dto/create-cpca-case-cipavd-thread.dto';
 import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
+import { ReopenCpcaCaseCipavdThreadDto } from './dto/reopen-cpca-case-cipavd-thread.dto';
+import { ResolveCpcaCaseCipavdThreadDto } from './dto/resolve-cpca-case-cipavd-thread.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
 import { CpcaService } from './cpca.service';
 
@@ -71,6 +74,31 @@ export class CpcaController {
     return this.cpca.stats({ localityId: omId ?? localityId, from, to }, user);
   }
 
+  @Get('cipavd-pending-summary')
+  @RequirePermission('cpca_cases', 'view')
+  cipavdPendingSummary(
+    @Query('omId') omId: string | undefined,
+    @Query('localityId') localityId: string | undefined,
+    @Query('status') status: string | undefined,
+    @Query('complaintType') complaintType: string | undefined,
+    @Query('detailedViolenceType') detailedViolenceType: string | undefined,
+    @Query('procedureType') procedureType: string | undefined,
+    @Query('q') q: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.pendingSummary(
+      {
+        localityId: omId ?? localityId,
+        status,
+        complaintType,
+        detailedViolenceType,
+        procedureType,
+        q,
+      },
+      user,
+    );
+  }
+
   @Get(':id')
   @RequirePermission('cpca_cases', 'view')
   getById(@Param('id') id: string, @CurrentUser() user: RbacUser) {
@@ -97,6 +125,48 @@ export class CpcaController {
   @RequirePermission('cpca_cases', 'delete')
   remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.cpca.remove(id, user);
+  }
+
+  @Post(':id/cipavd-threads')
+  @RequirePermission('cpca_cases', 'view')
+  createCipavdThread(
+    @Param('id') id: string,
+    @Body() dto: CreateCpcaCaseCipavdThreadDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.createCipavdThread(id, dto, user);
+  }
+
+  @Post(':id/cipavd-threads/:threadId/resolve')
+  @RequirePermission('cpca_cases', 'view')
+  resolveCipavdThread(
+    @Param('id') id: string,
+    @Param('threadId') threadId: string,
+    @Body() dto: ResolveCpcaCaseCipavdThreadDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.resolveCipavdThread(id, threadId, dto, user);
+  }
+
+  @Post(':id/cipavd-threads/:threadId/reopen')
+  @RequirePermission('cpca_cases', 'view')
+  reopenCipavdThread(
+    @Param('id') id: string,
+    @Param('threadId') threadId: string,
+    @Body() dto: ReopenCpcaCaseCipavdThreadDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.reopenCipavdThread(id, threadId, dto, user);
+  }
+
+  @Post(':id/cipavd-threads/:threadId/finalize')
+  @RequirePermission('cpca_cases', 'view')
+  finalizeCipavdThread(
+    @Param('id') id: string,
+    @Param('threadId') threadId: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.finalizeCipavdThread(id, threadId, user);
   }
 
   @Get(':id/comments')

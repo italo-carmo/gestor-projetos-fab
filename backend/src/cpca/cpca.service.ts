@@ -4,7 +4,13 @@ import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
-import { hasPermission } from '../rbac/role-access';
+import {
+  hasAnyRole,
+  hasPermission,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_TI,
+} from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import {
   getCpcaCaseInconsistencies,
@@ -58,6 +64,11 @@ const CPCA_INVESTIGATION_STATUS_SET = new Set<string>([
   'PROCEDURE_DEFINED',
   'INVESTIGATION',
 ]);
+const CIPAVD_MANAGEMENT_ROLES = [
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_COMANDANTE_COMGEP,
+  ROLE_TI,
+] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type ComplaintWorkflowScope = 'CPCA' | 'SMIF';
@@ -66,6 +77,17 @@ export type ComplaintWorkflowContext = {
   workflowScope: ComplaintWorkflowScope;
   resource: 'cpca_cases' | 'smif_complaints';
   caseNumberPrefix: 'CPCA' | 'SMIF';
+};
+
+type ComplaintListFilters = {
+  localityId?: string;
+  status?: string;
+  complaintType?: string;
+  detailedViolenceType?: string;
+  procedureType?: string;
+  q?: string;
+  page?: string;
+  pageSize?: string;
 };
 
 export type CpcaAiContextReference = {
@@ -170,78 +192,23 @@ export class CpcaService {
   }
 
   async list(
-    filters: {
-      localityId?: string;
-      status?: string;
-      complaintType?: string;
-      detailedViolenceType?: string;
-      procedureType?: string;
-      q?: string;
-      page?: string;
-      pageSize?: string;
-    },
+    filters: ComplaintListFilters,
     user?: RbacUser,
     context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
   ) {
     const workflowContext = this.resolveContext(context);
-    const constraints = this.getScopeConstraints(user, workflowContext);
-    const cpcaScopedLocalityIds = await this.resolveCpcaScopedLocalityIds(
-      constraints,
+    const where = await this.buildComplaintWhere(
+      filters,
+      user,
       workflowContext,
     );
-    const where: any = {
-      workflowScope: workflowContext.workflowScope,
-    };
-    const andConditions: any[] = [];
-
-    if (filters.localityId) {
-      where.omId = filters.localityId;
-    }
-    if (constraints.localityId) {
-      if (workflowContext.workflowScope === 'CPCA') {
-        if (
-          filters.localityId &&
-          (!cpcaScopedLocalityIds ||
-            !cpcaScopedLocalityIds.includes(filters.localityId))
-        ) {
-          where.omId = '__none__';
-        } else if (cpcaScopedLocalityIds?.length) {
-          where.omId = filters.localityId
-            ? filters.localityId
-            : { in: cpcaScopedLocalityIds };
-        }
-      } else if (
-        filters.localityId &&
-        constraints.localityId !== filters.localityId
-      ) {
-        where.omId = '__none__';
-      } else {
-        where.omId = constraints.localityId;
-      }
-    }
-
-    if (filters.status) where.status = filters.status;
-    if (filters.complaintType) where.complaintType = filters.complaintType;
-    if (filters.detailedViolenceType)
-      where.detailedViolenceType = filters.detailedViolenceType;
-    if (filters.procedureType) where.procedureType = filters.procedureType;
-    if (filters.q) {
-      andConditions.push({
-        caseNumber: { contains: filters.q.trim(), mode: 'insensitive' },
-      });
-    }
-    if (andConditions.length === 1) {
-      Object.assign(where, andConditions[0]);
-    } else if (andConditions.length > 1) {
-      where.AND = andConditions;
-    }
-
     const { page, pageSize, skip, take } = parsePagination(
       filters.page,
       filters.pageSize,
     );
 
     const complaintModel = (this.prisma as any).cpcComplaintCase;
+    const threadModel = (this.prisma as any).cpcComplaintCipavdThread;
 
     const [items, total] = await this.prisma.$transaction([
       complaintModel.findMany({
@@ -262,9 +229,29 @@ export class CpcaService {
       complaintModel.count({ where }),
     ]);
 
+    const complaintCaseIds = (items ?? [])
+      .map((item: any) => String(item?.id ?? '').trim())
+      .filter(Boolean);
+    const cipavdThreads = complaintCaseIds.length
+      ? await threadModel.findMany({
+          where: { complaintCaseId: { in: complaintCaseIds } },
+          select: {
+            complaintCaseId: true,
+            type: true,
+            status: true,
+            lastMessageAt: true,
+          },
+        })
+      : [];
+    const cipavdSummaryByCaseId =
+      this.buildCipavdSummaryByCaseId(cipavdThreads);
+
     return {
       items: (items ?? []).map((item: any) => {
         const serialized = this.serializeComplaint(item);
+        const cipavdCommentsSummary =
+          cipavdSummaryByCaseId.get(String(item?.id ?? '')) ??
+          this.buildEmptyCipavdSummary();
         const inconsistencies =
           workflowContext.workflowScope === 'CPCA'
             ? getCpcaCaseInconsistencies(serialized)
@@ -272,14 +259,142 @@ export class CpcaService {
 
         return {
           ...serialized,
-          lastCommentAt: item.comments?.[0]?.createdAt ?? null,
+          lastCommentAt: this.resolveLatestIsoDate(
+            item.comments?.[0]?.createdAt ?? null,
+            cipavdCommentsSummary.lastActivityAt,
+          ),
           comments: undefined,
+          cipavdCommentsSummary,
           inconsistencies,
         };
       }),
       page,
       pageSize,
       total,
+    };
+  }
+
+  async pendingSummary(
+    filters: ComplaintListFilters,
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const where = await this.buildComplaintWhere(
+      filters,
+      user,
+      workflowContext,
+    );
+    const threadModel = (this.prisma as any).cpcComplaintCipavdThread;
+    const canReviewResolvedPendencies = this.isCipavdManagementUser(user);
+    const detailsLimit = 200;
+
+    const [
+      openPendingCount,
+      resolvedPendingCount,
+      openThreads,
+      resolvedThreads,
+    ] = await Promise.all([
+      threadModel.count({
+        where: {
+          type: 'PENDENCY',
+          status: 'OPEN',
+          complaintCase: where,
+        },
+      }),
+      canReviewResolvedPendencies
+        ? threadModel.count({
+            where: {
+              type: 'PENDENCY',
+              status: 'RESOLVED',
+              complaintCase: where,
+            },
+          })
+        : Promise.resolve(0),
+      threadModel.findMany({
+        where: {
+          type: 'PENDENCY',
+          status: 'OPEN',
+          complaintCase: where,
+        },
+        include: {
+          complaintCase: {
+            select: {
+              id: true,
+              caseNumber: true,
+              status: true,
+              procedureType: true,
+              reportedAt: true,
+              workflowScope: true,
+              om: { select: { id: true, code: true, name: true } },
+              locality: { select: { id: true, code: true, name: true } },
+            },
+          },
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: {
+              createdBy: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+        orderBy: { lastMessageAt: 'desc' },
+        take: detailsLimit,
+      }),
+      canReviewResolvedPendencies
+        ? threadModel.findMany({
+            where: {
+              type: 'PENDENCY',
+              status: 'RESOLVED',
+              complaintCase: where,
+            },
+            include: {
+              complaintCase: {
+                select: {
+                  id: true,
+                  caseNumber: true,
+                  status: true,
+                  procedureType: true,
+                  reportedAt: true,
+                  workflowScope: true,
+                  om: { select: { id: true, code: true, name: true } },
+                  locality: { select: { id: true, code: true, name: true } },
+                },
+              },
+              messages: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+                include: {
+                  createdBy: {
+                    select: { id: true, name: true, email: true },
+                  },
+                },
+              },
+            },
+            orderBy: { lastMessageAt: 'desc' },
+            take: detailsLimit,
+          })
+        : Promise.resolve([]),
+    ]);
+
+    return {
+      summary: {
+        openPendingCount: Number(openPendingCount ?? 0),
+        resolvedPendingCount: canReviewResolvedPendencies
+          ? Number(resolvedPendingCount ?? 0)
+          : 0,
+        totalPendingCount:
+          Number(openPendingCount ?? 0) +
+          (canReviewResolvedPendencies ? Number(resolvedPendingCount ?? 0) : 0),
+      },
+      openItems: (openThreads ?? []).map((item: any) =>
+        this.serializePendingSummaryItem(item),
+      ),
+      resolvedItems: canReviewResolvedPendencies
+        ? (resolvedThreads ?? []).map((item: any) =>
+            this.serializePendingSummaryItem(item),
+          )
+        : [],
     };
   }
 
@@ -1189,6 +1304,20 @@ export class CpcaService {
       include: {
         om: { select: { id: true, code: true, name: true } },
         locality: { select: { id: true, code: true, name: true } },
+        cipavdThreads: {
+          orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+            resolvedBy: { select: { id: true, name: true, email: true } },
+            closedBy: { select: { id: true, name: true, email: true } },
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              include: {
+                createdBy: { select: { id: true, name: true, email: true } },
+              },
+            },
+          },
+        },
         comments: {
           orderBy: { createdAt: 'asc' },
           include: {
@@ -1216,8 +1345,17 @@ export class CpcaService {
       user,
       workflowContext,
     );
+
+    const cipavdAccess = await this.resolveCipavdAccess(item, user);
     return {
       ...this.serializeComplaint(item),
+      cipavdComments: {
+        access: cipavdAccess,
+        summary: this.buildCipavdSummary(item.cipavdThreads ?? []),
+        threads: (item.cipavdThreads ?? []).map((thread: any) =>
+          this.serializeCipavdThread(thread),
+        ),
+      },
     };
   }
 
@@ -1875,6 +2013,344 @@ export class CpcaService {
     return { ok: true };
   }
 
+  async createCipavdThread(
+    id: string,
+    payload: { text: string; isPending?: boolean },
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const complaint = await this.findComplaintCaseForCipavdAction(
+      id,
+      user,
+      workflowContext,
+    );
+    const cipavdAccess = await this.resolveCipavdAccess(complaint, user);
+    if (!cipavdAccess.canCreateThread) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const text = this.cleanText(payload.text);
+    if (!text) {
+      throwError('VALIDATION_ERROR', { field: 'text', reason: 'required' });
+    }
+
+    const actorId = this.requireUserId(user);
+    const isPending = payload.isPending !== false;
+    const threadType = isPending ? 'PENDENCY' : 'NOTE';
+    const threadStatus = isPending ? 'OPEN' : 'CLOSED';
+    const now = new Date();
+
+    const created = await this.prisma.$transaction(async (tx: any) => {
+      const thread = await tx.cpcComplaintCipavdThread.create({
+        data: {
+          complaintCaseId: complaint.id,
+          type: threadType,
+          status: threadStatus,
+          createdById: actorId,
+          lastMessageAt: now,
+        },
+      });
+
+      await tx.cpcComplaintCipavdMessage.create({
+        data: {
+          threadId: thread.id,
+          body: text,
+          createdById: actorId,
+          authorKind: 'MANAGEMENT',
+          type: 'MESSAGE',
+        },
+      });
+
+      return tx.cpcComplaintCipavdThread.findUnique({
+        where: { id: thread.id },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          resolvedBy: { select: { id: true, name: true, email: true } },
+          closedBy: { select: { id: true, name: true, email: true } },
+          messages: {
+            orderBy: { createdAt: 'asc' },
+            include: {
+              createdBy: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+      });
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: workflowContext.resource,
+      action: isPending ? 'cipavd_pendency_create' : 'cipavd_comment_create',
+      entityId: complaint.id,
+      diffJson: {
+        caseId: complaint.id,
+        threadId: created?.id,
+        omId: complaint.omId,
+        workflowScope: workflowContext.workflowScope,
+      },
+    });
+
+    return this.serializeCipavdThread(created);
+  }
+
+  async resolveCipavdThread(
+    id: string,
+    threadId: string,
+    payload: { text: string },
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const complaint = await this.findComplaintCaseForCipavdAction(
+      id,
+      user,
+      workflowContext,
+    );
+    const cipavdAccess = await this.resolveCipavdAccess(complaint, user);
+    if (!cipavdAccess.canResolvePending) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const thread = await this.findCipavdThreadForComplaint(
+      threadId,
+      complaint.id,
+      workflowContext,
+    );
+    if (thread.type !== 'PENDENCY' || thread.status !== 'OPEN') {
+      throwError('VALIDATION_ERROR', {
+        field: 'threadId',
+        reason: 'PENDENCY_MUST_BE_OPEN',
+      });
+    }
+
+    const text = this.cleanText(payload.text);
+    if (!text) {
+      throwError('VALIDATION_ERROR', { field: 'text', reason: 'required' });
+    }
+
+    const actorId = this.requireUserId(user);
+    const now = new Date();
+    const updated = await this.prisma.$transaction(async (tx: any) => {
+      await tx.cpcComplaintCipavdMessage.create({
+        data: {
+          threadId,
+          body: text,
+          createdById: actorId,
+          authorKind: 'PRESIDENT',
+          type: 'RESOLUTION',
+        },
+      });
+
+      await tx.cpcComplaintCipavdThread.update({
+        where: { id: threadId },
+        data: {
+          status: 'RESOLVED',
+          resolvedById: actorId,
+          resolvedAt: now,
+          lastMessageAt: now,
+        },
+      });
+
+      return tx.cpcComplaintCipavdThread.findUnique({
+        where: { id: threadId },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          resolvedBy: { select: { id: true, name: true, email: true } },
+          closedBy: { select: { id: true, name: true, email: true } },
+          messages: {
+            orderBy: { createdAt: 'asc' },
+            include: {
+              createdBy: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+      });
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: workflowContext.resource,
+      action: 'cipavd_pendency_resolve',
+      entityId: complaint.id,
+      diffJson: {
+        caseId: complaint.id,
+        threadId,
+        omId: complaint.omId,
+        workflowScope: workflowContext.workflowScope,
+      },
+    });
+
+    return this.serializeCipavdThread(updated);
+  }
+
+  async reopenCipavdThread(
+    id: string,
+    threadId: string,
+    payload: { text: string },
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const complaint = await this.findComplaintCaseForCipavdAction(
+      id,
+      user,
+      workflowContext,
+    );
+    const cipavdAccess = await this.resolveCipavdAccess(complaint, user);
+    if (!cipavdAccess.canReviewResolvedPendencies) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const thread = await this.findCipavdThreadForComplaint(
+      threadId,
+      complaint.id,
+      workflowContext,
+    );
+    if (thread.type !== 'PENDENCY' || thread.status !== 'RESOLVED') {
+      throwError('VALIDATION_ERROR', {
+        field: 'threadId',
+        reason: 'PENDENCY_MUST_BE_RESOLVED',
+      });
+    }
+
+    const text = this.cleanText(payload.text);
+    if (!text) {
+      throwError('VALIDATION_ERROR', { field: 'text', reason: 'required' });
+    }
+
+    const actorId = this.requireUserId(user);
+    const now = new Date();
+    const updated = await this.prisma.$transaction(async (tx: any) => {
+      await tx.cpcComplaintCipavdMessage.create({
+        data: {
+          threadId,
+          body: text,
+          createdById: actorId,
+          authorKind: 'MANAGEMENT',
+          type: 'REOPEN',
+        },
+      });
+
+      await tx.cpcComplaintCipavdThread.update({
+        where: { id: threadId },
+        data: {
+          status: 'OPEN',
+          resolvedById: null,
+          resolvedAt: null,
+          closedById: null,
+          closedAt: null,
+          reopenedCount: Number(thread.reopenedCount ?? 0) + 1,
+          lastMessageAt: now,
+        },
+      });
+
+      return tx.cpcComplaintCipavdThread.findUnique({
+        where: { id: threadId },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          resolvedBy: { select: { id: true, name: true, email: true } },
+          closedBy: { select: { id: true, name: true, email: true } },
+          messages: {
+            orderBy: { createdAt: 'asc' },
+            include: {
+              createdBy: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+      });
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: workflowContext.resource,
+      action: 'cipavd_pendency_reopen',
+      entityId: complaint.id,
+      diffJson: {
+        caseId: complaint.id,
+        threadId,
+        omId: complaint.omId,
+        workflowScope: workflowContext.workflowScope,
+      },
+    });
+
+    return this.serializeCipavdThread(updated);
+  }
+
+  async finalizeCipavdThread(
+    id: string,
+    threadId: string,
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const complaint = await this.findComplaintCaseForCipavdAction(
+      id,
+      user,
+      workflowContext,
+    );
+    const cipavdAccess = await this.resolveCipavdAccess(complaint, user);
+    if (!cipavdAccess.canReviewResolvedPendencies) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const thread = await this.findCipavdThreadForComplaint(
+      threadId,
+      complaint.id,
+      workflowContext,
+    );
+    if (thread.type !== 'PENDENCY' || thread.status !== 'RESOLVED') {
+      throwError('VALIDATION_ERROR', {
+        field: 'threadId',
+        reason: 'PENDENCY_MUST_BE_RESOLVED',
+      });
+    }
+
+    const actorId = this.requireUserId(user);
+    const now = new Date();
+    const updated = await this.prisma.$transaction(async (tx: any) => {
+      await tx.cpcComplaintCipavdThread.update({
+        where: { id: threadId },
+        data: {
+          status: 'CLOSED',
+          closedById: actorId,
+          closedAt: now,
+          lastMessageAt: now,
+        },
+      });
+
+      return tx.cpcComplaintCipavdThread.findUnique({
+        where: { id: threadId },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          resolvedBy: { select: { id: true, name: true, email: true } },
+          closedBy: { select: { id: true, name: true, email: true } },
+          messages: {
+            orderBy: { createdAt: 'asc' },
+            include: {
+              createdBy: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+      });
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: workflowContext.resource,
+      action: 'cipavd_pendency_finalize',
+      entityId: complaint.id,
+      diffJson: {
+        caseId: complaint.id,
+        threadId,
+        omId: complaint.omId,
+        workflowScope: workflowContext.workflowScope,
+      },
+    });
+
+    return this.serializeCipavdThread(updated);
+  }
+
   async addComment(
     id: string,
     text: string,
@@ -1980,6 +2456,377 @@ export class CpcaService {
     });
 
     return { items };
+  }
+
+  private async buildComplaintWhere(
+    filters: ComplaintListFilters,
+    user: RbacUser | undefined,
+    context: ComplaintWorkflowContext,
+  ) {
+    const constraints = this.getScopeConstraints(user, context);
+    const cpcaScopedLocalityIds = await this.resolveCpcaScopedLocalityIds(
+      constraints,
+      context,
+    );
+    const where: any = {
+      workflowScope: context.workflowScope,
+    };
+    const andConditions: any[] = [];
+
+    if (filters.localityId) {
+      where.omId = filters.localityId;
+    }
+    if (constraints.localityId) {
+      if (context.workflowScope === 'CPCA') {
+        if (
+          filters.localityId &&
+          (!cpcaScopedLocalityIds ||
+            !cpcaScopedLocalityIds.includes(filters.localityId))
+        ) {
+          where.omId = '__none__';
+        } else if (cpcaScopedLocalityIds?.length) {
+          where.omId = filters.localityId
+            ? filters.localityId
+            : { in: cpcaScopedLocalityIds };
+        }
+      } else if (
+        filters.localityId &&
+        constraints.localityId !== filters.localityId
+      ) {
+        where.omId = '__none__';
+      } else {
+        where.omId = constraints.localityId;
+      }
+    }
+
+    if (filters.status) where.status = filters.status;
+    if (filters.complaintType) where.complaintType = filters.complaintType;
+    if (filters.detailedViolenceType) {
+      where.detailedViolenceType = filters.detailedViolenceType;
+    }
+    if (filters.procedureType) where.procedureType = filters.procedureType;
+    if (filters.q) {
+      andConditions.push({
+        caseNumber: { contains: filters.q.trim(), mode: 'insensitive' },
+      });
+    }
+    if (andConditions.length === 1) {
+      Object.assign(where, andConditions[0]);
+    } else if (andConditions.length > 1) {
+      where.AND = andConditions;
+    }
+
+    return where;
+  }
+
+  private buildEmptyCipavdSummary() {
+    return {
+      totalThreads: 0,
+      noteCount: 0,
+      totalPendingCount: 0,
+      openPendingCount: 0,
+      resolvedPendingCount: 0,
+      closedPendingCount: 0,
+      lastActivityAt: null as string | null,
+    };
+  }
+
+  private buildCipavdSummary(threads: any[]) {
+    const summary = this.buildEmptyCipavdSummary();
+
+    for (const thread of threads ?? []) {
+      summary.totalThreads += 1;
+
+      if (String(thread?.type ?? '') === 'NOTE') {
+        summary.noteCount += 1;
+      } else if (String(thread?.type ?? '') === 'PENDENCY') {
+        summary.totalPendingCount += 1;
+        const status = String(thread?.status ?? '');
+        if (status === 'OPEN') summary.openPendingCount += 1;
+        if (status === 'RESOLVED') summary.resolvedPendingCount += 1;
+        if (status === 'CLOSED') summary.closedPendingCount += 1;
+      }
+
+      summary.lastActivityAt = this.resolveLatestIsoDate(
+        summary.lastActivityAt,
+        thread?.lastMessageAt ?? null,
+      );
+    }
+
+    return summary;
+  }
+
+  private buildCipavdSummaryByCaseId(threads: any[]) {
+    const threadGroups = new Map<string, any[]>();
+    for (const thread of threads ?? []) {
+      const complaintCaseId = String(thread?.complaintCaseId ?? '').trim();
+      if (!complaintCaseId) continue;
+      const group = threadGroups.get(complaintCaseId) ?? [];
+      group.push(thread);
+      threadGroups.set(complaintCaseId, group);
+    }
+
+    const summaryByCaseId = new Map<string, any>();
+    for (const [complaintCaseId, group] of threadGroups.entries()) {
+      summaryByCaseId.set(complaintCaseId, this.buildCipavdSummary(group));
+    }
+
+    return summaryByCaseId;
+  }
+
+  private resolveLatestIsoDate(
+    left: string | Date | null | undefined,
+    right: string | Date | null | undefined,
+  ) {
+    const leftDate = this.parseDateValue(left);
+    const rightDate = this.parseDateValue(right);
+    if (!leftDate && !rightDate) return null;
+    if (!leftDate) return rightDate?.toISOString() ?? null;
+    if (!rightDate) return leftDate.toISOString();
+    return leftDate.getTime() >= rightDate.getTime()
+      ? leftDate.toISOString()
+      : rightDate.toISOString();
+  }
+
+  private parseDateValue(value: string | Date | null | undefined) {
+    if (!value) return null;
+    const parsed = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private isCipavdManagementUser(user?: RbacUser) {
+    return hasAnyRole(user, [...CIPAVD_MANAGEMENT_ROLES]);
+  }
+
+  private async resolveCipavdAccess(
+    complaint: {
+      omId?: string | null;
+      localityId?: string | null;
+    },
+    user?: RbacUser,
+  ) {
+    const omId = String(complaint.omId ?? complaint.localityId ?? '').trim();
+    const userId = String(user?.id ?? '').trim();
+    const userIsManagement = this.isCipavdManagementUser(user);
+    const userIsPresident =
+      Boolean(userId) &&
+      Boolean(omId) &&
+      Boolean(
+        await this.prisma.cpcaCommissionPresident.findFirst({
+          where: {
+            omId,
+            userId,
+          },
+          select: { id: true },
+        }),
+      );
+
+    return {
+      userIsManagement,
+      userIsPresident,
+      canCreateThread: userIsManagement,
+      canResolvePending: userIsPresident,
+      canReviewResolvedPendencies: userIsManagement,
+    };
+  }
+
+  private async findComplaintCaseForCipavdAction(
+    id: string,
+    user: RbacUser | undefined,
+    context: ComplaintWorkflowContext,
+  ) {
+    const complaintModel = (this.prisma as any).cpcComplaintCase;
+    const complaint = await complaintModel.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        omId: true,
+        localityId: true,
+        caseNumber: true,
+        workflowScope: true,
+      },
+    });
+
+    if (!complaint) throwError('NOT_FOUND');
+    if (complaint.workflowScope !== context.workflowScope) {
+      throwError('NOT_FOUND');
+    }
+
+    await this.assertCaseAccess(
+      {
+        localityId: complaint.omId ?? complaint.localityId ?? '',
+        caseNumber: complaint.caseNumber,
+      },
+      user,
+      context,
+    );
+
+    return complaint;
+  }
+
+  private async findCipavdThreadForComplaint(
+    threadId: string,
+    complaintCaseId: string,
+    context: ComplaintWorkflowContext,
+  ) {
+    const threadModel = (this.prisma as any).cpcComplaintCipavdThread;
+    const thread = await threadModel.findUnique({
+      where: { id: threadId },
+      select: {
+        id: true,
+        complaintCaseId: true,
+        type: true,
+        status: true,
+        reopenedCount: true,
+        complaintCase: {
+          select: { workflowScope: true },
+        },
+      },
+    });
+
+    if (!thread) throwError('NOT_FOUND');
+    if (thread.complaintCaseId !== complaintCaseId) {
+      throwError('NOT_FOUND');
+    }
+    if (thread.complaintCase?.workflowScope !== context.workflowScope) {
+      throwError('NOT_FOUND');
+    }
+
+    return thread;
+  }
+
+  private serializePendingSummaryItem(item: any) {
+    const complaint = this.serializeComplaint(item?.complaintCase ?? {});
+    const lastMessage = Array.isArray(item?.messages) ? item.messages[0] : null;
+
+    return {
+      threadId: item.id,
+      type: item.type,
+      typeLabel: this.getCipavdThreadTypeLabel(item.type),
+      status: item.status,
+      statusLabel: this.getCipavdThreadStatusLabel(item.status),
+      reopenedCount: Number(item.reopenedCount ?? 0),
+      createdAt:
+        item.createdAt instanceof Date
+          ? item.createdAt.toISOString()
+          : (item.createdAt ?? null),
+      resolvedAt:
+        item.resolvedAt instanceof Date
+          ? item.resolvedAt.toISOString()
+          : (item.resolvedAt ?? null),
+      closedAt:
+        item.closedAt instanceof Date
+          ? item.closedAt.toISOString()
+          : (item.closedAt ?? null),
+      lastMessageAt:
+        item.lastMessageAt instanceof Date
+          ? item.lastMessageAt.toISOString()
+          : (item.lastMessageAt ?? null),
+      case: {
+        id: complaint.id,
+        caseNumber: complaint.caseNumber,
+        status: complaint.status,
+        procedureType: complaint.procedureType,
+        reportedAt: complaint.reportedAt,
+        locality: complaint.locality,
+      },
+      lastMessage: lastMessage
+        ? this.serializeCipavdMessage(lastMessage)
+        : null,
+    };
+  }
+
+  private serializeCipavdThread(thread: any) {
+    return {
+      id: thread.id,
+      type: thread.type,
+      typeLabel: this.getCipavdThreadTypeLabel(thread.type),
+      status: thread.status,
+      statusLabel:
+        String(thread?.type ?? '')
+          .trim()
+          .toUpperCase() === 'NOTE'
+          ? 'Registrado'
+          : this.getCipavdThreadStatusLabel(thread.status),
+      reopenedCount: Number(thread.reopenedCount ?? 0),
+      createdAt:
+        thread.createdAt instanceof Date
+          ? thread.createdAt.toISOString()
+          : (thread.createdAt ?? null),
+      resolvedAt:
+        thread.resolvedAt instanceof Date
+          ? thread.resolvedAt.toISOString()
+          : (thread.resolvedAt ?? null),
+      closedAt:
+        thread.closedAt instanceof Date
+          ? thread.closedAt.toISOString()
+          : (thread.closedAt ?? null),
+      lastMessageAt:
+        thread.lastMessageAt instanceof Date
+          ? thread.lastMessageAt.toISOString()
+          : (thread.lastMessageAt ?? null),
+      createdBy: thread.createdBy ?? null,
+      resolvedBy: thread.resolvedBy ?? null,
+      closedBy: thread.closedBy ?? null,
+      messages: Array.isArray(thread?.messages)
+        ? thread.messages.map((message: any) =>
+            this.serializeCipavdMessage(message),
+          )
+        : [],
+    };
+  }
+
+  private serializeCipavdMessage(message: any) {
+    return {
+      id: message.id,
+      body: message.body,
+      createdAt:
+        message.createdAt instanceof Date
+          ? message.createdAt.toISOString()
+          : (message.createdAt ?? null),
+      authorKind: message.authorKind,
+      authorLabel: this.getCipavdAuthorLabel(message.authorKind),
+      type: message.type,
+      typeLabel: this.getCipavdMessageTypeLabel(message.type),
+      createdBy: message.createdBy ?? null,
+    };
+  }
+
+  private getCipavdThreadTypeLabel(type: string | null | undefined) {
+    return String(type ?? '')
+      .trim()
+      .toUpperCase() === 'PENDENCY'
+      ? 'Pendência'
+      : 'Comentário';
+  }
+
+  private getCipavdThreadStatusLabel(status: string | null | undefined) {
+    const normalized = String(status ?? '')
+      .trim()
+      .toUpperCase();
+    if (normalized === 'OPEN') return 'Em aberto';
+    if (normalized === 'RESOLVED') return 'Resolvida';
+    if (normalized === 'CLOSED') return 'Finalizada';
+    return normalized || 'Sem status';
+  }
+
+  private getCipavdAuthorLabel(authorKind: string | null | undefined) {
+    const normalized = String(authorKind ?? '')
+      .trim()
+      .toUpperCase();
+    if (normalized === 'PRESIDENT') return 'Presidente da CPCA';
+    if (normalized === 'SYSTEM') return 'Sistema';
+    return 'CIPAVD / COMGEP / TI';
+  }
+
+  private getCipavdMessageTypeLabel(type: string | null | undefined) {
+    const normalized = String(type ?? '')
+      .trim()
+      .toUpperCase();
+    if (normalized === 'RESOLUTION') return 'Resposta da comissão';
+    if (normalized === 'REOPEN') return 'Nova pendência';
+    if (normalized === 'FINALIZATION') return 'Pendência finalizada';
+    return 'Mensagem';
   }
 
   private getScopeConstraints(

@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import type { RbacUser } from '../rbac/rbac.types';
 import {
+  hasPermission,
   normalizeRoleName,
   ROLE_COMANDANTE_COMGEP,
   ROLE_TI,
@@ -58,10 +59,30 @@ export class MenuUpdatesService {
 
   async list(rawMenuKeys: string | string[] | undefined, user?: RbacUser) {
     const userId = this.requireUserId(user);
+    const userOmId = String(user?.omId ?? '').trim();
     const menuKeys = this.normalizeMenuKeys(rawMenuKeys);
     if (!menuKeys.length) {
       return { items: [] as Array<Record<string, unknown>> };
     }
+
+    const canSeeCpcaCasesNational = hasPermission(
+      user,
+      'cpca_cases',
+      'view',
+      'NATIONAL',
+    );
+    const canSeeCpcaCasesLocal =
+      hasPermission(user, 'cpca_cases', 'view', 'LOCALITY') &&
+      Boolean(userOmId);
+    const canSeeSmifComplaintsNational = hasPermission(
+      user,
+      'smif_complaints',
+      'view',
+      'NATIONAL',
+    );
+    const canSeeSmifComplaintsLocal =
+      hasPermission(user, 'smif_complaints', 'view', 'LOCALITY') &&
+      Boolean(userOmId);
 
     const menuResourcePairs = menuKeys.flatMap((menuKey) =>
       Array.from(new Set(MENU_UPDATE_RESOURCES[menuKey] ?? [])).map(
@@ -137,13 +158,20 @@ export class MenuUpdatesService {
                     )
                   )
                 )
+              LEFT JOIN "CpcComplaintCase" "complaint_scope"
+                ON al."resource" IN ('cpca_cases', 'smif_complaints')
+               AND "complaint_scope"."id" = COALESCE(
+                 NULLIF(btrim(al."diffJson"->>'caseId'), ''),
+                 NULLIF(btrim(al."entityId"), '')
+               )
               WHERE (
                 (
                   mr."menuKey" NOT IN (
                     'activities_smif',
                     'activities_cipavd',
                     'cpca_cases',
-                    'cpca_commission'
+                    'cpca_commission',
+                    'smif_complaints'
                   )
                   OR (
                     "act_scope"."id" IS NOT NULL
@@ -156,10 +184,38 @@ export class MenuUpdatesService {
                     mr."menuKey" = 'cpca_cases'
                     AND al."action" NOT LIKE 'cpca_commission_%'
                     AND al."action" NOT LIKE 'cpca_president_%'
+                    AND (
+                      ${canSeeCpcaCasesNational}
+                      OR (
+                        ${canSeeCpcaCasesLocal}
+                        AND ${userOmId} <> ''
+                        AND "complaint_scope"."omId" IS NOT NULL
+                        AND (
+                          "complaint_scope"."omId" = ${userOmId}
+                          OR EXISTS (
+                            SELECT 1
+                            FROM "CpcaCommissionCoverageOm" cco
+                            WHERE cco."managerOmId" = ${userOmId}
+                              AND cco."managedOmId" = "complaint_scope"."omId"
+                          )
+                        )
+                      )
+                    )
                   )
                   OR (
                     mr."menuKey" = 'cpca_commission'
                     AND al."action" LIKE 'cpca_commission_%'
+                  )
+                  OR (
+                    mr."menuKey" = 'smif_complaints'
+                    AND (
+                      ${canSeeSmifComplaintsNational}
+                      OR (
+                        ${canSeeSmifComplaintsLocal}
+                        AND ${userOmId} <> ''
+                        AND "complaint_scope"."omId" = ${userOmId}
+                      )
+                    )
                   )
                 )
               )

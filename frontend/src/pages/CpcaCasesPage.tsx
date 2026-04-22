@@ -5,6 +5,10 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Drawer,
   FormControlLabel,
@@ -28,20 +32,28 @@ import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  useAddCpcaCaseComment,
-  useAddSmifComplaintCaseComment,
   useCpcaCase,
   useCpcaCases,
   useCpcaCaseLocalityOptions,
+  useCpcaCasePendingSummary,
+  useCreateCpcaCaseCipavdThread,
   useCreateCpcaCase,
   useDeleteCpcaCase,
+  useFinalizeCpcaCaseCipavdThread,
   useLocalities,
   useMe,
   usePostos,
+  useReopenCpcaCaseCipavdThread,
+  useResolveCpcaCaseCipavdThread,
   useSmifComplaintCase,
   useSmifComplaintCases,
+  useSmifComplaintPendingSummary,
+  useCreateSmifComplaintCaseCipavdThread,
   useCreateSmifComplaintCase,
   useDeleteSmifComplaintCase,
+  useFinalizeSmifComplaintCaseCipavdThread,
+  useReopenSmifComplaintCaseCipavdThread,
+  useResolveSmifComplaintCaseCipavdThread,
   useUpdateSmifComplaintCase,
   useUpdateCpcaCase,
 } from "../api/hooks";
@@ -51,7 +63,6 @@ import {
   hasAnyRole,
   ROLE_COMANDANTE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
-  ROLE_CPCA,
   ROLE_TI,
 } from "../app/roleAccess";
 import { useToast } from "../app/toast";
@@ -64,6 +75,13 @@ import {
   syncCpcaWorkflowStatus,
   type CpcaCaseInconsistency,
 } from "../features/cpcaCaseConsistency";
+import {
+  getComplaintPendingKpiLabel,
+  getComplaintPendingStatusTone,
+  getComplaintPendencyBadge,
+  normalizeComplaintCipavdSummary,
+  sortComplaintPendingItems,
+} from "../features/cpcaCipavdThreads";
 
 const STATUS_OPTIONS = [
   { value: "RECEIVED", label: "Recebida" },
@@ -577,11 +595,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const { data: me, isLoading: meLoading } = useMe();
   const isSmifWorkflow = workflow === "SMIF";
   const resourceKey = isSmifWorkflow ? "smif_complaints" : "cpca_cases";
-  const workflowRoleAccess = isSmifWorkflow
-    ? [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI]
-    : [ROLE_CPCA, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP, ROLE_TI];
-
-  const canAccessByRole = hasAnyRole(me, workflowRoleAccess);
+  const canAccessByRole = can(me, resourceKey, "view");
 
   const q = params.get("q") ?? "";
   const localityId = params.get("localityId") ?? "";
@@ -628,6 +642,17 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     canAccessByRole && isSmifWorkflow,
   );
   const casesQuery = isSmifWorkflow ? smifCasesQuery : cpcaCasesQuery;
+  const cpcaPendingSummaryQuery = useCpcaCasePendingSummary(
+    filters,
+    canAccessByRole && !isSmifWorkflow,
+  );
+  const smifPendingSummaryQuery = useSmifComplaintPendingSummary(
+    filters,
+    canAccessByRole && isSmifWorkflow,
+  );
+  const pendingSummaryQuery = isSmifWorkflow
+    ? smifPendingSummaryQuery
+    : cpcaPendingSummaryQuery;
   const cpcaLocalityOptionsQuery = useCpcaCaseLocalityOptions(
     canAccessByRole && !isSmifWorkflow,
   );
@@ -641,8 +666,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const [selectedId, setSelectedId] = useState("");
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [pendingModalOpen, setPendingModalOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
-  const [newComment, setNewComment] = useState("");
+  const [cipavdDraft, setCipavdDraft] = useState("");
+  const [cipavdDraftIsPending, setCipavdDraftIsPending] = useState(true);
+  const [threadDrafts, setThreadDrafts] = useState<Record<string, string>>({});
+  const [focusedThreadId, setFocusedThreadId] = useState("");
   const [activeStep, setActiveStep] = useState(0);
   const [consistencyPopover, setConsistencyPopover] = useState<{
     anchorEl: HTMLElement | null;
@@ -666,19 +695,35 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const createCpcaCase = useCreateCpcaCase();
   const updateCpcaCase = useUpdateCpcaCase();
   const deleteCpcaCase = useDeleteCpcaCase();
-  const addCpcaCaseComment = useAddCpcaCaseComment();
+  const createCpcaCipavdThread = useCreateCpcaCaseCipavdThread();
+  const resolveCpcaCipavdThread = useResolveCpcaCaseCipavdThread();
+  const reopenCpcaCipavdThread = useReopenCpcaCaseCipavdThread();
+  const finalizeCpcaCipavdThread = useFinalizeCpcaCaseCipavdThread();
   const createSmifCase = useCreateSmifComplaintCase();
   const updateSmifCase = useUpdateSmifComplaintCase();
   const deleteSmifCase = useDeleteSmifComplaintCase();
-  const addSmifCaseComment = useAddSmifComplaintCaseComment();
+  const createSmifCipavdThread = useCreateSmifComplaintCaseCipavdThread();
+  const resolveSmifCipavdThread = useResolveSmifComplaintCaseCipavdThread();
+  const reopenSmifCipavdThread = useReopenSmifComplaintCaseCipavdThread();
+  const finalizeSmifCipavdThread = useFinalizeSmifComplaintCaseCipavdThread();
   const createCase = isSmifWorkflow ? createSmifCase : createCpcaCase;
   const updateCase = isSmifWorkflow ? updateSmifCase : updateCpcaCase;
   const deleteCase = isSmifWorkflow ? deleteSmifCase : deleteCpcaCase;
-  const addComment = isSmifWorkflow ? addSmifCaseComment : addCpcaCaseComment;
+  const createCipavdThread = isSmifWorkflow
+    ? createSmifCipavdThread
+    : createCpcaCipavdThread;
+  const resolveCipavdThread = isSmifWorkflow
+    ? resolveSmifCipavdThread
+    : resolveCpcaCipavdThread;
+  const reopenCipavdThread = isSmifWorkflow
+    ? reopenSmifCipavdThread
+    : reopenCpcaCipavdThread;
+  const finalizeCipavdThread = isSmifWorkflow
+    ? finalizeSmifCipavdThread
+    : finalizeCpcaCipavdThread;
   const canCreateCase = can(me, resourceKey, "create");
   const canUpdateCase = can(me, resourceKey, "update");
   const canDeleteCase = can(me, resourceKey, "delete");
-  const canCommentCase = can(me, resourceKey, "comment");
   const workflowLabel = isSmifWorkflow ? "SMIF" : "CPCA";
 
   const isNationalScope = hasAnyRole(me, [
@@ -686,6 +731,28 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     ROLE_COMANDANTE_COMGEP,
     ROLE_TI,
   ]);
+  const cipavdAccess = (selectedCaseQuery.data as any)?.cipavdComments
+    ?.access as
+    | {
+        canCreateThread?: boolean;
+        canResolvePending?: boolean;
+        canReviewResolvedPendencies?: boolean;
+      }
+    | undefined;
+  const selectedCipavdThreads = (
+    ((selectedCaseQuery.data as any)?.cipavdComments?.threads ?? []) as any[]
+  ).slice();
+  const selectedCipavdSummary = normalizeComplaintCipavdSummary(
+    ((selectedCaseQuery.data as any)?.cipavdComments?.summary ?? null) as any,
+  );
+  const selectedLegacyComments = (
+    ((selectedCaseQuery.data as any)?.comments ?? []) as any[]
+  ).slice();
+  const canCreateCipavdThread = Boolean(cipavdAccess?.canCreateThread);
+  const canResolveCipavdPending = Boolean(cipavdAccess?.canResolvePending);
+  const canReviewResolvedPendencies = Boolean(
+    cipavdAccess?.canReviewResolvedPendencies,
+  );
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -704,6 +771,31 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
   const items = casesQuery.data?.items ?? [];
   const totalItems = Number(casesQuery.data?.total ?? 0);
+  const pendingSummaryData = pendingSummaryQuery.data as
+    | {
+        summary?: {
+          openPendingCount?: number | null;
+          resolvedPendingCount?: number | null;
+          totalPendingCount?: number | null;
+        };
+        openItems?: any[];
+        resolvedItems?: any[];
+      }
+    | undefined;
+  const openPendingItems = sortComplaintPendingItems(
+    (pendingSummaryData?.openItems ?? []) as any[],
+  );
+  const resolvedPendingItems = sortComplaintPendingItems(
+    (pendingSummaryData?.resolvedItems ?? []) as any[],
+  );
+  const openPendingCount = Math.max(
+    0,
+    Number(pendingSummaryData?.summary?.openPendingCount ?? 0) || 0,
+  );
+  const resolvedPendingCount = Math.max(
+    0,
+    Number(pendingSummaryData?.summary?.resolvedPendingCount ?? 0) || 0,
+  );
 
   const handlePageChange = (_event: unknown, nextPage: number) => {
     updateParam("page", String(nextPage + 1));
@@ -972,16 +1064,22 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       ...defaultForm,
       localityId: isNationalScope ? "" : String(me?.omId ?? ""),
     });
-    setNewComment("");
+    setCipavdDraft("");
+    setCipavdDraftIsPending(true);
+    setThreadDrafts({});
+    setFocusedThreadId("");
     setActiveStep(0);
     setDrawerOpen(true);
   };
 
-  const openDetails = (id: string) => {
+  const openDetails = (id: string, threadId?: string) => {
     setIsCreateMode(false);
     setSelectedId(id);
     setConfirmDeleteOpen(false);
-    setNewComment("");
+    setCipavdDraft("");
+    setCipavdDraftIsPending(true);
+    setThreadDrafts({});
+    setFocusedThreadId(threadId ?? "");
     setActiveStep(0);
     setDrawerOpen(true);
   };
@@ -993,8 +1091,18 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setConfirmDeleteOpen(false);
     setConsistencyPopover({ anchorEl: null, inconsistency: null });
     setForm(defaultForm);
-    setNewComment("");
+    setCipavdDraft("");
+    setCipavdDraftIsPending(true);
+    setThreadDrafts({});
+    setFocusedThreadId("");
     setActiveStep(0);
+  };
+
+  const setThreadDraftValue = (threadId: string, value: string) => {
+    setThreadDrafts((current) => ({
+      ...current,
+      [threadId]: value,
+    }));
   };
 
   const saveCase = async () => {
@@ -1165,23 +1273,82 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     }
   };
 
-  const saveComment = async () => {
-    if (!canCommentCase) {
-      toast.push({
-        message: "Seu perfil nao possui permissao para registrar comentários.",
-        severity: "warning",
-      });
-      return;
-    }
-    if (!selectedId || !newComment.trim()) return;
+  const saveCipavdThread = async () => {
+    if (!selectedId || !cipavdDraft.trim()) return;
     try {
-      await addComment.mutateAsync({ id: selectedId, text: newComment.trim() });
-      setNewComment("");
-      toast.push({ message: "Comentário registrado.", severity: "success" });
+      await createCipavdThread.mutateAsync({
+        id: selectedId,
+        text: cipavdDraft.trim(),
+        isPending: cipavdDraftIsPending,
+      });
+      setCipavdDraft("");
+      setCipavdDraftIsPending(true);
+      toast.push({
+        message: cipavdDraftIsPending
+          ? "Pendência registrada."
+          : "Comentário da CIPAVD registrado.",
+        severity: "success",
+      });
     } catch (error) {
       toast.push({
         message:
-          parseApiError(error).message ?? "Erro ao registrar comentário.",
+          parseApiError(error).message ??
+          "Erro ao registrar comentário da CIPAVD.",
+        severity: "error",
+      });
+    }
+  };
+
+  const resolvePendingThread = async (threadId: string) => {
+    const text = String(threadDrafts[threadId] ?? "").trim();
+    if (!selectedId || !text) return;
+    try {
+      await resolveCipavdThread.mutateAsync({ id: selectedId, threadId, text });
+      setThreadDraftValue(threadId, "");
+      toast.push({
+        message: "Pendência resolvida e enviada para validação.",
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ?? "Erro ao resolver a pendência.",
+        severity: "error",
+      });
+    }
+  };
+
+  const reopenPendingThread = async (threadId: string) => {
+    const text = String(threadDrafts[threadId] ?? "").trim();
+    if (!selectedId || !text) return;
+    try {
+      await reopenCipavdThread.mutateAsync({ id: selectedId, threadId, text });
+      setThreadDraftValue(threadId, "");
+      toast.push({
+        message: "Pendência reaberta com nova orientação.",
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Erro ao reabrir a pendência.",
+        severity: "error",
+      });
+    }
+  };
+
+  const finalizePendingThread = async (threadId: string) => {
+    if (!selectedId) return;
+    try {
+      await finalizeCipavdThread.mutateAsync({ id: selectedId, threadId });
+      setThreadDraftValue(threadId, "");
+      toast.push({
+        message: "Pendência finalizada.",
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ?? "Erro ao finalizar a pendência.",
         severity: "error",
       });
     }
@@ -2217,6 +2384,73 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         )}
       </Stack>
 
+      <Card
+        sx={{
+          mb: 2,
+          borderRadius: 4,
+          border: "1px solid",
+          borderColor: "divider",
+          background:
+            "linear-gradient(135deg, rgba(15,23,42,0.035), rgba(148,163,184,0.08))",
+          cursor: "pointer",
+        }}
+        role="button"
+        tabIndex={0}
+        onClick={() => setPendingModalOpen(true)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            setPendingModalOpen(true);
+          }
+        }}
+      >
+        <CardContent>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1.5}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", md: "center" }}
+          >
+            <Box>
+              <Typography variant="overline" color="text.secondary">
+                Comentários da CIPAVD
+              </Typography>
+              <Typography variant="h4" fontWeight={800} lineHeight={1}>
+                {openPendingCount}
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.5 }}
+              >
+                {getComplaintPendingKpiLabel(openPendingCount)}
+              </Typography>
+            </Box>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              alignItems={{ xs: "flex-start", sm: "center" }}
+            >
+              {resolvedPendingCount > 0 && (
+                <Chip
+                  size="small"
+                  label={`${resolvedPendingCount} resolvida${resolvedPendingCount > 1 ? "s" : ""}`}
+                  sx={{
+                    fontWeight: 700,
+                    color: "#166534",
+                    bgcolor: "rgba(34, 197, 94, 0.12)",
+                    border: "1px solid rgba(34, 197, 94, 0.24)",
+                  }}
+                />
+              )}
+              <Typography variant="body2" color="text.secondary">
+                Clique para listar as pendências do filtro atual.
+              </Typography>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Stack
@@ -2340,6 +2574,15 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                     : Array.isArray(item.inconsistencies)
                       ? item.inconsistencies
                       : getCpcaCaseInconsistencies(item);
+                  const cipavdSummary = normalizeComplaintCipavdSummary(
+                    item.cipavdCommentsSummary,
+                  );
+                  const pendencyBadge = getComplaintPendencyBadge(
+                    cipavdSummary,
+                    {
+                      showResolved: isNationalScope,
+                    },
+                  );
 
                   return (
                     <TableRow
@@ -2406,16 +2649,40 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 }}
                               />
                             ))}
+                            {pendencyBadge && (
+                              <Chip
+                                size="small"
+                                label={pendencyBadge.label}
+                                sx={{
+                                  fontWeight: 700,
+                                  color:
+                                    pendencyBadge.tone === "warning"
+                                      ? "#B45309"
+                                      : "#166534",
+                                  bgcolor:
+                                    pendencyBadge.tone === "warning"
+                                      ? "rgba(245, 158, 11, 0.14)"
+                                      : "rgba(34, 197, 94, 0.12)",
+                                  border: "1px solid",
+                                  borderColor:
+                                    pendencyBadge.tone === "warning"
+                                      ? "rgba(245, 158, 11, 0.28)"
+                                      : "rgba(34, 197, 94, 0.24)",
+                                }}
+                              />
+                            )}
                           </Stack>
-                          {item.lastCommentAt && (
+                          {(item.lastCommentAt ||
+                            cipavdSummary.lastActivityAt) && (
                             <Typography
                               variant="caption"
                               color="text.secondary"
                             >
-                              Último comentário:{" "}
-                              {new Date(item.lastCommentAt).toLocaleString(
-                                "pt-BR",
-                              )}
+                              Última movimentação:{" "}
+                              {new Date(
+                                cipavdSummary.lastActivityAt ??
+                                  item.lastCommentAt,
+                              ).toLocaleString("pt-BR")}
                             </Typography>
                           )}
                         </Stack>
@@ -2560,7 +2827,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <Alert severity="warning" sx={{ mb: 2.5 }}>
             Registrar apenas dados genéricos (sem nomes). Acesso restrito a
             {isSmifWorkflow
-              ? " TI, Coordenação CIPAVD e COMGEP."
+              ? " perfis CPCA autorizados, TI, Coordenação CIPAVD e COMGEP."
               : " CPCA, Coordenação CIPAVD e COMGEP."}
           </Alert>
 
@@ -2747,79 +3014,432 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
               {!isCreateMode && selectedCaseQuery.data && (
                 <Card>
-                  <CardContent>
-                    <Typography variant="subtitle1" fontWeight={700} mb={1}>
-                      Comentários do processo
-                    </Typography>
-                    {(selectedCaseQuery.data.comments ?? []).length === 0 ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Nenhum comentário registrado.
-                      </Typography>
-                    ) : (
-                      <Stack spacing={1} sx={{ mb: 1.5 }}>
-                        {(selectedCaseQuery.data.comments ?? []).map(
-                          (comment: any) => (
-                            <Box
-                              key={comment.id}
-                              sx={{
-                                border: "1px solid",
-                                borderColor: "divider",
-                                borderRadius: 1,
-                                p: 1,
-                              }}
-                            >
-                              <Typography
-                                variant="body2"
-                                sx={{ whiteSpace: "pre-wrap" }}
-                              >
-                                {comment.text}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {comment.createdBy?.name ?? "Usuário"} •{" "}
-                                {new Date(comment.createdAt).toLocaleString(
-                                  "pt-BR",
-                                )}
-                              </Typography>
-                            </Box>
-                          ),
-                        )}
-                      </Stack>
-                    )}
-                    <Divider sx={{ mb: 1 }} />
-                    {canCommentCase ? (
-                      <>
-                        <TextField
-                          size="small"
-                          label="Novo comentário"
-                          value={newComment}
-                          onChange={(e) => setNewComment(e.target.value)}
-                          fullWidth
-                          multiline
-                          minRows={2}
-                        />
-                        <Box display="flex" justifyContent="flex-end" mt={1}>
-                          <Button
-                            variant="outlined"
-                            onClick={saveComment}
-                            disabled={
-                              !newComment.trim() ||
-                              addComment.isPending ||
-                              deleteCase.isPending
-                            }
-                          >
-                            Adicionar comentário
-                          </Button>
+                  <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+                    <Stack spacing={2}>
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        spacing={1.25}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", md: "center" }}
+                      >
+                        <Box>
+                          <Typography variant="subtitle1" fontWeight={800}>
+                            Comentários da CIPAVD
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Fluxo de alinhamento entre CIPAVD/COMGEP/TI e a
+                            presidência da comissão da OM.
+                          </Typography>
                         </Box>
-                      </>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        Seu perfil possui acesso somente para leitura dos
-                        comentários.
-                      </Typography>
-                    )}
+                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                          <Chip
+                            size="small"
+                            label={`${selectedCipavdSummary.openPendingCount} aberta${selectedCipavdSummary.openPendingCount === 1 ? "" : "s"}`}
+                            sx={{
+                              fontWeight: 700,
+                              color: "#B45309",
+                              bgcolor: "rgba(245, 158, 11, 0.14)",
+                              border: "1px solid rgba(245, 158, 11, 0.28)",
+                            }}
+                          />
+                          {canReviewResolvedPendencies &&
+                            selectedCipavdSummary.resolvedPendingCount > 0 && (
+                              <Chip
+                                size="small"
+                                label={`${selectedCipavdSummary.resolvedPendingCount} resolvida${selectedCipavdSummary.resolvedPendingCount > 1 ? "s" : ""}`}
+                                sx={{
+                                  fontWeight: 700,
+                                  color: "#166534",
+                                  bgcolor: "rgba(34, 197, 94, 0.12)",
+                                  border: "1px solid rgba(34, 197, 94, 0.24)",
+                                }}
+                              />
+                            )}
+                        </Stack>
+                      </Stack>
+
+                      {canCreateCipavdThread ? (
+                        <Box
+                          sx={{
+                            p: 2,
+                            borderRadius: 3,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            background:
+                              "linear-gradient(135deg, rgba(15,23,42,0.03), rgba(148,163,184,0.06))",
+                          }}
+                        >
+                          <Stack spacing={1.25}>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={cipavdDraftIsPending}
+                                  onChange={(event) =>
+                                    setCipavdDraftIsPending(
+                                      event.target.checked,
+                                    )
+                                  }
+                                />
+                              }
+                              label={
+                                cipavdDraftIsPending
+                                  ? "Registrar como pendência"
+                                  : "Registrar como comentário"
+                              }
+                            />
+                            <TextField
+                              size="small"
+                              label={
+                                cipavdDraftIsPending
+                                  ? "Nova pendência"
+                                  : "Novo comentário da CIPAVD"
+                              }
+                              value={cipavdDraft}
+                              onChange={(event) =>
+                                setCipavdDraft(event.target.value)
+                              }
+                              fullWidth
+                              multiline
+                              minRows={3}
+                            />
+                            <Box display="flex" justifyContent="flex-end">
+                              <Button
+                                variant="contained"
+                                onClick={saveCipavdThread}
+                                disabled={
+                                  !cipavdDraft.trim() ||
+                                  createCipavdThread.isPending ||
+                                  deleteCase.isPending
+                                }
+                              >
+                                {cipavdDraftIsPending
+                                  ? "Enviar pendência"
+                                  : "Enviar comentário"}
+                              </Button>
+                            </Box>
+                          </Stack>
+                        </Box>
+                      ) : (
+                        <Alert severity="info">
+                          Somente Coordenação CIPAVD, COMGEP e TI iniciam novos
+                          comentários ou pendências neste fluxo.
+                        </Alert>
+                      )}
+
+                      {selectedCipavdThreads.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Nenhuma interação da CIPAVD registrada até o momento.
+                        </Typography>
+                      ) : (
+                        <Stack spacing={1.5}>
+                          {selectedCipavdThreads.map((thread: any) => {
+                            const statusTone = getComplaintPendingStatusTone(
+                              thread.status,
+                            );
+                            const draftValue = String(
+                              threadDrafts[thread.id] ?? "",
+                            );
+
+                            return (
+                              <Box
+                                key={thread.id}
+                                sx={{
+                                  p: 2,
+                                  borderRadius: 3,
+                                  border: "1px solid",
+                                  borderColor:
+                                    focusedThreadId === thread.id
+                                      ? "primary.main"
+                                      : "divider",
+                                  boxShadow:
+                                    focusedThreadId === thread.id
+                                      ? "0 0 0 1px rgba(25,118,210,0.12)"
+                                      : "none",
+                                  background:
+                                    "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.96))",
+                                }}
+                              >
+                                <Stack spacing={1.25}>
+                                  <Stack
+                                    direction={{ xs: "column", md: "row" }}
+                                    spacing={1}
+                                    justifyContent="space-between"
+                                    alignItems={{
+                                      xs: "flex-start",
+                                      md: "center",
+                                    }}
+                                  >
+                                    <Stack
+                                      direction="row"
+                                      spacing={0.75}
+                                      flexWrap="wrap"
+                                      useFlexGap
+                                    >
+                                      <Chip
+                                        size="small"
+                                        label={thread.typeLabel}
+                                        variant="outlined"
+                                        sx={{ fontWeight: 700 }}
+                                      />
+                                      <Chip
+                                        size="small"
+                                        label={thread.statusLabel}
+                                        sx={{
+                                          fontWeight: 700,
+                                          color: statusTone.color,
+                                          bgcolor: statusTone.background,
+                                          border: "1px solid",
+                                          borderColor: statusTone.borderColor,
+                                        }}
+                                      />
+                                      {thread.reopenedCount > 0 && (
+                                        <Chip
+                                          size="small"
+                                          label={`${thread.reopenedCount} retorno${thread.reopenedCount > 1 ? "s" : ""}`}
+                                          variant="outlined"
+                                        />
+                                      )}
+                                    </Stack>
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                    >
+                                      Última atualização{" "}
+                                      {thread.lastMessageAt
+                                        ? new Date(
+                                            thread.lastMessageAt,
+                                          ).toLocaleString("pt-BR")
+                                        : "-"}
+                                    </Typography>
+                                  </Stack>
+
+                                  <Stack spacing={1}>
+                                    {(thread.messages ?? []).map(
+                                      (message: any) => {
+                                        const isPresidentMessage =
+                                          message.authorKind === "PRESIDENT";
+
+                                        return (
+                                          <Box
+                                            key={message.id}
+                                            sx={{
+                                              alignSelf: isPresidentMessage
+                                                ? "flex-end"
+                                                : "flex-start",
+                                              maxWidth: {
+                                                xs: "100%",
+                                                md: "88%",
+                                              },
+                                              p: 1.25,
+                                              borderRadius: 3,
+                                              borderTopLeftRadius:
+                                                isPresidentMessage ? 3 : 1,
+                                              borderTopRightRadius:
+                                                isPresidentMessage ? 1 : 3,
+                                              bgcolor: isPresidentMessage
+                                                ? "rgba(25,118,210,0.08)"
+                                                : "rgba(15,23,42,0.05)",
+                                              border: "1px solid",
+                                              borderColor: isPresidentMessage
+                                                ? "rgba(25,118,210,0.16)"
+                                                : "rgba(148,163,184,0.22)",
+                                            }}
+                                          >
+                                            <Typography
+                                              variant="overline"
+                                              color="text.secondary"
+                                              sx={{ lineHeight: 1.2 }}
+                                            >
+                                              {message.authorLabel} •{" "}
+                                              {message.typeLabel}
+                                            </Typography>
+                                            <Typography
+                                              variant="body2"
+                                              sx={{
+                                                whiteSpace: "pre-wrap",
+                                                mt: 0.35,
+                                              }}
+                                            >
+                                              {message.body}
+                                            </Typography>
+                                            <Typography
+                                              variant="caption"
+                                              color="text.secondary"
+                                              sx={{ display: "block", mt: 0.5 }}
+                                            >
+                                              {message.createdBy?.name ??
+                                                "Usuário"}{" "}
+                                              •{" "}
+                                              {message.createdAt
+                                                ? new Date(
+                                                    message.createdAt,
+                                                  ).toLocaleString("pt-BR")
+                                                : "-"}
+                                            </Typography>
+                                          </Box>
+                                        );
+                                      },
+                                    )}
+                                  </Stack>
+
+                                  {thread.type === "PENDENCY" &&
+                                    thread.status === "OPEN" &&
+                                    canResolveCipavdPending && (
+                                      <Box
+                                        sx={{
+                                          p: 1.5,
+                                          borderRadius: 2.5,
+                                          border: "1px dashed",
+                                          borderColor: "rgba(25,118,210,0.28)",
+                                          bgcolor: "rgba(25,118,210,0.03)",
+                                        }}
+                                      >
+                                        <Stack spacing={1}>
+                                          <TextField
+                                            size="small"
+                                            label="Resposta da comissão"
+                                            value={draftValue}
+                                            onChange={(event) =>
+                                              setThreadDraftValue(
+                                                thread.id,
+                                                event.target.value,
+                                              )
+                                            }
+                                            fullWidth
+                                            multiline
+                                            minRows={2}
+                                          />
+                                          <Box
+                                            display="flex"
+                                            justifyContent="flex-end"
+                                          >
+                                            <Button
+                                              variant="contained"
+                                              onClick={() =>
+                                                resolvePendingThread(thread.id)
+                                              }
+                                              disabled={
+                                                !draftValue.trim() ||
+                                                resolveCipavdThread.isPending
+                                              }
+                                            >
+                                              Responder e resolver
+                                            </Button>
+                                          </Box>
+                                        </Stack>
+                                      </Box>
+                                    )}
+
+                                  {thread.type === "PENDENCY" &&
+                                    thread.status === "RESOLVED" &&
+                                    canReviewResolvedPendencies && (
+                                      <Box
+                                        sx={{
+                                          p: 1.5,
+                                          borderRadius: 2.5,
+                                          border: "1px dashed",
+                                          borderColor:
+                                            "rgba(34, 197, 94, 0.28)",
+                                          bgcolor: "rgba(34, 197, 94, 0.04)",
+                                        }}
+                                      >
+                                        <Stack spacing={1}>
+                                          <TextField
+                                            size="small"
+                                            label="Nova pendência atrelada"
+                                            value={draftValue}
+                                            onChange={(event) =>
+                                              setThreadDraftValue(
+                                                thread.id,
+                                                event.target.value,
+                                              )
+                                            }
+                                            fullWidth
+                                            multiline
+                                            minRows={2}
+                                            helperText="Se necessário, registre uma nova exigência no mesmo histórico."
+                                          />
+                                          <Stack
+                                            direction={{
+                                              xs: "column",
+                                              sm: "row",
+                                            }}
+                                            spacing={1}
+                                            justifyContent="flex-end"
+                                          >
+                                            <Button
+                                              variant="outlined"
+                                              color="inherit"
+                                              onClick={() =>
+                                                finalizePendingThread(thread.id)
+                                              }
+                                              disabled={
+                                                finalizeCipavdThread.isPending
+                                              }
+                                            >
+                                              Finalizar pendência
+                                            </Button>
+                                            <Button
+                                              variant="contained"
+                                              onClick={() =>
+                                                reopenPendingThread(thread.id)
+                                              }
+                                              disabled={
+                                                !draftValue.trim() ||
+                                                reopenCipavdThread.isPending
+                                              }
+                                            >
+                                              Gerar nova pendência
+                                            </Button>
+                                          </Stack>
+                                        </Stack>
+                                      </Box>
+                                    )}
+                                </Stack>
+                              </Box>
+                            );
+                          })}
+                        </Stack>
+                      )}
+
+                      {selectedLegacyComments.length > 0 && (
+                        <>
+                          <Divider />
+                          <Stack spacing={1}>
+                            <Typography variant="subtitle2" fontWeight={700}>
+                              Registros anteriores
+                            </Typography>
+                            {selectedLegacyComments.map((comment: any) => (
+                              <Box
+                                key={comment.id}
+                                sx={{
+                                  border: "1px solid",
+                                  borderColor: "divider",
+                                  borderRadius: 2,
+                                  p: 1.25,
+                                }}
+                              >
+                                <Typography
+                                  variant="body2"
+                                  sx={{ whiteSpace: "pre-wrap" }}
+                                >
+                                  {comment.text}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {comment.createdBy?.name ?? "Usuário"} •{" "}
+                                  {new Date(comment.createdAt).toLocaleString(
+                                    "pt-BR",
+                                  )}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </Stack>
+                        </>
+                      )}
+                    </Stack>
                   </CardContent>
                 </Card>
               )}
@@ -2827,6 +3447,179 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           )}
         </Box>
       </Drawer>
+
+      <Dialog
+        open={pendingModalOpen}
+        onClose={() => setPendingModalOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Pendências da CIPAVD</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              A listagem respeita os filtros ativos desta tela.
+            </Typography>
+
+            {pendingSummaryQuery.isLoading ? (
+              <Typography variant="body2" color="text.secondary">
+                Carregando pendências...
+              </Typography>
+            ) : (
+              <>
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={800} gutterBottom>
+                    Em aberto ({openPendingCount})
+                  </Typography>
+                  {openPendingItems.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhuma pendência aberta no filtro atual.
+                    </Typography>
+                  ) : (
+                    <Stack spacing={1}>
+                      {openPendingItems.map((item: any) => (
+                        <Box
+                          key={item.threadId}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            setPendingModalOpen(false);
+                            openDetails(item.case.id, item.threadId);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              setPendingModalOpen(false);
+                              openDetails(item.case.id, item.threadId);
+                            }
+                          }}
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 2.5,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <Stack spacing={0.75}>
+                            <Stack
+                              direction={{ xs: "column", sm: "row" }}
+                              spacing={1}
+                              justifyContent="space-between"
+                            >
+                              <Typography fontWeight={700}>
+                                {item.case.caseNumber}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {item.lastMessageAt
+                                  ? new Date(item.lastMessageAt).toLocaleString(
+                                      "pt-BR",
+                                    )
+                                  : "-"}
+                              </Typography>
+                            </Stack>
+                            <Typography variant="body2" color="text.secondary">
+                              {formatOmLabel(item.case.locality)}
+                            </Typography>
+                            <Typography variant="body2">
+                              {item.lastMessage?.body ??
+                                "Sem detalhe informado."}
+                            </Typography>
+                          </Stack>
+                        </Box>
+                      ))}
+                    </Stack>
+                  )}
+                </Box>
+
+                {resolvedPendingCount > 0 && (
+                  <Box>
+                    <Typography
+                      variant="subtitle2"
+                      fontWeight={800}
+                      gutterBottom
+                    >
+                      Resolvidas aguardando validação ({resolvedPendingCount})
+                    </Typography>
+                    {resolvedPendingItems.length === 0 ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Nenhuma pendência resolvida para validação.
+                      </Typography>
+                    ) : (
+                      <Stack spacing={1}>
+                        {resolvedPendingItems.map((item: any) => (
+                          <Box
+                            key={item.threadId}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              setPendingModalOpen(false);
+                              openDetails(item.case.id, item.threadId);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setPendingModalOpen(false);
+                                openDetails(item.case.id, item.threadId);
+                              }
+                            }}
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 2.5,
+                              border: "1px solid",
+                              borderColor: "divider",
+                              cursor: "pointer",
+                              backgroundColor: "rgba(34, 197, 94, 0.04)",
+                            }}
+                          >
+                            <Stack spacing={0.75}>
+                              <Stack
+                                direction={{ xs: "column", sm: "row" }}
+                                spacing={1}
+                                justifyContent="space-between"
+                              >
+                                <Typography fontWeight={700}>
+                                  {item.case.caseNumber}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {item.lastMessageAt
+                                    ? new Date(
+                                        item.lastMessageAt,
+                                      ).toLocaleString("pt-BR")
+                                    : "-"}
+                                </Typography>
+                              </Stack>
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                {formatOmLabel(item.case.locality)}
+                              </Typography>
+                              <Typography variant="body2">
+                                {item.lastMessage?.body ??
+                                  "Sem resolução registrada."}
+                              </Typography>
+                            </Stack>
+                          </Box>
+                        ))}
+                      </Stack>
+                    )}
+                  </Box>
+                )}
+              </>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingModalOpen(false)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
 
       <Popover
         open={Boolean(
