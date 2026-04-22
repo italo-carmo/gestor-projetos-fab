@@ -263,11 +263,20 @@ export class CpcaService {
     ]);
 
     return {
-      items: (items ?? []).map((item: any) => ({
-        ...this.serializeComplaint(item),
-        lastCommentAt: item.comments?.[0]?.createdAt ?? null,
-        comments: undefined,
-      })),
+      items: (items ?? []).map((item: any) => {
+        const serialized = this.serializeComplaint(item);
+        const inconsistencies =
+          workflowContext.workflowScope === 'CPCA'
+            ? getCpcaCaseInconsistencies(serialized)
+            : [];
+
+        return {
+          ...serialized,
+          lastCommentAt: item.comments?.[0]?.createdAt ?? null,
+          comments: undefined,
+          inconsistencies,
+        };
+      }),
       page,
       pageSize,
       total,
@@ -832,8 +841,8 @@ export class CpcaService {
       .slice(0, 20);
 
     return {
-        filters: {
-          localityId: where.omId ?? null,
+      filters: {
+        localityId: where.omId ?? null,
         from: fromDate ? fromDate.toISOString().slice(0, 10) : null,
         to: toDate ? toDate.toISOString().slice(0, 10) : null,
       },
@@ -920,10 +929,7 @@ export class CpcaService {
   }): Promise<CpcaAiContext> {
     const complaintModel = (this.prisma as any).cpcComplaintCase;
     const now = new Date();
-    const safeLimit = Math.min(
-      12,
-      Math.max(4, Number(args?.limit ?? 8) || 8),
-    );
+    const safeLimit = Math.min(12, Math.max(4, Number(args?.limit ?? 8) || 8));
     const includeInconsistencies = args?.includeInconsistencies !== false;
     const rows = await complaintModel.findMany({
       where: { workflowScope: CPCA_WORKFLOW_CONTEXT.workflowScope },
@@ -951,7 +957,10 @@ export class CpcaService {
 
     const statusCounter = new Map<string, number>();
     const procedureCounter = new Map<string, number>();
-    const omCounter = new Map<string, { omId: string; omLabel: string; count: number }>();
+    const omCounter = new Map<
+      string,
+      { omId: string; omLabel: string; count: number }
+    >();
     const inconsistencyCounter = new Map<
       string,
       {
@@ -978,7 +987,8 @@ export class CpcaService {
       const status = String(item.status ?? '').trim();
       const complaintType = String(item.complaintType ?? '').trim();
       const reportedAt =
-        item.reportedAt instanceof Date && !Number.isNaN(item.reportedAt.getTime())
+        item.reportedAt instanceof Date &&
+        !Number.isNaN(item.reportedAt.getTime())
           ? item.reportedAt
           : null;
       const incidentDate =
@@ -988,7 +998,8 @@ export class CpcaService {
           : null;
       const isOpen = CPCA_OPEN_STATUS_SET.has(status);
       const om = item.locality ?? item.om ?? null;
-      const omId = String(item.omId ?? item.localityId ?? om?.id ?? '').trim() || null;
+      const omId =
+        String(item.omId ?? item.localityId ?? om?.id ?? '').trim() || null;
       const omLabel = this.formatCpcaAiOmLabel(om);
       const inconsistencies = includeInconsistencies
         ? getCpcaCaseInconsistencies(
@@ -996,7 +1007,8 @@ export class CpcaService {
               complaintType,
               detailedViolenceType: item.detailedViolenceType,
               incidentFrequency: item.incidentFrequency,
-              hierarchicalFunctionalRelation: item.hierarchicalFunctionalRelation,
+              hierarchicalFunctionalRelation:
+                item.hierarchicalFunctionalRelation,
               reportedAt,
               incidentDate,
             },
@@ -1004,8 +1016,12 @@ export class CpcaService {
           )
         : [];
 
-      statusCounter.set(status || 'NAO_INFORMADO', (statusCounter.get(status || 'NAO_INFORMADO') ?? 0) + 1);
-      const procedureType = String(item.procedureType ?? '').trim() || 'NAO_INFORMADO';
+      statusCounter.set(
+        status || 'NAO_INFORMADO',
+        (statusCounter.get(status || 'NAO_INFORMADO') ?? 0) + 1,
+      );
+      const procedureType =
+        String(item.procedureType ?? '').trim() || 'NAO_INFORMADO';
       procedureCounter.set(
         procedureType,
         (procedureCounter.get(procedureType) ?? 0) + 1,
@@ -1049,7 +1065,8 @@ export class CpcaService {
         detailedViolenceType: String(item.detailedViolenceType ?? ''),
         procedureType,
         procedureCurrentSituation:
-          String(item.procedureCurrentSituation ?? '').trim() || 'NAO_INFORMADO',
+          String(item.procedureCurrentSituation ?? '').trim() ||
+          'NAO_INFORMADO',
         reportedAt: reportedAt ? reportedAt.toISOString() : null,
         incidentDate: incidentDate ? incidentDate.toISOString() : null,
         openDays: reportedAt && isOpen ? this.daysBetween(reportedAt, now) : 0,
@@ -1110,17 +1127,19 @@ export class CpcaService {
 
     const references = Array.from(
       new Map<string, CpcaAiContextReference>(
-        [...matchedCases, ...inconsistentCases, ...criticalCases].map((item) => [
-          item.link,
-          {
-            id: item.caseId,
-            label: `${item.caseNumber} • ${item.omLabel}`,
-            description:
-              item.inconsistencies[0]?.headline ??
-              `${item.status} • ${item.complaintType || 'tipo não informado'}`,
-            href: item.link,
-          },
-        ]),
+        [...matchedCases, ...inconsistentCases, ...criticalCases].map(
+          (item) => [
+            item.link,
+            {
+              id: item.caseId,
+              label: `${item.caseNumber} • ${item.omLabel}`,
+              description:
+                item.inconsistencies[0]?.headline ??
+                `${item.status} • ${item.complaintType || 'tipo não informado'}`,
+              href: item.link,
+            },
+          ],
+        ),
       ).values(),
     ).slice(0, safeLimit + 4);
 
@@ -1190,7 +1209,10 @@ export class CpcaService {
       throwError('NOT_FOUND');
     }
     await this.assertCaseAccess(
-      { localityId: item.omId ?? item.localityId ?? '', caseNumber: item.caseNumber },
+      {
+        localityId: item.omId ?? item.localityId ?? '',
+        caseNumber: item.caseNumber,
+      },
       user,
       workflowContext,
     );
@@ -1475,7 +1497,10 @@ export class CpcaService {
     }
 
     await this.assertCaseAccess(
-      { localityId: current.omId ?? current.localityId ?? '', caseNumber: current.caseNumber },
+      {
+        localityId: current.omId ?? current.localityId ?? '',
+        caseNumber: current.caseNumber,
+      },
       user,
       workflowContext,
     );
@@ -1487,7 +1512,7 @@ export class CpcaService {
           user,
           workflowContext,
         )
-      : current.omId ?? current.localityId ?? null;
+      : (current.omId ?? current.localityId ?? null);
 
     const nextProcedureCurrentSituation =
       payload.procedureCurrentSituation === undefined
@@ -1750,7 +1775,7 @@ export class CpcaService {
               ? new Date(payload.archivedAt)
               : null
             : nextStatus === 'ARCHIVED'
-              ? current.archivedAt ?? new Date()
+              ? (current.archivedAt ?? new Date())
               : undefined,
         updatedBy: { connect: { id: actorId } },
       },
@@ -1822,7 +1847,10 @@ export class CpcaService {
     }
 
     await this.assertCaseAccess(
-      { localityId: current.omId ?? current.localityId ?? '', caseNumber: current.caseNumber },
+      {
+        localityId: current.omId ?? current.localityId ?? '',
+        caseNumber: current.caseNumber,
+      },
       user,
       workflowContext,
     );
@@ -1859,14 +1887,23 @@ export class CpcaService {
 
     const complaint = await complaintModel.findUnique({
       where: { id },
-      select: { id: true, omId: true, localityId: true, caseNumber: true, workflowScope: true },
+      select: {
+        id: true,
+        omId: true,
+        localityId: true,
+        caseNumber: true,
+        workflowScope: true,
+      },
     });
     if (!complaint) throwError('NOT_FOUND');
     if (complaint.workflowScope !== workflowContext.workflowScope) {
       throwError('NOT_FOUND');
     }
     await this.assertCaseAccess(
-      { localityId: complaint.omId ?? complaint.localityId ?? '', caseNumber: complaint.caseNumber },
+      {
+        localityId: complaint.omId ?? complaint.localityId ?? '',
+        caseNumber: complaint.caseNumber,
+      },
       user,
       workflowContext,
     );
@@ -1913,14 +1950,23 @@ export class CpcaService {
 
     const complaint = await complaintModel.findUnique({
       where: { id },
-      select: { id: true, omId: true, localityId: true, caseNumber: true, workflowScope: true },
+      select: {
+        id: true,
+        omId: true,
+        localityId: true,
+        caseNumber: true,
+        workflowScope: true,
+      },
     });
     if (!complaint) throwError('NOT_FOUND');
     if (complaint.workflowScope !== workflowContext.workflowScope) {
       throwError('NOT_FOUND');
     }
     await this.assertCaseAccess(
-      { localityId: complaint.omId ?? complaint.localityId ?? '', caseNumber: complaint.caseNumber },
+      {
+        localityId: complaint.omId ?? complaint.localityId ?? '',
+        caseNumber: complaint.caseNumber,
+      },
       user,
       workflowContext,
     );
@@ -1998,9 +2044,7 @@ export class CpcaService {
         constraints,
         context,
       );
-      if (
-        allowedLocalityIds?.includes(String(item.localityId ?? '').trim())
-      ) {
+      if (allowedLocalityIds?.includes(String(item.localityId ?? '').trim())) {
         return;
       }
     }
@@ -2030,10 +2074,7 @@ export class CpcaService {
           constraints,
           context,
         );
-        if (
-          allowedLocalityIds &&
-          !allowedLocalityIds.includes(localityId)
-        ) {
+        if (allowedLocalityIds && !allowedLocalityIds.includes(localityId)) {
           throwError('RBAC_FORBIDDEN');
         }
         return localityId;
@@ -2149,11 +2190,13 @@ export class CpcaService {
     const normalizedQuery = this.cleanText(query).toUpperCase();
     if (!normalizedQuery) return false;
 
-    const caseMatches = normalizedQuery.match(/CPCA-\d{4}-[A-Z0-9]+-\d+/g) ?? [];
+    const caseMatches =
+      normalizedQuery.match(/CPCA-\d{4}-[A-Z0-9]+-\d+/g) ?? [];
     if (
       caseMatches.length > 0 &&
       caseMatches.some(
-        (caseNumber) => caseNumber === String(item.caseNumber ?? '').toUpperCase(),
+        (caseNumber) =>
+          caseNumber === String(item.caseNumber ?? '').toUpperCase(),
       )
     ) {
       return true;

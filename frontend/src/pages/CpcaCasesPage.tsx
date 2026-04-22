@@ -9,6 +9,7 @@ import {
   Drawer,
   FormControlLabel,
   MenuItem,
+  Popover,
   Stack,
   Step,
   StepButton,
@@ -58,6 +59,11 @@ import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import {
+  getCpcaCaseInconsistencies,
+  syncCpcaWorkflowStatus,
+  type CpcaCaseInconsistency,
+} from "../features/cpcaCaseConsistency";
 
 const STATUS_OPTIONS = [
   { value: "RECEIVED", label: "Recebida" },
@@ -143,25 +149,115 @@ const GENDER_OPTIONS = [
   { value: "NAO_INFORMADO", label: "Não informado" },
 ];
 
-const DETAILED_VIOLENCE_TYPE_OPTIONS = [
-  { value: "ASSEDIO_MORAL", label: "Assédio Moral" },
-  { value: "ASSEDIO_SEXUAL", label: "Assédio Sexual" },
+const DETAILED_VIOLENCE_TYPE_OPTIONS: Array<{
+  value: string;
+  label: string;
+  macroComplaintType: "MORAL" | "SEXUAL";
+}> = [
+  {
+    value: "ASSEDIO_MORAL",
+    label: "Assédio Moral",
+    macroComplaintType: "MORAL",
+  },
+  {
+    value: "ASSEDIO_SEXUAL",
+    label: "Assédio Sexual",
+    macroComplaintType: "SEXUAL",
+  },
   {
     value: "VIOLENCIA_DOMESTICA_FISICA",
     label: "Violência doméstica - Física",
+    macroComplaintType: "MORAL",
   },
   {
     value: "VIOLENCIA_DOMESTICA_PSICOLOGICA",
     label: "Violência doméstica - Psicológica",
+    macroComplaintType: "MORAL",
   },
-  { value: "VIOLENCIA_DOMESTICA_MORAL", label: "Violência doméstica - Moral" },
+  {
+    value: "VIOLENCIA_DOMESTICA_MORAL",
+    label: "Violência doméstica - Moral",
+    macroComplaintType: "MORAL",
+  },
   {
     value: "VIOLENCIA_DOMESTICA_PATRIMONIAL",
     label: "Violência doméstica - Patrimonial",
+    macroComplaintType: "MORAL",
   },
   {
     value: "VIOLENCIA_DOMESTICA_SEXUAL",
     label: "Violência doméstica - Sexual",
+    macroComplaintType: "SEXUAL",
+  },
+  {
+    value: "IMPORTUNACAO_SEXUAL",
+    label: "Importunação sexual",
+    macroComplaintType: "SEXUAL",
+  },
+  {
+    value: "INJURIA_RACIAL",
+    label: "Injúria racial",
+    macroComplaintType: "MORAL",
+  },
+  {
+    value: "INJURIA",
+    label: "Injúria",
+    macroComplaintType: "MORAL",
+  },
+  {
+    value: "CALUNIA",
+    label: "Calúnia",
+    macroComplaintType: "MORAL",
+  },
+  {
+    value: "DIFAMACAO",
+    label: "Difamação",
+    macroComplaintType: "MORAL",
+  },
+  {
+    value: "DENUNCIACAO_CALUNIOSA",
+    label: "Denunciação caluniosa",
+    macroComplaintType: "MORAL",
+  },
+  {
+    value: "ATO_DE_LIBIDINAGEM",
+    label: "Ato de libidinagem",
+    macroComplaintType: "SEXUAL",
+  },
+  {
+    value: "PRESUNCAO_DE_VIOLENCIA",
+    label: "Presunção de violência",
+    macroComplaintType: "SEXUAL",
+  },
+  {
+    value: "CORRUPCAO_DE_MENORES",
+    label: "Corrupção de menores",
+    macroComplaintType: "SEXUAL",
+  },
+  {
+    value: "ESTUPRO_DE_VULNERAVEL",
+    label: "Estupro de vulnerável",
+    macroComplaintType: "SEXUAL",
+  },
+  {
+    value: "SEDUCAO",
+    label: "Sedução",
+    macroComplaintType: "SEXUAL",
+  },
+  {
+    value: "REGISTRO_NAO_AUTORIZADO_DE_INTIMIDADE_SEXUAL",
+    label: "Registro não autorizado de intimidade sexual",
+    macroComplaintType: "SEXUAL",
+  },
+  {
+    value: "VIOLACAO_SEXUAL_MEDIANTE_FRAUDE",
+    label: "Violação sexual mediante fraude",
+    macroComplaintType: "SEXUAL",
+  },
+  {
+    value: "ESTUPRO",
+    label: "Estupro",
+    macroComplaintType: "SEXUAL",
   },
 ];
 
@@ -441,14 +537,10 @@ function inferMacroComplaintTypeFromDetailed(
 ): "MORAL" | "SEXUAL" | null {
   const normalized = String(detailedViolenceType ?? "").trim();
   if (!normalized) return null;
-  if (
-    normalized === "ASSEDIO_SEXUAL" ||
-    normalized === "VIOLENCIA_DOMESTICA_SEXUAL" ||
-    normalized === "VIOLENCIA_SEXUAL"
-  ) {
-    return "SEXUAL";
-  }
-  return "MORAL";
+  return (
+    DETAILED_VIOLENCE_TYPE_OPTIONS.find((item) => item.value === normalized)
+      ?.macroComplaintType ?? null
+  );
 }
 
 function getDetailedViolenceTypeLabel(value: string | null | undefined) {
@@ -496,7 +588,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const status = params.get("status") ?? "";
   const detailedViolenceType = params.get("detailedViolenceType") ?? "";
   const procedureType = params.get("procedureType") ?? "";
-  const pageSizeParam = String(params.get("pageSize") ?? "20").trim().toLowerCase();
+  const pageSizeParam = String(params.get("pageSize") ?? "20")
+    .trim()
+    .toLowerCase();
   const showAllRows = pageSizeParam === "all";
   const page = Math.max(1, Number(params.get("page") ?? 1) || 1);
   const pageSize = showAllRows
@@ -513,7 +607,16 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       page,
       pageSize: showAllRows ? "all" : pageSize,
     }),
-    [q, localityId, status, detailedViolenceType, procedureType, page, pageSize, showAllRows],
+    [
+      q,
+      localityId,
+      status,
+      detailedViolenceType,
+      procedureType,
+      page,
+      pageSize,
+      showAllRows,
+    ],
   );
 
   const cpcaCasesQuery = useCpcaCases(
@@ -541,6 +644,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const [form, setForm] = useState(defaultForm);
   const [newComment, setNewComment] = useState("");
   const [activeStep, setActiveStep] = useState(0);
+  const [consistencyPopover, setConsistencyPopover] = useState<{
+    anchorEl: HTMLElement | null;
+    inconsistency: CpcaCaseInconsistency | null;
+  }>({
+    anchorEl: null,
+    inconsistency: null,
+  });
 
   const selectedCpcaCaseQuery = useCpcaCase(
     selectedId,
@@ -640,7 +750,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const occurrenceFormLabelByValue = useMemo(
     () =>
       new Map(
-        OCCURRENCE_FORM_OPTIONS.map((item) => [item.value, item.label] as const),
+        OCCURRENCE_FORM_OPTIONS.map(
+          (item) => [item.value, item.label] as const,
+        ),
       ),
     [],
   );
@@ -699,9 +811,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     if (!isCreateMode || !drawerOpen) return;
     setForm((prev) => ({
       ...prev,
-      localityId: isNationalScope || !isSmifWorkflow
-        ? prev.localityId
-        : String(me?.omId ?? ""),
+      localityId:
+        isNationalScope || !isSmifWorkflow
+          ? prev.localityId
+          : String(me?.omId ?? ""),
     }));
   }, [drawerOpen, isCreateMode, isNationalScope, isSmifWorkflow, me?.omId]);
 
@@ -717,7 +830,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       localityId: item.localityId ?? "",
       complaintType: inferredComplaintType ?? item.complaintType ?? "MORAL",
       notifierType,
-      status: item.status ?? "RECEIVED",
+      status: syncCpcaWorkflowStatus(
+        item.status ?? "RECEIVED",
+        item.procedureCurrentSituation ?? "",
+      ),
       procedureType: item.procedureType ?? "NOT_DEFINED",
       incidentDate: item.incidentDate
         ? String(item.incidentDate).slice(0, 10)
@@ -730,7 +846,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       victimAgeRange: item.victimAgeRange ?? "",
       victimIsNotifier: nextNotifierIsVictim,
       notifierRank: item.notifierRank ?? item.victimRank ?? "",
-      notifierGender: item.notifierGender ?? item.victimGender ?? "NAO_INFORMADO",
+      notifierGender:
+        item.notifierGender ?? item.victimGender ?? "NAO_INFORMADO",
       notifierAgeRange: item.notifierAgeRange ?? item.victimAgeRange ?? "",
       detailedViolenceType: item.detailedViolenceType ?? "",
       harassmentContext: item.harassmentContext ?? "",
@@ -874,6 +991,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setSelectedId("");
     setIsCreateMode(false);
     setConfirmDeleteOpen(false);
+    setConsistencyPopover({ anchorEl: null, inconsistency: null });
     setForm(defaultForm);
     setNewComment("");
     setActiveStep(0);
@@ -924,6 +1042,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       form.detailedViolenceType,
     );
     const macroComplaintType = inferredComplaintType ?? form.complaintType;
+    const syncedStatus = syncCpcaWorkflowStatus(
+      form.status,
+      form.procedureCurrentSituation,
+    );
 
     if (macroComplaintType === "SEXUAL" && !form.confidentialityTermSigned) {
       setActiveStep(1);
@@ -946,7 +1068,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       omId: form.localityId || undefined,
       complaintType: macroComplaintType,
       notifierType: form.notifierType,
-      status: form.status,
+      status: syncedStatus,
       procedureType: form.procedureType,
       incidentDate: toNullable(form.incidentDate),
       aggressorRank: form.aggressorRank,
@@ -1309,9 +1431,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 return {
                   ...prev,
                   victimRank: nextVictimRank,
-                  notifierRank: prev.notifierType === "VITIMA"
-                    ? nextVictimRank
-                    : prev.notifierRank,
+                  notifierRank:
+                    prev.notifierType === "VITIMA"
+                      ? nextVictimRank
+                      : prev.notifierRank,
                 };
               })
             }
@@ -1336,9 +1459,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 return {
                   ...prev,
                   victimGender: nextVictimGender,
-                  notifierGender: prev.notifierType === "VITIMA"
-                    ? nextVictimGender
-                    : prev.notifierGender,
+                  notifierGender:
+                    prev.notifierType === "VITIMA"
+                      ? nextVictimGender
+                      : prev.notifierGender,
                 };
               })
             }
@@ -1361,9 +1485,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 return {
                   ...prev,
                   victimAgeRange: nextVictimAgeRange,
-                  notifierAgeRange: prev.notifierType === "VITIMA"
-                    ? nextVictimAgeRange
-                    : prev.notifierAgeRange,
+                  notifierAgeRange:
+                    prev.notifierType === "VITIMA"
+                      ? nextVictimAgeRange
+                      : prev.notifierAgeRange,
                 };
               })
             }
@@ -1416,7 +1541,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               }
             >
               {GENDER_OPTIONS.map((item) => (
-                <MenuItem key={`notifier-gender-${item.value}`} value={item.value}>
+                <MenuItem
+                  key={`notifier-gender-${item.value}`}
+                  value={item.value}
+                >
                   {item.label}
                 </MenuItem>
               ))}
@@ -1497,6 +1625,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             select
             size="small"
             label="Forma de ocorrência"
+            InputLabelProps={{ shrink: true }}
             value={form.occurrenceForms}
             onChange={(e) => {
               const value = e.target.value;
@@ -1518,8 +1647,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 if (!selectedValues.length) return "Selecionar";
                 return selectedValues
                   .map(
-                    (value) =>
-                      occurrenceFormLabelByValue.get(value) ?? value,
+                    (value) => occurrenceFormLabelByValue.get(value) ?? value,
                   )
                   .join(", ");
               },
@@ -1699,7 +1827,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               label="Status da triagem/apuração"
               value={form.status}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, status: e.target.value }))
+                setForm((prev) => ({
+                  ...prev,
+                  status: syncCpcaWorkflowStatus(
+                    e.target.value,
+                    prev.procedureCurrentSituation,
+                  ),
+                }))
               }
             >
               {statusOptionsForStep(2, form.status).map((item) => (
@@ -1730,12 +1864,17 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               size="small"
               label="Situação atual do procedimento"
               value={form.procedureCurrentSituation}
-              onChange={(e) =>
+              onChange={(e) => {
+                const nextProcedureCurrentSituation = e.target.value;
                 setForm((prev) => ({
                   ...prev,
-                  procedureCurrentSituation: e.target.value,
-                }))
-              }
+                  procedureCurrentSituation: nextProcedureCurrentSituation,
+                  status: syncCpcaWorkflowStatus(
+                    prev.status,
+                    nextProcedureCurrentSituation,
+                  ),
+                }));
+              }}
             >
               <MenuItem value="">Selecionar</MenuItem>
               {PROCEDURE_CURRENT_SITUATION_OPTIONS.map((item) => (
@@ -1795,7 +1934,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             label="Status de conclusão"
             value={form.status}
             onChange={(e) =>
-              setForm((prev) => ({ ...prev, status: e.target.value }))
+              setForm((prev) => ({
+                ...prev,
+                status: syncCpcaWorkflowStatus(
+                  e.target.value,
+                  prev.procedureCurrentSituation,
+                ),
+              }))
             }
           >
             {statusOptionsForStep(3, form.status)
@@ -2189,75 +2334,138 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {items.map((item: any) => (
-                  <TableRow
-                    key={item.id}
-                    hover
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => openDetails(item.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        openDetails(item.id);
-                      }
-                    }}
-                    sx={{ cursor: "pointer" }}
-                  >
-                    <TableCell>
-                      <Typography fontWeight={700}>
-                        {item.caseNumber}
-                      </Typography>
-                      {item.lastCommentAt && (
-                        <Typography variant="caption" color="text.secondary">
-                          Último comentário:{" "}
-                          {new Date(item.lastCommentAt).toLocaleString("pt-BR")}
-                        </Typography>
-                      )}
-                    </TableCell>
-                    <TableCell>{formatOmLabel(item.locality)}</TableCell>
-                    <TableCell>
-                      {getDetailedViolenceTypeLabel(
-                        item.detailedViolenceType,
-                      ) ??
-                        getComplaintTypeLabel(item.complaintType) ??
-                        "-"}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={
-                          STATUS_OPTIONS.find(
-                            (entry) => entry.value === item.status,
-                          )?.label ?? item.status
+                {items.map((item: any) => {
+                  const inconsistencies = isSmifWorkflow
+                    ? []
+                    : Array.isArray(item.inconsistencies)
+                      ? item.inconsistencies
+                      : getCpcaCaseInconsistencies(item);
+
+                  return (
+                    <TableRow
+                      key={item.id}
+                      hover
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openDetails(item.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openDetails(item.id);
                         }
-                        sx={{
-                          fontWeight: 700,
-                          bgcolor:
-                            STATUS_CHIP_STYLES[String(item.status)]?.bgcolor ??
-                            "rgba(17, 24, 39, 0.08)",
-                          color:
-                            STATUS_CHIP_STYLES[String(item.status)]?.color ??
-                            "#111827",
-                          border: "1px solid",
-                          borderColor:
-                            STATUS_CHIP_STYLES[String(item.status)]?.borderColor ??
-                            "rgba(17, 24, 39, 0.14)",
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {PROCEDURE_OPTIONS.find(
-                        (entry) => entry.value === item.procedureType,
-                      )?.label ?? item.procedureType}
-                    </TableCell>
-                    <TableCell>
-                      {item.reportedAt
-                        ? new Date(item.reportedAt).toLocaleDateString("pt-BR")
-                        : "-"}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      }}
+                      sx={{ cursor: "pointer" }}
+                    >
+                      <TableCell sx={{ minWidth: 320, maxWidth: 440 }}>
+                        <Stack spacing={0.6}>
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            useFlexGap
+                            flexWrap="wrap"
+                            alignItems="center"
+                          >
+                            <Typography
+                              fontWeight={700}
+                              sx={{
+                                overflowWrap: "anywhere",
+                                wordBreak: "break-word",
+                              }}
+                            >
+                              {item.caseNumber}
+                            </Typography>
+                            {inconsistencies.map((inconsistency) => (
+                              <Chip
+                                key={`${item.id}-${inconsistency.code}`}
+                                size="small"
+                                variant="outlined"
+                                clickable
+                                label={inconsistency.badgeLabel}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setConsistencyPopover({
+                                    anchorEl: event.currentTarget,
+                                    inconsistency,
+                                  });
+                                }}
+                                sx={{
+                                  fontWeight: 700,
+                                  borderStyle: "dashed",
+                                  borderColor:
+                                    inconsistency.tone === "warning"
+                                      ? "rgba(245, 124, 0, 0.4)"
+                                      : "rgba(2, 136, 209, 0.35)",
+                                  bgcolor:
+                                    inconsistency.tone === "warning"
+                                      ? "rgba(245, 124, 0, 0.08)"
+                                      : "rgba(2, 136, 209, 0.08)",
+                                  color:
+                                    inconsistency.tone === "warning"
+                                      ? "#B45309"
+                                      : "#0C4A6E",
+                                }}
+                              />
+                            ))}
+                          </Stack>
+                          {item.lastCommentAt && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Último comentário:{" "}
+                              {new Date(item.lastCommentAt).toLocaleString(
+                                "pt-BR",
+                              )}
+                            </Typography>
+                          )}
+                        </Stack>
+                      </TableCell>
+                      <TableCell>{formatOmLabel(item.locality)}</TableCell>
+                      <TableCell>
+                        {getDetailedViolenceTypeLabel(
+                          item.detailedViolenceType,
+                        ) ??
+                          getComplaintTypeLabel(item.complaintType) ??
+                          "-"}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={
+                            STATUS_OPTIONS.find(
+                              (entry) => entry.value === item.status,
+                            )?.label ?? item.status
+                          }
+                          sx={{
+                            fontWeight: 700,
+                            bgcolor:
+                              STATUS_CHIP_STYLES[String(item.status)]
+                                ?.bgcolor ?? "rgba(17, 24, 39, 0.08)",
+                            color:
+                              STATUS_CHIP_STYLES[String(item.status)]?.color ??
+                              "#111827",
+                            border: "1px solid",
+                            borderColor:
+                              STATUS_CHIP_STYLES[String(item.status)]
+                                ?.borderColor ?? "rgba(17, 24, 39, 0.14)",
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {PROCEDURE_OPTIONS.find(
+                          (entry) => entry.value === item.procedureType,
+                        )?.label ?? item.procedureType}
+                      </TableCell>
+                      <TableCell>
+                        {item.reportedAt
+                          ? new Date(item.reportedAt).toLocaleDateString(
+                              "pt-BR",
+                            )
+                          : "-"}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -2405,8 +2613,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                     {activeStep < STEP_DEFS.length - 1 &&
                       activeStep >= maxUnlockedStep && (
                         <Typography variant="caption" color="text.secondary">
-                          Preencha ao menos um campo útil desta etapa para liberar
-                          a próxima e atualizar o status.
+                          Preencha ao menos um campo útil desta etapa para
+                          liberar a próxima e atualizar o status.
                         </Typography>
                       )}
                   </Box>
@@ -2619,6 +2827,44 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           )}
         </Box>
       </Drawer>
+
+      <Popover
+        open={Boolean(
+          consistencyPopover.anchorEl && consistencyPopover.inconsistency,
+        )}
+        anchorEl={consistencyPopover.anchorEl}
+        onClose={() =>
+          setConsistencyPopover({ anchorEl: null, inconsistency: null })
+        }
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        transformOrigin={{ vertical: "top", horizontal: "left" }}
+        PaperProps={{
+          sx: {
+            maxWidth: 480,
+            p: 2,
+            borderRadius: 3,
+          },
+        }}
+      >
+        <Stack spacing={1}>
+          <Typography variant="subtitle2" fontWeight={800}>
+            {consistencyPopover.inconsistency?.headline}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {consistencyPopover.inconsistency?.summary}
+          </Typography>
+          <Divider />
+          <Typography variant="caption" fontWeight={800} color="text.secondary">
+            {consistencyPopover.inconsistency?.referenceTitle}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ whiteSpace: "pre-line", maxHeight: 320, overflowY: "auto" }}
+          >
+            {consistencyPopover.inconsistency?.referenceBody}
+          </Typography>
+        </Stack>
+      </Popover>
 
       <ConfirmDialog
         open={confirmDeleteOpen}
