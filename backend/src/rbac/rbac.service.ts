@@ -1065,7 +1065,82 @@ export class RbacService implements OnModuleInit {
         ROLE_COMANDANTE_COMGEP,
       ],
     });
+    await this.backfillPermissionAssignments({
+      sourceResource: 'cpca_cases',
+      sourceAction: 'view',
+      targetResource: 'cpca_checklist',
+      targetAction: 'view',
+      allowedRoleNames: [
+        ROLE_TI,
+        ROLE_COORDENACAO_CIPAVD,
+        ROLE_COMANDANTE_COMGEP,
+      ],
+    });
+    await this.backfillCpcaCoveragePermissions();
     await this.backfillCpcaDashboardViewPermission();
+  }
+
+  private async backfillCpcaCoveragePermissions() {
+    const targetPermissions = await this.prisma.permission.findMany({
+      where: { resource: 'cpca_coverage' },
+      select: { id: true, action: true },
+    });
+    if (targetPermissions.length === 0) {
+      return;
+    }
+
+    const roles = await this.prisma.role.findMany({
+      where: {
+        name: {
+          in: [ROLE_TI, ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP],
+        },
+      },
+      select: { id: true, name: true },
+    });
+    if (roles.length === 0) {
+      return;
+    }
+
+    const roleIdsByName = new Map(
+      roles.map((role) => [normalizeRoleName(role.name), role.id] as const),
+    );
+    const tiRoleId = roleIdsByName.get(normalizeRoleName(ROLE_TI));
+    const coordinatorRoleId = roleIdsByName.get(
+      normalizeRoleName(ROLE_COORDENACAO_CIPAVD),
+    );
+    const comgepRoleId = roleIdsByName.get(
+      normalizeRoleName(ROLE_COMANDANTE_COMGEP),
+    );
+
+    const viewCreateUpdatePermissionIds = targetPermissions
+      .filter((permission) =>
+        ['view', 'create', 'update'].includes(permission.action),
+      )
+      .map((permission) => permission.id);
+    const deletePermissionIds = targetPermissions
+      .filter((permission) => permission.action === 'delete')
+      .map((permission) => permission.id);
+
+    const toCreate: Array<{ roleId: string; permissionId: string }> = [];
+    for (const roleId of [tiRoleId, coordinatorRoleId, comgepRoleId].filter(
+      Boolean,
+    ) as string[]) {
+      for (const permissionId of viewCreateUpdatePermissionIds) {
+        toCreate.push({ roleId, permissionId });
+      }
+    }
+    if (tiRoleId) {
+      for (const permissionId of deletePermissionIds) {
+        toCreate.push({ roleId: tiRoleId, permissionId });
+      }
+    }
+
+    if (toCreate.length > 0) {
+      await this.prisma.rolePermission.createMany({
+        data: toCreate,
+        skipDuplicates: true,
+      });
+    }
   }
 
   private async backfillPermissionAssignments(input: {
@@ -1097,7 +1172,10 @@ export class RbacService implements OnModuleInit {
     }
 
     let allowedRoleIds: Set<string> | null = null;
-    if (Array.isArray(input.allowedRoleNames) && input.allowedRoleNames.length > 0) {
+    if (
+      Array.isArray(input.allowedRoleNames) &&
+      input.allowedRoleNames.length > 0
+    ) {
       const allowedNames = new Set(
         input.allowedRoleNames.map((name) => normalizeRoleName(name)),
       );
@@ -1155,9 +1233,8 @@ export class RbacService implements OnModuleInit {
     for (const item of rolePermissionsWithSource) {
       const sourceScope = sourceScopeByPermissionId.get(item.permissionId);
       const targetPermissionId =
-        (sourceScope
-          ? targetPermissionByScope.get(sourceScope)
-          : undefined) ?? fallbackTargetPermissionId;
+        (sourceScope ? targetPermissionByScope.get(sourceScope) : undefined) ??
+        fallbackTargetPermissionId;
       const key = `${item.roleId}:${targetPermissionId}`;
       if (existingTargetByRole.has(key)) continue;
       existingTargetByRole.add(key);
@@ -1224,9 +1301,8 @@ export class RbacService implements OnModuleInit {
     for (const item of rolePermissionsWithSource) {
       const sourceScope = sourceScopeByPermissionId.get(item.permissionId);
       const targetPermissionId =
-        (sourceScope
-          ? targetPermissionByScope.get(sourceScope)
-          : undefined) ?? fallbackTargetPermissionId;
+        (sourceScope ? targetPermissionByScope.get(sourceScope) : undefined) ??
+        fallbackTargetPermissionId;
       const key = `${item.roleId}:${targetPermissionId}`;
       if (existingTargetByRole.has(key)) continue;
       existingTargetByRole.add(key);

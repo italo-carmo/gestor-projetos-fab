@@ -143,6 +143,10 @@ export const qk = {
     ["cpcaCaseStats", filters] as const,
   cpcaCommissionOverview: (localityId: string) =>
     ["cpcaCommission", "overview", localityId] as const,
+  cpcaChecklistLocality: (localityId: string) =>
+    ["cpcaChecklist", "locality", localityId] as const,
+  cpcaChecklistNational: (filters: Record<string, any>) =>
+    ["cpcaChecklist", "national", filters] as const,
   cpcaPresidentRequests: (filters: Record<string, any>) =>
     ["cpcaCommission", "presidentRequests", filters] as const,
   cpcaPresidentRequestsPendingCount: () =>
@@ -152,6 +156,10 @@ export const qk = {
   smifComplaints: (filters: Record<string, any>) =>
     ["smifComplaints", filters] as const,
   smifComplaintCase: (id: string) => ["smifComplaintCase", id] as const,
+  knowledgeBases: ["admin", "knowledgeBases"] as const,
+  knowledgeBasesSelectable: ["admin", "knowledgeBases", "selectable"] as const,
+  knowledgeBaseDocuments: (knowledgeBaseId: string) =>
+    ["admin", "knowledgeBases", knowledgeBaseId, "documents"] as const,
   aiSettings: ["admin", "aiSettings"] as const,
   comgepSettings: ["admin", "comgepSettings"] as const,
   biNormalizationOverview: ["bi", "normalization", "overview"] as const,

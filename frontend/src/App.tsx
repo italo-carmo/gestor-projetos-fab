@@ -34,7 +34,6 @@ import { ComgepSituationRoomPage } from "./pages/ComgepSituationRoomPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
 import { CpcaCasesPage } from "./pages/CpcaCasesPage";
-import { CpcaAiPage } from "./pages/CpcaAiPage";
 import { CpcaChecklistPage } from "./pages/CpcaChecklistPage";
 import { CpcaCommissionPage } from "./pages/CpcaCommissionPage";
 import { CpcaPresidentApprovalsPage } from "./pages/CpcaPresidentApprovalsPage";
@@ -190,9 +189,7 @@ function App() {
                   path="/dashboard/comgep"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        can(user, "strategic_dashboard", "view")
-                      }
+                      allow={(user) => can(user, "strategic_dashboard", "view")}
                     >
                       <ComgepSituationRoomPage />
                     </RequireRoleAccess>
@@ -202,9 +199,7 @@ function App() {
                   path="/dashboard/estrategico"
                   element={
                     <RequireRoleAccess
-                      allow={(user) =>
-                        can(user, "strategic_dashboard", "view")
-                      }
+                      allow={(user) => can(user, "strategic_dashboard", "view")}
                     >
                       <StrategicDashboardPage />
                     </RequireRoleAccess>
@@ -272,7 +267,7 @@ function App() {
                         can(user, "cpca_cases", "view", "NATIONAL")
                       }
                     >
-                      <CpcaAiPage />
+                      <Navigate to="/ai?tab=cpca" replace />
                     </RequireRoleAccess>
                   }
                 />
@@ -446,7 +441,9 @@ function App() {
                   path="/social-communication"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => can(user, "social_communication", "view")}
+                      allow={(user) =>
+                        can(user, "social_communication", "view")
+                      }
                     >
                       <SocialCommunicationPage />
                     </RequireRoleAccess>
@@ -556,11 +553,15 @@ function App() {
                 />
                 <Route
                   path="/admin/localities-cipavd"
-                  element={<Navigate to="/admin?tab=localities-cipavd" replace />}
+                  element={
+                    <Navigate to="/admin?tab=localities-cipavd" replace />
+                  }
                 />
                 <Route
                   path="/admin/localidades-cipavd"
-                  element={<Navigate to="/admin?tab=localities-cipavd" replace />}
+                  element={
+                    <Navigate to="/admin?tab=localities-cipavd" replace />
+                  }
                 />
                 <Route
                   path="/admin/postos"
@@ -575,12 +576,22 @@ function App() {
                   element={<Navigate to="/admin?tab=elo-roles" replace />}
                 />
                 <Route
+                  path="/cpca-coverage"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => can(user, "cpca_coverage", "view")}
+                    >
+                      <OmsAdminPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
                   path="/admin/oms"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => can(user, "localities", "view")}
+                      allow={(user) => can(user, "cpca_coverage", "view")}
                     >
-                      <OmsAdminPage />
+                      <Navigate to="/cpca-coverage" replace />
                     </RequireRoleAccess>
                   }
                 />

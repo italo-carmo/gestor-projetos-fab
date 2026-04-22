@@ -310,16 +310,16 @@ const navSections: NavSection[] = [
         menuKey: "cpca_cases",
       },
       {
-        label: "IA CPCA",
-        to: "/cpca-ai",
-        icon: <AutoAwesomeRoundedIcon fontSize="small" />,
-        menuKey: "ai",
-      },
-      {
         label: "Comissão CPCA",
         to: "/cpca-commission",
         icon: <GroupsIcon fontSize="small" />,
         menuKey: "cpca_commission",
+      },
+      {
+        label: "Cobertura",
+        to: "/cpca-coverage",
+        icon: <BusinessIcon fontSize="small" />,
+        menuKey: "cpca_coverage",
       },
       {
         label: "Checklist",
@@ -355,12 +355,6 @@ const navSections: NavSection[] = [
         to: "/admin",
         icon: <SettingsIcon fontSize="small" />,
         menuKey: "admin_catalog",
-      },
-      {
-        label: "OMs",
-        to: "/admin/oms",
-        icon: <BusinessIcon fontSize="small" />,
-        menuKey: "admin_oms",
       },
     ],
   },
@@ -445,8 +439,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         (localitiesQuery.data?.items ?? []) as GlobalLocalityLike[],
       )
         .filter(
-          (locality) =>
-            Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0,
+          (locality) => Number(locality?.recruitsFemaleCountCurrent ?? 0) > 0,
         )
         .map((locality) => ({
           id: String(locality.id),
@@ -530,12 +523,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === "/cpca-cases") {
       return can(me, "cpca_cases", "view");
     }
-    if (item.to === "/cpca-ai") {
-      return (
-        can(me, "ai", "view") &&
-        can(me, "cpca_cases", "view", "NATIONAL")
-      );
-    }
     if (item.to === "/cpca-commission") {
       return can(me, "cpca_cases", "view");
     }
@@ -547,8 +534,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/cpca-president-approvals") {
       return (
-        can(me, "cpca_cases", "view") &&
-        hasAnyRole(me, [ROLE_TI, ROLE_COMGEP])
+        can(me, "cpca_cases", "view") && hasAnyRole(me, [ROLE_TI, ROLE_COMGEP])
       );
     }
     if (item.to === "/cpca-stats") {
@@ -590,8 +576,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === "/gsd-recruits") {
       return can(me, "localities", "view") || can(me, "dashboard", "view");
     }
-    if (item.to === "/admin/oms") {
-      return can(me, "localities", "view");
+    if (item.to === "/cpca-coverage") {
+      return can(me, "cpca_coverage", "view");
     }
     if (item.to === "/admin") {
       return canAccessAdminCatalog(me);
@@ -1149,20 +1135,23 @@ export function AppShell({ children }: { children: ReactNode }) {
                                 <Chip
                                   size="small"
                                   label={
-                                    String(item.entityType ?? "").toUpperCase() ===
-                                    "SCREEN"
+                                    String(
+                                      item.entityType ?? "",
+                                    ).toUpperCase() === "SCREEN"
                                       ? "Tela"
                                       : "Registro"
                                   }
                                   color={
-                                    String(item.entityType ?? "").toUpperCase() ===
-                                    "SCREEN"
+                                    String(
+                                      item.entityType ?? "",
+                                    ).toUpperCase() === "SCREEN"
                                       ? "primary"
                                       : "default"
                                   }
                                   variant={
-                                    String(item.entityType ?? "").toUpperCase() ===
-                                    "SCREEN"
+                                    String(
+                                      item.entityType ?? "",
+                                    ).toUpperCase() === "SCREEN"
                                       ? "filled"
                                       : "outlined"
                                   }

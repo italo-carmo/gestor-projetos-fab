@@ -27,9 +27,12 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
     'social_communication_highlight',
   ],
   library: ['library'],
+  ai: [],
   cpca_dashboard: [],
   cpca_cases: ['cpca_cases'],
   cpca_commission: ['cpca_cases'],
+  cpca_coverage: ['cpca_coverage', 'cpca_cases'],
+  cpca_checklist: [],
   cpca_president_approvals: [],
   bi: ['bi', 'bi_survey'],
   admin_rbac: ['admin_rbac', 'roles', 'users'],
@@ -40,7 +43,7 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
     'elo_roles',
     'localities_cipavd',
   ],
-  admin_oms: ['localities'],
+  admin_oms: ['cpca_coverage', 'cpca_cases'],
 };
 
 const IGNORED_AUDIT_ACTIONS = ['view', 'list', 'read', 'query', 'search'];

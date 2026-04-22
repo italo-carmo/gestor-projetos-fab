@@ -32,6 +32,7 @@ import {
   useUsers,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
+import { can } from "../app/rbac";
 import {
   hasAnyRole,
   normalizeRoleName,
@@ -44,6 +45,12 @@ import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import {
+  buildOmCpcaCoverageSummary,
+  matchesOmCpcaCoverageFilter,
+  resolveOmCpcaCoverageStatus,
+  type OmCpcaCoverageFilter,
+} from "../features/omCpcaCoverage";
 
 type LocalityItem = {
   id: string;
@@ -113,8 +120,6 @@ type OmsForm = {
   notes: string;
   managedLocalityIds: string[];
 };
-
-type CpcaCoverageFilter = "ALL" | "WITH_CPCA" | "WITHOUT_CPCA";
 
 const DEFAULT_FORM: OmsForm = {
   code: "",
@@ -221,8 +226,13 @@ function formatDetachedOmSummary(payload: DeleteOmResponse | null | undefined) {
 export function OmsAdminPage() {
   const toast = useToast();
   const { data: me } = useMe();
+  const canCreateOms = can(me, "cpca_coverage", "create");
+  const canUpdateOms = can(me, "cpca_coverage", "update");
+  const canDeleteOms =
+    can(me, "cpca_coverage", "delete") && hasAnyRole(me, [ROLE_TI]);
+  const canViewUsers = can(me, "users", "view");
   const localitiesQuery = useOms();
-  const usersQuery = useUsers(Boolean(me?.id));
+  const usersQuery = useUsers(Boolean(me?.id) && canViewUsers);
   const createLocality = useCreateOm();
   const updateLocality = useUpdateOm();
   const updateCpcaCoverage = useUpdateCpcaCommissionCoverage();
@@ -230,11 +240,14 @@ export function OmsAdminPage() {
   const deleteLocality = useDeleteOm();
   const assignPresident = useAssignCpcaPresident();
   const lookupPresidentCandidate = useLookupCpcaPresidentCandidate();
-  const canManagePresident = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
+  const canManagePresident =
+    can(me, "cpca_cases", "update") && hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
+  const canEditCoverageAssignments =
+    canUpdateOms && can(me, "cpca_cases", "update");
 
   const [search, setSearch] = useState("");
   const [cpcaCoverageFilter, setCpcaCoverageFilter] =
-    useState<CpcaCoverageFilter>("ALL");
+    useState<OmCpcaCoverageFilter>("ALL");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<LocalityItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -313,9 +326,7 @@ export function OmsAdminPage() {
   const filteredLocalities = useMemo(() => {
     const term = search.trim().toLowerCase();
     return localities.filter((item) => {
-      const hasCpca = Boolean(item.hasCpca);
-      if (cpcaCoverageFilter === "WITH_CPCA" && !hasCpca) return false;
-      if (cpcaCoverageFilter === "WITHOUT_CPCA" && hasCpca) return false;
+      if (!matchesOmCpcaCoverageFilter(item, cpcaCoverageFilter)) return false;
       if (!term) return true;
       const code = String(item.code ?? "").toLowerCase();
       const name = String(item.name ?? "").toLowerCase();
@@ -324,9 +335,7 @@ export function OmsAdminPage() {
   }, [localities, search, cpcaCoverageFilter]);
 
   const coverage = useMemo(() => {
-    const withCpca = localities.filter((locality) => Boolean(locality.hasCpca));
-    const withoutCpca = localities.filter((locality) => !locality.hasCpca);
-    return { total: localities.length, withCpca, withoutCpca };
+    return buildOmCpcaCoverageSummary(localities);
   }, [localities]);
 
   const cpcaCoverageOptions = useMemo(
@@ -523,7 +532,7 @@ export function OmsAdminPage() {
     try {
       if (editing) {
         await updateLocality.mutateAsync({ id: editing.id, payload });
-        if (canManagePresident) {
+        if (canEditCoverageAssignments) {
           await updateCpcaCoverage.mutateAsync({
             localityId: editing.id,
             managedLocalityIds: form.hasCpca ? form.managedLocalityIds : [],
@@ -671,16 +680,18 @@ export function OmsAdminPage() {
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            Cadastro de OMs
+            Cobertura CPCA
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            CRUD completo de OMs com marcação de "Possui CPCA" e visão de
-            militares CPCA por localidade.
+            Gestão nacional da cobertura CPCA por OM, com comissão própria,
+            cobertura delegada e trilha clara das OMs sem cobertura.
           </Typography>
         </Box>
-        <Button variant="contained" onClick={openCreate}>
-          Nova OM
-        </Button>
+        {canCreateOms ? (
+          <Button variant="contained" onClick={openCreate}>
+            Nova OM
+          </Button>
+        ) : null}
       </Box>
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={2} sx={{ mb: 2 }}>
@@ -697,28 +708,47 @@ export function OmsAdminPage() {
         <Card sx={{ flex: 1 }}>
           <CardContent>
             <Typography variant="overline" color="text.secondary">
-              OMs com CPCA
+              OMs cobertas por CPCA
             </Typography>
             <Typography variant="h5" fontWeight={800}>
-              {coverage.withCpca.length}
+              {coverage.covered}
             </Typography>
+            <Stack
+              direction="row"
+              spacing={0.8}
+              useFlexGap
+              flexWrap="wrap"
+              sx={{ mt: 1 }}
+            >
+              <Chip
+                size="small"
+                color="success"
+                variant="outlined"
+                label={`${coverage.ownCpca} com CPCA própria`}
+              />
+              <Chip
+                size="small"
+                color="info"
+                variant="outlined"
+                label={`${coverage.managedByOther} cobertas por outra CPCA`}
+              />
+            </Stack>
           </CardContent>
         </Card>
         <Card sx={{ flex: 1 }}>
           <CardContent>
             <Typography variant="overline" color="text.secondary">
-              OMs sem CPCA
+              OMs sem cobertura CPCA
             </Typography>
             <Typography
               variant="h5"
               fontWeight={800}
-              color={
-                coverage.withoutCpca.length > 0
-                  ? "warning.main"
-                  : "text.primary"
-              }
+              color={coverage.uncovered > 0 ? "warning.main" : "text.primary"}
             >
-              {coverage.withoutCpca.length}
+              {coverage.uncovered}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Não possuem CPCA e não estão cobertas por outra comissão.
             </Typography>
           </CardContent>
         </Card>
@@ -738,16 +768,22 @@ export function OmsAdminPage() {
             <TextField
               select
               size="small"
-              label="Filtro Possui CPCA"
+              label="Filtro de cobertura CPCA"
               value={cpcaCoverageFilter}
               onChange={(event) =>
-                setCpcaCoverageFilter(event.target.value as CpcaCoverageFilter)
+                setCpcaCoverageFilter(
+                  event.target.value as OmCpcaCoverageFilter,
+                )
               }
-              sx={{ minWidth: 220 }}
+              sx={{ minWidth: 260 }}
             >
               <MenuItem value="ALL">Todas</MenuItem>
-              <MenuItem value="WITH_CPCA">Possui CPCA = Sim</MenuItem>
-              <MenuItem value="WITHOUT_CPCA">Possui CPCA = Não</MenuItem>
+              <MenuItem value="COVERED">Cobertas por CPCA</MenuItem>
+              <MenuItem value="OWN_CPCA">Com CPCA própria</MenuItem>
+              <MenuItem value="MANAGED_BY_OTHER">
+                Cobertas por outra CPCA
+              </MenuItem>
+              <MenuItem value="UNCOVERED">Sem cobertura CPCA</MenuItem>
             </TextField>
             <Button variant="text" onClick={() => setSearch("")}>
               Limpar
@@ -756,65 +792,75 @@ export function OmsAdminPage() {
               Limpar cobertura
             </Button>
           </Stack>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ mt: 1.5, display: "block" }}
+          >
+            Cobertura CPCA considera tanto a OM com comissão própria quanto a OM
+            formalmente coberta por outra comissão CPCA.
+          </Typography>
         </CardContent>
       </Card>
 
-      <Card sx={{ mb: 2 }}>
-        <CardContent>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={1.2}
-            alignItems={{ xs: "stretch", md: "center" }}
-          >
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ minWidth: 180 }}
+      {canUpdateOms ? (
+        <Card sx={{ mb: 2 }}>
+          <CardContent>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1.2}
+              alignItems={{ xs: "stretch", md: "center" }}
             >
-              OMs selecionadas: <strong>{selectedLocalityIds.length}</strong>
-            </Typography>
-            <Button
-              variant="text"
-              onClick={() => toggleSelectVisible(true)}
-              disabled={filteredLocalityIds.length === 0}
-            >
-              Selecionar visíveis
-            </Button>
-            <Button
-              variant="text"
-              onClick={() => setSelectedLocalityIds([])}
-              disabled={selectedLocalityIds.length === 0}
-            >
-              Limpar seleção
-            </Button>
-            <TextField
-              select
-              size="small"
-              label="Possui CPCA (lote)"
-              value={batchHasCpcaValue}
-              onChange={(event) =>
-                setBatchHasCpcaValue(event.target.value as "SIM" | "NAO" | "")
-              }
-              sx={{ minWidth: 220 }}
-            >
-              <MenuItem value="">
-                <em>Selecione</em>
-              </MenuItem>
-              <MenuItem value="SIM">Sim</MenuItem>
-              <MenuItem value="NAO">Não</MenuItem>
-            </TextField>
-            <Button
-              variant="contained"
-              onClick={() => {
-                void applyHasCpcaBatch();
-              }}
-              disabled={updateLocalitiesHasCpcaBatch.isPending}
-            >
-              Aplicar em lote
-            </Button>
-          </Stack>
-        </CardContent>
-      </Card>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ minWidth: 180 }}
+              >
+                OMs selecionadas: <strong>{selectedLocalityIds.length}</strong>
+              </Typography>
+              <Button
+                variant="text"
+                onClick={() => toggleSelectVisible(true)}
+                disabled={filteredLocalityIds.length === 0}
+              >
+                Selecionar visíveis
+              </Button>
+              <Button
+                variant="text"
+                onClick={() => setSelectedLocalityIds([])}
+                disabled={selectedLocalityIds.length === 0}
+              >
+                Limpar seleção
+              </Button>
+              <TextField
+                select
+                size="small"
+                label="Possui CPCA (lote)"
+                value={batchHasCpcaValue}
+                onChange={(event) =>
+                  setBatchHasCpcaValue(event.target.value as "SIM" | "NAO" | "")
+                }
+                sx={{ minWidth: 220 }}
+              >
+                <MenuItem value="">
+                  <em>Selecione</em>
+                </MenuItem>
+                <MenuItem value="SIM">Sim</MenuItem>
+                <MenuItem value="NAO">Não</MenuItem>
+              </TextField>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  void applyHasCpcaBatch();
+                }}
+                disabled={updateLocalitiesHasCpcaBatch.isPending}
+              >
+                Aplicar em lote
+              </Button>
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardContent>
@@ -827,18 +873,20 @@ export function OmsAdminPage() {
             <Table size="small">
               <TableHead>
                 <TableRow sx={{ bgcolor: "primary.main" }}>
-                  <TableCell padding="checkbox" sx={{ color: "white" }}>
-                    <Checkbox
-                      size="small"
-                      checked={allVisibleSelected}
-                      indeterminate={someVisibleSelected}
-                      onChange={(_, checked) => toggleSelectVisible(checked)}
-                      sx={{
-                        color: "white",
-                        "&.Mui-checked": { color: "white" },
-                      }}
-                    />
-                  </TableCell>
+                  {canUpdateOms ? (
+                    <TableCell padding="checkbox" sx={{ color: "white" }}>
+                      <Checkbox
+                        size="small"
+                        checked={allVisibleSelected}
+                        indeterminate={someVisibleSelected}
+                        onChange={(_, checked) => toggleSelectVisible(checked)}
+                        sx={{
+                          color: "white",
+                          "&.Mui-checked": { color: "white" },
+                        }}
+                      />
+                    </TableCell>
+                  ) : null}
                   <TableCell sx={{ color: "white", fontWeight: 700 }}>
                     Código
                   </TableCell>
@@ -851,10 +899,10 @@ export function OmsAdminPage() {
                     UF
                   </TableCell>
                   <TableCell sx={{ color: "white", fontWeight: 700 }}>
-                    Possui CPCA
+                    Cobertura CPCA
                   </TableCell>
                   <TableCell sx={{ color: "white", fontWeight: 700 }}>
-                    Gerenciada por
+                    Comissão responsável
                   </TableCell>
                   <TableCell sx={{ color: "white", fontWeight: 700 }}>
                     Militares CPCA
@@ -870,19 +918,21 @@ export function OmsAdminPage() {
               <TableBody>
                 {filteredLocalities.map((locality) => {
                   const cpcaMembers = cpcaByLocalityId.get(locality.id) ?? [];
-                  const hasCoverage = Boolean(locality.hasCpca);
+                  const coverageStatus = resolveOmCpcaCoverageStatus(locality);
                   const managedBy = locality.cpcaManagedByLocality;
                   return (
                     <TableRow key={locality.id} hover>
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          size="small"
-                          checked={selectedIdSet.has(locality.id)}
-                          onChange={(_, checked) =>
-                            toggleSelectLocality(locality.id, checked)
-                          }
-                        />
-                      </TableCell>
+                      {canUpdateOms ? (
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            size="small"
+                            checked={selectedIdSet.has(locality.id)}
+                            onChange={(_, checked) =>
+                              toggleSelectLocality(locality.id, checked)
+                            }
+                          />
+                        </TableCell>
+                      ) : null}
                       <TableCell>
                         <Typography variant="body2" fontWeight={700}>
                           {locality.code}
@@ -895,17 +945,40 @@ export function OmsAdminPage() {
                       </TableCell>
                       <TableCell>{locality.uf ?? "—"}</TableCell>
                       <TableCell>
-                        <Chip
-                          size="small"
-                          color={hasCoverage ? "success" : "default"}
-                          label={hasCoverage ? "Sim" : "Não"}
-                        />
+                        {coverageStatus === "OWN_CPCA" ? (
+                          <Chip
+                            size="small"
+                            color="success"
+                            label="CPCA própria"
+                          />
+                        ) : coverageStatus === "MANAGED_BY_OTHER" ? (
+                          <Chip
+                            size="small"
+                            color="info"
+                            label="Coberta por outra CPCA"
+                          />
+                        ) : (
+                          <Chip
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                            label="Sem cobertura"
+                          />
+                        )}
                       </TableCell>
                       <TableCell>
-                        {managedBy ? (
+                        {coverageStatus === "OWN_CPCA" ? (
+                          <Chip
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                            label="Própria OM"
+                          />
+                        ) : managedBy ? (
                           <Chip
                             size="small"
                             variant="outlined"
+                            color="info"
                             label={managedBy.code}
                             title={formatOmLabel(
                               managedBy.code,
@@ -922,16 +995,23 @@ export function OmsAdminPage() {
                           : "—"}
                       </TableCell>
                       <TableCell align="right">
-                        <Button size="small" onClick={() => openEdit(locality)}>
-                          Editar
-                        </Button>
-                        <Button
-                          size="small"
-                          color="error"
-                          onClick={() => setDeleteId(locality.id)}
-                        >
-                          Excluir
-                        </Button>
+                        {canUpdateOms ? (
+                          <Button
+                            size="small"
+                            onClick={() => openEdit(locality)}
+                          >
+                            Editar
+                          </Button>
+                        ) : null}
+                        {canDeleteOms ? (
+                          <Button
+                            size="small"
+                            color="error"
+                            onClick={() => setDeleteId(locality.id)}
+                          >
+                            Excluir
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   );
@@ -1239,13 +1319,17 @@ export function OmsAdminPage() {
                               variant="outlined"
                               label={item.actionLabel || "Evento registrado"}
                             />
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
                               {item.actor?.name || "Sistema"} •{" "}
                               {formatDateTime(item.createdAt)}
                             </Typography>
                           </Stack>
                           <Typography variant="body2">
-                            {item.summary || "Alteração registrada na comissão CPCA."}
+                            {item.summary ||
+                              "Alteração registrada na comissão CPCA."}
                           </Typography>
                         </Box>
                       ))}
@@ -1346,31 +1430,35 @@ export function OmsAdminPage() {
           />
           <Box display="flex" gap={1} justifyContent="flex-end">
             <Button onClick={closeDrawer}>Cancelar</Button>
-            <Button
-              variant="contained"
-              onClick={() => {
-                void handleSave();
-              }}
-              disabled={createLocality.isPending || updateLocality.isPending}
-            >
-              Salvar
-            </Button>
+            {(editing ? canUpdateOms : canCreateOms) ? (
+              <Button
+                variant="contained"
+                onClick={() => {
+                  void handleSave();
+                }}
+                disabled={createLocality.isPending || updateLocality.isPending}
+              >
+                Salvar
+              </Button>
+            ) : null}
           </Box>
         </Box>
       </Drawer>
 
-      <ConfirmDialog
-        open={Boolean(deleteId)}
-        title="Excluir OM"
-        message="A OM será removida do catálogo, mas os registros relacionados serão preservados. Usuários, denúncias e vínculos de comissão apenas perderão a associação com esta OM."
-        note="Esta ação não exclui os itens relacionados. Ela apenas desfaz os relacionamentos com a OM e remove a cobertura CPCA associada."
-        severity="warning"
-        confirmLabel="Excluir OM"
-        onCancel={() => setDeleteId(null)}
-        onConfirm={() => {
-          if (deleteId) void handleDelete(deleteId);
-        }}
-      />
+      {canDeleteOms ? (
+        <ConfirmDialog
+          open={Boolean(deleteId)}
+          title="Excluir OM"
+          message="A OM será removida do catálogo, mas os registros relacionados serão preservados. Usuários, denúncias e vínculos de comissão apenas perderão a associação com esta OM."
+          note="Esta ação não exclui os itens relacionados. Ela apenas desfaz os relacionamentos com a OM e remove a cobertura CPCA associada."
+          severity="warning"
+          confirmLabel="Excluir OM"
+          onCancel={() => setDeleteId(null)}
+          onConfirm={() => {
+            if (deleteId) void handleDelete(deleteId);
+          }}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={Boolean(pendingPresidentConfirm)}

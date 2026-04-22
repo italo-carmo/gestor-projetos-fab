@@ -42,6 +42,8 @@ import { useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { api } from "../api/client";
+import { useMe, useAiActionAgents } from "../api/hooks";
+import { can } from "../app/rbac";
 import { consumeJsonSseStream } from "../app/sse";
 import { useToast } from "../app/toast";
 import {
@@ -55,7 +57,9 @@ import {
   type AiCopilotIntent,
   type AiCopilotMode,
 } from "../app/aiCopilotLaunch";
-import { useAiActionAgents } from "../api/hooks";
+import { normalizeAiMarkdown } from "../features/aiMarkdown";
+import { normalizeAiPageTab, type AiPageTab } from "../features/aiTabs";
+import { CpcaAiPage } from "./CpcaAiPage";
 
 const ANALYSIS_CARDS: {
   type: string;
@@ -203,11 +207,15 @@ const COPILOT_INTENT_HELP: Record<
   },
 };
 
-function getIntentFromMode(mode: AiCopilotMode): Exclude<AiCopilotIntent, "action"> {
+function getIntentFromMode(
+  mode: AiCopilotMode,
+): Exclude<AiCopilotIntent, "action"> {
   return mode === "analyst" ? "explain" : "briefing";
 }
 
-function getModeFromIntent(intent: AiCopilotIntent | null | undefined): AiCopilotMode {
+function getModeFromIntent(
+  intent: AiCopilotIntent | null | undefined,
+): AiCopilotMode {
   return intent === "explain" ? "analyst" : "executive";
 }
 
@@ -321,7 +329,9 @@ function getBaseUrl(): string {
 }
 
 function getAuthHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
   const token = localStorage.getItem("accessToken");
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const roleId = localStorage.getItem("activeRoleId");
@@ -329,10 +339,16 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-function buildAssistantContextBadges(context: AssistantContextSeed | null): string[] {
+function buildAssistantContextBadges(
+  context: AssistantContextSeed | null,
+): string[] {
   if (!context) return [];
   const badges: string[] = [];
-  badges.push(context.source === "copilot" ? "Origem: copiloto" : "Origem: painel estratégico");
+  badges.push(
+    context.source === "copilot"
+      ? "Origem: copiloto"
+      : "Origem: painel estratégico",
+  );
   if (String(context.uf ?? "").trim()) {
     badges.push(`UF ${String(context.uf).trim()}`);
   }
@@ -408,7 +424,7 @@ function MdContent({ children }: { children: string }) {
           },
         }}
       >
-        {children}
+        {normalizeAiMarkdown(children)}
       </ReactMarkdown>
     </Box>
   );
@@ -587,7 +603,9 @@ function AnalysisCard({
         flexDirection: "column",
       }}
     >
-      <CardContent sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}>
+      <CardContent
+        sx={{ flexGrow: 1, display: "flex", flexDirection: "column" }}
+      >
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
           <Box sx={{ color: card.color }}>{card.icon}</Box>
           <Typography variant="subtitle1" fontWeight={700}>
@@ -600,7 +618,11 @@ function AnalysisCard({
 
         {state?.running && (
           <Box sx={{ mb: 2 }}>
-            <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              sx={{ mb: 0.5 }}
+            >
               <Typography variant="caption" color="text.secondary">
                 {state.stage}
               </Typography>
@@ -635,7 +657,14 @@ function AnalysisCard({
           >
             <MdContent>{state.narrative}</MdContent>
             {state.model && !state.running && (
-              <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ mt: 1.5 }}
+                alignItems="center"
+                flexWrap="wrap"
+                useFlexGap
+              >
                 <Chip
                   label={`Modelo: ${state.model}`}
                   size="small"
@@ -646,7 +675,11 @@ function AnalysisCard({
                     {new Date(state.generatedAt).toLocaleString("pt-BR")}
                   </Typography>
                 )}
-                <IconButton size="small" onClick={handleCopy} title="Copiar texto">
+                <IconButton
+                  size="small"
+                  onClick={handleCopy}
+                  title="Copiar texto"
+                >
                   <ContentCopyRoundedIcon fontSize="small" />
                 </IconButton>
                 {copied && (
@@ -665,7 +698,11 @@ function AnalysisCard({
           </Typography>
         )}
 
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2} sx={{ mt: "auto" }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.2}
+          sx={{ mt: "auto" }}
+        >
           <Button
             variant="contained"
             onClick={onStart}
@@ -698,7 +735,9 @@ function AnalysisCard({
 
 function AnalysesTab() {
   const { states, start } = useAnalysisSSE();
-  const [exportingByType, setExportingByType] = useState<Record<string, boolean>>({});
+  const [exportingByType, setExportingByType] = useState<
+    Record<string, boolean>
+  >({});
   const toast = useToast();
 
   const exportPdf = useCallback(
@@ -736,7 +775,9 @@ function AnalysesTab() {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const anchor = document.createElement("a");
-        const datePart = (state.generatedAt ? new Date(state.generatedAt) : new Date())
+        const datePart = (
+          state.generatedAt ? new Date(state.generatedAt) : new Date()
+        )
           .toISOString()
           .slice(0, 19)
           .replace(/[:T]/g, "-");
@@ -746,7 +787,10 @@ function AnalysesTab() {
         anchor.click();
         anchor.remove();
         window.URL.revokeObjectURL(url);
-        toast.push({ message: "PDF exportado com sucesso.", severity: "success" });
+        toast.push({
+          message: "PDF exportado com sucesso.",
+          severity: "success",
+        });
       } catch (error: unknown) {
         const message =
           error instanceof Error ? error.message : "Falha ao exportar PDF.";
@@ -770,7 +814,9 @@ function AnalysesTab() {
           }}
         >
           <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
-            Os insights textuais do sistema foram concentrados nesta área de IA. O Painel Estratégico agora fica restrito a leitura executiva, perfil, território e priorização COMGEP.
+            Os insights textuais do sistema foram concentrados nesta área de IA.
+            O Painel Estratégico agora fica restrito a leitura executiva,
+            perfil, território e priorização COMGEP.
           </Typography>
         </Alert>
       </Grid>
@@ -829,7 +875,11 @@ function AssistantQuickActionCard({
             <Typography variant="subtitle2" fontWeight={800}>
               {title}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.7, lineHeight: 1.65 }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.7, lineHeight: 1.65 }}
+            >
               {description}
             </Typography>
           </Box>
@@ -997,8 +1047,7 @@ function ChatbotTab({
           });
         }
       } catch (error: any) {
-        const message =
-          error?.message ?? "Falha ao conversar com o chatbot.";
+        const message = error?.message ?? "Falha ao conversar com o chatbot.";
         appendMessage({
           id: `chatbot-error-${Date.now()}`,
           role: "assistant",
@@ -1030,8 +1079,9 @@ function ChatbotTab({
         <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.65 }}>
           Esta aba é para perguntas abertas sobre CIPAVD, SMIF e CPCA. O chatbot
           responde somente com base nas fontes permitidas em{" "}
-          <strong>Administração &gt; Configuração IA</strong>. Para criar missão,
-          atividade, tarefa, cronograma ou matéria, use a aba <strong>Assistente virtual</strong>.
+          <strong>Administração &gt; Configuração IA</strong>. Para criar
+          missão, atividade, tarefa, cronograma ou matéria, use a aba{" "}
+          <strong>Assistente virtual</strong>.
         </Typography>
       </Alert>
 
@@ -1044,9 +1094,13 @@ function ChatbotTab({
                 Como usar
               </Typography>
             </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-              Faça perguntas livres sobre dados, tendências, diferenças entre fluxos,
-              panorama operacional e sinais institucionais do sistema.
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ lineHeight: 1.7 }}
+            >
+              Faça perguntas livres sobre dados, tendências, diferenças entre
+              fluxos, panorama operacional e sinais institucionais do sistema.
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               {CHATBOT_QUICK_PROMPTS.map((prompt) => (
@@ -1086,7 +1140,8 @@ function ChatbotTab({
                 Conversa
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Perguntas abertas com resposta em Markdown, respeitando o escopo configurado.
+                Perguntas abertas com resposta em Markdown, respeitando o escopo
+                configurado.
               </Typography>
             </Box>
             <Button
@@ -1114,7 +1169,9 @@ function ChatbotTab({
           >
             {!messages.length ? (
               <Box sx={{ textAlign: "center", py: 8 }}>
-                <SmartToyRoundedIcon sx={{ fontSize: 48, color: "#00695C", mb: 1 }} />
+                <SmartToyRoundedIcon
+                  sx={{ fontSize: 48, color: "#00695C", mb: 1 }}
+                />
                 <Typography variant="h6" color="#1A3C6E" fontWeight={700}>
                   Chatbot institucional
                 </Typography>
@@ -1135,11 +1192,18 @@ function ChatbotTab({
                   key={msg.id}
                   direction="row"
                   spacing={1}
-                  justifyContent={msg.role === "user" ? "flex-end" : "flex-start"}
+                  justifyContent={
+                    msg.role === "user" ? "flex-end" : "flex-start"
+                  }
                 >
                   {msg.role === "assistant" ? (
                     <SmartToyRoundedIcon
-                      sx={{ fontSize: 28, color: "#00695C", mt: 0.5, flexShrink: 0 }}
+                      sx={{
+                        fontSize: 28,
+                        color: "#00695C",
+                        mt: 0.5,
+                        flexShrink: 0,
+                      }}
                     />
                   ) : null}
                   <Box
@@ -1155,10 +1219,17 @@ function ChatbotTab({
                           : "text.primary",
                       boxShadow: 1,
                       border:
-                        msg.role === "assistant" ? "1px solid #E2E8F0" : undefined,
+                        msg.role === "assistant"
+                          ? "1px solid #E2E8F0"
+                          : undefined,
                     }}
                   >
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ mb: 0.8 }}
+                    >
                       <Chip
                         size="small"
                         label={msg.role === "assistant" ? "Chatbot" : "Você"}
@@ -1174,7 +1245,11 @@ function ChatbotTab({
                         }
                       />
                       {msg.model ? (
-                        <Chip size="small" variant="outlined" label={msg.model} />
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={msg.model}
+                        />
                       ) : null}
                     </Stack>
                     {msg.role === "assistant" ? (
@@ -1197,7 +1272,12 @@ function ChatbotTab({
                         <Typography variant="caption" color="text.secondary">
                           Links sugeridos
                         </Typography>
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          flexWrap="wrap"
+                          useFlexGap
+                        >
                           {msg.suggestedLinks.map((item) => (
                             <Button
                               key={`${msg.id}-${item.href}`}
@@ -1214,7 +1294,8 @@ function ChatbotTab({
                         </Stack>
                       </Stack>
                     ) : null}
-                    {msg.role === "assistant" && msg.suggestedActions?.length ? (
+                    {msg.role === "assistant" &&
+                    msg.suggestedActions?.length ? (
                       <Stack spacing={1} sx={{ mt: 1.25 }}>
                         <Typography variant="caption" color="text.secondary">
                           Transformar em ação
@@ -1224,7 +1305,11 @@ function ChatbotTab({
                             <Paper
                               key={`${msg.id}-${action.id}`}
                               variant="outlined"
-                              sx={{ p: 1.1, borderRadius: 2, bgcolor: "#FAFBFD" }}
+                              sx={{
+                                p: 1.1,
+                                borderRadius: 2,
+                                bgcolor: "#FAFBFD",
+                              }}
                             >
                               <Stack
                                 direction={{ xs: "column", sm: "row" }}
@@ -1239,7 +1324,11 @@ function ChatbotTab({
                                   <Typography
                                     variant="caption"
                                     color="text.secondary"
-                                    sx={{ display: "block", mt: 0.35, lineHeight: 1.55 }}
+                                    sx={{
+                                      display: "block",
+                                      mt: 0.35,
+                                      lineHeight: 1.55,
+                                    }}
                                   >
                                     {action.description}
                                   </Typography>
@@ -1247,7 +1336,11 @@ function ChatbotTab({
                                     <Typography
                                       variant="caption"
                                       color="text.secondary"
-                                      sx={{ display: "block", mt: 0.5, lineHeight: 1.55 }}
+                                      sx={{
+                                        display: "block",
+                                        mt: 0.5,
+                                        lineHeight: 1.55,
+                                      }}
                                     >
                                       Motivo: {action.reason}
                                     </Typography>
@@ -1257,7 +1350,10 @@ function ChatbotTab({
                                   size="small"
                                   variant="contained"
                                   onClick={() =>
-                                    onOpenAssistantAction(action.id, action.label)
+                                    onOpenAssistantAction(
+                                      action.id,
+                                      action.label,
+                                    )
                                   }
                                   sx={{
                                     bgcolor: "#1A3C6E",
@@ -1276,15 +1372,25 @@ function ChatbotTab({
                   </Box>
                   {msg.role === "user" ? (
                     <PersonRoundedIcon
-                      sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
+                      sx={{
+                        fontSize: 28,
+                        color: "#1A3C6E",
+                        mt: 0.5,
+                        flexShrink: 0,
+                      }}
                     />
                   ) : null}
                 </Stack>
               ))}
               {running || statusText ? (
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <SmartToyRoundedIcon sx={{ fontSize: 28, color: "#00695C" }} />
-                  <Paper variant="outlined" sx={{ px: 2, py: 1.2, borderRadius: 2.5 }}>
+                  <SmartToyRoundedIcon
+                    sx={{ fontSize: 28, color: "#00695C" }}
+                  />
+                  <Paper
+                    variant="outlined"
+                    sx={{ px: 2, py: 1.2, borderRadius: 2.5 }}
+                  >
                     <Typography variant="body2" color="text.secondary">
                       {statusText || "Processando..."}
                     </Typography>
@@ -1375,18 +1481,30 @@ function AssistantTab() {
   const [messages, setMessages] = useState<UnifiedMessage[]>([]);
   const [running, setRunning] = useState(false);
   const [statusText, setStatusText] = useState("");
-  const [conversationKind, setConversationKind] = useState<"assistant" | "copilot" | null>(null);
-  const [assistantSessionId, setAssistantSessionId] = useState<string | null>(null);
+  const [conversationKind, setConversationKind] = useState<
+    "assistant" | "copilot" | null
+  >(null);
+  const [assistantSessionId, setAssistantSessionId] = useState<string | null>(
+    null,
+  );
   const [copilotSessionId, setCopilotSessionId] = useState<string | null>(null);
   const [workflow, setWorkflow] = useState<AssistantWorkflow | null>(null);
-  const [copilotMode, setCopilotMode] = useState<"executive" | "analyst">("executive");
-  const [copilotIntent, setCopilotIntent] = useState<Exclude<AiCopilotIntent, "action">>("briefing");
+  const [copilotMode, setCopilotMode] = useState<"executive" | "analyst">(
+    "executive",
+  );
+  const [copilotIntent, setCopilotIntent] =
+    useState<Exclude<AiCopilotIntent, "action">>("briefing");
   const [copilotType, setCopilotType] = useState<string | null>(null);
-  const [copilotFocus, setCopilotFocus] = useState<Record<string, any> | null>(null);
+  const [copilotFocus, setCopilotFocus] = useState<Record<string, any> | null>(
+    null,
+  );
   const [copilotTitle, setCopilotTitle] = useState<string | null>(null);
-  const [copilotActionContext, setCopilotActionContext] = useState<AssistantContextSeed | null>(null);
+  const [copilotActionContext, setCopilotActionContext] =
+    useState<AssistantContextSeed | null>(null);
   const [textInput, setTextInput] = useState("");
-  const [singleOption, setSingleOption] = useState<AssistantOption | null>(null);
+  const [singleOption, setSingleOption] = useState<AssistantOption | null>(
+    null,
+  );
   const [multiOptions, setMultiOptions] = useState<AssistantOption[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const scheduleFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1413,7 +1531,9 @@ function AssistantTab() {
   const resetConversation = useCallback(async () => {
     if (assistantSessionId) {
       try {
-        await api.post("/ai/assistant/reset", { sessionId: assistantSessionId });
+        await api.post("/ai/assistant/reset", {
+          sessionId: assistantSessionId,
+        });
       } catch {
         // best effort
       }
@@ -1568,10 +1688,12 @@ function AssistantTab() {
             origin: "assistant",
           });
         }
-        const data = (await api.post("/ai/assistant/message", {
-          sessionId: assistantSessionId,
-          ...payload,
-        })).data;
+        const data = (
+          await api.post("/ai/assistant/message", {
+            sessionId: assistantSessionId,
+            ...payload,
+          })
+        ).data;
         handleAssistantResponse(data);
       } catch (error: any) {
         const message =
@@ -1605,7 +1727,9 @@ function AssistantTab() {
     ) => {
       if (assistantSessionId) {
         try {
-          await api.post("/ai/assistant/reset", { sessionId: assistantSessionId });
+          await api.post("/ai/assistant/reset", {
+            sessionId: assistantSessionId,
+          });
         } catch {
           // best effort
         }
@@ -1684,7 +1808,9 @@ function AssistantTab() {
   );
 
   useEffect(() => {
-    const pendingAction = String(searchParams.get("assistantAction") ?? "").trim();
+    const pendingAction = String(
+      searchParams.get("assistantAction") ?? "",
+    ).trim();
     if (!pendingAction) {
       handledAssistantLaunchRef.current = "";
       return;
@@ -1730,9 +1856,9 @@ function AssistantTab() {
         actionContext?: AssistantContextSeed | null;
       },
     ) => {
-      const resolvedIntent = (options?.intent === "action"
-        ? "briefing"
-        : options?.intent) ?? getIntentFromMode(options?.mode ?? copilotMode);
+      const resolvedIntent =
+        (options?.intent === "action" ? "briefing" : options?.intent) ??
+        getIntentFromMode(options?.mode ?? copilotMode);
       const resolvedMode = options?.mode ?? getModeFromIntent(resolvedIntent);
       if (resolvedMode !== copilotMode) {
         setCopilotMode(resolvedMode);
@@ -1870,20 +1996,16 @@ function AssistantTab() {
           }
         : null;
 
-    void startCopilot(
-      launch.type,
-      buildAiCopilotLaunchTitle(launch),
-      {
-        mode: launch.mode,
-        intent: launch.intent,
-        focus: normalizedFocus,
-        launchMessage: buildAiCopilotLaunchMessage(launch),
-        actionContext: buildAssistantContextSeedFromCopilotLaunch(
-          launch,
-          "strategic_dashboard",
-        ),
-      },
-    );
+    void startCopilot(launch.type, buildAiCopilotLaunchTitle(launch), {
+      mode: launch.mode,
+      intent: launch.intent,
+      focus: normalizedFocus,
+      launchMessage: buildAiCopilotLaunchMessage(launch),
+      actionContext: buildAssistantContextSeedFromCopilotLaunch(
+        launch,
+        "strategic_dashboard",
+      ),
+    });
   }, [running, searchParams, setSearchParams, startCopilot]);
 
   const transformContextToAction = useCallback(
@@ -1895,7 +2017,9 @@ function AssistantTab() {
           }
         : null;
       const contextLabel = String(copilotActionContext?.title ?? "").trim();
-      const contextDescription = String(copilotActionContext?.description ?? "").trim();
+      const contextDescription = String(
+        copilotActionContext?.description ?? "",
+      ).trim();
       const messageParts = [
         `Iniciar fluxo: ${actionLabel}`,
         contextLabel ? `Contexto: ${contextLabel}` : "",
@@ -1911,20 +2035,16 @@ function AssistantTab() {
 
   const rerunCurrentCopilotVariant = useCallback(async () => {
     if (!copilotType || conversationKind !== "copilot") return;
-    await startCopilot(
-      copilotType,
-      copilotTitle ?? "Copiloto gerencial",
-      {
-        mode: getModeFromIntent(copilotIntent),
-        intent: copilotIntent,
-        focus: copilotFocus,
-        launchMessage:
-          copilotIntent === "briefing"
-            ? `Regerar como briefing executivo${copilotActionContext?.title ? ` — ${copilotActionContext.title}` : ""}`
-            : `Regerar como análise detalhada${copilotActionContext?.title ? ` — ${copilotActionContext.title}` : ""}`,
-        actionContext: copilotActionContext,
-      },
-    );
+    await startCopilot(copilotType, copilotTitle ?? "Copiloto gerencial", {
+      mode: getModeFromIntent(copilotIntent),
+      intent: copilotIntent,
+      focus: copilotFocus,
+      launchMessage:
+        copilotIntent === "briefing"
+          ? `Regerar como briefing executivo${copilotActionContext?.title ? ` — ${copilotActionContext.title}` : ""}`
+          : `Regerar como análise detalhada${copilotActionContext?.title ? ` — ${copilotActionContext.title}` : ""}`,
+      actionContext: copilotActionContext,
+    });
   }, [
     conversationKind,
     copilotActionContext,
@@ -1976,7 +2096,8 @@ function AssistantTab() {
         }
 
         const reader = res.body?.getReader();
-        if (!reader) throw new Error("O servidor não retornou um stream válido.");
+        if (!reader)
+          throw new Error("O servidor não retornou um stream válido.");
 
         let sawTerminalEvent = false;
         await consumeJsonSseStream(reader, (event, data) => {
@@ -2045,10 +2166,7 @@ function AssistantTab() {
         setTextInput("");
         return;
       }
-      await postAssistant(
-        { confirmExecution: true },
-        workflow.confirmLabel,
-      );
+      await postAssistant({ confirmExecution: true }, workflow.confirmLabel);
       return;
     }
     if (!field) {
@@ -2071,7 +2189,13 @@ function AssistantTab() {
         {
           fieldInput: { field: field.field, value: singleOption.value },
         },
-        buildUserMessageLabel(workflow, singleOption.label, field, [], singleOption),
+        buildUserMessageLabel(
+          workflow,
+          singleOption.label,
+          field,
+          [],
+          singleOption,
+        ),
       );
       return;
     }
@@ -2111,7 +2235,15 @@ function AssistantTab() {
       buildUserMessageLabel(workflow, text || "Não informar", field),
     );
     setTextInput("");
-  }, [multiOptions, postAssistant, running, singleOption, textInput, toast, workflow]);
+  }, [
+    multiOptions,
+    postAssistant,
+    running,
+    singleOption,
+    textInput,
+    toast,
+    workflow,
+  ]);
 
   const handleSend = useCallback(async () => {
     if (running) return;
@@ -2123,7 +2255,14 @@ function AssistantTab() {
       return;
     }
     await submitCurrentStep();
-  }, [conversationKind, copilotSessionId, running, sendCopilotFollowUp, submitCurrentStep, textInput]);
+  }, [
+    conversationKind,
+    copilotSessionId,
+    running,
+    sendCopilotFollowUp,
+    submitCurrentStep,
+    textInput,
+  ]);
 
   const currentField = workflow?.currentField ?? null;
   const copilotCards = (agentsQuery.data ?? []).map((item: any) => ({
@@ -2160,12 +2299,23 @@ function AssistantTab() {
               <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
                 Copilotos gerenciais
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                Use estes copilotos para entender o contexto, gerar síntese executiva,
-                priorizar atuação e tratar governança CPCA. O follow-up permanece na mesma conversa.
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.5 }}
+              >
+                Use estes copilotos para entender o contexto, gerar síntese
+                executiva, priorizar atuação e tratar governança CPCA. O
+                follow-up permanece na mesma conversa.
               </Typography>
             </Box>
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              flexWrap="wrap"
+              useFlexGap
+            >
               <Typography variant="body2" color="text.secondary">
                 Formato de leitura:
               </Typography>
@@ -2181,7 +2331,9 @@ function AssistantTab() {
                 }}
               >
                 <ToggleButton value="analyst">Análise detalhada</ToggleButton>
-                <ToggleButton value="executive">Briefing executivo</ToggleButton>
+                <ToggleButton value="executive">
+                  Briefing executivo
+                </ToggleButton>
               </ToggleButtonGroup>
             </Stack>
             <Box
@@ -2193,9 +2345,14 @@ function AssistantTab() {
               }}
             >
               <Grid container spacing={1.25}>
-                {(Object.entries(COPILOT_MODE_DESCRIPTIONS) as Array<
-                  ["executive" | "analyst", (typeof COPILOT_MODE_DESCRIPTIONS)["executive"]]
-                >).map(([mode, item]) => {
+                {(
+                  Object.entries(COPILOT_MODE_DESCRIPTIONS) as Array<
+                    [
+                      "executive" | "analyst",
+                      (typeof COPILOT_MODE_DESCRIPTIONS)["executive"],
+                    ]
+                  >
+                ).map(([mode, item]) => {
                   const selected = copilotMode === mode;
                   return (
                     <Grid key={mode} size={{ xs: 12, md: 6 }}>
@@ -2208,7 +2365,9 @@ function AssistantTab() {
                           borderColor: selected
                             ? "rgba(26,60,110,0.32)"
                             : "rgba(26,60,110,0.1)",
-                          bgcolor: selected ? "rgba(26,60,110,0.05)" : "#FFFFFF",
+                          bgcolor: selected
+                            ? "rgba(26,60,110,0.05)"
+                            : "#FFFFFF",
                         }}
                       >
                         <Stack
@@ -2218,7 +2377,11 @@ function AssistantTab() {
                           justifyContent="space-between"
                           sx={{ mb: 0.5 }}
                         >
-                          <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+                          <Typography
+                            variant="subtitle2"
+                            fontWeight={800}
+                            color="#1A3C6E"
+                          >
                             {item.title}
                           </Typography>
                           {selected ? (
@@ -2277,7 +2440,11 @@ function AssistantTab() {
               <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
                 Ações assistidas
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.5 }}
+              >
                 Use ações rápidas ou descreva o que deseja criar. O assistente
                 conduz um passo por vez e confirma a gravação antes de escrever.
               </Typography>
@@ -2290,7 +2457,9 @@ function AssistantTab() {
                     description={item.description}
                     icon={item.icon}
                     color={item.color}
-                    onClick={() => postAssistant({ quickAction: item.id }, item.title)}
+                    onClick={() =>
+                      postAssistant({ quickAction: item.id }, item.title)
+                    }
                     disabled={running}
                   />
                 </Grid>
@@ -2300,7 +2469,9 @@ function AssistantTab() {
         </CardContent>
       </Card>
 
-      {workflow && !isMissionScheduleWorkflow && !isChatOnlyAssistantWorkflow ? (
+      {workflow &&
+      !isMissionScheduleWorkflow &&
+      !isChatOnlyAssistantWorkflow ? (
         <Card variant="outlined" sx={{ borderRadius: 3, bgcolor: "#FAFBFD" }}>
           <CardContent>
             <Stack spacing={1.25}>
@@ -2310,10 +2481,18 @@ function AssistantTab() {
                 justifyContent="space-between"
               >
                 <Box>
-                  <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
+                  <Typography
+                    variant="subtitle1"
+                    fontWeight={800}
+                    color="#1A3C6E"
+                  >
                     {workflow.title}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5 }}
+                  >
                     {workflow.description}
                   </Typography>
                 </Box>
@@ -2341,7 +2520,10 @@ function AssistantTab() {
                       >
                         {item.label}
                       </Typography>
-                      <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.55 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ mt: 0.35, lineHeight: 1.55 }}
+                      >
                         {item.value || "—"}
                       </Typography>
                     </Paper>
@@ -2353,7 +2535,11 @@ function AssistantTab() {
                   variant="outlined"
                   sx={{ p: 1.5, borderRadius: 2.5, bgcolor: "#fff" }}
                 >
-                  <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+                  <Typography
+                    variant="subtitle2"
+                    fontWeight={800}
+                    color="#1A3C6E"
+                  >
                     Arquivos analisados
                   </Typography>
                   <Stack spacing={1} sx={{ mt: 1 }}>
@@ -2364,11 +2550,10 @@ function AssistantTab() {
                         spacing={1}
                         justifyContent="space-between"
                       >
-                        <Typography variant="body2">
-                          {file.name}
-                        </Typography>
+                        <Typography variant="body2">{file.name}</Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {file.itemCount} item(ns) • {file.extractionMethod === "text" ? "texto" : "OCR"}
+                          {file.itemCount} item(ns) •{" "}
+                          {file.extractionMethod === "text" ? "texto" : "OCR"}
                           {file.pageCount ? ` • ${file.pageCount} pág.` : ""}
                         </Typography>
                       </Stack>
@@ -2388,25 +2573,31 @@ function AssistantTab() {
                     alignItems={{ sm: "center" }}
                   >
                     <Box>
-                      <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={800}
+                        color="#1A3C6E"
+                      >
                         {isEditingExistingSchedule
                           ? "Cronograma atual da missão"
                           : "Rascunho do cronograma"}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.4 }}
+                      >
                         {isEditingExistingSchedule ? (
                           <>
-                            Revise os itens já salvos da missão. Selecione qual item deseja alterar
-                            nos campos guiados abaixo; a alteração só é gravada após sua confirmação.
+                            Revise os itens já salvos da missão. Selecione qual
+                            item deseja alterar nos campos guiados abaixo; a
+                            alteração só é gravada após sua confirmação.
                           </>
                         ) : (
                           <>
-                            Revise os itens abaixo. Para ajustar, use a numeração exibida e escreva por exemplo
-                            {" "}
-                            <strong>alterar item 2</strong>
-                            {" "}
-                            ou
-                            {" "}
+                            Revise os itens abaixo. Para ajustar, use a
+                            numeração exibida e escreva por exemplo{" "}
+                            <strong>alterar item 2</strong> ou{" "}
                             <strong>remover item 3</strong>.
                           </>
                         )}
@@ -2420,10 +2611,10 @@ function AssistantTab() {
                         isEditingExistingSchedule
                           ? `${workflow.scheduleItems.length} item(ns) salvos`
                           : workflow.schedulePreviewStartNumber &&
-                            workflow.schedulePreviewEndNumber &&
-                            workflow.scheduleTotalItems
-                          ? `Itens ${workflow.schedulePreviewStartNumber}-${workflow.schedulePreviewEndNumber} de ${workflow.scheduleTotalItems}`
-                          : `${workflow.scheduleItems.length} item(ns)`
+                              workflow.schedulePreviewEndNumber &&
+                              workflow.scheduleTotalItems
+                            ? `Itens ${workflow.schedulePreviewStartNumber}-${workflow.schedulePreviewEndNumber} de ${workflow.scheduleTotalItems}`
+                            : `${workflow.scheduleItems.length} item(ns)`
                       }
                     />
                   </Stack>
@@ -2443,21 +2634,36 @@ function AssistantTab() {
                             <Typography variant="body2" fontWeight={800}>
                               {(isEditingExistingSchedule
                                 ? 1
-                                : workflow.schedulePreviewStartNumber ?? 1) + index}. {item.title}
+                                : (workflow.schedulePreviewStartNumber ?? 1)) +
+                                index}
+                              . {item.title}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {formatScheduleDateTime(item.startAt)} • {item.durationMinutes} min
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {formatScheduleDateTime(item.startAt)} •{" "}
+                              {item.durationMinutes} min
                             </Typography>
                           </Box>
                           {isEditingExistingSchedule ? (
-                            workflow.draft?.scheduleExistingItemId === item.id ? (
-                              <Chip size="small" variant="outlined" color="primary" label="Selecionado" />
+                            workflow.draft?.scheduleExistingItemId ===
+                            item.id ? (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                                label="Selecionado"
+                              />
                             ) : null
                           ) : (
                             <Chip
                               size="small"
                               variant="outlined"
-                              label={item.sourceFileNames?.join(", ") || "Entrada manual"}
+                              label={
+                                item.sourceFileNames?.join(", ") ||
+                                "Entrada manual"
+                              }
                             />
                           )}
                         </Stack>
@@ -2477,9 +2683,11 @@ function AssistantTab() {
                     {workflow.scheduleTotalItems &&
                     workflow.schedulePreviewEndNumber &&
                     !isEditingExistingSchedule &&
-                    workflow.scheduleTotalItems > workflow.schedulePreviewEndNumber ? (
+                    workflow.scheduleTotalItems >
+                      workflow.schedulePreviewEndNumber ? (
                       <Typography variant="caption" color="text.secondary">
-                        Confirme este lote para cadastrar esses itens e avançar para o próximo bloco.
+                        Confirme este lote para cadastrar esses itens e avançar
+                        para o próximo bloco.
                       </Typography>
                     ) : null}
                   </Stack>
@@ -2547,9 +2755,9 @@ function AssistantTab() {
                   ? "Sessão gerencial com memória curta para análise, briefing e conversão em ação."
                   : isMissionScheduleWorkflow
                     ? "Fluxo de cronograma conduzido diretamente no chat, com confirmação no rodapé da conversa."
-                  : conversationKind === "assistant"
-                    ? "Sessão operacional guiada com rascunho, contexto anexado e confirmação."
-                    : "Escolha uma ação rápida ou escreva o que deseja criar."}
+                    : conversationKind === "assistant"
+                      ? "Sessão operacional guiada com rascunho, contexto anexado e confirmação."
+                      : "Escolha uma ação rápida ou escreva o que deseja criar."}
               </Typography>
             </Box>
             <Button
@@ -2594,7 +2802,8 @@ function AssistantTab() {
                 </Typography>
               </Alert>
             ) : null}
-            {conversationKind === "copilot" && (copilotActionContext || copilotSessionId) ? (
+            {conversationKind === "copilot" &&
+            (copilotActionContext || copilotSessionId) ? (
               <Alert
                 severity="info"
                 sx={{ mb: 1.5, borderRadius: 2.5, alignItems: "flex-start" }}
@@ -2610,10 +2819,23 @@ function AssistantTab() {
                     : "Use esta mesma leitura para baixar o briefing em PDF ou abrir um fluxo assistido com o contexto já anexado."}
                 </Typography>
                 {buildAssistantContextBadges(copilotActionContext).length ? (
-                  <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
-                    {buildAssistantContextBadges(copilotActionContext).map((badge) => (
-                      <Chip key={badge} size="small" label={badge} variant="outlined" />
-                    ))}
+                  <Stack
+                    direction="row"
+                    spacing={0.8}
+                    useFlexGap
+                    flexWrap="wrap"
+                    sx={{ mt: 1 }}
+                  >
+                    {buildAssistantContextBadges(copilotActionContext).map(
+                      (badge) => (
+                        <Chip
+                          key={badge}
+                          size="small"
+                          label={badge}
+                          variant="outlined"
+                        />
+                      ),
+                    )}
                   </Stack>
                 ) : null}
                 {copilotType === "briefing_comgep" ? (
@@ -2629,7 +2851,11 @@ function AssistantTab() {
                     <Typography
                       variant="caption"
                       color="text.secondary"
-                      sx={{ display: "block", textTransform: "uppercase", letterSpacing: 0.5 }}
+                      sx={{
+                        display: "block",
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                      }}
                     >
                       Leitura deste recorte
                     </Typography>
@@ -2651,10 +2877,18 @@ function AssistantTab() {
                             setCopilotMode(getModeFromIntent(value));
                           }}
                         >
-                          <ToggleButton value="explain">Análise detalhada</ToggleButton>
-                          <ToggleButton value="briefing">Briefing executivo</ToggleButton>
+                          <ToggleButton value="explain">
+                            Análise detalhada
+                          </ToggleButton>
+                          <ToggleButton value="briefing">
+                            Briefing executivo
+                          </ToggleButton>
                         </ToggleButtonGroup>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.8, lineHeight: 1.55 }}>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 0.8, lineHeight: 1.55 }}
+                        >
                           {COPILOT_INTENT_HELP[copilotIntent].summary}
                         </Typography>
                       </Box>
@@ -2673,11 +2907,22 @@ function AssistantTab() {
                 <Typography
                   variant="caption"
                   color="text.secondary"
-                  sx={{ display: "block", mt: 1.1, textTransform: "uppercase", letterSpacing: 0.5 }}
+                  sx={{
+                    display: "block",
+                    mt: 1.1,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                  }}
                 >
                   Próximo passo
                 </Typography>
-                <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 0.8 }}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  useFlexGap
+                  flexWrap="wrap"
+                  sx={{ mt: 0.8 }}
+                >
                   {copilotSessionId ? (
                     <Button
                       size="small"
@@ -2697,7 +2942,12 @@ function AssistantTab() {
                     size="small"
                     variant="outlined"
                     startIcon={<RocketLaunchRoundedIcon />}
-                    onClick={() => void transformContextToAction("create_mission", "Criar missão")}
+                    onClick={() =>
+                      void transformContextToAction(
+                        "create_mission",
+                        "Criar missão",
+                      )
+                    }
                     disabled={running}
                   >
                     Criar missão
@@ -2706,7 +2956,12 @@ function AssistantTab() {
                     size="small"
                     variant="outlined"
                     startIcon={<EventAvailableRoundedIcon />}
-                    onClick={() => void transformContextToAction("create_activity", "Criar atividade")}
+                    onClick={() =>
+                      void transformContextToAction(
+                        "create_activity",
+                        "Criar atividade",
+                      )
+                    }
                     disabled={running}
                   >
                     Criar atividade
@@ -2715,7 +2970,12 @@ function AssistantTab() {
                     size="small"
                     variant="outlined"
                     startIcon={<AddTaskRoundedIcon />}
-                    onClick={() => void transformContextToAction("create_task", "Criar tarefa")}
+                    onClick={() =>
+                      void transformContextToAction(
+                        "create_task",
+                        "Criar tarefa",
+                      )
+                    }
                     disabled={running}
                   >
                     Criar tarefa
@@ -2724,16 +2984,25 @@ function AssistantTab() {
                     size="small"
                     variant="contained"
                     startIcon={<PictureAsPdfRoundedIcon />}
-                    onClick={() => void transformContextToAction("create_report", "Criar relatório")}
+                    onClick={() =>
+                      void transformContextToAction(
+                        "create_report",
+                        "Criar relatório",
+                      )
+                    }
                     disabled={running}
-                    sx={{ bgcolor: "#1A3C6E", "&:hover": { bgcolor: "#122B4E" } }}
+                    sx={{
+                      bgcolor: "#1A3C6E",
+                      "&:hover": { bgcolor: "#122B4E" },
+                    }}
                   >
                     Criar relatório
                   </Button>
                 </Stack>
               </Alert>
             ) : null}
-            {conversationKind === "assistant" && workflow?.draft?.assistantContext ? (
+            {conversationKind === "assistant" &&
+            workflow?.draft?.assistantContext ? (
               <Alert
                 severity="info"
                 sx={{ mb: 1.5, borderRadius: 2.5, alignItems: "flex-start" }}
@@ -2742,17 +3011,38 @@ function AssistantTab() {
                   Contexto anexado ao fluxo
                 </Typography>
                 <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.6 }}>
-                  {String(workflow.draft.assistantContext.title ?? "").trim() || "Contexto em referência."}
+                  {String(workflow.draft.assistantContext.title ?? "").trim() ||
+                    "Contexto em referência."}
                 </Typography>
-                {buildAssistantContextBadges(workflow.draft.assistantContext as AssistantContextSeed).length ? (
-                  <Stack direction="row" spacing={0.8} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
-                    {buildAssistantContextBadges(workflow.draft.assistantContext as AssistantContextSeed).map((badge) => (
-                      <Chip key={badge} size="small" label={badge} variant="outlined" />
+                {buildAssistantContextBadges(
+                  workflow.draft.assistantContext as AssistantContextSeed,
+                ).length ? (
+                  <Stack
+                    direction="row"
+                    spacing={0.8}
+                    useFlexGap
+                    flexWrap="wrap"
+                    sx={{ mt: 1 }}
+                  >
+                    {buildAssistantContextBadges(
+                      workflow.draft.assistantContext as AssistantContextSeed,
+                    ).map((badge) => (
+                      <Chip
+                        key={badge}
+                        size="small"
+                        label={badge}
+                        variant="outlined"
+                      />
                     ))}
                   </Stack>
                 ) : null}
-                {String(workflow.draft.assistantContext.description ?? "").trim() ? (
-                  <Typography variant="body2" sx={{ mt: 0.35, lineHeight: 1.6 }}>
+                {String(
+                  workflow.draft.assistantContext.description ?? "",
+                ).trim() ? (
+                  <Typography
+                    variant="body2"
+                    sx={{ mt: 0.35, lineHeight: 1.6 }}
+                  >
                     {String(workflow.draft.assistantContext.description)}
                   </Typography>
                 ) : null}
@@ -2760,7 +3050,9 @@ function AssistantTab() {
             ) : null}
             {!messages.length ? (
               <Box sx={{ textAlign: "center", py: 7 }}>
-                <SmartToyRoundedIcon sx={{ fontSize: 48, color: "#1A3C6E", mb: 1 }} />
+                <SmartToyRoundedIcon
+                  sx={{ fontSize: 48, color: "#1A3C6E", mb: 1 }}
+                />
                 <Typography variant="h6" color="#1A3C6E" fontWeight={700}>
                   Assistente virtual CIPAVD/SMIF
                 </Typography>
@@ -2782,11 +3074,18 @@ function AssistantTab() {
                   key={msg.id}
                   direction="row"
                   spacing={1}
-                  justifyContent={msg.role === "user" ? "flex-end" : "flex-start"}
+                  justifyContent={
+                    msg.role === "user" ? "flex-end" : "flex-start"
+                  }
                 >
                   {msg.role === "assistant" ? (
                     <SmartToyRoundedIcon
-                      sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
+                      sx={{
+                        fontSize: 28,
+                        color: "#1A3C6E",
+                        mt: 0.5,
+                        flexShrink: 0,
+                      }}
                     />
                   ) : null}
                   <Box
@@ -2797,13 +3096,22 @@ function AssistantTab() {
                       borderRadius: 2.5,
                       bgcolor: msg.role === "user" ? "#163A6B" : "#FFFFFF",
                       color:
-                        msg.role === "user" ? "rgba(248, 251, 255, 0.98)" : "text.primary",
+                        msg.role === "user"
+                          ? "rgba(248, 251, 255, 0.98)"
+                          : "text.primary",
                       boxShadow: 1,
                       border:
-                        msg.role === "assistant" ? "1px solid #E2E8F0" : undefined,
+                        msg.role === "assistant"
+                          ? "1px solid #E2E8F0"
+                          : undefined,
                     }}
                   >
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.8 }}>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ mb: 0.8 }}
+                    >
                       <Chip
                         size="small"
                         label={msg.role === "assistant" ? "Assistente" : "Você"}
@@ -2821,7 +3129,11 @@ function AssistantTab() {
                       <Chip
                         size="small"
                         variant="outlined"
-                        label={msg.origin === "copilot" ? "Copiloto gerencial" : "Ação assistida"}
+                        label={
+                          msg.origin === "copilot"
+                            ? "Copiloto gerencial"
+                            : "Ação assistida"
+                        }
                         sx={
                           msg.role === "user"
                             ? {
@@ -2892,10 +3204,16 @@ function AssistantTab() {
                             >
                               <Box>
                                 <Typography variant="body2" fontWeight={700}>
-                                  {evidence.omCode || evidence.omName || evidence.title}
+                                  {evidence.omCode ||
+                                    evidence.omName ||
+                                    evidence.title}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  UF {evidence.uf || "—"} • Score {evidence.score ?? 0}
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  UF {evidence.uf || "—"} • Score{" "}
+                                  {evidence.score ?? 0}
                                 </Typography>
                               </Box>
                               {evidence.link ? (
@@ -2911,7 +3229,10 @@ function AssistantTab() {
                                 </Button>
                               ) : null}
                             </Stack>
-                            <Typography variant="body2" sx={{ mt: 0.8, lineHeight: 1.6 }}>
+                            <Typography
+                              variant="body2"
+                              sx={{ mt: 0.8, lineHeight: 1.6 }}
+                            >
                               {evidence.reason}
                             </Typography>
                           </Paper>
@@ -2921,15 +3242,25 @@ function AssistantTab() {
                   </Box>
                   {msg.role === "user" ? (
                     <PersonRoundedIcon
-                      sx={{ fontSize: 28, color: "#1A3C6E", mt: 0.5, flexShrink: 0 }}
+                      sx={{
+                        fontSize: 28,
+                        color: "#1A3C6E",
+                        mt: 0.5,
+                        flexShrink: 0,
+                      }}
                     />
                   ) : null}
                 </Stack>
               ))}
               {running || statusText ? (
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <SmartToyRoundedIcon sx={{ fontSize: 28, color: "#1A3C6E" }} />
-                  <Paper variant="outlined" sx={{ px: 2, py: 1.2, borderRadius: 2.5 }}>
+                  <SmartToyRoundedIcon
+                    sx={{ fontSize: 28, color: "#1A3C6E" }}
+                  />
+                  <Paper
+                    variant="outlined"
+                    sx={{ px: 2, py: 1.2, borderRadius: 2.5 }}
+                  >
                     <Typography variant="body2" color="text.secondary">
                       {statusText || "Processando..."}
                     </Typography>
@@ -2986,7 +3317,9 @@ function AssistantTab() {
                   onClick={() => {
                     setTextInput("Sim");
                     postAssistant(
-                      { fieldInput: { field: currentField.field, value: "Sim" } },
+                      {
+                        fieldInput: { field: currentField.field, value: "Sim" },
+                      },
                       `${currentField.label}: Sim`,
                     );
                   }}
@@ -2999,7 +3332,9 @@ function AssistantTab() {
                   onClick={() => {
                     setTextInput("Não");
                     postAssistant(
-                      { fieldInput: { field: currentField.field, value: "Não" } },
+                      {
+                        fieldInput: { field: currentField.field, value: "Não" },
+                      },
                       `${currentField.label}: Não`,
                     );
                   }}
@@ -3022,10 +3357,18 @@ function AssistantTab() {
               >
                 <Stack spacing={1.2}>
                   <Box>
-                    <Typography variant="subtitle2" fontWeight={800} color="#1A3C6E">
+                    <Typography
+                      variant="subtitle2"
+                      fontWeight={800}
+                      color="#1A3C6E"
+                    >
                       {currentField.label}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 0.5 }}
+                    >
                       {currentField.helperText ??
                         "Envie um ou mais PDFs do cronograma. O assistente vai ler, montar o rascunho e pedir sua confirmação final."}
                     </Typography>
@@ -3043,7 +3386,11 @@ function AssistantTab() {
                     >
                       Selecionar PDFs
                     </Button>
-                    <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ alignSelf: "center" }}
+                    >
                       Você pode enviar vários arquivos de uma vez.
                     </Typography>
                   </Stack>
@@ -3081,13 +3428,23 @@ function AssistantTab() {
                 value={textInput}
                 onChange={(e) => setTextInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey && currentField?.inputType !== "textarea") {
+                  if (
+                    e.key === "Enter" &&
+                    !e.shiftKey &&
+                    currentField?.inputType !== "textarea"
+                  ) {
                     e.preventDefault();
                     handleSend();
                   }
                 }}
-                multiline={currentField?.inputType === "textarea" || !currentField}
-                maxRows={currentField?.inputType === "textarea" || !currentField ? 4 : 1}
+                multiline={
+                  currentField?.inputType === "textarea" || !currentField
+                }
+                maxRows={
+                  currentField?.inputType === "textarea" || !currentField
+                    ? 4
+                    : 1
+                }
                 type={
                   currentField?.inputType === "date"
                     ? "date"
@@ -3134,9 +3491,9 @@ function AssistantTab() {
                     : workflow.confirmLabel
                   : currentField?.inputType === "file_upload"
                     ? "Aguardando arquivo"
-                  : conversationKind === "copilot"
-                    ? "Enviar follow-up"
-                    : "Enviar"}
+                    : conversationKind === "copilot"
+                      ? "Enviar follow-up"
+                      : "Enviar"}
               </Button>
               {currentField?.optional ? (
                 <Button
@@ -3161,26 +3518,42 @@ function AssistantTab() {
 }
 
 export function AiPage() {
+  const { data: me } = useMe();
   const [searchParams, setSearchParams] = useSearchParams();
+  const canSeeCpcaAgent =
+    can(me, "ai", "view") && can(me, "cpca_cases", "view", "NATIONAL");
+  const normalizeTab = useCallback(
+    (value: string) => normalizeAiPageTab(value, canSeeCpcaAgent),
+    [canSeeCpcaAgent],
+  );
   const tabParam = String(searchParams.get("tab") ?? "analyses");
-  const tabIndexFromParam = useCallback((value: string) => {
-    if (value === "chatbot") return 1;
-    if (value === "assistant") return 2;
-    return 0;
-  }, []);
-  const [tab, setTab] = useState(tabIndexFromParam(tabParam));
+  const [tab, setTab] = useState<AiPageTab>(normalizeTab(tabParam));
 
   useEffect(() => {
-    setTab(tabIndexFromParam(tabParam));
-  }, [tabIndexFromParam, tabParam]);
+    setTab(normalizeTab(tabParam));
+  }, [normalizeTab, tabParam]);
 
-  const handleTabChange = (_: unknown, nextValue: number) => {
+  useEffect(() => {
+    const normalized = normalizeTab(tabParam);
+    if (normalized === tabParam) return;
+    const next = new URLSearchParams(searchParams);
+    if (normalized === "analyses") {
+      next.delete("tab");
+    } else {
+      next.set("tab", normalized);
+    }
+    setSearchParams(next, { replace: true });
+  }, [normalizeTab, searchParams, setSearchParams, tabParam]);
+
+  const handleTabChange = (_: unknown, nextValue: AiPageTab) => {
     setTab(nextValue);
     const next = new URLSearchParams(searchParams);
-    if (nextValue === 1) {
+    if (nextValue === "chatbot") {
       next.set("tab", "chatbot");
-    } else if (nextValue === 2) {
+    } else if (nextValue === "assistant") {
       next.set("tab", "assistant");
+    } else if (nextValue === "cpca") {
+      next.set("tab", "cpca");
     } else {
       next.delete("tab");
     }
@@ -3198,7 +3571,7 @@ export function AiPage() {
         | "create_report",
       _actionLabel: string,
     ) => {
-      setTab(2);
+      setTab("assistant");
       const next = new URLSearchParams(searchParams);
       next.set("tab", "assistant");
       next.set("assistantAction", actionId);
@@ -3216,7 +3589,8 @@ export function AiPage() {
             Inteligência Artificial
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Análises automatizadas, chatbot livre e assistente virtual operacional
+            Análises automatizadas, chatbot livre, IA CPCA e assistente virtual
+            operacional
           </Typography>
         </Box>
       </Stack>
@@ -3227,28 +3601,43 @@ export function AiPage() {
         sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
       >
         <Tab
+          value="analyses"
           label="Análises"
           icon={<AutoAwesomeRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}
         />
         <Tab
+          value="chatbot"
           label="Chatbot"
           icon={<SmartToyRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}
         />
         <Tab
+          value="assistant"
           label="Assistente virtual"
           icon={<SmartToyRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}
         />
+        {canSeeCpcaAgent ? (
+          <Tab
+            value="cpca"
+            label="IA CPCA"
+            icon={<ShieldRoundedIcon />}
+            iconPosition="start"
+            sx={{ textTransform: "none" }}
+          />
+        ) : null}
       </Tabs>
 
-      {tab === 0 && <AnalysesTab />}
-      {tab === 1 && <ChatbotTab onOpenAssistantAction={openAssistantAction} />}
-      {tab === 2 && <AssistantTab />}
+      {tab === "analyses" && <AnalysesTab />}
+      {tab === "chatbot" && (
+        <ChatbotTab onOpenAssistantAction={openAssistantAction} />
+      )}
+      {tab === "assistant" && <AssistantTab />}
+      {tab === "cpca" && canSeeCpcaAgent && <CpcaAiPage />}
     </Box>
   );
 }
