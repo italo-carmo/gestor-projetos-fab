@@ -10,6 +10,8 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  Tab,
+  Tabs,
   MenuItem,
   Stack,
   TextField,
@@ -31,6 +33,7 @@ import {
   useCreateCpcaPresidentSelfRegistration,
   useLogin,
   useLookupCpcaSelfRegistrationCandidate,
+  useLookupCpcaSelfRegistrationStatus,
   useVerifyTwoFactor,
 } from "../api/hooks";
 import {
@@ -39,6 +42,14 @@ import {
   type CpcaPresidentBulletinValidationResult,
   validateCpcaPresidentBulletinFile,
 } from "../features/cpcaPresidentBulletinFile";
+import {
+  buildCpcaSelfRegistrationResubmissionSeed,
+  formatCpcaSelfRegistrationAttemptLabel,
+  getCpcaSelfRegistrationStatusMeta,
+  sortCpcaSelfRegistrationHistory,
+  type CpcaSelfRegistrationAttempt,
+  type CpcaSelfRegistrationStatusLookupResult,
+} from "../features/cpcaSelfRegistrationStatus";
 
 type TwoFactorState = {
   twoFactorToken: string;
@@ -90,6 +101,14 @@ function formatOmLabel(
   return codeValue || nameValue;
 }
 
+function formatDateTime(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "-";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleString("pt-BR");
+}
+
 export function LoginPage() {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -99,7 +118,11 @@ export function LoginPage() {
   const [totpCode, setTotpCode] = useState("");
   const [cpcaSelfRegistrationOpen, setCpcaSelfRegistrationOpen] =
     useState(false);
+  const [cpcaSelfRegistrationTab, setCpcaSelfRegistrationTab] = useState<
+    "register" | "status"
+  >("register");
   const [cpcaIdentifier, setCpcaIdentifier] = useState("");
+  const [cpcaResubmissionOfId, setCpcaResubmissionOfId] = useState("");
   const [cpcaIsSubstitution, setCpcaIsSubstitution] = useState(false);
   const [cpcaBulletinNumber, setCpcaBulletinNumber] = useState("");
   const [cpcaLookupPreview, setCpcaLookupPreview] =
@@ -110,10 +133,15 @@ export function LoginPage() {
   const [cpcaBulletinFileError, setCpcaBulletinFileError] = useState("");
   const [cpcaBulletinFileIsValidating, setCpcaBulletinFileIsValidating] =
     useState(false);
+  const [cpcaStatusIdentifier, setCpcaStatusIdentifier] = useState("");
+  const [cpcaStatusResult, setCpcaStatusResult] =
+    useState<CpcaSelfRegistrationStatusLookupResult | null>(null);
   const loginMutation = useLogin();
   const verifyMutation = useVerifyTwoFactor();
   const cpcaSelfRegistrationLookupMutation =
     useLookupCpcaSelfRegistrationCandidate();
+  const cpcaSelfRegistrationStatusMutation =
+    useLookupCpcaSelfRegistrationStatus();
   const cpcaSelfRegistrationMutation = useCreateCpcaPresidentSelfRegistration();
   const navigate = useNavigate();
   const toast = useToast();
@@ -232,6 +260,7 @@ export function LoginPage() {
 
   const resetCpcaSelfRegistrationForm = () => {
     setCpcaIdentifier("");
+    setCpcaResubmissionOfId("");
     setCpcaIsSubstitution(false);
     setCpcaBulletinNumber("");
     setCpcaLookupPreview(null);
@@ -239,6 +268,24 @@ export function LoginPage() {
     setCpcaBulletinFileValidation(null);
     setCpcaBulletinFileError("");
     setCpcaBulletinFileIsValidating(false);
+  };
+
+  const resetCpcaStatusLookup = () => {
+    setCpcaStatusIdentifier("");
+    setCpcaStatusResult(null);
+  };
+
+  const closeCpcaSelfRegistrationDialog = () => {
+    if (cpcaSelfRegistrationMutation.isPending) return;
+    setCpcaSelfRegistrationOpen(false);
+    setCpcaSelfRegistrationTab("register");
+    resetCpcaSelfRegistrationForm();
+    resetCpcaStatusLookup();
+  };
+
+  const openCpcaSelfRegistrationDialog = (tab: "register" | "status") => {
+    setCpcaSelfRegistrationTab(tab);
+    setCpcaSelfRegistrationOpen(true);
   };
 
   const handleCpcaBulletinFileChange = async (
@@ -322,6 +369,71 @@ export function LoginPage() {
     }
   };
 
+  const handleLookupCpcaSelfRegistrationStatus = async () => {
+    const identifier = cpcaStatusIdentifier.trim();
+    if (!identifier) {
+      toast.push({
+        message: "Informe e-mail ou CPF para consultar o status.",
+        severity: "warning",
+      });
+      return;
+    }
+    try {
+      const result = (await cpcaSelfRegistrationStatusMutation.mutateAsync({
+        identifier,
+      })) as CpcaSelfRegistrationStatusLookupResult;
+      setCpcaStatusResult(result);
+      toast.push({
+        message: result?.latestRequest
+          ? "Status da solicitação localizado."
+          : "Nenhuma solicitação de presidência foi encontrada para esse militar.",
+        severity: result?.latestRequest ? "success" : "info",
+      });
+    } catch (error) {
+      setCpcaStatusResult(null);
+      const payload = parseApiError(error);
+      toast.push({
+        message:
+          payload.message ?? "Erro ao consultar o status da solicitação.",
+        severity: "error",
+      });
+    }
+  };
+
+  const prepareCpcaSelfRegistrationResubmission = () => {
+    const seed = buildCpcaSelfRegistrationResubmissionSeed(
+      cpcaStatusResult,
+      cpcaStatusIdentifier,
+    );
+    setCpcaIdentifier(seed.identifier);
+    setCpcaResubmissionOfId(seed.resubmissionOfId);
+    setCpcaIsSubstitution(seed.isSubstitution);
+    setCpcaBulletinNumber(seed.bulletinNumber);
+    setCpcaBulletinFile(null);
+    setCpcaBulletinFileValidation(null);
+    setCpcaBulletinFileError("");
+    setCpcaBulletinFileIsValidating(false);
+    setCpcaLookupPreview(
+      cpcaStatusResult?.profile?.uid
+        ? {
+            identifier: seed.identifier,
+            profile: {
+              uid: cpcaStatusResult.profile.uid,
+              name: cpcaStatusResult.profile.name,
+              email: cpcaStatusResult.profile.email,
+              fabom: cpcaStatusResult.profile.fabom,
+              postoGraduacao: cpcaStatusResult.profile.postoGraduacao,
+              warName:
+                cpcaStatusResult.profile.warName ??
+                cpcaStatusResult.profile.name,
+            },
+            locality: cpcaStatusResult.locality ?? null,
+          }
+        : null,
+    );
+    setCpcaSelfRegistrationTab("register");
+  };
+
   const handleSubmitCpcaSelfRegistration = async () => {
     const identifier = cpcaIdentifier.trim();
     const localityId = String(cpcaLookupPreview?.locality?.id ?? "").trim();
@@ -365,16 +477,18 @@ export function LoginPage() {
       await cpcaSelfRegistrationMutation.mutateAsync({
         identifier,
         localityId,
+        resubmissionOfId: cpcaResubmissionOfId || undefined,
         isSubstitution: cpcaIsSubstitution,
         bulletinNumber,
         bulletinFile: cpcaBulletinFile,
       });
       toast.push({
-        message: "Solicitação enviada para homologação da COMGEP.",
+        message: cpcaResubmissionOfId
+          ? "Nova tentativa enviada para homologação da gestão nacional."
+          : "Solicitação enviada para homologação da gestão nacional.",
         severity: "success",
       });
-      setCpcaSelfRegistrationOpen(false);
-      resetCpcaSelfRegistrationForm();
+      closeCpcaSelfRegistrationDialog();
     } catch (error) {
       const payload = parseApiError(error);
       toast.push({
@@ -384,6 +498,15 @@ export function LoginPage() {
       });
     }
   };
+
+  const cpcaStatusHistory = sortCpcaSelfRegistrationHistory(
+    (cpcaStatusResult?.history ?? []) as CpcaSelfRegistrationAttempt[],
+  );
+  const cpcaLatestStatusMeta = getCpcaSelfRegistrationStatusMeta(
+    cpcaStatusResult?.latestRequest?.status,
+    cpcaStatusResult?.latestRequest?.accessGranted ??
+      cpcaStatusResult?.accessGranted,
+  );
 
   if (twoFactorState) {
     return (
@@ -672,10 +795,18 @@ export function LoginPage() {
               </Button>
               <Button
                 variant="text"
-                onClick={() => setCpcaSelfRegistrationOpen(true)}
+                onClick={() => openCpcaSelfRegistrationDialog("register")}
                 sx={{ mt: 0.4 }}
               >
                 Cadastro de presidente CPCA
+              </Button>
+              <Button
+                variant="text"
+                color="inherit"
+                onClick={() => openCpcaSelfRegistrationDialog("status")}
+                sx={{ mt: -0.6 }}
+              >
+                Acompanhar solicitação CPCA
               </Button>
             </Box>
           </CardContent>
@@ -684,259 +815,563 @@ export function LoginPage() {
 
       <Dialog
         open={cpcaSelfRegistrationOpen}
-        onClose={() => {
-          if (cpcaSelfRegistrationMutation.isPending) return;
-          setCpcaSelfRegistrationOpen(false);
-        }}
+        onClose={closeCpcaSelfRegistrationDialog}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Solicitar cadastro como presidente CPCA</DialogTitle>
+        <DialogTitle>Presidência CPCA</DialogTitle>
         <DialogContent dividers>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.4 }}>
-            Este fluxo é para o militar que deseja se cadastrar como presidente
-            da comissão CPCA da sua OM. A solicitação ficará pendente até
-            homologação pela gestão nacional.
-          </Typography>
-          <Stack spacing={1.2}>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-              <TextField
-                size="small"
-                label="E-mail ou CPF"
-                value={cpcaIdentifier}
-                onChange={(event) => {
-                  setCpcaIdentifier(event.target.value);
-                  setCpcaLookupPreview(null);
-                }}
-                fullWidth
-              />
-              <Button
-                variant="outlined"
-                onClick={() => {
-                  void handleLookupCpcaSelfRegistrationCandidate();
-                }}
-                disabled={cpcaSelfRegistrationLookupMutation.isPending}
-                sx={{ minHeight: 40 }}
-              >
-                {cpcaSelfRegistrationLookupMutation.isPending
-                  ? "Buscando..."
-                  : "Buscar"}
-              </Button>
-            </Stack>
-            {cpcaLookupPreview ? (
-              <>
-                <Alert severity="info">
-                  Militar encontrado:{" "}
-                  <strong>
-                    {cpcaLookupPreview.profile.name ||
-                      cpcaLookupPreview.profile.uid}
-                  </strong>
-                  {" · "}UID/CPF: {cpcaLookupPreview.profile.uid}
-                  {" · "}Email:{" "}
-                  {cpcaLookupPreview.profile.email || "Não informado"}
-                </Alert>
-                <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-                  <TextField
-                    size="small"
-                    label="Posto/Graduação"
-                    value={
-                      cpcaLookupPreview.profile.postoGraduacao ||
-                      "Não identificado"
-                    }
-                    InputProps={{ readOnly: true }}
-                    fullWidth
-                  />
-                  <TextField
-                    size="small"
-                    label="Nome de guerra"
-                    value={
-                      cpcaLookupPreview.profile.warName ||
-                      cpcaLookupPreview.profile.name ||
-                      "Não identificado"
-                    }
-                    InputProps={{ readOnly: true }}
-                    fullWidth
-                  />
-                </Stack>
-              </>
-            ) : null}
-            <TextField
-              size="small"
-              label="OM"
-              value={
-                cpcaLookupPreview?.locality
-                  ? formatOmLabel(
-                      cpcaLookupPreview.locality.code,
-                      cpcaLookupPreview.locality.name,
-                    )
-                  : ""
-              }
-              InputProps={{ readOnly: true }}
-              fullWidth
-              helperText="Preenchida automaticamente via LDAP. Não é possível alterar."
-            />
-            <TextField
-              select
-              size="small"
-              label="É substituição do presidente anterior?"
-              value={cpcaIsSubstitution ? "SIM" : "NAO"}
-              onChange={(event) =>
-                setCpcaIsSubstitution(event.target.value === "SIM")
-              }
-            >
-              <MenuItem value="SIM">Sim</MenuItem>
-              <MenuItem value="NAO">Não</MenuItem>
-            </TextField>
-            <TextField
-              size="small"
-              label="Número do boletim de designação"
-              value={cpcaBulletinNumber}
-              onChange={(event) => setCpcaBulletinNumber(event.target.value)}
-              fullWidth
-            />
-            <Box
-              sx={{
-                border: "1px dashed",
-                borderColor: cpcaBulletinFileError
-                  ? "error.main"
-                  : cpcaBulletinFile
-                    ? "success.main"
-                    : "divider",
-                borderRadius: 2,
-                px: 1.5,
-                py: 1.4,
-                bgcolor: cpcaBulletinFile
-                  ? "rgba(46, 125, 50, 0.06)"
-                  : "background.paper",
-              }}
-            >
-              <Stack spacing={1.1}>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  spacing={1}
-                  justifyContent="space-between"
-                  alignItems={{ xs: "flex-start", sm: "center" }}
-                >
-                  <Box>
-                    <Typography variant="subtitle2" fontWeight={700}>
-                      Publicação do boletim
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Envie a imagem ou PDF do boletim que publicou a comissão
-                      com o seu nome. Tipos aceitos: PDF, PNG e JPG. Limite de
-                      10 MB.
-                    </Typography>
-                  </Box>
-                  <Button
-                    component="label"
-                    variant="outlined"
-                    size="small"
-                    startIcon={<UploadFileRoundedIcon />}
-                    disabled={cpcaBulletinFileIsValidating}
-                  >
-                    {cpcaBulletinFile ? "Trocar arquivo" : "Selecionar arquivo"}
-                    <input
-                      hidden
-                      type="file"
-                      accept={CPCA_PRESIDENT_BULLETIN_ACCEPT}
-                      onChange={(event) => {
-                        void handleCpcaBulletinFileChange(event);
-                      }}
-                    />
-                  </Button>
-                </Stack>
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                Use este espaço para solicitar a homologação como presidente da
+                comissão CPCA da sua OM ou acompanhar o andamento das tentativas
+                já enviadas.
+              </Typography>
+            </Box>
 
-                {cpcaBulletinFileIsValidating ? (
-                  <Alert severity="info">
-                    Validando assinatura e tipo real do arquivo...
+            <Tabs
+              value={cpcaSelfRegistrationTab}
+              onChange={(_, nextValue: "register" | "status") =>
+                setCpcaSelfRegistrationTab(nextValue)
+              }
+              variant="fullWidth"
+            >
+              <Tab value="register" label="Nova solicitação" />
+              <Tab value="status" label="Acompanhar status" />
+            </Tabs>
+
+            {cpcaSelfRegistrationTab === "register" ? (
+              <Stack spacing={1.2}>
+                <Typography variant="body2" color="text.secondary">
+                  O cadastro fica pendente até homologação pela gestão nacional.
+                  Em caso de rejeição, você poderá revisar o motivo e reenviar
+                  uma nova tentativa por aqui.
+                </Typography>
+
+                {cpcaResubmissionOfId ? (
+                  <Alert severity="warning">
+                    Você está reenviando uma solicitação rejeitada. Revise os
+                    dados abaixo, ajuste o que for necessário e anexe novamente
+                    a publicação do boletim.
                   </Alert>
                 ) : null}
 
-                {cpcaBulletinFile ? (
-                  <Alert
-                    severity="success"
-                    action={
-                      <Button
+                <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                  <TextField
+                    size="small"
+                    label="E-mail ou CPF"
+                    value={cpcaIdentifier}
+                    onChange={(event) => {
+                      setCpcaIdentifier(event.target.value);
+                      setCpcaLookupPreview(null);
+                      setCpcaResubmissionOfId("");
+                    }}
+                    fullWidth
+                  />
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      void handleLookupCpcaSelfRegistrationCandidate();
+                    }}
+                    disabled={cpcaSelfRegistrationLookupMutation.isPending}
+                    sx={{ minHeight: 40 }}
+                  >
+                    {cpcaSelfRegistrationLookupMutation.isPending
+                      ? "Buscando..."
+                      : "Buscar"}
+                  </Button>
+                </Stack>
+                {cpcaLookupPreview ? (
+                  <>
+                    <Alert severity="info">
+                      Militar encontrado:{" "}
+                      <strong>
+                        {cpcaLookupPreview.profile.name ||
+                          cpcaLookupPreview.profile.uid}
+                      </strong>
+                      {" · "}UID/CPF: {cpcaLookupPreview.profile.uid}
+                      {" · "}Email:{" "}
+                      {cpcaLookupPreview.profile.email || "Não informado"}
+                    </Alert>
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                      <TextField
                         size="small"
-                        color="inherit"
-                        startIcon={<DeleteOutlineRoundedIcon />}
-                        onClick={() => {
-                          setCpcaBulletinFile(null);
-                          setCpcaBulletinFileValidation(null);
-                          setCpcaBulletinFileError("");
-                        }}
+                        label="Posto/Graduação"
+                        value={
+                          cpcaLookupPreview.profile.postoGraduacao ||
+                          "Não identificado"
+                        }
+                        InputProps={{ readOnly: true }}
+                        fullWidth
+                      />
+                      <TextField
+                        size="small"
+                        label="Nome de guerra"
+                        value={
+                          cpcaLookupPreview.profile.warName ||
+                          cpcaLookupPreview.profile.name ||
+                          "Não identificado"
+                        }
+                        InputProps={{ readOnly: true }}
+                        fullWidth
+                      />
+                    </Stack>
+                  </>
+                ) : null}
+                <TextField
+                  size="small"
+                  label="OM"
+                  value={
+                    cpcaLookupPreview?.locality
+                      ? formatOmLabel(
+                          cpcaLookupPreview.locality.code,
+                          cpcaLookupPreview.locality.name,
+                        )
+                      : ""
+                  }
+                  InputProps={{ readOnly: true }}
+                  fullWidth
+                  helperText="Preenchida automaticamente via LDAP. Não é possível alterar."
+                />
+                <TextField
+                  select
+                  size="small"
+                  label="É substituição do presidente anterior?"
+                  value={cpcaIsSubstitution ? "SIM" : "NAO"}
+                  onChange={(event) =>
+                    setCpcaIsSubstitution(event.target.value === "SIM")
+                  }
+                >
+                  <MenuItem value="SIM">Sim</MenuItem>
+                  <MenuItem value="NAO">Não</MenuItem>
+                </TextField>
+                <TextField
+                  size="small"
+                  label="Número do boletim de designação"
+                  value={cpcaBulletinNumber}
+                  onChange={(event) =>
+                    setCpcaBulletinNumber(event.target.value)
+                  }
+                  fullWidth
+                />
+                <Box
+                  sx={{
+                    border: "1px dashed",
+                    borderColor: cpcaBulletinFileError
+                      ? "error.main"
+                      : cpcaBulletinFile
+                        ? "success.main"
+                        : "divider",
+                    borderRadius: 2,
+                    px: 1.5,
+                    py: 1.4,
+                    bgcolor: cpcaBulletinFile
+                      ? "rgba(46, 125, 50, 0.06)"
+                      : "background.paper",
+                  }}
+                >
+                  <Stack spacing={1.1}>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1}
+                      justifyContent="space-between"
+                      alignItems={{ xs: "flex-start", sm: "center" }}
+                    >
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={700}>
+                          Publicação do boletim
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Envie a imagem ou PDF do boletim que publicou a
+                          comissão com o seu nome. Tipos aceitos: PDF, PNG e
+                          JPG. Limite de 10 MB.
+                        </Typography>
+                      </Box>
+                      <Button
+                        component="label"
+                        variant="outlined"
+                        size="small"
+                        startIcon={<UploadFileRoundedIcon />}
+                        disabled={cpcaBulletinFileIsValidating}
                       >
-                        Remover
+                        {cpcaBulletinFile
+                          ? "Trocar arquivo"
+                          : "Selecionar arquivo"}
+                        <input
+                          hidden
+                          type="file"
+                          accept={CPCA_PRESIDENT_BULLETIN_ACCEPT}
+                          onChange={(event) => {
+                            void handleCpcaBulletinFileChange(event);
+                          }}
+                        />
                       </Button>
-                    }
+                    </Stack>
+
+                    {cpcaBulletinFileIsValidating ? (
+                      <Alert severity="info">
+                        Validando assinatura e tipo real do arquivo...
+                      </Alert>
+                    ) : null}
+
+                    {cpcaBulletinFile ? (
+                      <Alert
+                        severity="success"
+                        action={
+                          <Button
+                            size="small"
+                            color="inherit"
+                            startIcon={<DeleteOutlineRoundedIcon />}
+                            onClick={() => {
+                              setCpcaBulletinFile(null);
+                              setCpcaBulletinFileValidation(null);
+                              setCpcaBulletinFileError("");
+                            }}
+                          >
+                            Remover
+                          </Button>
+                        }
+                      >
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={1}
+                          alignItems={{ xs: "flex-start", sm: "center" }}
+                        >
+                          <Stack
+                            direction="row"
+                            spacing={0.8}
+                            alignItems="center"
+                          >
+                            {cpcaBulletinFileValidation?.kind === "pdf" ? (
+                              <PictureAsPdfRoundedIcon fontSize="small" />
+                            ) : (
+                              <ImageRoundedIcon fontSize="small" />
+                            )}
+                            <Typography variant="body2" fontWeight={600}>
+                              {cpcaBulletinFile.name}
+                            </Typography>
+                          </Stack>
+                          <Chip
+                            size="small"
+                            label={formatCpcaPresidentBulletinFileSize(
+                              cpcaBulletinFile.size,
+                            )}
+                            variant="outlined"
+                          />
+                          <Chip
+                            size="small"
+                            label={
+                              cpcaBulletinFileValidation?.kind === "pdf"
+                                ? "PDF validado"
+                                : "Imagem validada"
+                            }
+                            color="success"
+                            variant="outlined"
+                          />
+                        </Stack>
+                      </Alert>
+                    ) : null}
+
+                    {cpcaBulletinFileError ? (
+                      <Alert severity="error">{cpcaBulletinFileError}</Alert>
+                    ) : null}
+                  </Stack>
+                </Box>
+              </Stack>
+            ) : (
+              <Stack spacing={1.4}>
+                <Typography variant="body2" color="text.secondary">
+                  Consulte o andamento da sua solicitação antes de entrar no
+                  sistema. Se houver rejeição, o motivo aparecerá aqui junto com
+                  o histórico de tentativas.
+                </Typography>
+
+                <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                  <TextField
+                    size="small"
+                    label="E-mail ou CPF"
+                    value={cpcaStatusIdentifier}
+                    onChange={(event) => {
+                      setCpcaStatusIdentifier(event.target.value);
+                      setCpcaStatusResult(null);
+                    }}
+                    fullWidth
+                  />
+                  <Button
+                    variant="outlined"
+                    onClick={() => {
+                      void handleLookupCpcaSelfRegistrationStatus();
+                    }}
+                    disabled={cpcaSelfRegistrationStatusMutation.isPending}
+                    sx={{ minHeight: 40 }}
+                  >
+                    {cpcaSelfRegistrationStatusMutation.isPending
+                      ? "Consultando..."
+                      : "Consultar"}
+                  </Button>
+                </Stack>
+
+                {cpcaStatusResult?.profile ? (
+                  <Box
+                    sx={{
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 2,
+                      p: 1.5,
+                      bgcolor: "rgba(12, 101, 126, 0.03)",
+                    }}
                   >
                     <Stack
                       direction={{ xs: "column", sm: "row" }}
                       spacing={1}
+                      justifyContent="space-between"
                       alignItems={{ xs: "flex-start", sm: "center" }}
                     >
-                      <Stack direction="row" spacing={0.8} alignItems="center">
-                        {cpcaBulletinFileValidation?.kind === "pdf" ? (
-                          <PictureAsPdfRoundedIcon fontSize="small" />
-                        ) : (
-                          <ImageRoundedIcon fontSize="small" />
-                        )}
-                        <Typography variant="body2" fontWeight={600}>
-                          {cpcaBulletinFile.name}
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight={800}>
+                          {cpcaStatusResult.profile.name ||
+                            cpcaStatusResult.profile.uid}
                         </Typography>
-                      </Stack>
-                      <Chip
-                        size="small"
-                        label={formatCpcaPresidentBulletinFileSize(
-                          cpcaBulletinFile.size,
-                        )}
-                        variant="outlined"
-                      />
-                      <Chip
-                        size="small"
-                        label={
-                          cpcaBulletinFileValidation?.kind === "pdf"
-                            ? "PDF validado"
-                            : "Imagem validada"
-                        }
-                        color="success"
-                        variant="outlined"
-                      />
+                        <Typography variant="body2" color="text.secondary">
+                          UID/CPF: {cpcaStatusResult.profile.uid}
+                          {cpcaStatusResult.profile.email
+                            ? ` • ${cpcaStatusResult.profile.email}`
+                            : ""}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          OM atual no LDAP:{" "}
+                          {cpcaStatusResult.locality
+                            ? formatOmLabel(
+                                cpcaStatusResult.locality.code,
+                                cpcaStatusResult.locality.name,
+                              )
+                            : "Não identificada"}
+                        </Typography>
+                      </Box>
+                      {cpcaStatusResult.latestRequest ? (
+                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                          <Chip
+                            label={cpcaLatestStatusMeta.label}
+                            color={cpcaLatestStatusMeta.chipColor}
+                            size="small"
+                          />
+                          {cpcaStatusResult.accessGranted ? (
+                            <Chip
+                              label="Acesso liberado"
+                              color="success"
+                              variant="outlined"
+                              size="small"
+                            />
+                          ) : null}
+                        </Stack>
+                      ) : null}
                     </Stack>
-                  </Alert>
+                  </Box>
                 ) : null}
 
-                {cpcaBulletinFileError ? (
-                  <Alert severity="error">{cpcaBulletinFileError}</Alert>
+                {cpcaStatusResult ? (
+                  cpcaStatusResult.latestRequest ? (
+                    <Stack spacing={1.2}>
+                      <Alert severity={cpcaLatestStatusMeta.alertSeverity}>
+                        {cpcaLatestStatusMeta.description}
+                      </Alert>
+
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        spacing={1}
+                      >
+                        <TextField
+                          size="small"
+                          label="Solicitação mais recente"
+                          value={`${formatCpcaSelfRegistrationAttemptLabel(cpcaStatusResult.latestRequest.attemptNumber)} • ${formatDateTime(cpcaStatusResult.latestRequest.createdAt)}`}
+                          InputProps={{ readOnly: true }}
+                          fullWidth
+                        />
+                        <TextField
+                          size="small"
+                          label="Boletim informado"
+                          value={cpcaStatusResult.latestRequest.bulletinNumber}
+                          InputProps={{ readOnly: true }}
+                          fullWidth
+                        />
+                      </Stack>
+
+                      {cpcaStatusResult.latestRequest.decisionNotes ? (
+                        <Alert
+                          severity={
+                            cpcaStatusResult.latestRequest.status === "REJECTED"
+                              ? "error"
+                              : "success"
+                          }
+                        >
+                          {cpcaStatusResult.latestRequest.decisionNotes}
+                        </Alert>
+                      ) : null}
+
+                      {cpcaStatusResult.canResubmit ? (
+                        <Box>
+                          <Button
+                            variant="contained"
+                            onClick={prepareCpcaSelfRegistrationResubmission}
+                          >
+                            Editar e reenviar tentativa
+                          </Button>
+                        </Box>
+                      ) : null}
+
+                      <Box
+                        sx={{
+                          border: "1px solid",
+                          borderColor: "divider",
+                          borderRadius: 2,
+                          px: 1.5,
+                          py: 1.4,
+                        }}
+                      >
+                        <Stack spacing={1.2}>
+                          <Typography variant="subtitle2" fontWeight={800}>
+                            Histórico de tentativas
+                          </Typography>
+                          {cpcaStatusHistory.map((entry) => {
+                            const statusMeta =
+                              getCpcaSelfRegistrationStatusMeta(
+                                entry.status,
+                                entry.accessGranted,
+                              );
+                            return (
+                              <Box
+                                key={entry.id}
+                                sx={{
+                                  borderLeft: "3px solid",
+                                  borderLeftColor:
+                                    entry.status === "REJECTED"
+                                      ? "error.main"
+                                      : entry.status === "APPROVED"
+                                        ? "success.main"
+                                        : "warning.main",
+                                  pl: 1.4,
+                                  py: 0.3,
+                                }}
+                              >
+                                <Stack spacing={0.7}>
+                                  <Stack
+                                    direction={{ xs: "column", sm: "row" }}
+                                    spacing={1}
+                                    justifyContent="space-between"
+                                    alignItems={{
+                                      xs: "flex-start",
+                                      sm: "center",
+                                    }}
+                                  >
+                                    <Stack
+                                      direction="row"
+                                      spacing={1}
+                                      alignItems="center"
+                                      flexWrap="wrap"
+                                    >
+                                      <Typography
+                                        variant="body2"
+                                        fontWeight={700}
+                                      >
+                                        {formatCpcaSelfRegistrationAttemptLabel(
+                                          entry.attemptNumber,
+                                        )}
+                                      </Typography>
+                                      <Chip
+                                        size="small"
+                                        label={statusMeta.label}
+                                        color={statusMeta.chipColor}
+                                        variant={
+                                          entry.status === "PENDING"
+                                            ? "filled"
+                                            : "outlined"
+                                        }
+                                      />
+                                    </Stack>
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                    >
+                                      Enviada em{" "}
+                                      {formatDateTime(entry.createdAt)}
+                                    </Typography>
+                                  </Stack>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                  >
+                                    Boletim: {entry.bulletinNumber}
+                                    {entry.requestedAsSubstitution
+                                      ? " • Substituição"
+                                      : ""}
+                                  </Typography>
+                                  {entry.decidedAt ? (
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
+                                    >
+                                      Processada em{" "}
+                                      {formatDateTime(entry.decidedAt)}
+                                    </Typography>
+                                  ) : null}
+                                  {entry.decisionNotes ? (
+                                    <Box
+                                      sx={{
+                                        borderRadius: 1.5,
+                                        px: 1.1,
+                                        py: 0.9,
+                                        bgcolor:
+                                          entry.status === "REJECTED"
+                                            ? "rgba(211, 47, 47, 0.08)"
+                                            : "rgba(46, 125, 50, 0.08)",
+                                      }}
+                                    >
+                                      <Typography variant="body2">
+                                        {entry.decisionNotes}
+                                      </Typography>
+                                    </Box>
+                                  ) : null}
+                                </Stack>
+                              </Box>
+                            );
+                          })}
+                        </Stack>
+                      </Box>
+                    </Stack>
+                  ) : (
+                    <Alert severity="info">
+                      Nenhuma solicitação de presidência CPCA foi localizada
+                      para esse militar até o momento.
+                    </Alert>
+                  )
                 ) : null}
               </Stack>
-            </Box>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button
-            onClick={() => {
-              if (cpcaSelfRegistrationMutation.isPending) return;
-              setCpcaSelfRegistrationOpen(false);
-            }}
-            color="inherit"
-          >
-            Cancelar
+          <Button onClick={closeCpcaSelfRegistrationDialog} color="inherit">
+            Fechar
           </Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmitCpcaSelfRegistration}
-            disabled={
-              cpcaSelfRegistrationMutation.isPending ||
-              cpcaBulletinFileIsValidating ||
-              !cpcaBulletinFile ||
-              !cpcaBulletinFileValidation
-            }
-          >
-            {cpcaSelfRegistrationMutation.isPending
-              ? "Enviando..."
-              : "Enviar para homologação"}
-          </Button>
+          {cpcaSelfRegistrationTab === "register" ? (
+            <Button
+              variant="contained"
+              onClick={handleSubmitCpcaSelfRegistration}
+              disabled={
+                cpcaSelfRegistrationMutation.isPending ||
+                cpcaBulletinFileIsValidating ||
+                !cpcaBulletinFile ||
+                !cpcaBulletinFileValidation
+              }
+            >
+              {cpcaSelfRegistrationMutation.isPending
+                ? "Enviando..."
+                : cpcaResubmissionOfId
+                  ? "Reenviar para homologação"
+                  : "Enviar para homologação"}
+            </Button>
+          ) : null}
         </DialogActions>
       </Dialog>
     </Box>

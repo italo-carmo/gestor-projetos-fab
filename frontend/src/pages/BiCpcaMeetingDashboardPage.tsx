@@ -32,6 +32,7 @@ import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
@@ -67,9 +68,11 @@ import {
   BiExecutiveNotebookDialog,
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
+import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
 
 type MetricMode = "PERCENT" | "COUNT";
 type CombineMode = "AND" | "OR";
@@ -355,7 +358,10 @@ function DistributionCard({
   );
   const useLongLabelLayout = longestLabelLength >= 34;
   const rowHeight = useLongLabelLayout ? 34 : 24;
-  const height = Math.max(useLongLabelLayout ? 228 : 164, chartData.length * rowHeight);
+  const height = Math.max(
+    useLongLabelLayout ? 228 : 164,
+    chartData.length * rowHeight,
+  );
   const yAxisWidth = useLongLabelLayout ? 240 : 170;
   const yAxisTickStyle = useLongLabelLayout
     ? { ...axisTickStyle, fontSize: 11 }
@@ -365,7 +371,11 @@ function DistributionCard({
   return (
     <Card sx={cardSx}>
       <CardContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+        >
           <Typography variant="subtitle1" fontWeight={700}>
             {title}
           </Typography>
@@ -390,7 +400,11 @@ function DistributionCard({
             <ResponsiveContainer width="100%" height={height}>
               <BarChart data={chartData} layout="vertical" margin={{ left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-                <XAxis type="number" stroke={chartAxisStroke} tick={axisTickStyle} />
+                <XAxis
+                  type="number"
+                  stroke={chartAxisStroke}
+                  tick={axisTickStyle}
+                />
                 <YAxis
                   type="category"
                   dataKey="label"
@@ -459,8 +473,8 @@ export function BiCpcaMeetingDashboardPage() {
   });
 
   const dashboardFilters = useMemo(() => {
-    const hasColumnFilters = Object.values(filters.columnFilters).some((value) =>
-      Boolean(String(value ?? "").trim()),
+    const hasColumnFilters = Object.values(filters.columnFilters).some(
+      (value) => Boolean(String(value ?? "").trim()),
     );
 
     return {
@@ -492,7 +506,9 @@ export function BiCpcaMeetingDashboardPage() {
   const exportNotebookMutation = useExportBiExecutiveNotebookPdf();
   const updateCardSettingMutation = useUpdateBiCpcaMeetingCardSetting();
 
-  const dashboard = dashboardQuery.data as CpcaMeetingDashboardResponse | undefined;
+  const dashboard = dashboardQuery.data as
+    | CpcaMeetingDashboardResponse
+    | undefined;
   const responses = responsesQuery.data as
     | PagedResponse<CpcaMeetingResponseRow>
     | undefined;
@@ -551,8 +567,7 @@ export function BiCpcaMeetingDashboardPage() {
       if (!cardId) continue;
       map.set(cardId, {
         title:
-          String(item?.title ?? "").trim() ||
-          getDefaultCardText(cardId).title,
+          String(item?.title ?? "").trim() || getDefaultCardText(cardId).title,
         description:
           typeof item?.description === "string"
             ? item.description
@@ -811,7 +826,9 @@ export function BiCpcaMeetingDashboardPage() {
   }
 
   if (!dashboard) {
-    return <Alert severity="warning">Não foi possível carregar o painel.</Alert>;
+    return (
+      <Alert severity="warning">Não foi possível carregar o painel.</Alert>
+    );
   }
 
   const pageHeaderText = getCardText("page-header");
@@ -823,6 +840,10 @@ export function BiCpcaMeetingDashboardPage() {
   const trendText = getCardText("chart-trend-q2");
   const importsText = getCardText("list-imports");
   const responsesText = getCardText("list-responses");
+  const activeFiltersCount = useMemo(
+    () => countActiveBusinessIntelligenceFilters(filters, ["combineMode"]),
+    [filters],
+  );
 
   const visibleColumns = (dashboard.columnsMeta ?? []).slice(0, 6);
   const trendOptions = dashboard.charts.question2TrendByDay?.options ?? [];
@@ -855,7 +876,10 @@ export function BiCpcaMeetingDashboardPage() {
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("page-header")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("page-header")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -866,29 +890,6 @@ export function BiCpcaMeetingDashboardPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<DownloadRoundedIcon />}
-            component="a"
-            href="/templates/bi-cpca-meeting-template.csv"
-            download
-            sx={{
-              height: 36,
-              px: 1.4,
-              fontSize: 13,
-              whiteSpace: "nowrap",
-              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.5),
-              color: CPCA_BI_PALETTE.primary,
-              "& .MuiButton-startIcon > *": { fontSize: 18 },
-              "&:hover": {
-                borderColor: CPCA_BI_PALETTE.primary,
-                bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
-              },
-            }}
-          >
-            Baixar template
-          </Button>
           <Button
             size="small"
             variant="outlined"
@@ -956,216 +957,298 @@ export function BiCpcaMeetingDashboardPage() {
               ? "Gerando caderno..."
               : "Caderno PDF"}
           </Button>
+        </Stack>
+      </Stack>
+
+      <BiCollapsibleSection
+        title="Ingestão de dados"
+        description="Template, upload e estado da base ficam recolhidos por padrão para reduzir ruído visual."
+        icon={<UploadFileRoundedIcon fontSize="small" />}
+        accentColor={CPCA_BI_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              file
+                ? "Arquivo pronto"
+                : dashboard.latestImport?.fileName
+                  ? "Base carregada"
+                  : "Sem importação"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.28),
+              color: CPCA_BI_PALETTE.primary,
+              bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        sx={{ mb: 2, ...cardSx }}
+      >
+        <Stack
+          direction={{ xs: "column", lg: "row" }}
+          spacing={1.2}
+          alignItems={{ lg: "center" }}
+          sx={{ flexWrap: { lg: "wrap" }, rowGap: { lg: 1.2 }, pt: 1.2 }}
+        >
           <Button
             size="small"
-            variant="contained"
-            startIcon={<AutoGraphRoundedIcon />}
-            onClick={resetFilters}
+            variant="outlined"
+            startIcon={<DownloadRoundedIcon />}
+            component="a"
+            href="/templates/bi-cpca-meeting-template.csv"
+            download
             sx={{
-              height: 36,
-              px: 1.4,
-              fontSize: 13,
+              height: 40,
+              px: 1.6,
               whiteSpace: "nowrap",
+              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.5),
+              color: CPCA_BI_PALETTE.primary,
               "& .MuiButton-startIcon > *": { fontSize: 18 },
+              "&:hover": {
+                borderColor: CPCA_BI_PALETTE.primary,
+                bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            Baixar template
+          </Button>
+          <Button
+            variant="outlined"
+            component="label"
+            startIcon={<UploadFileRoundedIcon />}
+            disabled={!canUpload}
+            sx={{
+              minWidth: 260,
+              height: 40,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.5),
+              color: CPCA_BI_PALETTE.primary,
+              "&:hover": {
+                borderColor: CPCA_BI_PALETTE.primary,
+                bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            {file ? file.name : "Selecionar arquivo da pesquisa"}
+            <input
+              hidden
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(event) => {
+                const selected = event.target.files?.[0] ?? null;
+                setFile(selected);
+              }}
+            />
+          </Button>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={replaceOnImport}
+                onChange={(event) => setReplaceOnImport(event.target.checked)}
+                disabled={!canUpload}
+              />
+            }
+            label="Substituir base atual"
+          />
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleImport}
+            disabled={!canUpload || importMutation.isPending}
+            sx={{
+              height: 40,
+              px: 2,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
               bgcolor: CPCA_BI_PALETTE.primary,
               "&:hover": { bgcolor: CPCA_BI_PALETTE.primaryDark },
             }}
           >
+            {importMutation.isPending ? "Importando..." : "Importar"}
+          </Button>
+          <Box sx={{ ml: { lg: "auto" } }}>
+            <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+              Última importação
+            </Typography>
+            <Typography variant="body2" fontWeight={600}>
+              {dashboard.latestImport?.fileName ?? "Nenhuma"}
+            </Typography>
+          </Box>
+        </Stack>
+      </BiCollapsibleSection>
+
+      <BiCollapsibleSection
+        title="Filtros do painel"
+        description="Os filtros avançados ficam recolhidos e podem ser abertos conforme o recorte necessário."
+        icon={<FilterListRoundedIcon fontSize="small" />}
+        accentColor={CPCA_BI_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              activeFiltersCount > 0
+                ? `${activeFiltersCount} filtro${activeFiltersCount > 1 ? "s" : ""} ativo${activeFiltersCount > 1 ? "s" : ""}`
+                : "Sem filtros ativos"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.28),
+              color: CPCA_BI_PALETTE.primary,
+              bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        headerActions={
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<AutoGraphRoundedIcon />}
+            onClick={resetFilters}
+            sx={{
+              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.35),
+              color: CPCA_BI_PALETTE.primary,
+            }}
+          >
             Limpar filtros
           </Button>
-        </Stack>
-      </Stack>
-
-      <Card sx={{ mb: 2, ...cardSx }}>
-        <CardContent>
-          <Stack
-            direction={{ xs: "column", lg: "row" }}
-            spacing={1.2}
-            alignItems={{ lg: "center" }}
-            sx={{ flexWrap: { lg: "wrap" }, rowGap: { lg: 1.2 } }}
-          >
-            <Button
-              variant="outlined"
-              component="label"
-              startIcon={<UploadFileRoundedIcon />}
-              disabled={!canUpload}
-              sx={{
-                minWidth: 260,
-                height: 40,
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                borderColor: alpha(CPCA_BI_PALETTE.primary, 0.5),
-                color: CPCA_BI_PALETTE.primary,
-                "&:hover": {
-                  borderColor: CPCA_BI_PALETTE.primary,
-                  bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
-                },
-              }}
-            >
-              {file ? file.name : "Selecionar arquivo da pesquisa"}
-              <input
-                hidden
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={(event) => {
-                  const selected = event.target.files?.[0] ?? null;
-                  setFile(selected);
-                }}
-              />
-            </Button>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={replaceOnImport}
-                  onChange={(event) => setReplaceOnImport(event.target.checked)}
-                  disabled={!canUpload}
-                />
-              }
-              label="Substituir base atual"
-            />
-            <Button
-              variant="contained"
+        }
+        sx={{ mb: 1.2, ...cardSx }}
+      >
+        <Grid container spacing={1.2} sx={{ pt: 1.2 }}>
+          <Grid size={{ xs: 12, md: 2 }}>
+            <TextField
+              fullWidth
               size="small"
-              onClick={handleImport}
-              disabled={!canUpload || importMutation.isPending}
-              sx={{
-                height: 40,
-                px: 2,
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                bgcolor: CPCA_BI_PALETTE.primary,
-                "&:hover": { bgcolor: CPCA_BI_PALETTE.primaryDark },
-              }}
+              type="date"
+              label="De"
+              InputLabelProps={{ shrink: true }}
+              value={filters.from}
+              onChange={(event) => updateFilter("from", event.target.value)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 2 }}>
+            <TextField
+              fullWidth
+              size="small"
+              type="date"
+              label="Até"
+              InputLabelProps={{ shrink: true }}
+              value={filters.to}
+              onChange={(event) => updateFilter("to", event.target.value)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Busca livre"
+              value={filters.q}
+              onChange={(event) => updateFilter("q", event.target.value)}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 2 }}>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="Combinar filtros"
+              value={filters.combineMode}
+              onChange={(event) =>
+                updateFilter("combineMode", event.target.value as CombineMode)
+              }
             >
-              {importMutation.isPending ? "Importando..." : "Importar"}
-            </Button>
-            <Box sx={{ ml: { lg: "auto" } }}>
-              <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
-                Última importação
-              </Typography>
-              <Typography variant="body2" fontWeight={600}>
-                {dashboard.latestImport?.fileName ?? "Nenhuma"}
-              </Typography>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+              <MenuItem value="AND">AND</MenuItem>
+              <MenuItem value="OR">OR</MenuItem>
+            </TextField>
+          </Grid>
+          <Grid
+            size={{ xs: 12, md: 3 }}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: { xs: "flex-start", md: "flex-end" },
+            }}
+          >
+            <Stack direction="row" spacing={1}>
+              <Chip
+                label={metricMode === "PERCENT" ? "Exibir: %" : "Exibir: Qtde"}
+                color="primary"
+                size="small"
+                onClick={() =>
+                  setMetricMode((prev) =>
+                    prev === "PERCENT" ? "COUNT" : "PERCENT",
+                  )
+                }
+                sx={{ cursor: "pointer" }}
+              />
+            </Stack>
+          </Grid>
 
-      <Card sx={{ mb: 1.2, ...cardSx }}>
-        <CardContent>
-          <Grid container spacing={1.2}>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                type="date"
-                label="De"
-                InputLabelProps={{ shrink: true }}
-                value={filters.from}
-                onChange={(event) => updateFilter("from", event.target.value)}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                type="date"
-                label="Até"
-                InputLabelProps={{ shrink: true }}
-                value={filters.to}
-                onChange={(event) => updateFilter("to", event.target.value)}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Busca livre"
-                value={filters.q}
-                onChange={(event) => updateFilter("q", event.target.value)}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
+          {dashboard.filters.columns.map((column) => (
+            <Grid key={column.key} size={{ xs: 12, md: 4, lg: 3 }}>
               <TextField
                 fullWidth
                 size="small"
                 select
-                label="Combinar filtros"
-                value={filters.combineMode}
+                label={column.label}
+                value={filters.columnFilters[column.key] ?? ""}
                 onChange={(event) =>
-                  updateFilter("combineMode", event.target.value as CombineMode)
+                  updateColumnFilter(column.key, event.target.value)
                 }
               >
-                <MenuItem value="AND">AND</MenuItem>
-                <MenuItem value="OR">OR</MenuItem>
+                <MenuItem value="">Todos</MenuItem>
+                {column.options.map((option) => (
+                  <MenuItem key={`${column.key}-${option}`} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
               </TextField>
             </Grid>
-            <Grid
-              size={{ xs: 12, md: 3 }}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: { xs: "flex-start", md: "flex-end" },
-              }}
-            >
-              <Stack direction="row" spacing={1}>
-                <Chip
-                  label={metricMode === "PERCENT" ? "Exibir: %" : "Exibir: Qtde"}
-                  color="primary"
-                  size="small"
-                  onClick={() =>
-                    setMetricMode((prev) => (prev === "PERCENT" ? "COUNT" : "PERCENT"))
-                  }
-                  sx={{ cursor: "pointer" }}
-                />
-              </Stack>
-            </Grid>
-
-            {dashboard.filters.columns.map((column) => (
-              <Grid key={column.key} size={{ xs: 12, md: 4, lg: 3 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  select
-                  label={column.label}
-                  value={filters.columnFilters[column.key] ?? ""}
-                  onChange={(event) =>
-                    updateColumnFilter(column.key, event.target.value)
-                  }
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  {column.options.map((option) => (
-                    <MenuItem key={`${column.key}-${option}`} value={option}>
-                      {option}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-            ))}
-          </Grid>
-        </CardContent>
-      </Card>
+          ))}
+        </Grid>
+      </BiCollapsibleSection>
 
       <Grid container spacing={1.2} sx={{ mb: 1.2 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card sx={cardSx}>
-            <CardContent sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+            <CardContent
+              sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}
+            >
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Typography
+                  variant="caption"
+                  sx={{ color: CPCA_BI_PALETTE.muted }}
+                >
                   {kpiTotalText.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-total")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-total")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
                 ) : null}
               </Stack>
-              <Typography variant="h5" fontWeight={700} sx={{ color: CPCA_BI_PALETTE.primary }}>
+              <Typography
+                variant="h5"
+                fontWeight={700}
+                sx={{ color: CPCA_BI_PALETTE.primary }}
+              >
                 {dashboard.kpis.totalResponses}
               </Typography>
-              <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+              <Typography
+                variant="caption"
+                sx={{ color: CPCA_BI_PALETTE.muted }}
+              >
                 {kpiTotalText.description}
               </Typography>
             </CardContent>
@@ -1174,9 +1257,18 @@ export function BiCpcaMeetingDashboardPage() {
 
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card sx={cardSx}>
-            <CardContent sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+            <CardContent
+              sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}
+            >
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Typography
+                  variant="caption"
+                  sx={{ color: CPCA_BI_PALETTE.muted }}
+                >
                   {kpiCompletionText.title}
                 </Typography>
                 {isTiProfile ? (
@@ -1190,10 +1282,17 @@ export function BiCpcaMeetingDashboardPage() {
                   </MuiTooltip>
                 ) : null}
               </Stack>
-              <Typography variant="h5" fontWeight={700} sx={{ color: CPCA_BI_PALETTE.accent }}>
+              <Typography
+                variant="h5"
+                fontWeight={700}
+                sx={{ color: CPCA_BI_PALETTE.accent }}
+              >
                 {toPercent(dashboard.kpis.completionRatePercent)}
               </Typography>
-              <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+              <Typography
+                variant="caption"
+                sx={{ color: CPCA_BI_PALETTE.muted }}
+              >
                 {kpiCompletionText.description}
               </Typography>
             </CardContent>
@@ -1202,9 +1301,18 @@ export function BiCpcaMeetingDashboardPage() {
 
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card sx={cardSx}>
-            <CardContent sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+            <CardContent
+              sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}
+            >
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Typography
+                  variant="caption"
+                  sx={{ color: CPCA_BI_PALETTE.muted }}
+                >
                   {kpiCategoricalText.title}
                 </Typography>
                 {isTiProfile ? (
@@ -1218,10 +1326,17 @@ export function BiCpcaMeetingDashboardPage() {
                   </MuiTooltip>
                 ) : null}
               </Stack>
-              <Typography variant="h5" fontWeight={700} sx={{ color: CPCA_BI_PALETTE.secondary }}>
+              <Typography
+                variant="h5"
+                fontWeight={700}
+                sx={{ color: CPCA_BI_PALETTE.secondary }}
+              >
                 {dashboard.kpis.categoricalQuestions}
               </Typography>
-              <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+              <Typography
+                variant="caption"
+                sx={{ color: CPCA_BI_PALETTE.muted }}
+              >
                 {kpiCategoricalText.description}
               </Typography>
             </CardContent>
@@ -1230,23 +1345,42 @@ export function BiCpcaMeetingDashboardPage() {
 
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card sx={cardSx}>
-            <CardContent sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+            <CardContent
+              sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}
+            >
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Typography
+                  variant="caption"
+                  sx={{ color: CPCA_BI_PALETTE.muted }}
+                >
                   {kpiTextText.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-text")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-text")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
                 ) : null}
               </Stack>
-              <Typography variant="h5" fontWeight={700} sx={{ color: CPCA_BI_PALETTE.warning }}>
+              <Typography
+                variant="h5"
+                fontWeight={700}
+                sx={{ color: CPCA_BI_PALETTE.warning }}
+              >
                 {dashboard.kpis.freeTextQuestions}
               </Typography>
-              <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+              <Typography
+                variant="caption"
+                sx={{ color: CPCA_BI_PALETTE.muted }}
+              >
                 {kpiTextText.description}
               </Typography>
             </CardContent>
@@ -1256,13 +1390,21 @@ export function BiCpcaMeetingDashboardPage() {
 
       <Card sx={{ mb: 1.2, ...cardSx }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            mb={0.5}
+          >
             <Typography variant="subtitle1" fontWeight={700}>
               {trendText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("chart-trend-q2")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("chart-trend-q2")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1280,8 +1422,15 @@ export function BiCpcaMeetingDashboardPage() {
             <Box sx={{ mt: 1.1 }}>
               <ResponsiveContainer width="100%" height={230}>
                 <BarChart data={trendItems} barCategoryGap="30%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-                  <XAxis dataKey="dayLabel" stroke={chartAxisStroke} tick={axisTickStyle} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={chartGridStroke}
+                  />
+                  <XAxis
+                    dataKey="dayLabel"
+                    stroke={chartAxisStroke}
+                    tick={axisTickStyle}
+                  />
                   <YAxis
                     stroke={chartAxisStroke}
                     tick={axisTickStyle}
@@ -1291,8 +1440,13 @@ export function BiCpcaMeetingDashboardPage() {
                   <Tooltip
                     formatter={(value: number, name: string, payload: any) => {
                       const option = String(name ?? "");
-                      const count = Number(payload?.payload?.[`${option}__count`] ?? 0);
-                      return [`${Number(value ?? 0).toFixed(2)}%`, `${option} • ${count} resp.`];
+                      const count = Number(
+                        payload?.payload?.[`${option}__count`] ?? 0,
+                      );
+                      return [
+                        `${Number(value ?? 0).toFixed(2)}%`,
+                        `${option} • ${count} resp.`,
+                      ];
                     }}
                     labelFormatter={(label, payload) => {
                       const total = Number(payload?.[0]?.payload?.total ?? 0);
@@ -1309,7 +1463,11 @@ export function BiCpcaMeetingDashboardPage() {
                       name={option}
                       stackId="q2-trend"
                       fill={CHART_COLORS[index % CHART_COLORS.length]}
-                      radius={index === trendOptions.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                      radius={
+                        index === trendOptions.length - 1
+                          ? [4, 4, 0, 0]
+                          : [0, 0, 0, 0]
+                      }
                     />
                   ))}
                 </BarChart>
@@ -1321,13 +1479,21 @@ export function BiCpcaMeetingDashboardPage() {
 
       <Card sx={{ mb: 1.2, ...cardSx }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.4}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            mb={0.4}
+          >
             <Typography variant="subtitle1" fontWeight={700}>
               {insightMainText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("insight-main")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("insight-main")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1396,19 +1562,29 @@ export function BiCpcaMeetingDashboardPage() {
             <Grid key={list.key} size={{ xs: 12, md: 6 }}>
               <Card sx={cardSx}>
                 <CardContent>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
                     <Typography variant="subtitle1" fontWeight={700}>
                       {text.title}
                     </Typography>
                     {isTiProfile ? (
                       <MuiTooltip title="Editar título/descrição">
-                        <IconButton size="small" onClick={() => openCardEditor(cardId)}>
+                        <IconButton
+                          size="small"
+                          onClick={() => openCardEditor(cardId)}
+                        >
                           <EditOutlinedIcon fontSize="small" />
                         </IconButton>
                       </MuiTooltip>
                     ) : null}
                   </Stack>
-                  <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: CPCA_BI_PALETTE.muted }}
+                  >
                     {text.description}
                   </Typography>
                   {list.items.length === 0 ? (
@@ -1432,7 +1608,10 @@ export function BiCpcaMeetingDashboardPage() {
                           </Typography>
                           <Typography
                             variant="caption"
-                            sx={{ color: CPCA_BI_PALETTE.muted, fontWeight: 600 }}
+                            sx={{
+                              color: CPCA_BI_PALETTE.muted,
+                              fontWeight: 600,
+                            }}
                           >
                             {item.count} resposta(s) • {toPercent(item.percent)}
                           </Typography>
@@ -1449,13 +1628,20 @@ export function BiCpcaMeetingDashboardPage() {
 
       <Card sx={{ mb: 1.2, ...cardSx }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <Typography variant="subtitle1" fontWeight={700}>
               {importsText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("list-imports")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("list-imports")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1487,7 +1673,9 @@ export function BiCpcaMeetingDashboardPage() {
               {(imports?.items ?? []).length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5}>
-                    <Alert severity="info">Nenhuma importação registrada.</Alert>
+                    <Alert severity="info">
+                      Nenhuma importação registrada.
+                    </Alert>
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -1498,7 +1686,11 @@ export function BiCpcaMeetingDashboardPage() {
 
       <Card sx={{ ...cardSx }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <Box>
               <Stack direction="row" spacing={0.8} alignItems="center">
                 <Typography variant="subtitle1" fontWeight={700}>
@@ -1506,13 +1698,19 @@ export function BiCpcaMeetingDashboardPage() {
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("list-responses")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("list-responses")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
                 ) : null}
               </Stack>
-              <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+              <Typography
+                variant="caption"
+                sx={{ color: CPCA_BI_PALETTE.muted }}
+              >
                 {responsesText.description}
               </Typography>
             </Box>
@@ -1521,7 +1719,13 @@ export function BiCpcaMeetingDashboardPage() {
               <Button
                 size="small"
                 variant="outlined"
-                startIcon={responsesExpanded ? <KeyboardArrowUpRoundedIcon /> : <KeyboardArrowDownRoundedIcon />}
+                startIcon={
+                  responsesExpanded ? (
+                    <KeyboardArrowUpRoundedIcon />
+                  ) : (
+                    <KeyboardArrowDownRoundedIcon />
+                  )
+                }
                 onClick={() => setResponsesExpanded((prev) => !prev)}
               >
                 {responsesExpanded ? "Ocultar" : "Exibir"}
@@ -1601,7 +1805,10 @@ export function BiCpcaMeetingDashboardPage() {
               gap={1}
               sx={{ mt: 1 }}
             >
-              <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
+              <Typography
+                variant="caption"
+                sx={{ color: CPCA_BI_PALETTE.muted }}
+              >
                 Página {responses?.page ?? page} de {totalPages} • Total:{" "}
                 {responses?.total ?? 0}
               </Typography>
@@ -1657,12 +1864,17 @@ export function BiCpcaMeetingDashboardPage() {
         maxWidth="sm"
       >
         <DialogTitle>Editar texto do card</DialogTitle>
-        <DialogContent sx={{ display: "grid", gap: 1.2, pt: "12px !important" }}>
+        <DialogContent
+          sx={{ display: "grid", gap: 1.2, pt: "12px !important" }}
+        >
           <TextField
             label="Título"
             value={editingCardDraft.title}
             onChange={(event) =>
-              setEditingCardDraft((prev) => ({ ...prev, title: event.target.value }))
+              setEditingCardDraft((prev) => ({
+                ...prev,
+                title: event.target.value,
+              }))
             }
             fullWidth
           />

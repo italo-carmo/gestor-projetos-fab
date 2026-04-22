@@ -12,16 +12,28 @@ export const CPCA_CHECKLIST_ITEM_ORDER = [
 export type CpcaChecklistItemKey = (typeof CPCA_CHECKLIST_ITEM_ORDER)[number];
 export type CpcaChecklistStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED";
 
+export type CpcaChecklistHistoryEntry = {
+  id: string;
+  completedAt: string;
+  details: string | null;
+  speakerName: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
 export type CpcaChecklistItem = {
   itemKey: CpcaChecklistItemKey;
   label: string;
   shortLabel: string;
   description: string;
   requiresSpeakerName: boolean;
+  supportsHistory?: boolean;
   isCompleted: boolean;
   completedAt: string | null;
   details: string | null;
   speakerName: string | null;
+  historyCount?: number;
+  historyEntries?: CpcaChecklistHistoryEntry[];
   updatedAt?: string | null;
 };
 
@@ -43,10 +55,19 @@ export type CpcaChecklistSnapshot = {
 
 export type CpcaChecklistDraftItem = {
   itemKey: CpcaChecklistItemKey;
+  supportsHistory: boolean;
   isCompleted: boolean;
   completedAt: string;
   details: string;
   speakerName: string;
+  historyEntries: Array<{
+    id?: string | null;
+    completedAt: string;
+    details: string;
+    speakerName: string;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+  }>;
 };
 
 type CpcaChecklistFieldConfig = {
@@ -99,8 +120,14 @@ export function getCpcaChecklistFieldConfig(
   };
 }
 
-export function isCpcaChecklistBinaryQuestionItem(itemKey: CpcaChecklistItemKey) {
+export function isCpcaChecklistBinaryQuestionItem(
+  itemKey: CpcaChecklistItemKey,
+) {
   return itemKey === "EMAIL_DIRETO_RELATOS" || itemKey === "LINK_INTRAER_CPCA";
+}
+
+export function isCpcaChecklistHistoryItem(itemKey: CpcaChecklistItemKey) {
+  return !isCpcaChecklistBinaryQuestionItem(itemKey);
 }
 
 export function getCpcaChecklistReadOnlyStatusLabel(
@@ -132,12 +159,17 @@ export function formatCpcaChecklistDate(value: string | null | undefined) {
 }
 
 export function normalizeCpcaChecklistOmCode(value: string | null | undefined) {
-  const raw = String(value ?? "").replace(/\s+/g, " ").trim();
+  const raw = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!raw) return "";
-  return raw.replace(/^(\d+\s*\/\s*\d+)\s*([A-Za-z].*)$/, (_match, prefix, suffix) => {
-    const compactPrefix = String(prefix).replace(/\s+/g, "");
-    return `${compactPrefix} ${String(suffix).trim()}`;
-  });
+  return raw.replace(
+    /^(\d+\s*\/\s*\d+)\s*([A-Za-z].*)$/,
+    (_match, prefix, suffix) => {
+      const compactPrefix = String(prefix).replace(/\s+/g, "");
+      return `${compactPrefix} ${String(suffix).trim()}`;
+    },
+  );
 }
 
 export function formatCpcaChecklistOmLabel(
@@ -165,18 +197,21 @@ export function getCpcaChecklistStatusTone(status: CpcaChecklistStatus) {
   if (status === "COMPLETED") {
     return {
       color: "success" as const,
-      background: "linear-gradient(135deg, rgba(46,125,50,0.14), rgba(102,187,106,0.08))",
+      background:
+        "linear-gradient(135deg, rgba(46,125,50,0.14), rgba(102,187,106,0.08))",
     };
   }
   if (status === "IN_PROGRESS") {
     return {
       color: "warning" as const,
-      background: "linear-gradient(135deg, rgba(245,124,0,0.14), rgba(255,183,77,0.08))",
+      background:
+        "linear-gradient(135deg, rgba(245,124,0,0.14), rgba(255,183,77,0.08))",
     };
   }
   return {
     color: "default" as const,
-    background: "linear-gradient(135deg, rgba(120,144,156,0.14), rgba(207,216,220,0.18))",
+    background:
+      "linear-gradient(135deg, rgba(120,144,156,0.14), rgba(207,216,220,0.18))",
   };
 }
 
@@ -191,10 +226,25 @@ export function buildCpcaChecklistDraft(
     const item = itemsByKey.get(itemKey);
     return {
       itemKey,
+      supportsHistory: Boolean(
+        item?.supportsHistory ?? isCpcaChecklistHistoryItem(itemKey),
+      ),
       isCompleted: Boolean(item?.isCompleted),
       completedAt: item?.completedAt ? item.completedAt.slice(0, 10) : "",
       details: String(item?.details ?? ""),
       speakerName: String(item?.speakerName ?? ""),
+      historyEntries: Array.isArray(item?.historyEntries)
+        ? item.historyEntries.map((entry) => ({
+            id: entry.id,
+            completedAt: entry.completedAt
+              ? entry.completedAt.slice(0, 10)
+              : "",
+            details: String(entry.details ?? ""),
+            speakerName: String(entry.speakerName ?? ""),
+            createdAt: entry.createdAt ?? null,
+            updatedAt: entry.updatedAt ?? null,
+          }))
+        : [],
     };
   });
 }

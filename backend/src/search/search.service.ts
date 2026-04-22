@@ -18,6 +18,7 @@ type LegacySearchPayload = {
   tasks: Array<{
     id: string;
     title: string;
+    scope: string;
     localityId: string | null;
     localityName: string;
     dueDate: Date | null;
@@ -111,7 +112,7 @@ type RouteWhitelistEntry = {
 const SEARCH_SCREEN_ALLOWED_ROUTES: RouteWhitelistEntry[] = [
   { path: '/dashboard/smif' },
   { path: '/dashboard/cipavd' },
-  { path: '/dashboard/bi' },
+  { path: '/dashboard/bi', allowedQueryKeys: new Set(['tab']) },
   { path: '/dashboard/bi-violencia-domestica' },
   { path: '/dashboard/bi-recrutas' },
   { path: '/dashboard/bi-ciclo-boas-praticas' },
@@ -139,7 +140,8 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     entityTypeLabel: 'Tela',
     path: '/dashboard/estrategico?tab=comgep',
     title: 'Sala COMGEP',
-    subtitle: 'Recorte executivo com cobertura CPCA, risco e presença operacional',
+    subtitle:
+      'Recorte executivo com cobertura CPCA, risco e presença operacional',
     keywords: [
       'comgep',
       'sala de situacao',
@@ -149,8 +151,7 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
       'presenca operacional',
       'presença operacional',
     ],
-    isAllowed: (user) =>
-      hasAnyRole(user, [ROLE_COMGEP, ROLE_TI]),
+    isAllowed: (user) => hasAnyRole(user, [ROLE_COMGEP, ROLE_TI]),
   },
   {
     id: 'tasks',
@@ -226,7 +227,7 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     id: 'bi-schools',
     entityType: 'SCREEN',
     entityTypeLabel: 'Tela',
-    path: '/dashboard/bi',
+    path: '/dashboard/bi?tab=schools',
     title: 'Pesquisas de escolas',
     subtitle: 'Pesquisa institucional de escolas',
     keywords: [
@@ -242,7 +243,7 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     id: 'bi-domestic-violence',
     entityType: 'SCREEN',
     entityTypeLabel: 'Tela',
-    path: '/dashboard/bi-violencia-domestica',
+    path: '/dashboard/bi?tab=domestic-violence',
     title: 'Pesquisa de Violência Doméstica',
     subtitle: 'Indicadores e histórico de violência doméstica',
     keywords: ['violência', 'violencia', 'domestica', 'violência doméstica'],
@@ -252,7 +253,7 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     id: 'bi-recruits',
     entityType: 'SCREEN',
     entityTypeLabel: 'Tela',
-    path: '/dashboard/bi-recrutas',
+    path: '/dashboard/bi?tab=recruits',
     title: 'Pesquisa de Recrutas',
     subtitle: 'Percepção e riscos para recrutamento',
     keywords: ['recrutas', 'recrutamento', 'pesquisa de recrutas', 'risco'],
@@ -262,7 +263,7 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     id: 'bi-best-practice-cycle',
     entityType: 'SCREEN',
     entityTypeLabel: 'Tela',
-    path: '/dashboard/bi-ciclo-boas-praticas',
+    path: '/dashboard/bi?tab=best-practices-cycle',
     title: 'Pesquisa de Ciclo de Boas Práticas',
     subtitle: 'Monitoramento de ciclo de boas práticas',
     keywords: [
@@ -278,7 +279,7 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     id: 'bi-cpca-meeting',
     entityType: 'SCREEN',
     entityTypeLabel: 'Tela',
-    path: '/dashboard/bi-encontro-cpca',
+    path: '/dashboard/bi?tab=cpca-meeting',
     title: 'Pesquisa de Encontro CPCA',
     subtitle: 'Indicadores de encontro CPCA',
     keywords: ['cpca', 'encontro', 'cpca meeting', 'encontro cpca'],
@@ -288,7 +289,7 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
     id: 'bi-gsd-evaluation',
     entityType: 'SCREEN',
     entityTypeLabel: 'Tela',
-    path: '/dashboard/bi-avaliacao-gsd',
+    path: '/dashboard/bi?tab=gsd-evaluation',
     title: 'Pesquisa de Avaliação GSD',
     subtitle: 'Avaliação de clima e ambiente de segurança',
     keywords: ['gsd', 'avaliação', 'avaliacao', 'pesquisa gsd'],
@@ -367,6 +368,7 @@ const SEARCH_SCREEN_CANDIDATES: SearchScreenCandidate[] = [
 
 type TaskSearchRow = {
   id: string;
+  scope: string | null;
   titleOverride: string | null;
   localityId: string;
   dueDate: Date;
@@ -453,6 +455,7 @@ export class SearchService {
               where: taskWhere,
               select: {
                 id: true,
+                scope: true,
                 titleOverride: true,
                 localityId: true,
                 dueDate: true,
@@ -524,6 +527,7 @@ export class SearchService {
       tasks: tasks.map((task) => ({
         id: task.id,
         title: this.resolveTaskTitle(task),
+        scope: String(task.scope ?? 'SMIF'),
         localityId: task.localityId,
         localityName: task.locality?.name ?? '',
         dueDate: task.dueDate,
@@ -562,6 +566,7 @@ export class SearchService {
           tasks: tasks.map((task) => ({
             id: task.id,
             title: this.resolveTaskTitle(task),
+            scope: String(task.scope ?? 'SMIF'),
             localityId: task.localityId,
             localityName: task.locality?.name ?? '',
             dueDate: task.dueDate,
@@ -1044,7 +1049,9 @@ export class SearchService {
         entityTypeLabel: 'Tarefa',
         title: task.title,
         subtitle: task.localityName || null,
-        url: `/tasks?taskId=${encodeURIComponent(task.id)}`,
+        url: `/tasks?scope=${encodeURIComponent(
+          String(task.scope ?? 'SMIF'),
+        )}&taskId=${encodeURIComponent(task.id)}`,
         keywords: [task.status, task.localityName ?? ''],
       });
     }

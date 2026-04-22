@@ -2203,6 +2203,102 @@ export class CpcaService {
     return this.serializeCipavdThread(updated);
   }
 
+  async updateCipavdThread(
+    id: string,
+    threadId: string,
+    payload: { text: string },
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const complaint = await this.findComplaintCaseForCipavdAction(
+      id,
+      user,
+      workflowContext,
+    );
+    const cipavdAccess = await this.resolveCipavdAccess(complaint, user);
+    if (!cipavdAccess.canCreateThread) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const thread = await this.findCipavdThreadForComplaint(
+      threadId,
+      complaint.id,
+      workflowContext,
+    );
+    if (thread.type !== 'PENDENCY' || thread.status !== 'OPEN') {
+      throwError('VALIDATION_ERROR', {
+        field: 'threadId',
+        reason: 'PENDENCY_MUST_BE_OPEN',
+      });
+    }
+
+    const text = this.cleanText(payload.text);
+    if (!text) {
+      throwError('VALIDATION_ERROR', { field: 'text', reason: 'required' });
+    }
+
+    const currentMessage = await (
+      this.prisma as any
+    ).cpcComplaintCipavdMessage.findFirst({
+      where: {
+        threadId,
+        authorKind: 'MANAGEMENT',
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        body: true,
+      },
+    });
+
+    if (!currentMessage?.id) {
+      throwError('VALIDATION_ERROR', {
+        field: 'threadId',
+        reason: 'PENDENCY_MESSAGE_NOT_FOUND',
+      });
+    }
+
+    const updated = await this.prisma.$transaction(async (tx: any) => {
+      await tx.cpcComplaintCipavdMessage.update({
+        where: { id: currentMessage.id },
+        data: { body: text },
+      });
+
+      return tx.cpcComplaintCipavdThread.findUnique({
+        where: { id: threadId },
+        include: {
+          createdBy: { select: { id: true, name: true, email: true } },
+          resolvedBy: { select: { id: true, name: true, email: true } },
+          closedBy: { select: { id: true, name: true, email: true } },
+          messages: {
+            orderBy: { createdAt: 'asc' },
+            include: {
+              createdBy: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+      });
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: workflowContext.resource,
+      action: 'cipavd_pendency_update',
+      entityId: complaint.id,
+      diffJson: {
+        caseId: complaint.id,
+        threadId,
+        omId: complaint.omId,
+        workflowScope: workflowContext.workflowScope,
+        previousText: currentMessage.body,
+        nextText: text,
+      },
+    });
+
+    return this.serializeCipavdThread(updated);
+  }
+
   async reopenCipavdThread(
     id: string,
     threadId: string,
@@ -2296,9 +2392,81 @@ export class CpcaService {
     return this.serializeCipavdThread(updated);
   }
 
+  async removeCipavdThread(
+    id: string,
+    threadId: string,
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const complaint = await this.findComplaintCaseForCipavdAction(
+      id,
+      user,
+      workflowContext,
+    );
+    const cipavdAccess = await this.resolveCipavdAccess(complaint, user);
+    if (!cipavdAccess.canCreateThread) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const thread = await this.findCipavdThreadForComplaint(
+      threadId,
+      complaint.id,
+      workflowContext,
+    );
+    if (thread.type !== 'PENDENCY' || thread.status !== 'OPEN') {
+      throwError('VALIDATION_ERROR', {
+        field: 'threadId',
+        reason: 'PENDENCY_MUST_BE_OPEN',
+      });
+    }
+    if (Number(thread.reopenedCount ?? 0) > 0) {
+      throwError('VALIDATION_ERROR', {
+        field: 'threadId',
+        reason: 'PENDENCY_DELETE_WITH_HISTORY_NOT_ALLOWED',
+      });
+    }
+
+    const resolvedMessage = await (
+      this.prisma as any
+    ).cpcComplaintCipavdMessage.findFirst({
+      where: {
+        threadId,
+        authorKind: 'PRESIDENT',
+      },
+      select: { id: true },
+    });
+    if (resolvedMessage?.id) {
+      throwError('VALIDATION_ERROR', {
+        field: 'threadId',
+        reason: 'PENDENCY_DELETE_WITH_HISTORY_NOT_ALLOWED',
+      });
+    }
+
+    await (this.prisma as any).cpcComplaintCipavdThread.delete({
+      where: { id: threadId },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: workflowContext.resource,
+      action: 'cipavd_pendency_delete',
+      entityId: complaint.id,
+      diffJson: {
+        caseId: complaint.id,
+        threadId,
+        omId: complaint.omId,
+        workflowScope: workflowContext.workflowScope,
+      },
+    });
+
+    return { ok: true };
+  }
+
   async finalizeCipavdThread(
     id: string,
     threadId: string,
+    payload: { text: string },
     user?: RbacUser,
     context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
   ) {
@@ -2325,9 +2493,24 @@ export class CpcaService {
       });
     }
 
+    const text = this.cleanText(payload.text);
+    if (!text) {
+      throwError('VALIDATION_ERROR', { field: 'text', reason: 'required' });
+    }
+
     const actorId = this.requireUserId(user);
     const now = new Date();
     const updated = await this.prisma.$transaction(async (tx: any) => {
+      await tx.cpcComplaintCipavdMessage.create({
+        data: {
+          threadId,
+          body: text,
+          createdById: actorId,
+          authorKind: 'MANAGEMENT',
+          type: 'FINALIZATION',
+        },
+      });
+
       await tx.cpcComplaintCipavdThread.update({
         where: { id: threadId },
         data: {
@@ -2364,6 +2547,7 @@ export class CpcaService {
         threadId,
         omId: complaint.omId,
         workflowScope: workflowContext.workflowScope,
+        finalizationText: text,
       },
     });
 
@@ -2835,7 +3019,7 @@ export class CpcaService {
       .toUpperCase();
     if (normalized === 'PRESIDENT') return 'Presidente da CPCA';
     if (normalized === 'SYSTEM') return 'Sistema';
-    return 'CIPAVD / COMGEP / TI';
+    return 'Gestão nacional';
   }
 
   private getCipavdMessageTypeLabel(type: string | null | undefined) {
@@ -2844,7 +3028,7 @@ export class CpcaService {
       .toUpperCase();
     if (normalized === 'RESOLUTION') return 'Resposta da comissão';
     if (normalized === 'REOPEN') return 'Nova pendência';
-    if (normalized === 'FINALIZATION') return 'Pendência finalizada';
+    if (normalized === 'FINALIZATION') return 'Validação final';
     return 'Mensagem';
   }
 

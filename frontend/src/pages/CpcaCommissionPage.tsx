@@ -70,6 +70,7 @@ import {
   getCpcaChecklistStatusTone,
   getCpcaChecklistFieldConfig,
   isCpcaChecklistBinaryQuestionItem,
+  isCpcaChecklistHistoryItem,
   type CpcaChecklistDraftItem,
   type CpcaChecklistItem,
   type CpcaChecklistItemKey,
@@ -186,6 +187,50 @@ function formatDateTime(value: string | null | undefined) {
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("pt-BR");
+}
+
+type ChecklistHistoryEntryDraft = {
+  id?: string | null;
+  completedAt: string;
+  details: string;
+  speakerName: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+function createEmptyChecklistHistoryEntryDraft(): ChecklistHistoryEntryDraft {
+  return {
+    completedAt: "",
+    details: "",
+    speakerName: "",
+  };
+}
+
+function sortChecklistHistoryEntryDrafts(
+  entries: ChecklistHistoryEntryDraft[],
+) {
+  return [...entries].sort((left, right) =>
+    String(right.completedAt ?? "").localeCompare(
+      String(left.completedAt ?? ""),
+    ),
+  );
+}
+
+function applyHistoryEntriesToDraftItem(
+  item: CpcaChecklistDraftItem,
+  entries: ChecklistHistoryEntryDraft[],
+): CpcaChecklistDraftItem {
+  const nextEntries = sortChecklistHistoryEntryDrafts(entries);
+  const latestEntry = nextEntries[0];
+  return {
+    ...item,
+    supportsHistory: true,
+    isCompleted: nextEntries.length > 0,
+    completedAt: latestEntry?.completedAt ?? "",
+    details: latestEntry?.details ?? "",
+    speakerName: latestEntry?.speakerName ?? "",
+    historyEntries: nextEntries,
+  };
 }
 
 function resolveChecklistIcon(itemKey: CpcaChecklistItemKey) {
@@ -317,6 +362,8 @@ export function CpcaCommissionPage() {
   const [checklistDraft, setChecklistDraft] = useState<
     CpcaChecklistDraftItem[]
   >([]);
+  const [checklistHistoryEntryDrafts, setChecklistHistoryEntryDrafts] =
+    useState<Record<string, ChecklistHistoryEntryDraft>>({});
   const [checklistDraftLocalityId, setChecklistDraftLocalityId] = useState("");
   const [checklistAppliedVersion, setChecklistAppliedVersion] = useState("");
 
@@ -417,6 +464,7 @@ export function CpcaCommissionPage() {
 
     const nextDraft = buildCpcaChecklistDraft(checklistItems);
     setChecklistDraft(nextDraft);
+    setChecklistHistoryEntryDrafts({});
     setChecklistDraftLocalityId(checklistLocalityId);
     setChecklistAppliedVersion(checklistVersion);
   }, [
@@ -439,14 +487,21 @@ export function CpcaCommissionPage() {
     selectedLocalityCode,
     selectedLocalityName,
   );
-  const checklistDirty = useMemo(
-    () =>
-      !areCpcaChecklistDraftsEqual(
-        checklistDraft,
-        buildCpcaChecklistDraft(checklistItems),
+  const checklistDirty = useMemo(() => {
+    const persistedChanged = !areCpcaChecklistDraftsEqual(
+      checklistDraft,
+      buildCpcaChecklistDraft(checklistItems),
+    );
+    if (persistedChanged) return true;
+
+    return Object.values(checklistHistoryEntryDrafts).some((draft) =>
+      Boolean(
+        String(draft.completedAt ?? "").trim() ||
+        String(draft.details ?? "").trim() ||
+        String(draft.speakerName ?? "").trim(),
       ),
-    [checklistDraft, checklistItems],
-  );
+    );
+  }, [checklistDraft, checklistHistoryEntryDrafts, checklistItems]);
   const checklistTone = getCpcaChecklistStatusTone(
     checklistSummary?.status ?? "NOT_STARTED",
   );
@@ -663,6 +718,7 @@ export function CpcaCommissionPage() {
     setChecklistDraft((current) =>
       current.map((item) => {
         if (item.itemKey !== itemKey) return item;
+        if (item.supportsHistory) return item;
         const nextItem = {
           ...item,
           [field]: value,
@@ -679,9 +735,73 @@ export function CpcaCommissionPage() {
     );
   };
 
+  const handleChecklistHistoryDraftChange = (
+    itemKey: CpcaChecklistItemKey,
+    field: keyof ChecklistHistoryEntryDraft,
+    value: string,
+  ) => {
+    setChecklistHistoryEntryDrafts((current) => ({
+      ...current,
+      [itemKey]: {
+        ...(current[itemKey] ?? createEmptyChecklistHistoryEntryDraft()),
+        [field]: value,
+      },
+    }));
+  };
+
+  const clearChecklistHistoryDraft = (itemKey: CpcaChecklistItemKey) => {
+    setChecklistHistoryEntryDrafts((current) => {
+      if (!(itemKey in current)) return current;
+      const next = { ...current };
+      delete next[itemKey];
+      return next;
+    });
+  };
+
+  const handleAddChecklistHistoryEntry = (itemKey: CpcaChecklistItemKey) => {
+    const draft =
+      checklistHistoryEntryDrafts[itemKey] ??
+      createEmptyChecklistHistoryEntryDraft();
+    const completedAt = String(draft.completedAt ?? "").trim();
+    const details = String(draft.details ?? "").trim();
+    const speakerName = String(draft.speakerName ?? "").trim();
+
+    if (!completedAt || !details) {
+      toast.push({
+        message: "Informe a data e a descrição do registro.",
+        severity: "warning",
+      });
+      return;
+    }
+    if (itemKey === "PALESTRA" && !speakerName) {
+      toast.push({
+        message: "Informe quem ministrou a palestra.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    setChecklistDraft((current) =>
+      current.map((item) => {
+        if (item.itemKey !== itemKey) return item;
+        return applyHistoryEntriesToDraftItem(item, [
+          ...item.historyEntries,
+          {
+            id: null,
+            completedAt,
+            details,
+            speakerName: itemKey === "PALESTRA" ? speakerName : "",
+          },
+        ]);
+      }),
+    );
+    clearChecklistHistoryDraft(itemKey);
+  };
+
   const handleResetChecklist = () => {
     const nextDraft = buildCpcaChecklistDraft(checklistItems);
     setChecklistDraft(nextDraft);
+    setChecklistHistoryEntryDrafts({});
     setChecklistAppliedVersion(checklistVersion);
   };
 
@@ -703,11 +823,20 @@ export function CpcaCommissionPage() {
           completedAt: item.completedAt || null,
           details: item.details.trim() || null,
           speakerName: item.speakerName.trim() || null,
+          historyEntries: item.supportsHistory
+            ? item.historyEntries.map((entry) => ({
+                id: entry.id ?? null,
+                completedAt: entry.completedAt,
+                details: entry.details.trim() || null,
+                speakerName: entry.speakerName.trim() || null,
+              }))
+            : undefined,
         })),
       });
       const savedItems = (response?.checklist?.items ??
         []) as CpcaChecklistItem[];
       setChecklistDraft(buildCpcaChecklistDraft(savedItems));
+      setChecklistHistoryEntryDrafts({});
       setChecklistAppliedVersion(
         String(
           response?.checklist?.summary?.lastUpdatedAt ??
@@ -888,7 +1017,7 @@ export function CpcaCommissionPage() {
                     sx={{ mt: 0.5 }}
                   >
                     O presidente da CPCA registra aqui as ações executadas na
-                    OM. TI e COMGEP visualizam esta mesma execução na visão
+                    OM. A gestão nacional visualiza esta mesma execução na visão
                     nacional do módulo CPCA &gt; Checklist.
                   </Typography>
                 </Box>
@@ -992,18 +1121,37 @@ export function CpcaCommissionPage() {
                     (entry) => entry.itemKey === item.itemKey,
                   ) ?? {
                     itemKey: item.itemKey,
+                    supportsHistory: isCpcaChecklistHistoryItem(item.itemKey),
                     isCompleted: Boolean(item.isCompleted),
                     completedAt: item.completedAt
                       ? item.completedAt.slice(0, 10)
                       : "",
                     details: String(item.details ?? ""),
                     speakerName: String(item.speakerName ?? ""),
+                    historyEntries: Array.isArray(item.historyEntries)
+                      ? item.historyEntries.map((entry) => ({
+                          id: entry.id,
+                          completedAt: entry.completedAt
+                            ? entry.completedAt.slice(0, 10)
+                            : "",
+                          details: String(entry.details ?? ""),
+                          speakerName: String(entry.speakerName ?? ""),
+                          createdAt: entry.createdAt ?? null,
+                          updatedAt: entry.updatedAt ?? null,
+                        }))
+                      : [],
                   };
-                  const itemCompleted = Boolean(draftItem?.isCompleted);
+                  const historyEntries = draftItem.historyEntries ?? [];
+                  const itemCompleted = draftItem.supportsHistory
+                    ? historyEntries.length > 0
+                    : Boolean(draftItem?.isCompleted);
                   const fieldConfig = getCpcaChecklistFieldConfig(item.itemKey);
                   const isBinaryQuestion = isCpcaChecklistBinaryQuestionItem(
                     item.itemKey,
                   );
+                  const historyEntryDraft =
+                    checklistHistoryEntryDrafts[item.itemKey] ??
+                    createEmptyChecklistHistoryEntryDraft();
                   return (
                     <Box
                       key={item.itemKey}
@@ -1060,120 +1208,306 @@ export function CpcaCommissionPage() {
                               </Typography>
                             </Box>
                           </Stack>
-                          {itemCompleted ? (
-                            <CheckCircleRoundedIcon
-                              color="success"
-                              fontSize="small"
-                            />
-                          ) : (
-                            <RadioButtonUncheckedRoundedIcon
-                              color="disabled"
-                              fontSize="small"
-                            />
-                          )}
-                        </Stack>
-
-                        <Stack
-                          direction={{ xs: "column", md: "row" }}
-                          spacing={1.2}
-                          alignItems={{ xs: "stretch", md: "center" }}
-                        >
-                          <TextField
-                            select
-                            label={isBinaryQuestion ? "Resposta" : "Situação"}
-                            size="small"
-                            value={draftItem?.isCompleted ? "done" : "pending"}
-                            onChange={(event) =>
-                              handleChecklistFieldChange(
-                                item.itemKey,
-                                "isCompleted",
-                                event.target.value === "done",
-                              )
-                            }
-                            disabled={!canEditChecklist}
-                            sx={{ minWidth: { xs: "100%", md: 170 } }}
-                          >
-                            <MenuItem value="pending">
-                              {fieldConfig.statusPendingLabel}
-                            </MenuItem>
-                            <MenuItem value="done">
-                              {fieldConfig.statusDoneLabel}
-                            </MenuItem>
-                          </TextField>
-                          <TextField
-                            label={
-                              isBinaryQuestion ? "Data do registro" : "Data"
-                            }
-                            type="date"
-                            size="small"
-                            value={draftItem?.completedAt ?? ""}
-                            onChange={(event) =>
-                              handleChecklistFieldChange(
-                                item.itemKey,
-                                "completedAt",
-                                event.target.value,
-                              )
-                            }
-                            disabled={!canEditChecklist || !itemCompleted}
-                            InputLabelProps={{ shrink: true }}
-                            sx={{ minWidth: { xs: "100%", md: 170 } }}
-                          />
                           <Stack
                             direction="row"
                             spacing={0.75}
                             alignItems="center"
+                            flexWrap="wrap"
                           >
-                            <TodayRoundedIcon
-                              sx={{ fontSize: 16, color: "text.secondary" }}
-                            />
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              Último registro:{" "}
-                              {formatCpcaChecklistDate(item.completedAt)}
-                            </Typography>
+                            {draftItem.supportsHistory &&
+                            historyEntries.length > 0 ? (
+                              <Chip
+                                size="small"
+                                label={`${historyEntries.length} registro${historyEntries.length > 1 ? "s" : ""}`}
+                                variant="outlined"
+                              />
+                            ) : null}
+                            {itemCompleted ? (
+                              <CheckCircleRoundedIcon
+                                color="success"
+                                fontSize="small"
+                              />
+                            ) : (
+                              <RadioButtonUncheckedRoundedIcon
+                                color="disabled"
+                                fontSize="small"
+                              />
+                            )}
                           </Stack>
                         </Stack>
 
-                        <TextField
-                          label={fieldConfig.detailsLabel}
-                          size="small"
-                          multiline
-                          minRows={2}
-                          value={draftItem?.details ?? ""}
-                          onChange={(event) =>
-                            handleChecklistFieldChange(
-                              item.itemKey,
-                              "details",
-                              event.target.value,
-                            )
-                          }
-                          disabled={!canEditChecklist || !itemCompleted}
-                          placeholder={fieldConfig.detailsPlaceholder}
-                          helperText={
-                            itemCompleted
-                              ? fieldConfig.detailsHelperText
-                              : undefined
-                          }
-                        />
+                        {isBinaryQuestion ? (
+                          <>
+                            <Stack
+                              direction={{ xs: "column", md: "row" }}
+                              spacing={1.2}
+                              alignItems={{ xs: "stretch", md: "center" }}
+                            >
+                              <TextField
+                                select
+                                label="Resposta"
+                                size="small"
+                                value={
+                                  draftItem?.isCompleted ? "done" : "pending"
+                                }
+                                onChange={(event) =>
+                                  handleChecklistFieldChange(
+                                    item.itemKey,
+                                    "isCompleted",
+                                    event.target.value === "done",
+                                  )
+                                }
+                                disabled={!canEditChecklist}
+                                sx={{ minWidth: { xs: "100%", md: 170 } }}
+                              >
+                                <MenuItem value="pending">
+                                  {fieldConfig.statusPendingLabel}
+                                </MenuItem>
+                                <MenuItem value="done">
+                                  {fieldConfig.statusDoneLabel}
+                                </MenuItem>
+                              </TextField>
+                              <TextField
+                                label="Data do registro"
+                                type="date"
+                                size="small"
+                                value={draftItem?.completedAt ?? ""}
+                                onChange={(event) =>
+                                  handleChecklistFieldChange(
+                                    item.itemKey,
+                                    "completedAt",
+                                    event.target.value,
+                                  )
+                                }
+                                disabled={!canEditChecklist || !itemCompleted}
+                                InputLabelProps={{ shrink: true }}
+                                sx={{ minWidth: { xs: "100%", md: 170 } }}
+                              />
+                              <Stack
+                                direction="row"
+                                spacing={0.75}
+                                alignItems="center"
+                              >
+                                <TodayRoundedIcon
+                                  sx={{ fontSize: 16, color: "text.secondary" }}
+                                />
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  Última atualização:{" "}
+                                  {formatCpcaChecklistDate(item.updatedAt)}
+                                </Typography>
+                              </Stack>
+                            </Stack>
 
-                        {item.requiresSpeakerName ? (
-                          <TextField
-                            label="Quem ministrou a palestra"
-                            size="small"
-                            value={draftItem?.speakerName ?? ""}
-                            onChange={(event) =>
-                              handleChecklistFieldChange(
-                                item.itemKey,
-                                "speakerName",
-                                event.target.value,
-                              )
-                            }
-                            disabled={!canEditChecklist || !itemCompleted}
-                            placeholder="Informe o nome do palestrante"
-                          />
-                        ) : null}
+                            <TextField
+                              label={fieldConfig.detailsLabel}
+                              size="small"
+                              multiline
+                              minRows={2}
+                              value={draftItem?.details ?? ""}
+                              onChange={(event) =>
+                                handleChecklistFieldChange(
+                                  item.itemKey,
+                                  "details",
+                                  event.target.value,
+                                )
+                              }
+                              disabled={!canEditChecklist || !itemCompleted}
+                              placeholder={fieldConfig.detailsPlaceholder}
+                              helperText={
+                                itemCompleted
+                                  ? fieldConfig.detailsHelperText
+                                  : undefined
+                              }
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <Stack
+                              direction={{ xs: "column", md: "row" }}
+                              spacing={1.2}
+                              alignItems={{ xs: "stretch", md: "center" }}
+                            >
+                              <Stack
+                                direction="row"
+                                spacing={0.75}
+                                alignItems="center"
+                              >
+                                <HistoryRoundedIcon
+                                  sx={{ fontSize: 16, color: "text.secondary" }}
+                                />
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  Último registro:{" "}
+                                  {formatCpcaChecklistDate(item.completedAt)}
+                                </Typography>
+                              </Stack>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                Histórico acumulado da OM para este item.
+                              </Typography>
+                            </Stack>
+
+                            {canEditChecklist ? (
+                              <Box
+                                sx={{
+                                  p: 1.5,
+                                  borderRadius: 2.5,
+                                  border: "1px dashed",
+                                  borderColor: "rgba(25,118,210,0.24)",
+                                  bgcolor: "rgba(25,118,210,0.03)",
+                                }}
+                              >
+                                <Stack spacing={1}>
+                                  <Typography
+                                    variant="subtitle2"
+                                    fontWeight={800}
+                                  >
+                                    Adicionar registro
+                                  </Typography>
+                                  <Stack
+                                    direction={{ xs: "column", md: "row" }}
+                                    spacing={1}
+                                  >
+                                    <TextField
+                                      label="Data"
+                                      type="date"
+                                      size="small"
+                                      value={historyEntryDraft.completedAt}
+                                      onChange={(event) =>
+                                        handleChecklistHistoryDraftChange(
+                                          item.itemKey,
+                                          "completedAt",
+                                          event.target.value,
+                                        )
+                                      }
+                                      InputLabelProps={{ shrink: true }}
+                                      sx={{ minWidth: { xs: "100%", md: 170 } }}
+                                    />
+                                    {item.requiresSpeakerName ? (
+                                      <TextField
+                                        label="Quem ministrou a palestra"
+                                        size="small"
+                                        value={historyEntryDraft.speakerName}
+                                        onChange={(event) =>
+                                          handleChecklistHistoryDraftChange(
+                                            item.itemKey,
+                                            "speakerName",
+                                            event.target.value,
+                                          )
+                                        }
+                                        sx={{ flex: 1 }}
+                                      />
+                                    ) : null}
+                                  </Stack>
+                                  <TextField
+                                    label={fieldConfig.detailsLabel}
+                                    size="small"
+                                    multiline
+                                    minRows={2}
+                                    value={historyEntryDraft.details}
+                                    onChange={(event) =>
+                                      handleChecklistHistoryDraftChange(
+                                        item.itemKey,
+                                        "details",
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder={fieldConfig.detailsPlaceholder}
+                                    helperText={
+                                      fieldConfig.detailsHelperText ??
+                                      "Cada novo registro entra no histórico da OM."
+                                    }
+                                  />
+                                  <Box display="flex" justifyContent="flex-end">
+                                    <Button
+                                      variant="contained"
+                                      onClick={() =>
+                                        handleAddChecklistHistoryEntry(
+                                          item.itemKey,
+                                        )
+                                      }
+                                    >
+                                      Adicionar ao histórico
+                                    </Button>
+                                  </Box>
+                                </Stack>
+                              </Box>
+                            ) : null}
+
+                            <Stack spacing={1}>
+                              {historyEntries.length === 0 ? (
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  Nenhum registro lançado para este item.
+                                </Typography>
+                              ) : (
+                                historyEntries.map((entry, index) => (
+                                  <Box
+                                    key={`${item.itemKey}-${entry.id ?? `draft-${index}`}`}
+                                    sx={{
+                                      p: 1.25,
+                                      borderRadius: 2.25,
+                                      border: "1px solid",
+                                      borderColor: "divider",
+                                      backgroundColor:
+                                        index === 0
+                                          ? "rgba(46,125,50,0.05)"
+                                          : "rgba(15,23,42,0.02)",
+                                    }}
+                                  >
+                                    <Stack spacing={0.5}>
+                                      <Stack
+                                        direction={{ xs: "column", sm: "row" }}
+                                        spacing={1}
+                                        justifyContent="space-between"
+                                      >
+                                        <Typography
+                                          variant="caption"
+                                          fontWeight={800}
+                                        >
+                                          {formatCpcaChecklistDate(
+                                            entry.completedAt,
+                                          )}
+                                        </Typography>
+                                        <Typography
+                                          variant="caption"
+                                          color="text.secondary"
+                                        >
+                                          Registrado em{" "}
+                                          {formatCpcaChecklistDate(
+                                            entry.updatedAt ??
+                                              entry.createdAt ??
+                                              entry.completedAt,
+                                          )}
+                                        </Typography>
+                                      </Stack>
+                                      <Typography variant="body2">
+                                        {entry.details}
+                                      </Typography>
+                                      {entry.speakerName ? (
+                                        <Typography
+                                          variant="caption"
+                                          fontWeight={700}
+                                        >
+                                          Palestrante: {entry.speakerName}
+                                        </Typography>
+                                      ) : null}
+                                    </Stack>
+                                  </Box>
+                                ))
+                              )}
+                            </Stack>
+                          </>
+                        )}
                       </Stack>
                     </Box>
                   );
@@ -1188,7 +1522,7 @@ export function CpcaCommissionPage() {
               >
                 <Typography variant="caption" color="text.secondary">
                   O checklist nacional consolida automaticamente estas marcações
-                  para TI, COMGEP e Coordenação CIPAVD.
+                  para COMGEP e Coordenação CIPAVD.
                 </Typography>
                 <Stack direction="row" spacing={1}>
                   <Button
@@ -1253,17 +1587,17 @@ export function CpcaCommissionPage() {
                       sx={{
                         fontWeight: 700,
                         color:
-                          commissionPendingBadge.tone === "warning"
-                            ? "#B45309"
+                          commissionPendingBadge.tone === "error"
+                            ? "#B91C1C"
                             : "#166534",
                         bgcolor:
-                          commissionPendingBadge.tone === "warning"
-                            ? "rgba(245, 158, 11, 0.14)"
+                          commissionPendingBadge.tone === "error"
+                            ? "rgba(239, 68, 68, 0.12)"
                             : "rgba(34, 197, 94, 0.12)",
                         border: "1px solid",
                         borderColor:
-                          commissionPendingBadge.tone === "warning"
-                            ? "rgba(245, 158, 11, 0.28)"
+                          commissionPendingBadge.tone === "error"
+                            ? "rgba(239, 68, 68, 0.24)"
                             : "rgba(34, 197, 94, 0.24)",
                       }}
                     />
@@ -1422,8 +1756,8 @@ export function CpcaCommissionPage() {
                 color="text.secondary"
                 sx={{ mb: 1.5 }}
               >
-                Fluxo direto para TI/COMGEP. O militar é localizado pelo LDAP e
-                a presidência é aplicada imediatamente na OM selecionada.
+                Fluxo direto para a gestão nacional. O militar é localizado pelo
+                LDAP e a presidência é aplicada imediatamente na OM selecionada.
               </Typography>
 
               <Stack
@@ -1509,8 +1843,8 @@ export function CpcaCommissionPage() {
                 sx={{ mb: 1.5 }}
               >
                 Use este fluxo quando a comissão precisar indicar o próximo
-                presidente. A alteração só passa a valer após homologação de TI
-                ou COMGEP.
+                presidente. A alteração só passa a valer após homologação da
+                gestão nacional.
               </Typography>
 
               {pendingPresidentNominationRequest ? (
@@ -1613,9 +1947,9 @@ export function CpcaCommissionPage() {
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               {canAssignPresident
-                ? "TI/COMGEP podem aplicar a cobertura imediatamente."
+                ? "A gestão nacional pode aplicar a cobertura imediatamente."
                 : managesCoverageByApproval
-                  ? "A presidência propõe a cobertura e a alteração só vale após homologação de TI ou COMGEP."
+                  ? "A presidência propõe a cobertura e a alteração só vale após homologação da gestão nacional."
                   : "Consulte abaixo quais OMs esta comissão atende além da própria OM."}
             </Typography>
 
@@ -1703,7 +2037,7 @@ export function CpcaCommissionPage() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
               {canManageMembers
                 ? "Cadastre membros por LDAP (e-mail ou CPF)."
-                : "Somente o presidente da comissão (ou TI/COMGEP) pode cadastrar ou remover membros."}
+                : "Somente o presidente da comissão ou a gestão nacional pode cadastrar ou remover membros."}
             </Typography>
 
             <Stack

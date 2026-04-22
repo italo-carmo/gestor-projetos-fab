@@ -49,9 +49,9 @@ export const CPCA_CHECKLIST_ITEMS = [
   },
   {
     key: 'POP_US',
-    label: 'Pop-us',
-    shortLabel: 'Pop-us',
-    description: 'Ações de divulgação em formato pop-us.',
+    label: 'Pop-ups',
+    shortLabel: 'Pop-ups',
+    description: 'Ações de divulgação em formato pop-ups.',
     requiresSpeakerName: false,
   },
   {
@@ -92,4 +92,11 @@ export function isCpcaChecklistDirectEmailItem(itemKey: CpcaChecklistItemKey) {
 
 export function isCpcaChecklistIntraerLinkItem(itemKey: CpcaChecklistItemKey) {
   return itemKey === 'LINK_INTRAER_CPCA';
+}
+
+export function isCpcaChecklistHistoryItem(itemKey: CpcaChecklistItemKey) {
+  return (
+    !isCpcaChecklistDirectEmailItem(itemKey) &&
+    !isCpcaChecklistIntraerLinkItem(itemKey)
+  );
 }

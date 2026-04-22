@@ -42,11 +42,6 @@ import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
 import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
-import StackedBarChartRoundedIcon from "@mui/icons-material/StackedBarChartRounded";
-import GroupAddRoundedIcon from "@mui/icons-material/GroupAddRounded";
-import AutorenewRoundedIcon from "@mui/icons-material/AutorenewRounded";
-import ForumRoundedIcon from "@mui/icons-material/ForumRounded";
-import GradingRoundedIcon from "@mui/icons-material/GradingRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import PolicyRoundedIcon from "@mui/icons-material/PolicyRounded";
 import FactCheckRoundedIcon from "@mui/icons-material/FactCheckRounded";
@@ -258,43 +253,13 @@ const navSections: NavSection[] = [
     ],
   },
   {
-    id: "pesquisas",
-    label: "PESQUISAS",
+    id: "business-intelligence",
+    label: "BUSINESS INTELLIGENCE",
     items: [
       {
-        label: "Escolas",
+        label: "Business Intelligence",
         to: "/dashboard/bi",
         icon: <BarChartRoundedIcon fontSize="small" />,
-        menuKey: "bi",
-      },
-      {
-        label: "Violência Doméstica",
-        to: "/dashboard/bi-violencia-domestica",
-        icon: <StackedBarChartRoundedIcon fontSize="small" />,
-        menuKey: "bi",
-      },
-      {
-        label: "Recrutas",
-        to: "/dashboard/bi-recrutas",
-        icon: <GroupAddRoundedIcon fontSize="small" />,
-        menuKey: "bi",
-      },
-      {
-        label: "Ciclo de Boas Práticas",
-        to: "/dashboard/bi-ciclo-boas-praticas",
-        icon: <AutorenewRoundedIcon fontSize="small" />,
-        menuKey: "bi",
-      },
-      {
-        label: "Encontro CPCA",
-        to: "/dashboard/bi-encontro-cpca",
-        icon: <ForumRoundedIcon fontSize="small" />,
-        menuKey: "bi",
-      },
-      {
-        label: "Avaliação GSD",
-        to: "/dashboard/bi-avaliacao-gsd",
-        icon: <GradingRoundedIcon fontSize="small" />,
         menuKey: "bi",
       },
     ],

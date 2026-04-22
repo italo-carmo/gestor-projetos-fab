@@ -33,6 +33,31 @@ class UpdateCpcaChecklistItemDto {
   @IsString()
   @MaxLength(220)
   speakerName?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UpdateCpcaChecklistHistoryEntryDto)
+  historyEntries?: UpdateCpcaChecklistHistoryEntryDto[];
+}
+
+class UpdateCpcaChecklistHistoryEntryDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  completedAt!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  details?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(220)
+  speakerName?: string | null;
 }
 
 export class UpdateCpcaChecklistDto {

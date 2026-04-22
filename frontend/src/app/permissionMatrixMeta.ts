@@ -412,8 +412,8 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
   bi: {
     menu: "Dashboards",
     menuOrder: 10,
-    title: "Escolas",
-    description: "Importacao e consulta de dados do modulo BI.",
+    title: "Business Intelligence",
+    description: "Hub de analise e importacao dos painéis de BI.",
     route: "/dashboard/bi",
     routeAliases: [
       "/dashboard/bi-violencia-domestica",
@@ -422,14 +422,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
       "/dashboard/bi-encontro-cpca",
       "/dashboard/bi-avaliacao-gsd",
     ],
-    sidebarItems: [
-      "Escolas",
-      "Violência Doméstica",
-      "Recrutas",
-      "Ciclo de Boas Práticas",
-      "Encontro CPCA",
-      "Avaliação GSD",
-    ],
+    sidebarItems: ["Business Intelligence"],
     expectedActions: ["view", "upload", "delete"],
   },
 };

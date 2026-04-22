@@ -221,6 +221,7 @@ describe('CpcaCommissionService', () => {
       id: 'req-1',
       status: 'PENDING',
       createdAt: new Date('2026-04-19T10:00:00Z'),
+      attemptNumber: 1,
       om,
     });
 
@@ -553,5 +554,322 @@ describe('CpcaCommissionService', () => {
     );
 
     expect(result.pendingCount).toBe(6);
+  });
+
+  it('permite reenviar uma autoinscrição rejeitada preservando o vínculo com a tentativa anterior', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+
+    (resolveBestOmByFabOm as jest.Mock).mockResolvedValue(om);
+    ldap.lookupByEmail.mockResolvedValue({
+      uid: 'uid-pres-1',
+      email: 'presidente@fab.mil.br',
+      name: 'Cel Presidente',
+      fabom: 'BACO',
+    });
+    prisma.om.findUnique.mockResolvedValue(om);
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({
+      id: 'user-pres-1',
+      name: 'Cel Presidente',
+      email: 'presidente@fab.mil.br',
+      ldapUid: 'uid-pres-1',
+      omId: om.id,
+      localityId: om.id,
+    });
+    prisma.cpcaPresidentSelfRegistration.findFirst.mockResolvedValue(null);
+    prisma.cpcaPresidentSelfRegistration.findUnique.mockResolvedValue({
+      id: 'req-rejected-1',
+      omId: om.id,
+      applicantUserId: 'user-pres-1',
+      status: 'REJECTED',
+      retryRootRequestId: null,
+      attemptNumber: 1,
+    });
+    prisma.cpcaPresidentSelfRegistration.create.mockResolvedValue({
+      id: 'req-retry-2',
+      status: 'PENDING',
+      createdAt: new Date('2026-04-22T13:00:00Z'),
+      attemptNumber: 2,
+      om,
+    });
+
+    const result = await service.createSelfRegistration(
+      {
+        identifier: 'presidente@fab.mil.br',
+        resubmissionOfId: 'req-rejected-1',
+        isSubstitution: true,
+        bulletinNumber: 'BOL 099',
+        bulletinFile: {
+          originalname: 'boletim-publicacao.pdf',
+          mimetype: 'application/pdf',
+          size: 1024,
+          buffer: Buffer.from('%PDF-1.4'),
+        } as any,
+      },
+      '127.0.0.1',
+    );
+
+    expect(prisma.cpcaPresidentSelfRegistration.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          retryRootRequestId: 'req-rejected-1',
+          previousAttemptId: 'req-rejected-1',
+          attemptNumber: 2,
+        }),
+      }),
+    );
+    expect(result.request.attemptNumber).toBe(2);
+  });
+
+  it('retorna o status público da autoinscrição com histórico e sinal de acesso liberado', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+
+    (resolveBestOmByFabOm as jest.Mock).mockResolvedValue(om);
+    ldap.lookupByEmail.mockResolvedValue({
+      uid: 'uid-pres-1',
+      email: 'presidente@fab.mil.br',
+      name: 'Cel Presidente',
+      fabom: 'BACO',
+      numeroOrdem: '123456',
+    });
+    prisma.cpcaPresidentSelfRegistration.findMany.mockResolvedValue([
+      {
+        id: 'req-approved-2',
+        omId: om.id,
+        applicantUserId: 'user-pres-1',
+        retryRootRequestId: 'req-rejected-1',
+        attemptNumber: 2,
+        status: 'APPROVED',
+        applicantIdentifier: 'presidente@fab.mil.br',
+        applicantUid: 'uid-pres-1',
+        applicantEmail: 'presidente@fab.mil.br',
+        applicantName: 'Cel Presidente',
+        requestedAsSubstitution: false,
+        bulletinNumber: 'BOL 100',
+        createdAt: new Date('2026-04-22T14:00:00Z'),
+        decidedAt: new Date('2026-04-22T15:00:00Z'),
+        decisionNotes: null,
+        om,
+        applicantUser: {
+          id: 'user-pres-1',
+          name: 'Cel Presidente',
+          email: 'presidente@fab.mil.br',
+          ldapUid: 'uid-pres-1',
+        },
+        decidedByUser: {
+          id: 'approver-1',
+          name: 'Aprovador',
+          email: 'approver@fab.mil.br',
+        },
+      },
+      {
+        id: 'req-rejected-1',
+        omId: om.id,
+        applicantUserId: 'user-pres-1',
+        retryRootRequestId: null,
+        attemptNumber: 1,
+        status: 'REJECTED',
+        applicantIdentifier: 'presidente@fab.mil.br',
+        applicantUid: 'uid-pres-1',
+        applicantEmail: 'presidente@fab.mil.br',
+        applicantName: 'Cel Presidente',
+        requestedAsSubstitution: false,
+        bulletinNumber: 'BOL 095',
+        createdAt: new Date('2026-04-21T14:00:00Z'),
+        decidedAt: new Date('2026-04-21T16:00:00Z'),
+        decisionNotes: 'Anexe a página do boletim com o nome completo.',
+        om,
+        applicantUser: {
+          id: 'user-pres-1',
+          name: 'Cel Presidente',
+          email: 'presidente@fab.mil.br',
+          ldapUid: 'uid-pres-1',
+        },
+        decidedByUser: {
+          id: 'approver-1',
+          name: 'Aprovador',
+          email: 'approver@fab.mil.br',
+        },
+      },
+    ]);
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+    });
+
+    const result = await service.lookupSelfRegistrationStatus(
+      'presidente@fab.mil.br',
+    );
+
+    expect(result.accessGranted).toBe(true);
+    expect(result.latestRequest).toMatchObject({
+      id: 'req-approved-2',
+      status: 'APPROVED',
+      accessGranted: true,
+    });
+    expect(result.history).toHaveLength(2);
+    expect(result.history.map((entry: any) => entry.attemptNumber)).toEqual([
+      1, 2,
+    ]);
+  });
+
+  it('exige motivo obrigatório ao rejeitar uma autoinscrição de presidente', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+
+    prisma.cpcaPresidentSelfRegistration.findUnique.mockResolvedValue({
+      id: 'req-pending-1',
+      status: 'PENDING',
+    });
+
+    try {
+      await service.rejectPresidentRequest(
+        'req-pending-1',
+        {},
+        makeUser({ id: 'approver', roles: ['COMGEP'] }) as any,
+      );
+      throw new Error('expected rejectPresidentRequest to fail');
+    } catch (error) {
+      const err = error as HttpException & {
+        response?: { code?: string; details?: { reason?: string } };
+      };
+      const response =
+        typeof err.getResponse === 'function'
+          ? (err.getResponse() as any)
+          : err.response;
+      expect(response?.details?.reason ?? response?.code).toBe('required');
+    }
+    expect(prisma.cpcaPresidentSelfRegistration.update).not.toHaveBeenCalled();
+  });
+
+  it('inclui o histórico completo da autoinscrição na fila de homologação', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+
+    prisma.cpcaPresidentSelfRegistration.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'req-pending-2',
+          omId: om.id,
+          applicantUserId: 'user-pres-1',
+          retryRootRequestId: 'req-rejected-1',
+          attemptNumber: 2,
+          status: 'PENDING',
+          applicantIdentifier: 'presidente@fab.mil.br',
+          applicantUid: 'uid-pres-1',
+          applicantEmail: 'presidente@fab.mil.br',
+          applicantName: 'Cel Presidente',
+          requestedAsSubstitution: true,
+          bulletinNumber: 'BOL 101',
+          bulletinFileName: 'novo-boletim.pdf',
+          bulletinStorageKey: 'novo-boletim.pdf',
+          bulletinMimeType: 'application/pdf',
+          bulletinFileSize: 2048,
+          bulletinChecksum: 'checksum-2',
+          createdAt: new Date('2026-04-22T14:00:00Z'),
+          decidedAt: null,
+          decisionNotes: null,
+          om,
+          applicantUser: {
+            id: 'user-pres-1',
+            name: 'Cel Presidente',
+            email: 'presidente@fab.mil.br',
+            ldapUid: 'uid-pres-1',
+          },
+          decidedByUser: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'req-rejected-1',
+          omId: om.id,
+          applicantUserId: 'user-pres-1',
+          retryRootRequestId: null,
+          attemptNumber: 1,
+          status: 'REJECTED',
+          requestedAsSubstitution: false,
+          bulletinNumber: 'BOL 095',
+          bulletinFileName: 'boletim-antigo.pdf',
+          bulletinStorageKey: 'boletim-antigo.pdf',
+          bulletinMimeType: 'application/pdf',
+          bulletinFileSize: 1024,
+          bulletinChecksum: 'checksum-1',
+          createdAt: new Date('2026-04-21T14:00:00Z'),
+          decidedAt: new Date('2026-04-21T16:00:00Z'),
+          decisionNotes: 'Faltou a publicação completa.',
+          om,
+          decidedByUser: {
+            id: 'approver-1',
+            name: 'Aprovador',
+            email: 'approver@fab.mil.br',
+          },
+        },
+        {
+          id: 'req-pending-2',
+          omId: om.id,
+          applicantUserId: 'user-pres-1',
+          retryRootRequestId: 'req-rejected-1',
+          attemptNumber: 2,
+          status: 'PENDING',
+          requestedAsSubstitution: true,
+          bulletinNumber: 'BOL 101',
+          bulletinFileName: 'novo-boletim.pdf',
+          bulletinStorageKey: 'novo-boletim.pdf',
+          bulletinMimeType: 'application/pdf',
+          bulletinFileSize: 2048,
+          bulletinChecksum: 'checksum-2',
+          createdAt: new Date('2026-04-22T14:00:00Z'),
+          decidedAt: null,
+          decisionNotes: null,
+          om,
+          decidedByUser: null,
+        },
+      ]);
+    prisma.cpcaPresidentNominationRequest.findMany.mockResolvedValue([]);
+    prisma.cpcaCommissionCoverageRequest.findMany.mockResolvedValue([]);
+    prisma.cpcaPresidentSelfRegistration.count.mockResolvedValue(1);
+    prisma.cpcaPresidentNominationRequest.count.mockResolvedValue(0);
+    prisma.cpcaCommissionCoverageRequest.count.mockResolvedValue(0);
+
+    const result = await service.listApprovalRequests(
+      makeUser({ id: 'approver', roles: ['COMGEP'] }) as any,
+      'PENDING',
+    );
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      id: 'req-pending-2',
+      attemptNumber: 2,
+    });
+    expect((result.items[0] as any).history).toHaveLength(2);
+    expect(
+      (result.items[0] as any).history.map((entry: any) => entry.attemptNumber),
+    ).toEqual([1, 2]);
   });
 });

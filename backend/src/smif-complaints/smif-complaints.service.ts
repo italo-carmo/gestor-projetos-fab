@@ -3,8 +3,10 @@ import { CpcaService, SMIF_WORKFLOW_CONTEXT } from '../cpca/cpca.service';
 import { AddCpcaCaseCommentDto } from '../cpca/dto/add-cpca-case-comment.dto';
 import { CreateCpcaCaseCipavdThreadDto } from '../cpca/dto/create-cpca-case-cipavd-thread.dto';
 import { CreateCpcaCaseDto } from '../cpca/dto/create-cpca-case.dto';
+import { FinalizeCpcaCaseCipavdThreadDto } from '../cpca/dto/finalize-cpca-case-cipavd-thread.dto';
 import { ReopenCpcaCaseCipavdThreadDto } from '../cpca/dto/reopen-cpca-case-cipavd-thread.dto';
 import { ResolveCpcaCaseCipavdThreadDto } from '../cpca/dto/resolve-cpca-case-cipavd-thread.dto';
+import { UpdateCpcaCaseCipavdThreadDto } from '../cpca/dto/update-cpca-case-cipavd-thread.dto';
 import { UpdateCpcaCaseDto } from '../cpca/dto/update-cpca-case.dto';
 import type { RbacUser } from '../rbac/rbac.types';
 
@@ -73,6 +75,30 @@ export class SmifComplaintsService {
     );
   }
 
+  async updateCipavdThread(
+    id: string,
+    threadId: string,
+    payload: UpdateCpcaCaseCipavdThreadDto,
+    user?: RbacUser,
+  ) {
+    return this.cpca.updateCipavdThread(
+      id,
+      threadId,
+      payload,
+      user,
+      SMIF_WORKFLOW_CONTEXT,
+    );
+  }
+
+  async removeCipavdThread(id: string, threadId: string, user?: RbacUser) {
+    return this.cpca.removeCipavdThread(
+      id,
+      threadId,
+      user,
+      SMIF_WORKFLOW_CONTEXT,
+    );
+  }
+
   async resolveCipavdThread(
     id: string,
     threadId: string,
@@ -103,10 +129,16 @@ export class SmifComplaintsService {
     );
   }
 
-  async finalizeCipavdThread(id: string, threadId: string, user?: RbacUser) {
+  async finalizeCipavdThread(
+    id: string,
+    threadId: string,
+    payload: FinalizeCpcaCaseCipavdThreadDto,
+    user?: RbacUser,
+  ) {
     return this.cpca.finalizeCipavdThread(
       id,
       threadId,
+      payload,
       user,
       SMIF_WORKFLOW_CONTEXT,
     );

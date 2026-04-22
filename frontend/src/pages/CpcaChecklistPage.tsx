@@ -63,7 +63,10 @@ type NationalChecklistRow = {
   checklist: CpcaChecklistSnapshot;
 };
 
-const STATUS_OPTIONS: Array<{ value: "ALL" | CpcaChecklistStatus; label: string }> = [
+const STATUS_OPTIONS: Array<{
+  value: "ALL" | CpcaChecklistStatus;
+  label: string;
+}> = [
   { value: "ALL", label: "Todas" },
   { value: "NOT_STARTED", label: "Não iniciadas" },
   { value: "IN_PROGRESS", label: "Em andamento" },
@@ -115,7 +118,11 @@ function SummaryStatCard(props: {
         background,
       }}
     >
-      <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: 0.4 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ letterSpacing: 0.4 }}
+      >
         {props.label}
       </Typography>
       <Typography variant="h5" fontWeight={800} sx={{ mt: 0.5 }}>
@@ -132,6 +139,8 @@ function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
     item.itemKey,
     isCompleted,
   );
+  const historyEntries = item.historyEntries ?? [];
+  const visibleHistoryEntries = historyEntries.slice(0, 3);
   return (
     <Box
       sx={{
@@ -144,26 +153,50 @@ function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
           : "linear-gradient(135deg, rgba(15,23,42,0.03), rgba(148,163,184,0.06))",
       }}
     >
-      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+      <Stack
+        direction="row"
+        spacing={1}
+        alignItems="center"
+        justifyContent="space-between"
+      >
         <Stack direction="row" spacing={1} alignItems="center" minWidth={0}>
-          <Box sx={{ color: isCompleted ? "success.main" : "text.secondary", display: "flex" }}>
+          <Box
+            sx={{
+              color: isCompleted ? "success.main" : "text.secondary",
+              display: "flex",
+            }}
+          >
             {resolveChecklistIcon(item.itemKey)}
           </Box>
           <Typography variant="body2" fontWeight={700} sx={{ lineHeight: 1.3 }}>
             {item.shortLabel}
           </Typography>
         </Stack>
-        {isCompleted ? (
-          <CheckCircleRoundedIcon color="success" fontSize="small" />
-        ) : (
-          <RadioButtonUncheckedRoundedIcon color="disabled" fontSize="small" />
-        )}
+        <Stack direction="row" spacing={0.75} alignItems="center">
+          {item.supportsHistory && historyEntries.length > 0 ? (
+            <Chip
+              size="small"
+              label={`${historyEntries.length} registro${historyEntries.length > 1 ? "s" : ""}`}
+              variant="outlined"
+            />
+          ) : null}
+          {isCompleted ? (
+            <CheckCircleRoundedIcon color="success" fontSize="small" />
+          ) : (
+            <RadioButtonUncheckedRoundedIcon
+              color="disabled"
+              fontSize="small"
+            />
+          )}
+        </Stack>
       </Stack>
 
       <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1 }}>
         <TodayRoundedIcon sx={{ fontSize: 15, color: "text.secondary" }} />
         <Typography variant="caption" color="text.secondary">
-          {isCompleted ? formatCpcaChecklistDate(item.completedAt) : statusLabel}
+          {isCompleted
+            ? formatCpcaChecklistDate(item.completedAt)
+            : statusLabel}
         </Typography>
       </Stack>
 
@@ -182,7 +215,9 @@ function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
         {item.details || item.description}
       </Typography>
 
-      {isCompleted && item.itemKey === "EMAIL_DIRETO_RELATOS" && item.details ? (
+      {isCompleted &&
+      item.itemKey === "EMAIL_DIRETO_RELATOS" &&
+      item.details ? (
         <Typography
           variant="caption"
           component="a"
@@ -222,10 +257,61 @@ function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
         </Typography>
       ) : null}
 
-      {item.speakerName ? (
-        <Typography variant="caption" sx={{ mt: 1, display: "block", fontWeight: 700 }}>
+      {!item.supportsHistory && item.speakerName ? (
+        <Typography
+          variant="caption"
+          sx={{ mt: 1, display: "block", fontWeight: 700 }}
+        >
           Palestrante: {item.speakerName}
         </Typography>
+      ) : null}
+
+      {item.supportsHistory && visibleHistoryEntries.length > 0 ? (
+        <Stack spacing={0.75} sx={{ mt: 1.25 }}>
+          {visibleHistoryEntries.map((entry) => (
+            <Box
+              key={entry.id}
+              sx={{
+                p: 1,
+                borderRadius: 2,
+                border: "1px solid",
+                borderColor: "divider",
+                backgroundColor: "rgba(255,255,255,0.68)",
+              }}
+            >
+              <Typography variant="caption" fontWeight={800}>
+                {formatCpcaChecklistDate(entry.completedAt)}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 0.25, whiteSpace: "pre-wrap" }}
+              >
+                {entry.details || item.description}
+              </Typography>
+              {entry.speakerName ? (
+                <Typography
+                  variant="caption"
+                  sx={{ display: "block", mt: 0.4, fontWeight: 700 }}
+                >
+                  Palestrante: {entry.speakerName}
+                </Typography>
+              ) : null}
+            </Box>
+          ))}
+          {historyEntries.length > visibleHistoryEntries.length ? (
+            <Typography variant="caption" color="text.secondary">
+              +{historyEntries.length - visibleHistoryEntries.length} registro
+              {historyEntries.length - visibleHistoryEntries.length > 1
+                ? "s"
+                : ""}{" "}
+              anterior
+              {historyEntries.length - visibleHistoryEntries.length > 1
+                ? "es"
+                : ""}
+            </Typography>
+          ) : null}
+        </Stack>
       ) : null}
     </Box>
   );
@@ -272,7 +358,8 @@ export function CpcaChecklistPage() {
     inProgressCount: number;
     notStartedCount: number;
   };
-  const availableUfs = (overviewQuery.data?.filters?.availableUfs ?? []) as string[];
+  const availableUfs = (overviewQuery.data?.filters?.availableUfs ??
+    []) as string[];
 
   return (
     <Box>
@@ -319,7 +406,11 @@ export function CpcaChecklistPage() {
                 />
               </Stack>
 
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} flexWrap="wrap">
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1.25}
+                flexWrap="wrap"
+              >
                 <SummaryStatCard
                   label="Concluídas"
                   value={String(summary.completedCount)}
@@ -409,7 +500,9 @@ export function CpcaChecklistPage() {
         ) : (
           <Stack spacing={1.5}>
             {items.map((item) => {
-              const tone = getCpcaChecklistStatusTone(item.checklist.summary.status);
+              const tone = getCpcaChecklistStatusTone(
+                item.checklist.summary.status,
+              );
               return (
                 <Accordion
                   key={item.locality.id}
@@ -452,7 +545,10 @@ export function CpcaChecklistPage() {
                           <Chip
                             label={item.checklist.summary.statusLabel}
                             color={tone.color}
-                            sx={{ fontWeight: 700, background: tone.background }}
+                            sx={{
+                              fontWeight: 700,
+                              background: tone.background,
+                            }}
                           />
                           <Chip
                             label={`${item.checklist.summary.completedCount}/${item.checklist.summary.totalCount} concluídos`}
@@ -478,7 +574,9 @@ export function CpcaChecklistPage() {
                         <LinearProgress
                           variant="determinate"
                           value={item.checklist.summary.completionRate}
-                          color={tone.color === "default" ? "inherit" : tone.color}
+                          color={
+                            tone.color === "default" ? "inherit" : tone.color
+                          }
                           sx={{
                             height: 10,
                             borderRadius: 999,

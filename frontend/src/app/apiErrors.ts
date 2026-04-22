@@ -27,6 +27,8 @@ const REASON_MESSAGES: Record<string, string> = {
     "Já existe uma solicitação pendente para este militar nessa OM.",
   CPCA_PRESIDENT_REQUEST_ALREADY_PROCESSED:
     "Esta solicitação já foi processada anteriormente.",
+  CPCA_PRESIDENT_REQUEST_RESUBMISSION_ONLY_AFTER_REJECTION:
+    "Só é possível reenviar uma solicitação que tenha sido rejeitada.",
   CPCA_SELF_REGISTRATION_LOCALITY_MISMATCH:
     "Você não pode se cadastrar como presidente da CPCA de uma OM diferente da sua OM no LDAP.",
   CPCA_SELF_REGISTRATION_LDAP_LOCALITY_NOT_FOUND:

@@ -34,6 +34,7 @@ import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
@@ -67,9 +68,11 @@ import {
   BiExecutiveNotebookDialog,
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
+import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
 import { useSearchParams } from "react-router-dom";
 
 type MetricMode = "PERCENT" | "COUNT";
@@ -270,7 +273,8 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
   },
   "panel-filters": {
     title: "Filtros analíticos",
-    description: "Refine o recorte por período, perfil e respostas do formulário.",
+    description:
+      "Refine o recorte por período, perfil e respostas do formulário.",
   },
   "kpi-total": {
     title: "Respostas no recorte",
@@ -278,11 +282,13 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
   },
   "kpi-guidance": {
     title: "Segurança para orientação",
-    description: "Percentual e volume de recrutas que se sentem seguros para orientação.",
+    description:
+      "Percentual e volume de recrutas que se sentem seguros para orientação.",
   },
   "kpi-report": {
     title: "Segurança para registro",
-    description: "Percentual e volume de recrutas que se sentem seguros para registrar ocorrência.",
+    description:
+      "Percentual e volume de recrutas que se sentem seguros para registrar ocorrência.",
   },
   "kpi-attention": {
     title: "Ponto de atenção",
@@ -331,7 +337,8 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
   },
   "insight-main": {
     title: "Insight Executivo",
-    description: "Síntese de sinais de risco e leitura consolidada das respostas.",
+    description:
+      "Síntese de sinais de risco e leitura consolidada das respostas.",
   },
   "list-free-text": {
     title: "Sugestões e Comentários (texto livre)",
@@ -448,7 +455,11 @@ function DistributionCard({
   return (
     <Card sx={cardSx}>
       <CardContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+        >
           <Typography variant="subtitle1" fontWeight={700}>
             {title}
           </Typography>
@@ -473,7 +484,11 @@ function DistributionCard({
             <ResponsiveContainer width="100%" height={height}>
               <BarChart data={chartData} layout="vertical" margin={chartMargin}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-                <XAxis type="number" stroke={chartAxisStroke} tick={axisTickStyle} />
+                <XAxis
+                  type="number"
+                  stroke={chartAxisStroke}
+                  tick={axisTickStyle}
+                />
                 <YAxis
                   type="category"
                   dataKey="label"
@@ -604,7 +619,9 @@ export function BiRecruitsDashboardPage() {
   const exportNotebookMutation = useExportBiExecutiveNotebookPdf();
   const updateCardSettingMutation = useUpdateBiRecruitsCardSetting();
 
-  const dashboard = dashboardQuery.data as RecruitsDashboardResponse | undefined;
+  const dashboard = dashboardQuery.data as
+    | RecruitsDashboardResponse
+    | undefined;
   const responses = responsesQuery.data as
     | PagedResponse<RecruitsResponseRow>
     | undefined;
@@ -638,8 +655,7 @@ export function BiRecruitsDashboardPage() {
       if (!cardId) continue;
       map.set(cardId, {
         title:
-          String(item?.title ?? "").trim() ||
-          getDefaultCardText(cardId).title,
+          String(item?.title ?? "").trim() || getDefaultCardText(cardId).title,
         description:
           typeof item?.description === "string"
             ? item.description
@@ -893,7 +909,9 @@ export function BiRecruitsDashboardPage() {
     );
   }
 
-  const distributionCards: Array<Omit<DistributionCardProps, "mode" | "onEdit" | "editable">> = [
+  const distributionCards: Array<
+    Omit<DistributionCardProps, "mode" | "onEdit" | "editable">
+  > = [
     {
       cardId: "chart-education",
       title: getCardText("chart-education").title,
@@ -970,6 +988,14 @@ export function BiRecruitsDashboardPage() {
   const kpiAttentionText = getCardText("kpi-attention");
   const trendText = getCardText("chart-response-trend");
   const insightText = getCardText("insight-main");
+  const activeFiltersCount = useMemo(
+    () =>
+      countActiveBusinessIntelligenceFilters(filters, [
+        "combineMode",
+        "responseId",
+      ]),
+    [filters],
+  );
   const freeTextCardText = getCardText("list-free-text");
   const responsesText = getCardText("list-responses");
   const importsText = getCardText("list-imports");
@@ -995,7 +1021,10 @@ export function BiRecruitsDashboardPage() {
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("page-header")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("page-header")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1007,25 +1036,6 @@ export function BiRecruitsDashboardPage() {
         </Box>
 
         <Stack direction="row" spacing={1} flexWrap="wrap">
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<DownloadRoundedIcon />}
-            component="a"
-            href="/templates/bi-recruits-template.csv"
-            download
-            sx={{
-              borderColor: alpha(RC_PALETTE.primary, 0.45),
-              color: RC_PALETTE.primary,
-              "&:hover": {
-                borderColor: RC_PALETTE.primary,
-                bgcolor: alpha(RC_PALETTE.primary, 0.08),
-              },
-            }}
-          >
-            Baixar template
-          </Button>
-
           <Button
             size="small"
             variant="outlined"
@@ -1080,101 +1090,113 @@ export function BiRecruitsDashboardPage() {
               ? "Gerando caderno..."
               : "Caderno PDF"}
           </Button>
-
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<AutoGraphRoundedIcon />}
-            onClick={resetFilters}
-            sx={{
-              bgcolor: RC_PALETTE.primary,
-              "&:hover": { bgcolor: RC_PALETTE.primaryDark },
-            }}
-          >
-            Limpar filtros
-          </Button>
         </Stack>
       </Stack>
 
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Card sx={cardSx}>
-            <CardContent>
-              <Stack
-                direction={{ xs: "column", lg: "row" }}
-                justifyContent="space-between"
-                alignItems={{ lg: "center" }}
-                gap={1.2}
+      <BiCollapsibleSection
+        title={ingestionPanelText.title}
+        description={ingestionPanelText.description}
+        icon={<UploadFileRoundedIcon fontSize="small" />}
+        accentColor={RC_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              file
+                ? "Arquivo pronto"
+                : dashboard.latestImport?.fileName
+                  ? "Base atual disponível"
+                  : "Sem importação"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(RC_PALETTE.primary, 0.28),
+              color: RC_PALETTE.primary,
+              bgcolor: alpha(RC_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        headerActions={
+          isTiProfile ? (
+            <MuiTooltip title="Editar título/descrição">
+              <IconButton
+                size="small"
+                onClick={() => openCardEditor("panel-ingestion")}
               >
-                <Box>
-                  <Stack direction="row" spacing={0.8} alignItems="center">
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      {ingestionPanelText.title}
-                    </Typography>
-                    {isTiProfile ? (
-                      <MuiTooltip title="Editar título/descrição">
-                        <IconButton
-                          size="small"
-                          onClick={() => openCardEditor("panel-ingestion")}
-                        >
-                          <EditOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </MuiTooltip>
-                    ) : null}
-                  </Stack>
-                  <Typography variant="body2" sx={{ color: RC_PALETTE.muted }}>
-                    {ingestionPanelText.description}
-                  </Typography>
-                </Box>
-
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Button
-                    component="label"
-                    size="small"
-                    variant="outlined"
-                    startIcon={<UploadFileRoundedIcon />}
-                    disabled={!canUpload}
-                    sx={{
-                      borderColor: alpha(RC_PALETTE.primary, 0.45),
-                      color: RC_PALETTE.primary,
-                      "&:hover": {
-                        borderColor: RC_PALETTE.primary,
-                        bgcolor: alpha(RC_PALETTE.primary, 0.08),
-                      },
+                <EditOutlinedIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+          ) : null
+        }
+        sx={{ mb: 2, ...cardSx }}
+      >
+        <Grid container spacing={2} sx={{ pt: 1.2 }}>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Stack spacing={1.2}>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<DownloadRoundedIcon />}
+                  component="a"
+                  href="/templates/bi-recruits-template.csv"
+                  download
+                  sx={{
+                    borderColor: alpha(RC_PALETTE.primary, 0.45),
+                    color: RC_PALETTE.primary,
+                    "&:hover": {
+                      borderColor: RC_PALETTE.primary,
+                      bgcolor: alpha(RC_PALETTE.primary, 0.08),
+                    },
+                  }}
+                >
+                  Baixar template
+                </Button>
+                <Button
+                  component="label"
+                  size="small"
+                  variant="outlined"
+                  startIcon={<UploadFileRoundedIcon />}
+                  disabled={!canUpload}
+                  sx={{
+                    borderColor: alpha(RC_PALETTE.primary, 0.45),
+                    color: RC_PALETTE.primary,
+                    "&:hover": {
+                      borderColor: RC_PALETTE.primary,
+                      bgcolor: alpha(RC_PALETTE.primary, 0.08),
+                    },
+                  }}
+                >
+                  Selecionar arquivo
+                  <input
+                    hidden
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={(event) => {
+                      const selected = event.target.files?.[0] ?? null;
+                      setFile(selected);
                     }}
-                  >
-                    Selecionar arquivo
-                    <input
-                      hidden
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      onChange={(event) => {
-                        const selected = event.target.files?.[0] ?? null;
-                        setFile(selected);
-                      }}
-                    />
-                  </Button>
+                  />
+                </Button>
 
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={handleImport}
-                    disabled={!canUpload || !file || importMutation.isPending}
-                    sx={{
-                      bgcolor: RC_PALETTE.accent,
-                      "&:hover": { bgcolor: "#D0761D" },
-                    }}
-                  >
-                    {importMutation.isPending ? "Importando..." : "Importar"}
-                  </Button>
-                </Stack>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={handleImport}
+                  disabled={!canUpload || !file || importMutation.isPending}
+                  sx={{
+                    bgcolor: RC_PALETTE.accent,
+                    "&:hover": { bgcolor: "#D0761D" },
+                  }}
+                >
+                  {importMutation.isPending ? "Importando..." : "Importar"}
+                </Button>
               </Stack>
 
               <Stack
                 direction={{ xs: "column", lg: "row" }}
                 justifyContent="space-between"
                 alignItems={{ lg: "center" }}
-                mt={1.2}
                 gap={1}
               >
                 <Stack
@@ -1216,7 +1238,9 @@ export function BiRecruitsDashboardPage() {
                 <Stack direction="row" spacing={1}>
                   <Button
                     size="small"
-                    variant={metricMode === "PERCENT" ? "contained" : "outlined"}
+                    variant={
+                      metricMode === "PERCENT" ? "contained" : "outlined"
+                    }
                     onClick={() => setMetricMode("PERCENT")}
                     sx={{
                       minWidth: 84,
@@ -1256,18 +1280,24 @@ export function BiRecruitsDashboardPage() {
               </Stack>
 
               {dashboardQuery.isFetching || importsQuery.isFetching ? (
-                <Box sx={{ mt: 1.2 }}>
+                <Box sx={{ mt: 0.4 }}>
                   <LinearProgress />
                 </Box>
               ) : null}
-            </CardContent>
-          </Card>
-        </Grid>
+            </Stack>
+          </Grid>
 
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card sx={cardSx}>
-            <CardContent>
-              <Typography variant="subtitle1" fontWeight={700}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Box
+              sx={{
+                borderRadius: 3,
+                border: "1px solid",
+                borderColor: alpha(RC_PALETTE.primary, 0.12),
+                bgcolor: alpha(RC_PALETTE.primary, 0.03),
+                p: 1.6,
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight={700}>
                 Última atualização
               </Typography>
               {dashboard.latestImport ? (
@@ -1276,7 +1306,10 @@ export function BiRecruitsDashboardPage() {
                     Arquivo: <strong>{dashboard.latestImport.fileName}</strong>
                   </Typography>
                   <Typography variant="body2" sx={{ color: RC_PALETTE.muted }}>
-                    Data: <strong>{formatDate(dashboard.latestImport.importedAt)}</strong>
+                    Data:{" "}
+                    <strong>
+                      {formatDate(dashboard.latestImport.importedAt)}
+                    </strong>
                   </Typography>
                 </Stack>
               ) : (
@@ -1284,264 +1317,302 @@ export function BiRecruitsDashboardPage() {
                   Nenhuma importação registrada até o momento.
                 </Alert>
               )}
-            </CardContent>
-          </Card>
+            </Box>
+          </Grid>
         </Grid>
-      </Grid>
+      </BiCollapsibleSection>
 
-      <Card sx={{ ...cardSx, mb: 2 }}>
-        <CardContent>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 0.6 }}
-          >
-            <Typography variant="subtitle1" fontWeight={700}>
-              {filtersPanelText.title}
-            </Typography>
+      <BiCollapsibleSection
+        title={filtersPanelText.title}
+        description={filtersPanelText.description}
+        icon={<FilterListRoundedIcon fontSize="small" />}
+        accentColor={RC_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              activeFiltersCount > 0
+                ? `${activeFiltersCount} filtro${activeFiltersCount > 1 ? "s" : ""} ativo${activeFiltersCount > 1 ? "s" : ""}`
+                : "Sem filtros ativos"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(RC_PALETTE.primary, 0.28),
+              color: RC_PALETTE.primary,
+              bgcolor: alpha(RC_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        headerActions={
+          <Stack direction="row" spacing={1}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<AutoGraphRoundedIcon />}
+              onClick={resetFilters}
+              sx={{
+                borderColor: alpha(RC_PALETTE.primary, 0.35),
+                color: RC_PALETTE.primary,
+              }}
+            >
+              Limpar filtros
+            </Button>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("panel-filters")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("panel-filters")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
             ) : null}
           </Stack>
-          <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-            {filtersPanelText.description}
-          </Typography>
-
-          <Grid container spacing={1.2}>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="De"
-                type="date"
-                value={filters.from}
-                onChange={(event) => updateFilter("from", event.target.value)}
-                size="small"
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Até"
-                type="date"
-                value={filters.to}
-                onChange={(event) => updateFilter("to", event.target.value)}
-                size="small"
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Escolaridade"
-                value={filters.education}
-                onChange={(event) => updateFilter("education", event.target.value)}
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.education ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Gênero"
-                value={filters.gender}
-                onChange={(event) => updateFilter("gender", event.target.value)}
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.gender ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Identifica assédio"
-                value={filters.identifyHarassment}
-                onChange={(event) =>
-                  updateFilter("identifyHarassment", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.identifyHarassment ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Compreende limites"
-                value={filters.conductLimits}
-                onChange={(event) =>
-                  updateFilter("conductLimits", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.conductLimits ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Sabe a quem recorrer"
-                value={filters.knowOrientation}
-                onChange={(event) =>
-                  updateFilter("knowOrientation", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.knowOrientation ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Sabe registrar"
-                value={filters.knowReportProcess}
-                onChange={(event) =>
-                  updateFilter("knowReportProcess", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.knowReportProcess ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Disposição orientação"
-                value={filters.willingnessOrientation}
-                onChange={(event) =>
-                  updateFilter("willingnessOrientation", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.willingnessOrientation ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Disposição registro"
-                value={filters.willingnessReport}
-                onChange={(event) =>
-                  updateFilter("willingnessReport", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.willingnessReport ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Influência no ingresso"
-                value={filters.enlistmentDecisionInfluence}
-                onChange={(event) =>
-                  updateFilter("enlistmentDecisionInfluence", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.enlistmentDecisionInfluence ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Busca textual"
-                value={filters.q}
-                onChange={(event) => updateFilter("q", event.target.value)}
-                size="small"
-                fullWidth
-                placeholder="Buscar em comentários e respostas"
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Combinação"
-                value={filters.combineMode}
-                onChange={(event) =>
-                  updateFilter("combineMode", event.target.value as CombineMode)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="AND">Todos os filtros (AND)</MenuItem>
-                <MenuItem value="OR">Qualquer filtro (OR)</MenuItem>
-              </TextField>
-            </Grid>
+        }
+        sx={{ mb: 2, ...cardSx }}
+      >
+        <Grid container spacing={1.2} sx={{ pt: 1.2 }}>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="De"
+              type="date"
+              value={filters.from}
+              onChange={(event) => updateFilter("from", event.target.value)}
+              size="small"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
           </Grid>
-        </CardContent>
-      </Card>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Até"
+              type="date"
+              value={filters.to}
+              onChange={(event) => updateFilter("to", event.target.value)}
+              size="small"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Escolaridade"
+              value={filters.education}
+              onChange={(event) =>
+                updateFilter("education", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(dashboard.filters.education ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Gênero"
+              value={filters.gender}
+              onChange={(event) => updateFilter("gender", event.target.value)}
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.gender ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Identifica assédio"
+              value={filters.identifyHarassment}
+              onChange={(event) =>
+                updateFilter("identifyHarassment", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.identifyHarassment ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Compreende limites"
+              value={filters.conductLimits}
+              onChange={(event) =>
+                updateFilter("conductLimits", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.conductLimits ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Sabe a quem recorrer"
+              value={filters.knowOrientation}
+              onChange={(event) =>
+                updateFilter("knowOrientation", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.knowOrientation ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Sabe registrar"
+              value={filters.knowReportProcess}
+              onChange={(event) =>
+                updateFilter("knowReportProcess", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.knowReportProcess ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Disposição orientação"
+              value={filters.willingnessOrientation}
+              onChange={(event) =>
+                updateFilter("willingnessOrientation", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.willingnessOrientation ?? []).map(
+                (option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ),
+              )}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Disposição registro"
+              value={filters.willingnessReport}
+              onChange={(event) =>
+                updateFilter("willingnessReport", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.willingnessReport ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Influência no ingresso"
+              value={filters.enlistmentDecisionInfluence}
+              onChange={(event) =>
+                updateFilter("enlistmentDecisionInfluence", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(dashboard.filters.enlistmentDecisionInfluence ?? []).map(
+                (option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ),
+              )}
+            </TextField>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Busca textual"
+              value={filters.q}
+              onChange={(event) => updateFilter("q", event.target.value)}
+              size="small"
+              fullWidth
+              placeholder="Buscar em comentários e respostas"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Combinação"
+              value={filters.combineMode}
+              onChange={(event) =>
+                updateFilter("combineMode", event.target.value as CombineMode)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="AND">Todos os filtros (AND)</MenuItem>
+              <MenuItem value="OR">Qualquer filtro (OR)</MenuItem>
+            </TextField>
+          </Grid>
+        </Grid>
+      </BiCollapsibleSection>
 
       <Grid container spacing={1.2} sx={{ mb: 2 }}>
         <Grid size={{ xs: 12, md: 3 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
                 <Typography variant="overline">{kpiTotalText.title}</Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-total")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-total")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
@@ -1551,7 +1622,8 @@ export function BiRecruitsDashboardPage() {
                 {dashboard.kpis.totalResponses}
               </Typography>
               <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-                {kpiTotalText.description} Base total: {dashboard.kpis.totalRowsInDb}
+                {kpiTotalText.description} Base total:{" "}
+                {dashboard.kpis.totalRowsInDb}
               </Typography>
             </CardContent>
           </Card>
@@ -1564,11 +1636,20 @@ export function BiRecruitsDashboardPage() {
             }}
           >
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="overline">{kpiGuidanceText.title}</Typography>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Typography variant="overline">
+                  {kpiGuidanceText.title}
+                </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-guidance")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-guidance")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
@@ -1578,7 +1659,8 @@ export function BiRecruitsDashboardPage() {
                 {dashboard.kpis.secureGuidanceRatePercent.toFixed(1)}%
               </Typography>
               <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-                {kpiGuidanceText.description} Seguro(a): {dashboard.kpis.secureGuidanceCount}
+                {kpiGuidanceText.description} Seguro(a):{" "}
+                {dashboard.kpis.secureGuidanceCount}
               </Typography>
             </CardContent>
           </Card>
@@ -1591,11 +1673,20 @@ export function BiRecruitsDashboardPage() {
             }}
           >
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="overline">{kpiReportText.title}</Typography>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Typography variant="overline">
+                  {kpiReportText.title}
+                </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-report")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-report")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
@@ -1605,7 +1696,8 @@ export function BiRecruitsDashboardPage() {
                 {dashboard.kpis.secureReportRatePercent.toFixed(1)}%
               </Typography>
               <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-                {kpiReportText.description} Seguro(a): {dashboard.kpis.secureReportCount}
+                {kpiReportText.description} Seguro(a):{" "}
+                {dashboard.kpis.secureReportCount}
               </Typography>
             </CardContent>
           </Card>
@@ -1618,11 +1710,20 @@ export function BiRecruitsDashboardPage() {
             }}
           >
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Typography variant="overline">{kpiAttentionText.title}</Typography>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
+                <Typography variant="overline">
+                  {kpiAttentionText.title}
+                </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-attention")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-attention")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
@@ -1632,8 +1733,10 @@ export function BiRecruitsDashboardPage() {
                 <strong>{dashboard.insights.weakestPoint.title}</strong>
               </Typography>
               <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-                {kpiAttentionText.description} {dashboard.insights.weakestPoint.affectedCount} respostas ({" "}
-                {dashboard.insights.weakestPoint.affectedRatePercent.toFixed(1)}%)
+                {kpiAttentionText.description}{" "}
+                {dashboard.insights.weakestPoint.affectedCount} respostas ({" "}
+                {dashboard.insights.weakestPoint.affectedRatePercent.toFixed(1)}
+                %)
               </Typography>
             </CardContent>
           </Card>
@@ -1642,13 +1745,20 @@ export function BiRecruitsDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <Typography variant="subtitle1" fontWeight={700}>
               {trendText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("chart-response-trend")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("chart-response-trend")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1665,8 +1775,14 @@ export function BiRecruitsDashboardPage() {
           ) : (
             <Box sx={{ mt: 1.1 }}>
               <ResponsiveContainer width="100%" height={228}>
-                <BarChart data={dashboard.charts.responseTrend} barCategoryGap="42%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
+                <BarChart
+                  data={dashboard.charts.responseTrend}
+                  barCategoryGap="42%"
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={chartGridStroke}
+                  />
                   <XAxis
                     dataKey="dayLabel"
                     stroke={chartAxisStroke}
@@ -1688,7 +1804,9 @@ export function BiRecruitsDashboardPage() {
                     formatter={(
                       value: number,
                       _name,
-                      props: { payload?: { total?: number; positiveCount?: number } },
+                      props: {
+                        payload?: { total?: number; positiveCount?: number };
+                      },
                     ) => {
                       const payload = props?.payload;
                       return [
@@ -1715,10 +1833,7 @@ export function BiRecruitsDashboardPage() {
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
         {distributionCards.map((card) => (
-          <Grid
-            key={card.cardId}
-            size={{ xs: 12, lg: card.fullRow ? 12 : 6 }}
-          >
+          <Grid key={card.cardId} size={{ xs: 12, lg: card.fullRow ? 12 : 6 }}>
             <DistributionCard
               {...card}
               mode={metricMode}
@@ -1731,13 +1846,20 @@ export function BiRecruitsDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <Typography variant="subtitle1" fontWeight={700}>
               {insightText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("insight-main")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("insight-main")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1747,32 +1869,56 @@ export function BiRecruitsDashboardPage() {
             {insightText.description}
           </Typography>
           <Typography variant="body2" sx={{ color: RC_PALETTE.muted, mt: 0.5 }}>
-            Escolaridade dominante: <strong>{dashboard.insights.topEducation?.label ?? "-"}</strong>
+            Escolaridade dominante:{" "}
+            <strong>{dashboard.insights.topEducation?.label ?? "-"}</strong>
             {dashboard.insights.topEducation
               ? ` (${dashboard.insights.topEducation.count} respostas | ${dashboard.insights.topEducation.percent.toFixed(1)}%)`
               : ""}
           </Typography>
-          <Typography variant="body2" sx={{ color: RC_PALETTE.muted, mt: 0.35 }}>
-            Principal motivador de ingresso: <strong>{dashboard.insights.topDecisionDriver?.label ?? "-"}</strong>
+          <Typography
+            variant="body2"
+            sx={{ color: RC_PALETTE.muted, mt: 0.35 }}
+          >
+            Principal motivador de ingresso:{" "}
+            <strong>
+              {dashboard.insights.topDecisionDriver?.label ?? "-"}
+            </strong>
             {dashboard.insights.topDecisionDriver
               ? ` (${dashboard.insights.topDecisionDriver.count} respostas | ${dashboard.insights.topDecisionDriver.percent.toFixed(1)}%)`
               : ""}
           </Typography>
-          <Typography variant="body2" sx={{ color: RC_PALETTE.muted, mt: 0.35 }}>
-            Conhece a quem recorrer: <strong>{dashboard.kpis.knowOrientationYesRatePercent.toFixed(1)}%</strong> | Conhece processo de registro: <strong>{dashboard.kpis.knowReportYesRatePercent.toFixed(1)}%</strong>
+          <Typography
+            variant="body2"
+            sx={{ color: RC_PALETTE.muted, mt: 0.35 }}
+          >
+            Conhece a quem recorrer:{" "}
+            <strong>
+              {dashboard.kpis.knowOrientationYesRatePercent.toFixed(1)}%
+            </strong>{" "}
+            | Conhece processo de registro:{" "}
+            <strong>
+              {dashboard.kpis.knowReportYesRatePercent.toFixed(1)}%
+            </strong>
           </Typography>
         </CardContent>
       </Card>
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <Typography variant="subtitle1" fontWeight={700}>
               {freeTextCardText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("list-free-text")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("list-free-text")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1784,12 +1930,16 @@ export function BiRecruitsDashboardPage() {
             {dashboard.textColumns.suggestionComment.total} registros.
           </Typography>
 
-          {(dashboard.textColumns.suggestionComment.items ?? []).length === 0 ? (
+          {(dashboard.textColumns.suggestionComment.items ?? []).length ===
+          0 ? (
             <Alert severity="info" sx={{ mt: 1 }}>
               Sem comentários livres para o recorte atual.
             </Alert>
           ) : (
-            <Stack spacing={1} sx={{ mt: 1.2, maxHeight: 360, overflow: "auto", pr: 0.5 }}>
+            <Stack
+              spacing={1}
+              sx={{ mt: 1.2, maxHeight: 360, overflow: "auto", pr: 0.5 }}
+            >
               {dashboard.textColumns.suggestionComment.items.map((item) => (
                 <Box
                   key={item.id}
@@ -1800,10 +1950,24 @@ export function BiRecruitsDashboardPage() {
                     bgcolor: alpha(RC_PALETTE.primary, 0.03),
                   }}
                 >
-                  <Stack direction="row" spacing={0.8} alignItems="center" flexWrap="wrap" sx={{ mb: 0.6 }}>
+                  <Stack
+                    direction="row"
+                    spacing={0.8}
+                    alignItems="center"
+                    flexWrap="wrap"
+                    sx={{ mb: 0.6 }}
+                  >
                     <Chip size="small" label={formatDate(item.submittedAt)} />
-                    <Chip size="small" variant="outlined" label={`Escolaridade: ${item.education ?? "-"}`} />
-                    <Chip size="small" variant="outlined" label={`Gênero: ${item.gender ?? "-"}`} />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`Escolaridade: ${item.education ?? "-"}`}
+                    />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`Gênero: ${item.gender ?? "-"}`}
+                    />
                   </Stack>
                   <Typography variant="body2">{item.text}</Typography>
                 </Box>
@@ -1828,7 +1992,10 @@ export function BiRecruitsDashboardPage() {
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("list-responses")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("list-responses")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
@@ -1882,7 +2049,9 @@ export function BiRecruitsDashboardPage() {
 
           <Collapse in={responsesExpanded}>
             <Box sx={{ mt: 1.2 }}>
-              {responsesQuery.isFetching ? <LinearProgress sx={{ mb: 1 }} /> : null}
+              {responsesQuery.isFetching ? (
+                <LinearProgress sx={{ mb: 1 }} />
+              ) : null}
 
               <Table size="small">
                 <TableHead>
@@ -1921,7 +2090,9 @@ export function BiRecruitsDashboardPage() {
                       <TableCell>{item.identifyHarassment ?? "-"}</TableCell>
                       <TableCell>{item.knowReportProcess ?? "-"}</TableCell>
                       <TableCell>{item.willingnessReport ?? "-"}</TableCell>
-                      <TableCell>{item.enlistmentDecisionInfluenceText ?? "-"}</TableCell>
+                      <TableCell>
+                        {item.enlistmentDecisionInfluenceText ?? "-"}
+                      </TableCell>
                       <TableCell sx={{ maxWidth: 220 }}>
                         <Typography
                           variant="body2"
@@ -1954,7 +2125,8 @@ export function BiRecruitsDashboardPage() {
                 mt={1}
               >
                 <Typography variant="caption" sx={{ color: RC_PALETTE.muted }}>
-                  Página {responses?.page ?? page} de {totalPages} | Total: {responses?.total ?? 0}
+                  Página {responses?.page ?? page} de {totalPages} | Total:{" "}
+                  {responses?.total ?? 0}
                 </Typography>
                 <Stack direction="row" spacing={1}>
                   <Button
@@ -1984,13 +2156,20 @@ export function BiRecruitsDashboardPage() {
 
       <Card sx={cardSx}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
               {importsText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("list-imports")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("list-imports")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>

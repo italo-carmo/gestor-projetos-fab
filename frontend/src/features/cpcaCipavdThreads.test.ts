@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatComplaintCaseNumberForDisplay,
   getComplaintPendingKpiLabel,
   getComplaintPendingStatusTone,
   getComplaintPendencyBadge,
@@ -29,7 +30,7 @@ describe("cpcaCipavdThreads helpers", () => {
         resolvedPendingCount: 4,
       }),
     ).toMatchObject({
-      tone: "warning",
+      tone: "error",
       label: "Pendências 2",
     });
 
@@ -57,6 +58,18 @@ describe("cpcaCipavdThreads helpers", () => {
     expect(getComplaintPendingStatusTone("OPEN").color).toBe("#B45309");
     expect(getComplaintPendingStatusTone("RESOLVED").color).toBe("#166534");
     expect(getComplaintPendingStatusTone("CLOSED").color).toBe("#475569");
+  });
+
+  it("removes the workflow prefix from case numbers in display contexts", () => {
+    expect(formatComplaintCaseNumberForDisplay("CPCA-2026-BACO-00001")).toBe(
+      "2026-BACO-00001",
+    );
+    expect(formatComplaintCaseNumberForDisplay("SMIF-2026-BACO-00001")).toBe(
+      "2026-BACO-00001",
+    );
+    expect(formatComplaintCaseNumberForDisplay("2026-BACO-00001")).toBe(
+      "2026-BACO-00001",
+    );
   });
 
   it("sorts pending items by latest message timestamp", () => {

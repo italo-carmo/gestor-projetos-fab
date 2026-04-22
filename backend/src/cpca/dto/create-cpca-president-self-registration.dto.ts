@@ -12,6 +12,11 @@ export class CreateCpcaPresidentSelfRegistrationDto {
   @IsString()
   localityId?: string;
 
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsOptional()
+  @IsString()
+  resubmissionOfId?: string;
+
   @Transform(
     ({ value }) =>
       value === true || value === 'true' || value === '1' || value === 1,

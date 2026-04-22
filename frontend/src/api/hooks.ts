@@ -3696,11 +3696,20 @@ export function useLookupCpcaSelfRegistrationCandidate() {
   });
 }
 
+export function useLookupCpcaSelfRegistrationStatus() {
+  return useMutation({
+    mutationFn: async (payload: { identifier: string }) =>
+      (await api.post("/cpca-commission/self-registration/status", payload))
+        .data,
+  });
+}
+
 export function useCreateCpcaPresidentSelfRegistration() {
   return useMutation({
     mutationFn: async (payload: {
       identifier: string;
       localityId: string;
+      resubmissionOfId?: string;
       isSubstitution: boolean;
       bulletinNumber: string;
       bulletinFile: File;
@@ -3708,6 +3717,9 @@ export function useCreateCpcaPresidentSelfRegistration() {
       const formData = new FormData();
       formData.set("identifier", payload.identifier);
       formData.set("localityId", payload.localityId);
+      if (payload.resubmissionOfId) {
+        formData.set("resubmissionOfId", payload.resubmissionOfId);
+      }
       formData.set("isSubstitution", String(payload.isSubstitution));
       formData.set("bulletinNumber", payload.bulletinNumber);
       formData.set("bulletinFile", payload.bulletinFile);

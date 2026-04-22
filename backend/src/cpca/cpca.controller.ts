@@ -17,8 +17,10 @@ import type { RbacUser } from '../rbac/rbac.types';
 import { AddCpcaCaseCommentDto } from './dto/add-cpca-case-comment.dto';
 import { CreateCpcaCaseCipavdThreadDto } from './dto/create-cpca-case-cipavd-thread.dto';
 import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
+import { FinalizeCpcaCaseCipavdThreadDto } from './dto/finalize-cpca-case-cipavd-thread.dto';
 import { ReopenCpcaCaseCipavdThreadDto } from './dto/reopen-cpca-case-cipavd-thread.dto';
 import { ResolveCpcaCaseCipavdThreadDto } from './dto/resolve-cpca-case-cipavd-thread.dto';
+import { UpdateCpcaCaseCipavdThreadDto } from './dto/update-cpca-case-cipavd-thread.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
 import { CpcaService } from './cpca.service';
 
@@ -137,6 +139,27 @@ export class CpcaController {
     return this.cpca.createCipavdThread(id, dto, user);
   }
 
+  @Put(':id/cipavd-threads/:threadId')
+  @RequirePermission('cpca_cases', 'view')
+  updateCipavdThread(
+    @Param('id') id: string,
+    @Param('threadId') threadId: string,
+    @Body() dto: UpdateCpcaCaseCipavdThreadDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.updateCipavdThread(id, threadId, dto, user);
+  }
+
+  @Delete(':id/cipavd-threads/:threadId')
+  @RequirePermission('cpca_cases', 'view')
+  removeCipavdThread(
+    @Param('id') id: string,
+    @Param('threadId') threadId: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.removeCipavdThread(id, threadId, user);
+  }
+
   @Post(':id/cipavd-threads/:threadId/resolve')
   @RequirePermission('cpca_cases', 'view')
   resolveCipavdThread(
@@ -164,9 +187,10 @@ export class CpcaController {
   finalizeCipavdThread(
     @Param('id') id: string,
     @Param('threadId') threadId: string,
+    @Body() dto: FinalizeCpcaCaseCipavdThreadDto,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.cpca.finalizeCipavdThread(id, threadId, user);
+    return this.cpca.finalizeCipavdThread(id, threadId, dto, user);
   }
 
   @Get(':id/comments')

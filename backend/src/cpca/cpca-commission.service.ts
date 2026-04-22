@@ -75,6 +75,7 @@ export class CpcaCommissionService {
     payload: {
       identifier: string;
       localityId?: string;
+      resubmissionOfId?: string;
       isSubstitution: boolean;
       bulletinNumber: string;
       bulletinFile?: Express.Multer.File | null;
@@ -120,6 +121,7 @@ export class CpcaCommissionService {
 
     const user = await this.upsertLdapBackedUser(ldapProfile, ldapLocality.id);
     const applicantName = ldapProfile.name?.trim() || user.name;
+    const resubmissionOfId = String(payload.resubmissionOfId ?? '').trim();
 
     const pendingExisting =
       await this.prisma.cpcaPresidentSelfRegistration.findFirst({
@@ -136,6 +138,49 @@ export class CpcaCommissionService {
       });
     }
 
+    let resubmissionTarget: {
+      id: string;
+      omId: string | null;
+      applicantUserId: string;
+      status: CpcaPresidentRequestStatus;
+      retryRootRequestId: string | null;
+      attemptNumber: number;
+    } | null = null;
+    if (resubmissionOfId) {
+      resubmissionTarget =
+        await this.prisma.cpcaPresidentSelfRegistration.findUnique({
+          where: { id: resubmissionOfId },
+          select: {
+            id: true,
+            omId: true,
+            applicantUserId: true,
+            status: true,
+            retryRootRequestId: true,
+            attemptNumber: true,
+          },
+        });
+      if (!resubmissionTarget) {
+        throwError('NOT_FOUND');
+      }
+      if (resubmissionTarget.applicantUserId !== user.id) {
+        throwError('RBAC_FORBIDDEN');
+      }
+      if (resubmissionTarget.omId !== locality.id) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'CPCA_SELF_REGISTRATION_LOCALITY_MISMATCH',
+          selectedLocalityId: locality.id,
+          ldapLocalityId: locality.id,
+          ldapLocalityCode: locality.code,
+          ldapLocalityName: locality.name,
+        });
+      }
+      if (resubmissionTarget.status !== 'REJECTED') {
+        throwError('VALIDATION_ERROR', {
+          reason: 'CPCA_PRESIDENT_REQUEST_RESUBMISSION_ONLY_AFTER_REJECTION',
+        });
+      }
+    }
+
     const validatedBulletinFile = validateCpcaPresidentBulletinUpload(
       payload.bulletinFile,
     );
@@ -147,6 +192,7 @@ export class CpcaCommissionService {
       id: string;
       status: CpcaPresidentRequestStatus;
       createdAt: Date;
+      attemptNumber: number;
       om: { id: string; code: string; name: string } | null;
     };
     try {
@@ -154,6 +200,13 @@ export class CpcaCommissionService {
         data: {
           omId: locality.id,
           applicantUserId: user.id,
+          retryRootRequestId: resubmissionTarget
+            ? resubmissionTarget.retryRootRequestId || resubmissionTarget.id
+            : null,
+          previousAttemptId: resubmissionTarget?.id ?? null,
+          attemptNumber: resubmissionTarget
+            ? Number(resubmissionTarget.attemptNumber ?? 1) + 1
+            : 1,
           applicantIdentifier: identifier,
           applicantUid: ldapProfile.uid,
           applicantEmail: ldapProfile.email,
@@ -192,6 +245,8 @@ export class CpcaCommissionService {
         bulletinMimeType: storedBulletinFile.mimeType,
         bulletinFileSize: storedBulletinFile.fileSize,
         bulletinChecksum: storedBulletinFile.checksum,
+        attemptNumber: created.attemptNumber,
+        resubmissionOfId: resubmissionTarget?.id ?? null,
         ip: ip || null,
       },
     });
@@ -201,6 +256,7 @@ export class CpcaCommissionService {
         id: created.id,
         status: created.status,
         createdAt: created.createdAt,
+        attemptNumber: created.attemptNumber,
         locality: created.om,
       },
     };
@@ -237,6 +293,85 @@ export class CpcaCommissionService {
             hasCpca: locality.hasCpca,
           }
         : null,
+    };
+  }
+
+  async lookupSelfRegistrationStatus(identifierRaw: string) {
+    const identifier = this.normalizeIdentifier(identifierRaw);
+    if (!identifier) {
+      throwError('VALIDATION_ERROR', {
+        field: 'identifier',
+        reason: 'required',
+      });
+    }
+
+    const profile = await this.resolveLdapProfile(identifier);
+    const militaryIdentity = this.extractMilitaryIdentity(profile.name);
+    const locality = await this.resolveOmFromFabOm(profile.fabom);
+    const history = await this.prisma.cpcaPresidentSelfRegistration.findMany({
+      where: this.buildSelfRegistrationApplicantWhere({
+        identifier,
+        applicantUid: profile.uid,
+        applicantEmail: profile.email,
+      }),
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        applicantUser: {
+          select: { id: true, name: true, email: true, ldapUid: true },
+        },
+        decidedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: [{ createdAt: 'desc' }, { attemptNumber: 'desc' }],
+    });
+
+    const latestRequest = history[0] ?? null;
+    const accessGranted =
+      latestRequest && latestRequest.omId
+        ? Boolean(
+            await this.prisma.cpcaCommissionPresident.findFirst({
+              where: {
+                omId: latestRequest.omId,
+                userId: latestRequest.applicantUserId,
+              },
+              select: { id: true },
+            }),
+          )
+        : false;
+
+    return {
+      profile: {
+        uid: profile.uid,
+        name: profile.name,
+        email: this.normalizeEmail(profile.email),
+        fabom: profile.fabom,
+        numeroOrdem: profile.numeroOrdem,
+        postoGraduacao: militaryIdentity.postoGraduacao,
+        warName: militaryIdentity.warName,
+      },
+      locality: locality
+        ? {
+            id: locality.id,
+            code: locality.code,
+            name: locality.name,
+            hasCpca: locality.hasCpca,
+          }
+        : null,
+      latestRequest: latestRequest
+        ? {
+            ...this.serializeSelfRegistrationHistoryEntry(latestRequest, {
+              includeBulletinFile: false,
+            }),
+            accessGranted,
+          }
+        : null,
+      history: this.serializeSelfRegistrationHistory(history, {
+        includeBulletinFile: false,
+      }),
+      accessGranted,
+      canResubmit: latestRequest?.status === 'REJECTED',
+      hasPendingRequest: latestRequest?.status === 'PENDING',
     };
   }
 
@@ -830,7 +965,8 @@ export class CpcaCommissionService {
         status: 'REJECTED',
         decidedByUserId: actorUserId,
         decidedAt: new Date(),
-        decisionNotes: this.cleanOptionalText(payload.notes, {
+        decisionNotes: this.cleanRequiredText(payload.notes ?? '', {
+          field: 'notes',
           maxLength: 320,
         }),
       },
@@ -1018,9 +1154,19 @@ export class CpcaCommissionService {
         ]),
       ]);
 
+    const selfRegistrationHistoryByGroupId =
+      await this.loadSelfRegistrationHistoryByGroupId(
+        selfRegistrations.map((item) => this.getSelfRegistrationGroupId(item)),
+      );
+
     const items = [
       ...selfRegistrations.map((item) =>
-        this.serializeApprovalSelfRegistration(item),
+        this.serializeApprovalSelfRegistration(
+          item,
+          selfRegistrationHistoryByGroupId.get(
+            this.getSelfRegistrationGroupId(item),
+          ) ?? [],
+        ),
       ),
       ...nominations.map((item) => this.serializeApprovalNomination(item)),
       ...(await Promise.all(
@@ -2448,32 +2594,222 @@ export class CpcaCommissionService {
     };
   }
 
-  private serializeApprovalSelfRegistration(request: {
-    id: string;
-    status: CpcaPresidentRequestStatus;
-    applicantIdentifier: string;
+  private buildSelfRegistrationApplicantWhere(args: {
+    identifier: string;
     applicantUid: string;
     applicantEmail?: string | null;
-    applicantName: string;
-    requestedAsSubstitution: boolean;
-    bulletinNumber: string;
-    bulletinFileName?: string | null;
-    bulletinStorageKey?: string | null;
-    bulletinMimeType?: string | null;
-    bulletinFileSize?: number | null;
-    bulletinChecksum?: string | null;
-    createdAt: Date;
-    decidedAt?: Date | null;
-    decisionNotes?: string | null;
-    om: { id: string; code: string; name: string } | null;
-    applicantUser: {
-      id: string;
-      name: string;
-      email: string;
-      ldapUid?: string | null;
-    };
-    decidedByUser?: { id: string; name: string; email: string } | null;
+  }): Prisma.CpcaPresidentSelfRegistrationWhereInput {
+    const orConditions: Prisma.CpcaPresidentSelfRegistrationWhereInput[] = [
+      { applicantIdentifier: args.identifier },
+      { applicantUid: args.applicantUid },
+    ];
+    const normalizedEmail = this.normalizeEmail(args.applicantEmail);
+    if (normalizedEmail) {
+      orConditions.push({ applicantEmail: normalizedEmail });
+    }
+    return { OR: orConditions };
+  }
+
+  private getSelfRegistrationGroupId(request: {
+    id: string;
+    retryRootRequestId?: string | null;
   }) {
+    const retryRootRequestId = String(request.retryRootRequestId ?? '').trim();
+    return retryRootRequestId || request.id;
+  }
+
+  private serializeSelfRegistrationHistoryEntry(
+    request: {
+      id: string;
+      retryRootRequestId?: string | null;
+      attemptNumber: number;
+      status: CpcaPresidentRequestStatus;
+      requestedAsSubstitution: boolean;
+      bulletinNumber: string;
+      bulletinFileName?: string | null;
+      bulletinStorageKey?: string | null;
+      bulletinMimeType?: string | null;
+      bulletinFileSize?: number | null;
+      bulletinChecksum?: string | null;
+      createdAt: Date;
+      decidedAt?: Date | null;
+      decisionNotes?: string | null;
+      om?: { id: string; code: string; name: string } | null;
+      decidedByUser?: { id: string; name: string; email: string } | null;
+    },
+    options?: { includeBulletinFile?: boolean },
+  ) {
+    return {
+      id: request.id,
+      groupId: this.getSelfRegistrationGroupId(request),
+      attemptNumber:
+        typeof request.attemptNumber === 'number'
+          ? request.attemptNumber
+          : Number(request.attemptNumber ?? 1),
+      status: request.status,
+      createdAt: request.createdAt.toISOString(),
+      decidedAt: request.decidedAt ? request.decidedAt.toISOString() : null,
+      decisionNotes: request.decisionNotes ?? null,
+      locality: request.om ?? null,
+      requestedAsSubstitution: request.requestedAsSubstitution,
+      bulletinNumber: request.bulletinNumber,
+      bulletinFile: options?.includeBulletinFile
+        ? this.serializeBulletinFile({
+            fileName: request.bulletinFileName,
+            storageKey: request.bulletinStorageKey,
+            mimeType: request.bulletinMimeType,
+            fileSize: request.bulletinFileSize,
+            checksum: request.bulletinChecksum,
+          })
+        : null,
+      decidedByUser: request.decidedByUser ?? null,
+    };
+  }
+
+  private serializeSelfRegistrationHistory(
+    requests: Array<{
+      id: string;
+      retryRootRequestId?: string | null;
+      attemptNumber: number;
+      status: CpcaPresidentRequestStatus;
+      requestedAsSubstitution: boolean;
+      bulletinNumber: string;
+      bulletinFileName?: string | null;
+      bulletinStorageKey?: string | null;
+      bulletinMimeType?: string | null;
+      bulletinFileSize?: number | null;
+      bulletinChecksum?: string | null;
+      createdAt: Date;
+      decidedAt?: Date | null;
+      decisionNotes?: string | null;
+      om?: { id: string; code: string; name: string } | null;
+      decidedByUser?: { id: string; name: string; email: string } | null;
+    }>,
+    options?: { includeBulletinFile?: boolean },
+  ) {
+    return [...requests]
+      .sort((a, b) => {
+        const attemptDiff =
+          Number(a.attemptNumber ?? 1) - Number(b.attemptNumber ?? 1);
+        if (attemptDiff !== 0) return attemptDiff;
+        return a.createdAt.getTime() - b.createdAt.getTime();
+      })
+      .map((entry) =>
+        this.serializeSelfRegistrationHistoryEntry(entry, options),
+      );
+  }
+
+  private async loadSelfRegistrationHistoryByGroupId(groupIdsRaw: string[]) {
+    const groupIds = Array.from(
+      new Set(
+        (groupIdsRaw ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    const empty = new Map<
+      string,
+      Array<{
+        id: string;
+        retryRootRequestId: string | null;
+        attemptNumber: number;
+        status: CpcaPresidentRequestStatus;
+        requestedAsSubstitution: boolean;
+        bulletinNumber: string;
+        bulletinFileName: string | null;
+        bulletinStorageKey: string | null;
+        bulletinMimeType: string | null;
+        bulletinFileSize: number | null;
+        bulletinChecksum: string | null;
+        createdAt: Date;
+        decidedAt: Date | null;
+        decisionNotes: string | null;
+        om: { id: string; code: string; name: string } | null;
+        decidedByUser: { id: string; name: string; email: string } | null;
+      }>
+    >();
+    if (groupIds.length === 0) {
+      return empty;
+    }
+
+    const rows = await this.prisma.cpcaPresidentSelfRegistration.findMany({
+      where: {
+        OR: [
+          { id: { in: groupIds } },
+          { retryRootRequestId: { in: groupIds } },
+        ],
+      },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        decidedByUser: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: [{ createdAt: 'asc' }, { attemptNumber: 'asc' }],
+    });
+
+    const grouped = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const groupId = this.getSelfRegistrationGroupId(row);
+      const existing = grouped.get(groupId);
+      if (existing) {
+        existing.push(row);
+      } else {
+        grouped.set(groupId, [row]);
+      }
+    }
+
+    return grouped;
+  }
+
+  private serializeApprovalSelfRegistration(
+    request: {
+      id: string;
+      retryRootRequestId?: string | null;
+      attemptNumber: number;
+      status: CpcaPresidentRequestStatus;
+      applicantIdentifier: string;
+      applicantUid: string;
+      applicantEmail?: string | null;
+      applicantName: string;
+      requestedAsSubstitution: boolean;
+      bulletinNumber: string;
+      bulletinFileName?: string | null;
+      bulletinStorageKey?: string | null;
+      bulletinMimeType?: string | null;
+      bulletinFileSize?: number | null;
+      bulletinChecksum?: string | null;
+      createdAt: Date;
+      decidedAt?: Date | null;
+      decisionNotes?: string | null;
+      om: { id: string; code: string; name: string } | null;
+      applicantUser: {
+        id: string;
+        name: string;
+        email: string;
+        ldapUid?: string | null;
+      };
+      decidedByUser?: { id: string; name: string; email: string } | null;
+    },
+    history: Array<{
+      id: string;
+      retryRootRequestId?: string | null;
+      attemptNumber: number;
+      status: CpcaPresidentRequestStatus;
+      requestedAsSubstitution: boolean;
+      bulletinNumber: string;
+      bulletinFileName?: string | null;
+      bulletinStorageKey?: string | null;
+      bulletinMimeType?: string | null;
+      bulletinFileSize?: number | null;
+      bulletinChecksum?: string | null;
+      createdAt: Date;
+      decidedAt?: Date | null;
+      decisionNotes?: string | null;
+      om?: { id: string; code: string; name: string } | null;
+      decidedByUser?: { id: string; name: string; email: string } | null;
+    }> = [],
+  ) {
     return {
       id: request.id,
       type: 'SELF_REGISTRATION' as const,
@@ -2481,6 +2817,11 @@ export class CpcaCommissionService {
       createdAt: request.createdAt.toISOString(),
       decidedAt: request.decidedAt ? request.decidedAt.toISOString() : null,
       decisionNotes: request.decisionNotes ?? null,
+      attemptNumber: Number(request.attemptNumber ?? 1),
+      attemptGroupId: this.getSelfRegistrationGroupId(request),
+      history: this.serializeSelfRegistrationHistory(history, {
+        includeBulletinFile: true,
+      }),
       locality: request.om,
       applicant: {
         id: request.applicantUser.id,

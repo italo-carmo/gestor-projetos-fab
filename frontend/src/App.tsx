@@ -22,12 +22,7 @@ import { OrgChartPage } from "./pages/OrgChartPage";
 import { AuditPage } from "./pages/AuditPage";
 import { TaskTemplatesPage } from "./pages/TaskTemplatesPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
-import { BiSurveyDashboardPage } from "./pages/BiSurveyDashboardPage";
-import { BiDomesticViolenceDashboardPage } from "./pages/BiDomesticViolenceDashboardPage";
-import { BiRecruitsDashboardPage } from "./pages/BiRecruitsDashboardPage";
-import { BiBestPracticesCycleDashboardPage } from "./pages/BiBestPracticesCycleDashboardPage";
-import { BiCpcaMeetingDashboardPage } from "./pages/BiCpcaMeetingDashboardPage";
-import { BiGsdEvaluationDashboardPage } from "./pages/BiGsdEvaluationDashboardPage";
+import { BusinessIntelligencePage } from "./pages/BusinessIntelligencePage";
 import { StrategicDashboardPage } from "./pages/StrategicDashboardPage";
 import { AiPage } from "./pages/AiPage";
 import { ComgepSituationRoomPage } from "./pages/ComgepSituationRoomPage";
@@ -64,6 +59,13 @@ function RecruitsHistoryRedirect() {
   const params = new URLSearchParams(location.search);
   params.set("tab", "historico");
   return <Navigate to={`/gsd-recruits?${params.toString()}`} replace />;
+}
+
+function BusinessIntelligenceLegacyRedirect(props: { tab: string }) {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.set("tab", props.tab);
+  return <Navigate to={`/dashboard/bi?${params.toString()}`} replace />;
 }
 
 function App() {
@@ -128,7 +130,7 @@ function App() {
                     <RequireRoleAccess
                       allow={(user) => can(user, "bi", "view")}
                     >
-                      <BiSurveyDashboardPage />
+                      <BusinessIntelligencePage />
                     </RequireRoleAccess>
                   }
                 />
@@ -138,7 +140,7 @@ function App() {
                     <RequireRoleAccess
                       allow={(user) => can(user, "bi", "view")}
                     >
-                      <BiDomesticViolenceDashboardPage />
+                      <BusinessIntelligenceLegacyRedirect tab="domestic-violence" />
                     </RequireRoleAccess>
                   }
                 />
@@ -151,7 +153,7 @@ function App() {
                         hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])
                       }
                     >
-                      <BiRecruitsDashboardPage />
+                      <BusinessIntelligenceLegacyRedirect tab="recruits" />
                     </RequireRoleAccess>
                   }
                 />
@@ -161,7 +163,7 @@ function App() {
                     <RequireRoleAccess
                       allow={(user) => can(user, "bi", "view")}
                     >
-                      <BiBestPracticesCycleDashboardPage />
+                      <BusinessIntelligenceLegacyRedirect tab="best-practices-cycle" />
                     </RequireRoleAccess>
                   }
                 />
@@ -171,7 +173,7 @@ function App() {
                     <RequireRoleAccess
                       allow={(user) => can(user, "bi", "view")}
                     >
-                      <BiCpcaMeetingDashboardPage />
+                      <BusinessIntelligenceLegacyRedirect tab="cpca-meeting" />
                     </RequireRoleAccess>
                   }
                 />
@@ -181,7 +183,7 @@ function App() {
                     <RequireRoleAccess
                       allow={(user) => can(user, "bi", "view")}
                     >
-                      <BiGsdEvaluationDashboardPage />
+                      <BusinessIntelligenceLegacyRedirect tab="gsd-evaluation" />
                     </RequireRoleAccess>
                   }
                 />

@@ -1,16 +1,18 @@
-import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import { alpha } from "@mui/material/styles";
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Chip,
-  Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Stack,
   Typography,
 } from "@mui/material";
 import { useState } from "react";
+import { buildStrategicTabGuideUiCopy } from "../../features/strategicTabGuide";
 
 export function StrategicTabGuideCard({
   title,
@@ -29,34 +31,77 @@ export function StrategicTabGuideCard({
   usageHint?: string;
   action?: React.ReactNode;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false);
+  const copy = buildStrategicTabGuideUiCopy({
+    title,
+    description,
+    questions,
+    usageHint,
+  });
 
   return (
-    <Card
-      variant="outlined"
-      sx={{
-        mb: 2,
-        borderRadius: 2.5,
-        borderColor: "#DDE5F0",
-        borderLeft: `4px solid ${accentColor}`,
-        bgcolor: "#FFFFFF",
-        boxShadow: "0 6px 18px rgba(15, 23, 42, 0.04)",
-      }}
-    >
-      <CardContent sx={{ p: { xs: 1.5, md: 1.75 }, "&:last-child": { pb: { xs: 1.5, md: 1.75 } } }}>
-        <Stack spacing={1.5}>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={1.25}
-            justifyContent="space-between"
-            alignItems={{ md: "center" }}
-          >
+    <>
+      <Box
+        sx={{
+          mb: 2,
+          display: "flex",
+          justifyContent: "flex-end",
+        }}
+      >
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<HelpOutlineRoundedIcon />}
+          onClick={() => setOpen(true)}
+          sx={{
+            borderRadius: 999,
+            px: 1.4,
+            minHeight: 34,
+            borderColor: alpha(accentColor, 0.22),
+            color: accentColor,
+            bgcolor: "#FFFFFF",
+            fontWeight: 700,
+            boxShadow: "0 4px 14px rgba(15, 23, 42, 0.04)",
+            "&:hover": {
+              borderColor: alpha(accentColor, 0.34),
+              bgcolor: alpha(accentColor, 0.04),
+            },
+          }}
+        >
+          {copy.triggerLabel}
+        </Button>
+      </Box>
+
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ pb: 1.25 }}>
+          <Stack direction="row" spacing={1.3} alignItems="flex-start">
+            <Box
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: 1.75,
+                display: "grid",
+                placeItems: "center",
+                bgcolor: alpha(accentColor, 0.08),
+                color: accentColor,
+                border: `1px solid ${alpha(accentColor, 0.14)}`,
+                flexShrink: 0,
+                "& svg": { fontSize: 20 },
+              }}
+            >
+              {icon}
+            </Box>
             <Box sx={{ minWidth: 0 }}>
               <Chip
                 size="small"
-                label="O que esta tela responde"
+                label={copy.badgeLabel}
                 sx={{
-                  mb: 0.75,
+                  mb: 0.9,
                   height: 24,
                   bgcolor: "#F5F8FC",
                   color: accentColor,
@@ -65,127 +110,117 @@ export function StrategicTabGuideCard({
                   border: `1px solid ${alpha(accentColor, 0.18)}`,
                 }}
               />
-              <Typography variant="subtitle1" fontWeight={800} color={accentColor}>
-                {title}
+              <Typography variant="h6" fontWeight={800} color={accentColor}>
+                {copy.title}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.45, lineHeight: 1.6, maxWidth: 920 }}>
-                {description}
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.55, lineHeight: 1.65 }}
+              >
+                {copy.description}
               </Typography>
             </Box>
+          </Stack>
+        </DialogTitle>
+
+        <DialogContent dividers>
+          <Stack spacing={2}>
             <Box
               sx={{
-                width: 40,
-                height: 40,
-                borderRadius: 1.5,
-                display: "grid",
-                placeItems: "center",
-                bgcolor: "#F5F8FC",
-                color: accentColor,
-                flexShrink: 0,
-                border: `1px solid ${alpha(accentColor, 0.14)}`,
-                "& svg": { fontSize: 20 },
+                borderRadius: 2,
+                border: "1px solid #E4EBF5",
+                bgcolor: "#F8FAFD",
+                px: 1.4,
+                py: 1.3,
               }}
             >
-              {icon}
-            </Box>
-          </Stack>
-
-          <Stack direction={{ xs: "column", xl: "row" }} spacing={1} useFlexGap flexWrap="wrap">
-            {questions.map((question, index) => (
-              <Box
-                key={question}
-                sx={{
-                  flex: 1,
-                  minWidth: { xs: "100%", md: 220 },
-                  borderRadius: 2,
-                  border: "1px solid #E4EBF5",
-                  bgcolor: "#F8FAFD",
-                  px: 1.2,
-                  py: 1,
-                }}
+              <Typography
+                variant="subtitle2"
+                fontWeight={800}
+                color={accentColor}
+                sx={{ mb: 1.2 }}
               >
-                <Stack direction="row" spacing={0.8} alignItems="flex-start">
-                  <Chip
-                    size="small"
-                    label={index + 1}
-                    sx={{
-                      mt: 0.05,
-                      minWidth: 24,
-                      height: 24,
-                      bgcolor: "#FFFFFF",
-                      color: accentColor,
-                      fontWeight: 800,
-                      fontSize: 11,
-                      border: `1px solid ${alpha(accentColor, 0.24)}`,
-                    }}
-                  />
-                  <Typography variant="body2" fontWeight={700} sx={{ lineHeight: 1.45 }}>
-                    {question}
-                  </Typography>
-                </Stack>
-              </Box>
-            ))}
-          </Stack>
+                {copy.questionsTitle}
+              </Typography>
 
-          {(usageHint || action) && (
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={0.75}
-              justifyContent="space-between"
-              alignItems={{ md: "center" }}
-            >
-              {usageHint ? (
-                <Button
-                  size="small"
-                  onClick={() => setExpanded((prev) => !prev)}
-                  endIcon={
-                    <ExpandMoreRoundedIcon
+              <Stack spacing={1}>
+                {copy.questions.map((question, index) => (
+                  <Stack
+                    key={question}
+                    direction="row"
+                    spacing={1}
+                    alignItems="flex-start"
+                  >
+                    <Chip
+                      size="small"
+                      label={index + 1}
                       sx={{
-                        transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-                        transition: "transform 0.2s ease",
+                        mt: 0.1,
+                        minWidth: 24,
+                        height: 24,
+                        bgcolor: "#FFFFFF",
+                        color: accentColor,
+                        fontWeight: 800,
+                        fontSize: 11,
+                        border: `1px solid ${alpha(accentColor, 0.24)}`,
+                        flexShrink: 0,
                       }}
                     />
-                  }
-                  sx={{
-                    alignSelf: "flex-start",
-                    color: accentColor,
-                    fontWeight: 700,
-                    px: 0.25,
-                    minHeight: 28,
-                    "&:hover": {
-                      bgcolor: "transparent",
-                      color: accentColor,
-                    },
-                  }}
-                >
-                  Como usar esta tela
-                </Button>
-              ) : (
-                <Box />
-              )}
-              {action}
-            </Stack>
-          )}
+                    <Typography variant="body2" sx={{ lineHeight: 1.55 }}>
+                      {question}
+                    </Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Box>
 
-          {usageHint ? (
-            <Collapse in={expanded} timeout="auto" unmountOnExit>
+            {copy.hasUsageHint ? (
               <Box
                 sx={{
                   borderRadius: 2,
-                  border: `1px dashed ${alpha(accentColor, 0.2)}`,
+                  border: `1px dashed ${alpha(accentColor, 0.24)}`,
                   bgcolor: "#FAFBFD",
-                  px: 1.2,
-                  py: 1,
+                  px: 1.4,
+                  py: 1.3,
                 }}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65 }}>
-                  {usageHint}
+                <Typography
+                  variant="subtitle2"
+                  fontWeight={800}
+                  color={accentColor}
+                  sx={{ mb: 0.85 }}
+                >
+                  {copy.usageTitle}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  {copy.usageHint}
                 </Typography>
               </Box>
-            </Collapse>
-          ) : null}
-        </Stack>
-      </CardContent>
-    </Card>
+            ) : null}
+
+            {action ? (
+              <Stack
+                direction="row"
+                justifyContent="flex-end"
+                sx={{ pt: 0.25 }}
+              >
+                {action}
+              </Stack>
+            ) : null}
+          </Stack>
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setOpen(false)} color="inherit">
+            Fechar
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }

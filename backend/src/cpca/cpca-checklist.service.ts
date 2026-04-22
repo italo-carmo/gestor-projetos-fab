@@ -10,6 +10,7 @@ import {
   CPCA_CHECKLIST_ITEM_KEYS,
   type CpcaChecklistItemKey,
   isCpcaChecklistDirectEmailItem,
+  isCpcaChecklistHistoryItem,
   isCpcaChecklistIntraerLinkItem,
   isCpcaChecklistItemKey,
 } from './cpca-checklist.constants';
@@ -22,10 +23,38 @@ type ChecklistUpdateInput = {
     completedAt?: string | null;
     details?: string | null;
     speakerName?: string | null;
+    historyEntries?: Array<{
+      id?: string | null;
+      completedAt: string;
+      details?: string | null;
+      speakerName?: string | null;
+    }>;
   }>;
 };
 
 type ChecklistStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+
+type ChecklistHistoryEntryDraft = {
+  id?: string | null;
+  completedAt: Date;
+  details: string | null;
+  speakerName: string | null;
+};
+
+type NormalizedChecklistItem =
+  | {
+      kind: 'BOOLEAN';
+      itemKey: CpcaChecklistItemKey;
+      isCompleted: boolean;
+      completedAt: Date | null;
+      details: string | null;
+      speakerName: string | null;
+    }
+  | {
+      kind: 'HISTORY';
+      itemKey: CpcaChecklistItemKey;
+      historyEntries: ChecklistHistoryEntryDraft[];
+    };
 
 @Injectable()
 export class CpcaChecklistService {
@@ -72,9 +101,79 @@ export class CpcaChecklistService {
     await this.assertPresidentUser(actorUserId, localityId);
 
     const normalizedItems = this.normalizeChecklistItems(payload.items);
+    const existingHistoryEntries = await (
+      this.prisma as any
+    ).cpcaChecklistHistoryEntry.findMany({
+      where: { omId: localityId },
+      select: {
+        id: true,
+        itemKey: true,
+        completedAt: true,
+        details: true,
+        speakerName: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    const existingHistoryByKey = new Map<
+      string,
+      Array<{
+        id: string;
+        itemKey: string;
+        completedAt: Date;
+        details: string | null;
+        speakerName: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+      }>
+    >();
+    for (const entry of existingHistoryEntries) {
+      const group = existingHistoryByKey.get(entry.itemKey) ?? [];
+      group.push(entry);
+      existingHistoryByKey.set(entry.itemKey, group);
+    }
 
     await this.prisma.$transaction(async (tx) => {
       for (const item of normalizedItems) {
+        if (item.kind === 'BOOLEAN') {
+          await tx.cpcaChecklistItem.upsert({
+            where: {
+              omId_itemKey: {
+                omId: localityId,
+                itemKey: item.itemKey,
+              },
+            },
+            update: {
+              isCompleted: item.isCompleted,
+              completedAt: item.completedAt,
+              details: item.details,
+              speakerName: item.speakerName,
+              updatedByUserId: actorUserId,
+            },
+            create: {
+              omId: localityId,
+              itemKey: item.itemKey,
+              isCompleted: item.isCompleted,
+              completedAt: item.completedAt,
+              details: item.details,
+              speakerName: item.speakerName,
+              updatedByUserId: actorUserId,
+            },
+          });
+          continue;
+        }
+
+        const existingEntries = existingHistoryByKey.get(item.itemKey) ?? [];
+        const nextEntries = await this.syncHistoryEntriesForItem(
+          tx,
+          localityId,
+          item.itemKey,
+          actorUserId,
+          existingEntries,
+          item.historyEntries,
+        );
+        const latestEntry = this.getLatestHistoryEntry(nextEntries);
+
         await tx.cpcaChecklistItem.upsert({
           where: {
             omId_itemKey: {
@@ -83,19 +182,19 @@ export class CpcaChecklistService {
             },
           },
           update: {
-            isCompleted: item.isCompleted,
-            completedAt: item.completedAt,
-            details: item.details,
-            speakerName: item.speakerName,
+            isCompleted: Boolean(latestEntry),
+            completedAt: latestEntry?.completedAt ?? null,
+            details: latestEntry?.details ?? null,
+            speakerName: latestEntry?.speakerName ?? null,
             updatedByUserId: actorUserId,
           },
           create: {
             omId: localityId,
             itemKey: item.itemKey,
-            isCompleted: item.isCompleted,
-            completedAt: item.completedAt,
-            details: item.details,
-            speakerName: item.speakerName,
+            isCompleted: Boolean(latestEntry),
+            completedAt: latestEntry?.completedAt ?? null,
+            details: latestEntry?.details ?? null,
+            speakerName: latestEntry?.speakerName ?? null,
             updatedByUserId: actorUserId,
           },
         });
@@ -123,6 +222,8 @@ export class CpcaChecklistService {
           completedAt: item.completedAt,
           details: item.details,
           speakerName: item.speakerName,
+          historyCount: item.historyCount,
+          historyEntries: item.historyEntries,
         })),
       },
     });
@@ -158,7 +259,7 @@ export class CpcaChecklistService {
       omWhere.uf = uf;
     }
 
-    const oms = await this.prisma.om.findMany({
+    const oms: any[] = await (this.prisma as any).om.findMany({
       where: omWhere,
       select: {
         id: true,
@@ -189,13 +290,25 @@ export class CpcaChecklistService {
             updatedAt: true,
           },
         },
+        cpcaChecklistHistoryEntries: {
+          select: {
+            id: true,
+            itemKey: true,
+            completedAt: true,
+            details: true,
+            speakerName: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
       orderBy: { name: 'asc' },
     });
 
-    const allItems = oms.map((om) => {
+    const allItems = oms.map((om: any) => {
       const checklist = this.buildChecklistSnapshotFromRows(
         om.cpcaChecklistItems,
+        om.cpcaChecklistHistoryEntries,
       );
       return {
         locality: {
@@ -218,7 +331,7 @@ export class CpcaChecklistService {
     });
 
     const filteredItems = allItems
-      .filter((item) => {
+      .filter((item: any) => {
         if (
           statusFilter !== 'ALL' &&
           item.checklist.summary.status !== statusFilter
@@ -241,7 +354,7 @@ export class CpcaChecklistService {
 
         return haystack.includes(search);
       })
-      .sort((a, b) => {
+      .sort((a: any, b: any) => {
         const completionDiff =
           a.checklist.summary.completionRate -
           b.checklist.summary.completionRate;
@@ -252,10 +365,10 @@ export class CpcaChecklistService {
         );
       });
 
-    const availableUfs = Array.from(
+    const availableUfs: string[] = Array.from(
       new Set(
         oms
-          .map((om) =>
+          .map((om: any) =>
             String(om.uf ?? '')
               .trim()
               .toUpperCase(),
@@ -277,19 +390,33 @@ export class CpcaChecklistService {
   }
 
   private async buildChecklistSnapshot(localityId: string) {
-    const rows = await this.prisma.cpcaChecklistItem.findMany({
-      where: { omId: localityId },
-      select: {
-        itemKey: true,
-        isCompleted: true,
-        completedAt: true,
-        details: true,
-        speakerName: true,
-        updatedAt: true,
-      },
-    });
+    const [rows, historyEntries] = await Promise.all([
+      this.prisma.cpcaChecklistItem.findMany({
+        where: { omId: localityId },
+        select: {
+          itemKey: true,
+          isCompleted: true,
+          completedAt: true,
+          details: true,
+          speakerName: true,
+          updatedAt: true,
+        },
+      }),
+      (this.prisma as any).cpcaChecklistHistoryEntry.findMany({
+        where: { omId: localityId },
+        select: {
+          id: true,
+          itemKey: true,
+          completedAt: true,
+          details: true,
+          speakerName: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
 
-    return this.buildChecklistSnapshotFromRows(rows);
+    return this.buildChecklistSnapshotFromRows(rows, historyEntries);
   }
 
   private buildChecklistSnapshotFromRows(
@@ -301,20 +428,71 @@ export class CpcaChecklistService {
       speakerName: string | null;
       updatedAt: Date;
     }>,
+    historyEntries: Array<{
+      id: string;
+      itemKey: string;
+      completedAt: Date;
+      details: string | null;
+      speakerName: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>,
   ) {
     const rowsByKey = new Map(rows.map((row) => [row.itemKey, row] as const));
+    const historyByKey = new Map<
+      string,
+      Array<{
+        id: string;
+        itemKey: string;
+        completedAt: Date;
+        details: string | null;
+        speakerName: string | null;
+        createdAt: Date;
+        updatedAt: Date;
+      }>
+    >();
+    for (const entry of historyEntries) {
+      const group = historyByKey.get(entry.itemKey) ?? [];
+      group.push(entry);
+      historyByKey.set(entry.itemKey, group);
+    }
     const items = CPCA_CHECKLIST_ITEMS.map((definition) => {
       const row = rowsByKey.get(definition.key);
+      const itemHistoryEntries = this.sortHistoryEntries(
+        historyByKey.get(definition.key) ?? [],
+      );
+      const latestHistoryEntry = this.getLatestHistoryEntry(itemHistoryEntries);
+      const isHistoryItem = isCpcaChecklistHistoryItem(definition.key);
       return {
         itemKey: definition.key,
         label: definition.label,
         shortLabel: definition.shortLabel,
         description: definition.description,
         requiresSpeakerName: definition.requiresSpeakerName,
-        isCompleted: Boolean(row?.isCompleted),
-        completedAt: row?.completedAt ? row.completedAt.toISOString() : null,
-        details: row?.details ?? null,
-        speakerName: row?.speakerName ?? null,
+        supportsHistory: isHistoryItem,
+        isCompleted: isHistoryItem
+          ? itemHistoryEntries.length > 0
+          : Boolean(row?.isCompleted),
+        completedAt: isHistoryItem
+          ? (latestHistoryEntry?.completedAt?.toISOString() ?? null)
+          : row?.completedAt
+            ? row.completedAt.toISOString()
+            : null,
+        details: isHistoryItem
+          ? (latestHistoryEntry?.details ?? null)
+          : (row?.details ?? null),
+        speakerName: isHistoryItem
+          ? (latestHistoryEntry?.speakerName ?? null)
+          : (row?.speakerName ?? null),
+        historyCount: itemHistoryEntries.length,
+        historyEntries: itemHistoryEntries.map((entry) => ({
+          id: entry.id,
+          completedAt: entry.completedAt.toISOString(),
+          details: entry.details ?? null,
+          speakerName: entry.speakerName ?? null,
+          createdAt: entry.createdAt.toISOString(),
+          updatedAt: entry.updatedAt.toISOString(),
+        })),
         updatedAt: row?.updatedAt ? row.updatedAt.toISOString() : null,
       };
     });
@@ -416,12 +594,30 @@ export class CpcaChecklistService {
         });
       }
 
+      if (isCpcaChecklistHistoryItem(itemKey)) {
+        return {
+          kind: 'HISTORY' as const,
+          itemKey,
+          historyEntries: this.normalizeChecklistHistoryEntries(
+            itemKey,
+            item.historyEntries,
+            {
+              isCompleted: Boolean(item.isCompleted),
+              completedAt: item.completedAt,
+              details: item.details,
+              speakerName: item.speakerName,
+            },
+          ),
+        };
+      }
+
       const isCompleted = Boolean(item.isCompleted);
       const details = this.cleanOptionalText(item.details, 2000);
       const speakerName = this.cleanOptionalText(item.speakerName, 220);
 
       if (!isCompleted) {
         return {
+          kind: 'BOOLEAN' as const,
           itemKey,
           isCompleted: false,
           completedAt: null as Date | null,
@@ -450,25 +646,14 @@ export class CpcaChecklistService {
       if (isCpcaChecklistIntraerLinkItem(itemKey) && details) {
         this.assertValidChecklistUrl(details);
       }
-      if (itemKey === 'PALESTRA' && !details) {
-        throwError('VALIDATION_ERROR', {
-          field: 'details',
-          reason: 'CPCA_CHECKLIST_PALESTRA_DETAILS_REQUIRED',
-        });
-      }
-      if (itemKey === 'PALESTRA' && !speakerName) {
-        throwError('VALIDATION_ERROR', {
-          field: 'speakerName',
-          reason: 'CPCA_CHECKLIST_PALESTRA_SPEAKER_REQUIRED',
-        });
-      }
 
       return {
+        kind: 'BOOLEAN' as const,
         itemKey,
         isCompleted: true,
         completedAt,
         details,
-        speakerName: itemKey === 'PALESTRA' ? speakerName : null,
+        speakerName,
       };
     });
 
@@ -496,6 +681,196 @@ export class CpcaChecklistService {
     return CPCA_CHECKLIST_ITEM_KEYS.map(
       (itemKey) => normalized.find((item) => item.itemKey === itemKey)!,
     );
+  }
+
+  private normalizeChecklistHistoryEntries(
+    itemKey: CpcaChecklistItemKey,
+    rawEntries:
+      | Array<{
+          id?: string | null;
+          completedAt: string;
+          details?: string | null;
+          speakerName?: string | null;
+        }>
+      | null
+      | undefined,
+    fallback: {
+      isCompleted: boolean;
+      completedAt?: string | null;
+      details?: string | null;
+      speakerName?: string | null;
+    },
+  ) {
+    const entries = Array.isArray(rawEntries) ? rawEntries : [];
+    const normalizedEntries = entries.map((entry) =>
+      this.normalizeSingleChecklistHistoryEntry(itemKey, {
+        id: entry.id ?? null,
+        completedAt: entry.completedAt,
+        details: entry.details,
+        speakerName: entry.speakerName,
+      }),
+    );
+
+    if (normalizedEntries.length > 0) {
+      return this.sortHistoryEntries(normalizedEntries);
+    }
+
+    if (!fallback.isCompleted) {
+      return [] as ChecklistHistoryEntryDraft[];
+    }
+
+    return [
+      this.normalizeSingleChecklistHistoryEntry(itemKey, {
+        id: null,
+        completedAt: fallback.completedAt,
+        details: fallback.details,
+        speakerName: fallback.speakerName,
+      }),
+    ];
+  }
+
+  private normalizeSingleChecklistHistoryEntry(
+    itemKey: CpcaChecklistItemKey,
+    entry: {
+      id?: string | null;
+      completedAt?: string | null;
+      details?: string | null;
+      speakerName?: string | null;
+    },
+  ) {
+    const details = this.cleanOptionalText(entry.details, 2000);
+    const speakerName = this.cleanOptionalText(entry.speakerName, 220);
+    const completedAt = this.parseChecklistDate(entry.completedAt, itemKey);
+
+    if (!details) {
+      throwError('VALIDATION_ERROR', {
+        field: 'details',
+        reason:
+          itemKey === 'PALESTRA'
+            ? 'CPCA_CHECKLIST_PALESTRA_DETAILS_REQUIRED'
+            : 'CPCA_CHECKLIST_HISTORY_DETAILS_REQUIRED',
+        itemKey,
+      });
+    }
+
+    if (itemKey === 'PALESTRA' && !speakerName) {
+      throwError('VALIDATION_ERROR', {
+        field: 'speakerName',
+        reason: 'CPCA_CHECKLIST_PALESTRA_SPEAKER_REQUIRED',
+      });
+    }
+
+    return {
+      id: String(entry.id ?? '').trim() || null,
+      completedAt,
+      details,
+      speakerName: itemKey === 'PALESTRA' ? speakerName : null,
+    };
+  }
+
+  private async syncHistoryEntriesForItem(
+    tx: any,
+    localityId: string,
+    itemKey: CpcaChecklistItemKey,
+    actorUserId: string,
+    existingEntries: Array<{
+      id: string;
+      itemKey: string;
+      completedAt: Date;
+      details: string | null;
+      speakerName: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>,
+    payloadEntries: ChecklistHistoryEntryDraft[],
+  ) {
+    const existingById = new Map(
+      existingEntries.map((entry) => [entry.id, entry] as const),
+    );
+    const updatedEntries = [...existingEntries];
+
+    for (const entry of payloadEntries) {
+      if (entry.id && existingById.has(entry.id)) {
+        const current = existingById.get(entry.id)!;
+        await tx.cpcaChecklistHistoryEntry.update({
+          where: { id: entry.id },
+          data: {
+            completedAt: entry.completedAt,
+            details: entry.details,
+            speakerName: entry.speakerName,
+          },
+        });
+        const index = updatedEntries.findIndex((item) => item.id === entry.id);
+        if (index >= 0) {
+          updatedEntries[index] = {
+            ...current,
+            completedAt: entry.completedAt,
+            details: entry.details,
+            speakerName: entry.speakerName,
+            updatedAt: new Date(),
+          };
+        }
+        continue;
+      }
+
+      const matchingExistingEntry = updatedEntries.find(
+        (current) =>
+          current.completedAt.getTime() === entry.completedAt.getTime() &&
+          String(current.details ?? '') === String(entry.details ?? '') &&
+          String(current.speakerName ?? '') === String(entry.speakerName ?? ''),
+      );
+      if (matchingExistingEntry) {
+        continue;
+      }
+
+      const created = await tx.cpcaChecklistHistoryEntry.create({
+        data: {
+          omId: localityId,
+          itemKey,
+          completedAt: entry.completedAt,
+          details: entry.details,
+          speakerName: entry.speakerName,
+          createdByUserId: actorUserId,
+        },
+        select: {
+          id: true,
+          itemKey: true,
+          completedAt: true,
+          details: true,
+          speakerName: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      updatedEntries.push(created);
+    }
+
+    return this.sortHistoryEntries(updatedEntries);
+  }
+
+  private sortHistoryEntries<
+    T extends {
+      completedAt: Date;
+      createdAt?: Date;
+    },
+  >(entries: T[]) {
+    return [...entries].sort((left, right) => {
+      const completedDiff =
+        right.completedAt.getTime() - left.completedAt.getTime();
+      if (completedDiff !== 0) return completedDiff;
+      return (
+        (right.createdAt?.getTime() ?? 0) - (left.createdAt?.getTime() ?? 0)
+      );
+    });
+  }
+
+  private getLatestHistoryEntry<
+    T extends {
+      completedAt: Date;
+      createdAt?: Date;
+    },
+  >(entries: T[]) {
+    return this.sortHistoryEntries(entries).at(0) ?? null;
   }
 
   private parseChecklistDate(

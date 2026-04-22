@@ -1490,21 +1490,21 @@ model CpcComplaintStatusHistory {
 }
 
 model CpcaCommissionPresident {
-  id                  String                                  @id @default(cuid())
-  omId                String?                                 @unique
-  userId              String
-  assignedByUserId    String?
-  assignmentSource    CpcaCommissionPresidentAssignmentSource @default(DIRECT_ASSIGNMENT)
-  designationBulletin String?
-  designationBulletinFileName    String?
-  designationBulletinStorageKey  String?
-  designationBulletinMimeType    String?
-  designationBulletinFileSize    Int?
-  designationBulletinChecksum    String?
-  isSubstitution      Boolean                                 @default(false)
-  assignedAt          DateTime                                @default(now())
-  createdAt           DateTime                                @default(now())
-  updatedAt           DateTime                                @updatedAt
+  id                            String                                  @id @default(cuid())
+  omId                          String?                                 @unique
+  userId                        String
+  assignedByUserId              String?
+  assignmentSource              CpcaCommissionPresidentAssignmentSource @default(DIRECT_ASSIGNMENT)
+  designationBulletin           String?
+  designationBulletinFileName   String?
+  designationBulletinStorageKey String?
+  designationBulletinMimeType   String?
+  designationBulletinFileSize   Int?
+  designationBulletinChecksum   String?
+  isSubstitution                Boolean                                 @default(false)
+  assignedAt                    DateTime                                @default(now())
+  createdAt                     DateTime                                @default(now())
+  updatedAt                     DateTime                                @updatedAt
 
   om             Om?   @relation(fields: [omId], references: [id], onDelete: SetNull)
   user           User  @relation("CpcaCommissionPresidentUser", fields: [userId], references: [id], onDelete: Restrict)
@@ -1555,15 +1555,15 @@ model CpcaChecklistItem {
 }
 
 model CpcaChecklistHistoryEntry {
-  id              String    @id @default(cuid())
+  id              String   @id @default(cuid())
   omId            String
   itemKey         String
   completedAt     DateTime
   details         String?
   speakerName     String?
   createdByUserId String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   om            Om    @relation(fields: [omId], references: [id], onDelete: Cascade)
   createdByUser User? @relation("CpcaChecklistHistoryCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
@@ -1577,6 +1577,9 @@ model CpcaPresidentSelfRegistration {
   id                      String                     @id @default(cuid())
   omId                    String?
   applicantUserId         String
+  retryRootRequestId      String?
+  previousAttemptId       String?
+  attemptNumber           Int                        @default(1)
   applicantIdentifier     String
   applicantUid            String
   applicantEmail          String?
@@ -1595,14 +1598,20 @@ model CpcaPresidentSelfRegistration {
   createdAt               DateTime                   @default(now())
   updatedAt               DateTime                   @updatedAt
 
-  om            Om?   @relation(fields: [omId], references: [id], onDelete: SetNull)
-  applicantUser User  @relation("CpcaPresidentSelfRegistrationApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict)
-  decidedByUser User? @relation("CpcaPresidentSelfRegistrationDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  om               Om?                             @relation(fields: [omId], references: [id], onDelete: SetNull)
+  applicantUser    User                            @relation("CpcaPresidentSelfRegistrationApplicant", fields: [applicantUserId], references: [id], onDelete: Restrict)
+  decidedByUser    User?                           @relation("CpcaPresidentSelfRegistrationDecidedBy", fields: [decidedByUserId], references: [id], onDelete: SetNull)
+  retryRootRequest CpcaPresidentSelfRegistration?  @relation("CpcaPresidentSelfRegistrationRetryRoot", fields: [retryRootRequestId], references: [id], onDelete: SetNull)
+  retryAttempts    CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationRetryRoot")
+  previousAttempt  CpcaPresidentSelfRegistration?  @relation("CpcaPresidentSelfRegistrationPreviousAttempt", fields: [previousAttemptId], references: [id], onDelete: SetNull)
+  nextAttempts     CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationPreviousAttempt")
 
   @@index([status, createdAt])
   @@index([omId, status])
   @@index([applicantUserId])
   @@index([decidedByUserId])
+  @@index([retryRootRequestId, createdAt])
+  @@index([previousAttemptId])
 }
 
 model CpcaPresidentNominationRequest {

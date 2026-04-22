@@ -63,6 +63,7 @@ export class CpcaCommissionController {
       {
         identifier: dto.identifier,
         localityId: dto.localityId,
+        resubmissionOfId: dto.resubmissionOfId,
         isSubstitution: dto.isSubstitution,
         bulletinNumber: dto.bulletinNumber,
         bulletinFile,
@@ -78,6 +79,13 @@ export class CpcaCommissionController {
     @Body() dto: LookupCpcaPresidentCandidateDto,
   ) {
     return this.cpcaCommission.lookupSelfRegistrationCandidate(dto.identifier);
+  }
+
+  @Post('self-registration/status')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 8, ttl: 60_000 } })
+  lookupSelfRegistrationStatus(@Body() dto: LookupCpcaPresidentCandidateDto) {
+    return this.cpcaCommission.lookupSelfRegistrationStatus(dto.identifier);
   }
 
   @Get('overview')

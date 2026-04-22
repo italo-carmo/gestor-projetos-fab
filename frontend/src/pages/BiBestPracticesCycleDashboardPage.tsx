@@ -33,6 +33,7 @@ import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
@@ -69,10 +70,12 @@ import {
   BiExecutiveNotebookDialog,
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
+import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
 import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
 
 type MetricMode = "PERCENT" | "COUNT";
 type CombineMode = "AND" | "OR";
@@ -311,11 +314,13 @@ const CARD_DEFAULTS: Record<CardId, EditableCardText> = {
   },
   "chart-q2": {
     title: "Q2 · Sinto-me preparado",
-    description: "Distribuição das respostas da pergunta de preparo individual.",
+    description:
+      "Distribuição das respostas da pergunta de preparo individual.",
   },
   "chart-q3": {
     title: "Q3 · Vieses de gênero",
-    description: "Percepção sobre influência de vieses nas decisões e práticas.",
+    description:
+      "Percepção sobre influência de vieses nas decisões e práticas.",
   },
   "chart-q4": {
     title: "Q4 · Diferença de interação",
@@ -435,7 +440,10 @@ function DistributionCard({
   );
   const useLongLabelLayout = longLabels || longestLabelLength >= 34;
   const rowHeight = useLongLabelLayout ? 34 : 24;
-  const height = Math.max(useLongLabelLayout ? 228 : 164, chartData.length * rowHeight);
+  const height = Math.max(
+    useLongLabelLayout ? 228 : 164,
+    chartData.length * rowHeight,
+  );
   const yAxisWidth = useLongLabelLayout ? 240 : 170;
   const yAxisTickStyle = useLongLabelLayout
     ? { ...axisTickStyle, fontSize: 11 }
@@ -445,7 +453,11 @@ function DistributionCard({
   return (
     <Card sx={cardSx}>
       <CardContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+        >
           <Typography variant="subtitle1" fontWeight={700}>
             {cardText.title}
           </Typography>
@@ -470,7 +482,11 @@ function DistributionCard({
             <ResponsiveContainer width="100%" height={height}>
               <BarChart data={chartData} layout="vertical" margin={{ left: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-                <XAxis type="number" stroke={chartAxisStroke} tick={axisTickStyle} />
+                <XAxis
+                  type="number"
+                  stroke={chartAxisStroke}
+                  tick={axisTickStyle}
+                />
                 <YAxis
                   type="category"
                   dataKey="label"
@@ -614,9 +630,7 @@ export function BiBestPracticesCycleDashboardPage() {
       const cardId = String(item?.cardId ?? "").trim();
       if (!isCardId(cardId)) continue;
       map.set(cardId, {
-        title:
-          String(item?.title ?? "").trim() ||
-          CARD_DEFAULTS[cardId].title,
+        title: String(item?.title ?? "").trim() || CARD_DEFAULTS[cardId].title,
         description:
           typeof item?.description === "string"
             ? item.description
@@ -908,7 +922,9 @@ export function BiBestPracticesCycleDashboardPage() {
   }
 
   if (!dashboard) {
-    return <Alert severity="warning">Não foi possível carregar o painel.</Alert>;
+    return (
+      <Alert severity="warning">Não foi possível carregar o painel.</Alert>
+    );
   }
 
   const pageHeaderText = getCardText("page-header");
@@ -920,6 +936,10 @@ export function BiBestPracticesCycleDashboardPage() {
   const trendText = getCardText("chart-trend-q2");
   const listQ5Text = getCardText("list-q5");
   const listSpecialtyText = getCardText("list-specialty");
+  const activeFiltersCount = useMemo(
+    () => countActiveBusinessIntelligenceFilters(filters, ["combineMode"]),
+    [filters],
+  );
 
   const trendOptions = dashboard.charts.preparednessTrendByDay.options ?? [];
   const trendItems = dashboard.charts.preparednessTrendByDay.items ?? [];
@@ -990,7 +1010,10 @@ export function BiBestPracticesCycleDashboardPage() {
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("page-header")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("page-header")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1001,29 +1024,6 @@ export function BiBestPracticesCycleDashboardPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<DownloadRoundedIcon />}
-            component="a"
-            href="/templates/bi-best-practices-cycle-template.csv"
-            download
-            sx={{
-              height: 36,
-              px: 1.4,
-              fontSize: 13,
-              whiteSpace: "nowrap",
-              borderColor: alpha(BPC_PALETTE.primary, 0.5),
-              color: BPC_PALETTE.primary,
-              "& .MuiButton-startIcon > *": { fontSize: 18 },
-              "&:hover": {
-                borderColor: BPC_PALETTE.primary,
-                bgcolor: alpha(BPC_PALETTE.primary, 0.06),
-              },
-            }}
-          >
-            Baixar template
-          </Button>
           <Button
             size="small"
             variant="outlined"
@@ -1091,280 +1091,355 @@ export function BiBestPracticesCycleDashboardPage() {
               ? "Gerando caderno..."
               : "Caderno PDF"}
           </Button>
+        </Stack>
+      </Stack>
+
+      <BiCollapsibleSection
+        title="Ingestão de dados"
+        description="Template, importação da pesquisa e status da base ficam concentrados aqui."
+        icon={<UploadFileRoundedIcon fontSize="small" />}
+        accentColor={BPC_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              file
+                ? "Arquivo pronto"
+                : dashboard.latestImport?.fileName
+                  ? "Base carregada"
+                  : "Sem importação"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(BPC_PALETTE.primary, 0.28),
+              color: BPC_PALETTE.primary,
+              bgcolor: alpha(BPC_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        sx={{ mb: 2, ...cardSx }}
+      >
+        <Stack
+          direction={{ xs: "column", lg: "row" }}
+          spacing={1.2}
+          alignItems={{ lg: "center" }}
+          sx={{ flexWrap: { lg: "wrap" }, rowGap: { lg: 1.2 }, pt: 1.2 }}
+        >
           <Button
             size="small"
-            variant="contained"
-            startIcon={<AutoGraphRoundedIcon />}
-            onClick={resetFilters}
+            variant="outlined"
+            startIcon={<DownloadRoundedIcon />}
+            component="a"
+            href="/templates/bi-best-practices-cycle-template.csv"
+            download
             sx={{
-              height: 36,
-              px: 1.4,
-              fontSize: 13,
+              height: 40,
+              px: 1.6,
               whiteSpace: "nowrap",
+              borderColor: alpha(BPC_PALETTE.primary, 0.5),
+              color: BPC_PALETTE.primary,
               "& .MuiButton-startIcon > *": { fontSize: 18 },
+              "&:hover": {
+                borderColor: BPC_PALETTE.primary,
+                bgcolor: alpha(BPC_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            Baixar template
+          </Button>
+          <Button
+            variant="outlined"
+            component="label"
+            startIcon={<UploadFileRoundedIcon />}
+            disabled={!canUpload}
+            sx={{
+              minWidth: 260,
+              height: 40,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              borderColor: alpha(BPC_PALETTE.primary, 0.5),
+              color: BPC_PALETTE.primary,
+              "&:hover": {
+                borderColor: BPC_PALETTE.primary,
+                bgcolor: alpha(BPC_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            {file ? file.name : "Selecionar arquivo da pesquisa"}
+            <input
+              hidden
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(event) => {
+                const selected = event.target.files?.[0] ?? null;
+                setFile(selected);
+              }}
+            />
+          </Button>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={replaceOnImport}
+                onChange={(event) => setReplaceOnImport(event.target.checked)}
+                disabled={!canUpload}
+              />
+            }
+            label="Substituir base atual"
+          />
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleImport}
+            disabled={
+              !canUpload ||
+              importMutation.isPending ||
+              previewImportMutation.isPending
+            }
+            sx={{
+              height: 40,
+              px: 2,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
               bgcolor: BPC_PALETTE.primary,
               "&:hover": { bgcolor: BPC_PALETTE.primaryDark },
             }}
           >
+            {previewImportMutation.isPending
+              ? "Analisando..."
+              : importMutation.isPending
+                ? "Importando..."
+                : "Importar"}
+          </Button>
+          <Box sx={{ ml: { lg: "auto" } }}>
+            <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
+              Última importação
+            </Typography>
+            <Typography variant="body2" fontWeight={600}>
+              {dashboard.latestImport?.fileName ?? "Nenhuma"}
+            </Typography>
+          </Box>
+        </Stack>
+      </BiCollapsibleSection>
+
+      <BiCollapsibleSection
+        title="Filtros do painel"
+        description="Os recortes do questionário ficam recolhidos por padrão para deixar a leitura dos indicadores mais limpa."
+        icon={<FilterListRoundedIcon fontSize="small" />}
+        accentColor={BPC_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              activeFiltersCount > 0
+                ? `${activeFiltersCount} filtro${activeFiltersCount > 1 ? "s" : ""} ativo${activeFiltersCount > 1 ? "s" : ""}`
+                : "Sem filtros ativos"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(BPC_PALETTE.primary, 0.28),
+              color: BPC_PALETTE.primary,
+              bgcolor: alpha(BPC_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        headerActions={
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<AutoGraphRoundedIcon />}
+            onClick={resetFilters}
+            sx={{
+              borderColor: alpha(BPC_PALETTE.primary, 0.35),
+              color: BPC_PALETTE.primary,
+            }}
+          >
             Limpar filtros
           </Button>
-        </Stack>
-      </Stack>
-
-      <Card sx={{ mb: 2, ...cardSx }}>
-        <CardContent>
-          <Stack
-            direction={{ xs: "column", lg: "row" }}
-            spacing={1.2}
-            alignItems={{ lg: "center" }}
-            sx={{ flexWrap: { lg: "wrap" }, rowGap: { lg: 1.2 } }}
+        }
+        sx={{ mb: 2, ...cardSx }}
+      >
+        <Box
+          display="grid"
+          gridTemplateColumns={{ xs: "1fr", md: "repeat(4, 1fr)" }}
+          gap={1.2}
+          pt={1.2}
+        >
+          <TextField
+            select
+            size="small"
+            label="Visualização"
+            value={metricMode}
+            onChange={(event) =>
+              setMetricMode(event.target.value as MetricMode)
+            }
           >
-            <Button
-              variant="outlined"
-              component="label"
-              startIcon={<UploadFileRoundedIcon />}
-              disabled={!canUpload}
-              sx={{
-                minWidth: 260,
-                height: 40,
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                borderColor: alpha(BPC_PALETTE.primary, 0.5),
-                color: BPC_PALETTE.primary,
-                "&:hover": {
-                  borderColor: BPC_PALETTE.primary,
-                  bgcolor: alpha(BPC_PALETTE.primary, 0.06),
-                },
-              }}
-            >
-              {file ? file.name : "Selecionar arquivo da pesquisa"}
-              <input
-                hidden
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={(event) => {
-                  const selected = event.target.files?.[0] ?? null;
-                  setFile(selected);
-                }}
-              />
-            </Button>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={replaceOnImport}
-                  onChange={(event) => setReplaceOnImport(event.target.checked)}
-                  disabled={!canUpload}
-                />
-              }
-              label="Substituir base atual"
-            />
-            <Button
-              variant="contained"
-              size="small"
-              onClick={handleImport}
-              disabled={
-                !canUpload ||
-                importMutation.isPending ||
-                previewImportMutation.isPending
-              }
-              sx={{
-                height: 40,
-                px: 2,
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                bgcolor: BPC_PALETTE.primary,
-                "&:hover": { bgcolor: BPC_PALETTE.primaryDark },
-              }}
-            >
-              {previewImportMutation.isPending
-                ? "Analisando..."
-                : importMutation.isPending
-                  ? "Importando..."
-                  : "Importar"}
-            </Button>
-            <Box sx={{ ml: { lg: "auto" } }}>
-              <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
-                Última importação
-              </Typography>
-              <Typography variant="body2" fontWeight={600}>
-                {dashboard.latestImport?.fileName ?? "Nenhuma"}
-              </Typography>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
-
-      <Card sx={{ mb: 2, ...cardSx }}>
-        <CardContent>
-          <Box
-            display="grid"
-            gridTemplateColumns={{ xs: "1fr", md: "repeat(4, 1fr)" }}
-            gap={1.2}
+            <MenuItem value="PERCENT">Percentual (%)</MenuItem>
+            <MenuItem value="COUNT">Quantidade (Qtd)</MenuItem>
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Combinação"
+            value={filters.combineMode}
+            onChange={(event) =>
+              updateFilter("combineMode", event.target.value as CombineMode)
+            }
           >
-            <TextField
-              select
-              size="small"
-              label="Visualização"
-              value={metricMode}
-              onChange={(event) =>
-                setMetricMode(event.target.value as MetricMode)
-              }
-            >
-              <MenuItem value="PERCENT">Percentual (%)</MenuItem>
-              <MenuItem value="COUNT">Quantidade (Qtd)</MenuItem>
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Combinação"
-              value={filters.combineMode}
-              onChange={(event) =>
-                updateFilter("combineMode", event.target.value as CombineMode)
-              }
-            >
-              <MenuItem value="AND">Todos os filtros (AND)</MenuItem>
-              <MenuItem value="OR">Qualquer filtro (OR)</MenuItem>
-            </TextField>
-            <TextField
-              size="small"
-              label="De"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={filters.from}
-              onChange={(event) => updateFilter("from", event.target.value)}
-            />
-            <TextField
-              size="small"
-              label="Até"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={filters.to}
-              onChange={(event) => updateFilter("to", event.target.value)}
-            />
-            <TextField
-              select
-              size="small"
-              label="Q2 - Preparo"
-              value={filters.preparednessToLeadMixedClass}
-              onChange={(event) =>
-                updateFilter("preparednessToLeadMixedClass", event.target.value)
-              }
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {(dashboard.filters.preparednessToLeadMixedClass ?? []).map(
-                (item) => (
-                  <MenuItem key={item} value={item}>
-                    {item}
-                  </MenuItem>
-                ),
-              )}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Q4 - Diferença"
-              value={filters.interactionDifference}
-              onChange={(event) =>
-                updateFilter("interactionDifference", event.target.value)
-              }
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {(dashboard.filters.interactionDifference ?? []).map((item) => (
+            <MenuItem value="AND">Todos os filtros (AND)</MenuItem>
+            <MenuItem value="OR">Qualquer filtro (OR)</MenuItem>
+          </TextField>
+          <TextField
+            size="small"
+            label="De"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={filters.from}
+            onChange={(event) => updateFilter("from", event.target.value)}
+          />
+          <TextField
+            size="small"
+            label="Até"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={filters.to}
+            onChange={(event) => updateFilter("to", event.target.value)}
+          />
+          <TextField
+            select
+            size="small"
+            label="Q2 - Preparo"
+            value={filters.preparednessToLeadMixedClass}
+            onChange={(event) =>
+              updateFilter("preparednessToLeadMixedClass", event.target.value)
+            }
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {(dashboard.filters.preparednessToLeadMixedClass ?? []).map(
+              (item) => (
                 <MenuItem key={item} value={item}>
                   {item}
                 </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Q6 - Apoio"
-              value={filters.supportNeedRecognition}
-              onChange={(event) =>
-                updateFilter("supportNeedRecognition", event.target.value)
-              }
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {(dashboard.filters.supportNeedRecognition ?? []).map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Q7 - Desafio"
-              value={filters.mainChallengeOption}
-              onChange={(event) =>
-                updateFilter("mainChallengeOption", event.target.value)
-              }
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {(dashboard.filters.mainChallengeOptions ?? []).map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Identificação"
-              value={filters.identification}
-              onChange={(event) =>
-                updateFilter("identification", event.target.value)
-              }
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {(dashboard.filters.identification ?? []).map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Especialidade"
-              value={filters.specialty}
-              onChange={(event) => updateFilter("specialty", event.target.value)}
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {(dashboard.filters.specialty ?? []).map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              size="small"
-              label="Busca"
-              value={filters.q}
-              onChange={(event) => updateFilter("q", event.target.value)}
-              placeholder="Pesquisar em textos e categorias"
-            />
-          </Box>
-        </CardContent>
-      </Card>
+              ),
+            )}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Q4 - Diferença"
+            value={filters.interactionDifference}
+            onChange={(event) =>
+              updateFilter("interactionDifference", event.target.value)
+            }
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {(dashboard.filters.interactionDifference ?? []).map((item) => (
+              <MenuItem key={item} value={item}>
+                {item}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Q6 - Apoio"
+            value={filters.supportNeedRecognition}
+            onChange={(event) =>
+              updateFilter("supportNeedRecognition", event.target.value)
+            }
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {(dashboard.filters.supportNeedRecognition ?? []).map((item) => (
+              <MenuItem key={item} value={item}>
+                {item}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Q7 - Desafio"
+            value={filters.mainChallengeOption}
+            onChange={(event) =>
+              updateFilter("mainChallengeOption", event.target.value)
+            }
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {(dashboard.filters.mainChallengeOptions ?? []).map((item) => (
+              <MenuItem key={item} value={item}>
+                {item}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Identificação"
+            value={filters.identification}
+            onChange={(event) =>
+              updateFilter("identification", event.target.value)
+            }
+          >
+            <MenuItem value="">Todas</MenuItem>
+            {(dashboard.filters.identification ?? []).map((item) => (
+              <MenuItem key={item} value={item}>
+                {item}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Especialidade"
+            value={filters.specialty}
+            onChange={(event) => updateFilter("specialty", event.target.value)}
+          >
+            <MenuItem value="">Todas</MenuItem>
+            {(dashboard.filters.specialty ?? []).map((item) => (
+              <MenuItem key={item} value={item}>
+                {item}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            size="small"
+            label="Busca"
+            value={filters.q}
+            onChange={(event) => updateFilter("q", event.target.value)}
+            placeholder="Pesquisar em textos e categorias"
+          />
+        </Box>
+      </BiCollapsibleSection>
 
       <Grid container spacing={1.2} sx={{ mb: 1.2 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card sx={cardSx}>
-            <CardContent sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <CardContent
+              sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}
+            >
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
                 <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
                   {kpiTotalText.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-total")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-total")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
                 ) : null}
               </Stack>
-              <Typography variant="h5" fontWeight={700} sx={{ color: BPC_PALETTE.primary }}>
+              <Typography
+                variant="h5"
+                fontWeight={700}
+                sx={{ color: BPC_PALETTE.primary }}
+              >
                 {dashboard.kpis.totalResponses}
               </Typography>
               <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
@@ -1376,20 +1451,33 @@ export function BiBestPracticesCycleDashboardPage() {
 
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card sx={cardSx}>
-            <CardContent sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <CardContent
+              sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}
+            >
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
                 <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
                   {kpiPreparedText.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-prepared")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-prepared")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
                 ) : null}
               </Stack>
-              <Typography variant="h5" fontWeight={700} sx={{ color: BPC_PALETTE.secondary }}>
+              <Typography
+                variant="h5"
+                fontWeight={700}
+                sx={{ color: BPC_PALETTE.secondary }}
+              >
                 {toPercent(dashboard.kpis.preparedPositiveRatePercent)}
               </Typography>
               <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
@@ -1401,20 +1489,33 @@ export function BiBestPracticesCycleDashboardPage() {
 
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card sx={cardSx}>
-            <CardContent sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <CardContent
+              sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}
+            >
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
                 <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
                   {kpiInteractionText.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-interaction")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-interaction")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
                 ) : null}
               </Stack>
-              <Typography variant="h5" fontWeight={700} sx={{ color: BPC_PALETTE.accent }}>
+              <Typography
+                variant="h5"
+                fontWeight={700}
+                sx={{ color: BPC_PALETTE.accent }}
+              >
                 {toPercent(dashboard.kpis.interactionYesRatePercent)}
               </Typography>
               <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
@@ -1426,20 +1527,33 @@ export function BiBestPracticesCycleDashboardPage() {
 
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <Card sx={cardSx}>
-            <CardContent sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <CardContent
+              sx={{ py: 1.15, px: 1.4, "&:last-child": { pb: 1.15 } }}
+            >
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
                 <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
                   {kpiSupportText.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("kpi-support")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("kpi-support")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
                 ) : null}
               </Stack>
-              <Typography variant="h5" fontWeight={700} sx={{ color: BPC_PALETTE.warning }}>
+              <Typography
+                variant="h5"
+                fontWeight={700}
+                sx={{ color: BPC_PALETTE.warning }}
+              >
                 {toPercent(dashboard.kpis.supportFrequentRatePercent)}
               </Typography>
               <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
@@ -1452,13 +1566,21 @@ export function BiBestPracticesCycleDashboardPage() {
 
       <Card sx={{ mb: 1.2, ...cardSx }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.4}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            mb={0.4}
+          >
             <Typography variant="subtitle1" fontWeight={700}>
               {insightMainText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("insight-main")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("insight-main")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1480,10 +1602,16 @@ export function BiBestPracticesCycleDashboardPage() {
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <Alert severity="warning" sx={{ mt: 1 }}>
-                <strong>{dashboard.insights.preparednessAttentionPoint.title}:</strong>{" "}
-                {dashboard.insights.preparednessAttentionPoint.affectedCount} respostas ({toPercent(
-                  dashboard.insights.preparednessAttentionPoint.affectedRatePercent,
-                )})
+                <strong>
+                  {dashboard.insights.preparednessAttentionPoint.title}:
+                </strong>{" "}
+                {dashboard.insights.preparednessAttentionPoint.affectedCount}{" "}
+                respostas (
+                {toPercent(
+                  dashboard.insights.preparednessAttentionPoint
+                    .affectedRatePercent,
+                )}
+                )
               </Alert>
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
@@ -1519,13 +1647,21 @@ export function BiBestPracticesCycleDashboardPage() {
 
       <Card sx={{ mb: 1.2, ...cardSx }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            mb={0.5}
+          >
             <Typography variant="subtitle1" fontWeight={700}>
               {trendText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("chart-trend-q2")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("chart-trend-q2")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1543,8 +1679,15 @@ export function BiBestPracticesCycleDashboardPage() {
             <Box sx={{ mt: 1.1 }}>
               <ResponsiveContainer width="100%" height={230}>
                 <BarChart data={trendItems} barCategoryGap="30%">
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
-                  <XAxis dataKey="dayLabel" stroke={chartAxisStroke} tick={axisTickStyle} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={chartGridStroke}
+                  />
+                  <XAxis
+                    dataKey="dayLabel"
+                    stroke={chartAxisStroke}
+                    tick={axisTickStyle}
+                  />
                   <YAxis
                     stroke={chartAxisStroke}
                     tick={axisTickStyle}
@@ -1554,8 +1697,13 @@ export function BiBestPracticesCycleDashboardPage() {
                   <Tooltip
                     formatter={(value: number, name: string, payload: any) => {
                       const option = String(name ?? "");
-                      const count = Number(payload?.payload?.[`${option}__count`] ?? 0);
-                      return [`${Number(value ?? 0).toFixed(2)}%`, `${option} • ${count} resp.`];
+                      const count = Number(
+                        payload?.payload?.[`${option}__count`] ?? 0,
+                      );
+                      return [
+                        `${Number(value ?? 0).toFixed(2)}%`,
+                        `${option} • ${count} resp.`,
+                      ];
                     }}
                     labelFormatter={(label, payload) => {
                       const total = Number(payload?.[0]?.payload?.total ?? 0);
@@ -1572,7 +1720,11 @@ export function BiBestPracticesCycleDashboardPage() {
                       name={option}
                       stackId="preparedness"
                       fill={CHART_COLORS[index % CHART_COLORS.length]}
-                      radius={index === trendOptions.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                      radius={
+                        index === trendOptions.length - 1
+                          ? [4, 4, 0, 0]
+                          : [0, 0, 0, 0]
+                      }
                     />
                   ))}
                 </BarChart>
@@ -1586,13 +1738,21 @@ export function BiBestPracticesCycleDashboardPage() {
         <Grid size={{ xs: 12, lg: 7 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                mb={0.5}
+              >
                 <Typography variant="subtitle1" fontWeight={700}>
                   {listQ5Text.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("list-q5")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("list-q5")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
@@ -1602,13 +1762,17 @@ export function BiBestPracticesCycleDashboardPage() {
                 {listQ5Text.description}
               </Typography>
 
-              {(dashboard.textColumns.interactionDifferenceComment.items ?? []).length === 0 ? (
+              {(dashboard.textColumns.interactionDifferenceComment.items ?? [])
+                .length === 0 ? (
                 <Alert severity="info" sx={{ mt: 1 }}>
                   Sem relatos textuais no recorte atual.
                 </Alert>
               ) : (
                 <Stack spacing={1} sx={{ mt: 1 }}>
-                  {(dashboard.textColumns.interactionDifferenceComment.items ?? []).map((item) => (
+                  {(
+                    dashboard.textColumns.interactionDifferenceComment.items ??
+                    []
+                  ).map((item) => (
                     <Box
                       key={item.id}
                       sx={{
@@ -1618,13 +1782,29 @@ export function BiBestPracticesCycleDashboardPage() {
                         bgcolor: "#FFF",
                       }}
                     >
-                      <Stack direction="row" spacing={0.8} flexWrap="wrap" sx={{ mb: 0.5 }}>
-                        <Chip size="small" label={formatDate(item.submittedAt)} />
+                      <Stack
+                        direction="row"
+                        spacing={0.8}
+                        flexWrap="wrap"
+                        sx={{ mb: 0.5 }}
+                      >
+                        <Chip
+                          size="small"
+                          label={formatDate(item.submittedAt)}
+                        />
                         {item.identification ? (
-                          <Chip size="small" variant="outlined" label={item.identification} />
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={item.identification}
+                          />
                         ) : null}
                         {item.specialty ? (
-                          <Chip size="small" variant="outlined" label={item.specialty} />
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={item.specialty}
+                          />
                         ) : null}
                       </Stack>
                       <Typography variant="body2">{item.text}</Typography>
@@ -1639,13 +1819,21 @@ export function BiBestPracticesCycleDashboardPage() {
         <Grid size={{ xs: 12, lg: 5 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                mb={0.5}
+              >
                 <Typography variant="subtitle1" fontWeight={700}>
                   {listSpecialtyText.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("list-specialty")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("list-specialty")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
@@ -1655,11 +1843,18 @@ export function BiBestPracticesCycleDashboardPage() {
                 {listSpecialtyText.description}
               </Typography>
 
-              <Typography variant="caption" sx={{ color: BPC_PALETTE.muted, display: "block", mt: 1 }}>
-                {dashboard.textColumns.specialtyFreeText.totalResponses} respostas preenchidas • {dashboard.textColumns.specialtyFreeText.totalUnique} especialidades distintas
+              <Typography
+                variant="caption"
+                sx={{ color: BPC_PALETTE.muted, display: "block", mt: 1 }}
+              >
+                {dashboard.textColumns.specialtyFreeText.totalResponses}{" "}
+                respostas preenchidas •{" "}
+                {dashboard.textColumns.specialtyFreeText.totalUnique}{" "}
+                especialidades distintas
               </Typography>
 
-              {(dashboard.textColumns.specialtyFreeText.items ?? []).length === 0 ? (
+              {(dashboard.textColumns.specialtyFreeText.items ?? []).length ===
+              0 ? (
                 <Alert severity="info" sx={{ mt: 1 }}>
                   Sem especialidades para o recorte atual.
                 </Alert>
@@ -1667,7 +1862,9 @@ export function BiBestPracticesCycleDashboardPage() {
                 <Table size="small" sx={{ mt: 1 }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Especialidade</TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>
+                        Especialidade
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 700 }} align="right">
                         Qtd
                       </TableCell>
@@ -1677,13 +1874,17 @@ export function BiBestPracticesCycleDashboardPage() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {dashboard.textColumns.specialtyFreeText.items.map((item) => (
-                      <TableRow key={item.text}>
-                        <TableCell>{item.text}</TableCell>
-                        <TableCell align="right">{item.count}</TableCell>
-                        <TableCell align="right">{toPercent(item.percent)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {dashboard.textColumns.specialtyFreeText.items.map(
+                      (item) => (
+                        <TableRow key={item.text}>
+                          <TableCell>{item.text}</TableCell>
+                          <TableCell align="right">{item.count}</TableCell>
+                          <TableCell align="right">
+                            {toPercent(item.percent)}
+                          </TableCell>
+                        </TableRow>
+                      ),
+                    )}
                   </TableBody>
                 </Table>
               )}
@@ -1705,7 +1906,9 @@ export function BiBestPracticesCycleDashboardPage() {
                 Registros da pesquisa
               </Typography>
               <MuiTooltip
-                title={responsesExpanded ? "Recolher tabela" : "Expandir tabela"}
+                title={
+                  responsesExpanded ? "Recolher tabela" : "Expandir tabela"
+                }
               >
                 <IconButton
                   size="small"
@@ -1744,7 +1947,9 @@ export function BiBestPracticesCycleDashboardPage() {
 
           <Collapse in={responsesExpanded}>
             <Box sx={{ mt: 1, overflowX: "auto" }}>
-              {responsesQuery.isFetching ? <LinearProgress sx={{ mb: 1 }} /> : null}
+              {responsesQuery.isFetching ? (
+                <LinearProgress sx={{ mb: 1 }} />
+              ) : null}
 
               <Table size="small">
                 <TableHead>
@@ -1777,9 +1982,13 @@ export function BiBestPracticesCycleDashboardPage() {
                         />
                       </TableCell>
                       <TableCell>{formatDate(item.submittedAt)}</TableCell>
-                      <TableCell>{item.preparednessToLeadMixedClass ?? "-"}</TableCell>
+                      <TableCell>
+                        {item.preparednessToLeadMixedClass ?? "-"}
+                      </TableCell>
                       <TableCell>{item.interactionDifference ?? "-"}</TableCell>
-                      <TableCell>{item.supportNeedRecognition ?? "-"}</TableCell>
+                      <TableCell>
+                        {item.supportNeedRecognition ?? "-"}
+                      </TableCell>
                       <TableCell>
                         {(item.mainChallengeOptions ?? []).join("; ") || "-"}
                       </TableCell>
@@ -1806,7 +2015,8 @@ export function BiBestPracticesCycleDashboardPage() {
                 sx={{ mt: 1 }}
               >
                 <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
-                  Página {responses?.page ?? 1} de {totalPages} • Total: {responses?.total ?? 0}
+                  Página {responses?.page ?? 1} de {totalPages} • Total:{" "}
+                  {responses?.total ?? 0}
                 </Typography>
                 <Stack direction="row" spacing={1}>
                   <Button
@@ -1850,7 +2060,9 @@ export function BiBestPracticesCycleDashboardPage() {
         confirmLabel="Excluir"
         severity="error"
         confirmLoading={deleteResponsesMutation.isPending}
-        disableConfirm={deleteConfirmMode === "SELECTED" && selectedIds.length === 0}
+        disableConfirm={
+          deleteConfirmMode === "SELECTED" && selectedIds.length === 0
+        }
         onCancel={() => setDeleteConfirmMode(null)}
         onConfirm={handleConfirmDelete}
       />

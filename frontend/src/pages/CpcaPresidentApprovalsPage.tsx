@@ -50,6 +50,11 @@ import {
   formatCpcaPresidentBulletinFileSize,
   getCpcaPresidentBulletinPreviewKind,
 } from "../features/cpcaPresidentBulletinFile";
+import {
+  formatCpcaSelfRegistrationAttemptLabel,
+  getCpcaSelfRegistrationStatusMeta,
+  sortCpcaSelfRegistrationHistory,
+} from "../features/cpcaSelfRegistrationStatus";
 
 type ApprovalRequestType =
   | "SELF_REGISTRATION"
@@ -63,6 +68,8 @@ type ApprovalRequestItem = {
   createdAt: string;
   decidedAt?: string | null;
   decisionNotes?: string | null;
+  attemptNumber?: number;
+  attemptGroupId?: string | null;
   locality?: {
     id: string;
     code: string;
@@ -103,6 +110,34 @@ type ApprovalRequestItem = {
     checksum?: string | null;
     available: boolean;
   } | null;
+  history?: Array<{
+    id: string;
+    groupId?: string | null;
+    attemptNumber: number;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    createdAt: string;
+    decidedAt?: string | null;
+    decisionNotes?: string | null;
+    locality?: {
+      id: string;
+      code: string;
+      name: string;
+    } | null;
+    requestedAsSubstitution: boolean;
+    bulletinNumber: string;
+    bulletinFile?: {
+      fileName: string;
+      mimeType: string;
+      fileSize: number;
+      checksum?: string | null;
+      available: boolean;
+    } | null;
+    decidedByUser?: {
+      id: string;
+      name: string;
+      email?: string | null;
+    } | null;
+  }>;
 };
 
 function extractReason(error: unknown) {
@@ -171,6 +206,7 @@ function renderOrigin(item: ApprovalRequestItem) {
 
 function renderDetail(item: ApprovalRequestItem) {
   if (item.type === "SELF_REGISTRATION") {
+    const attemptsCount = Array.isArray(item.history) ? item.history.length : 0;
     return (
       <Stack spacing={0.3}>
         <Typography variant="body2" fontWeight={600}>
@@ -181,6 +217,11 @@ function renderDetail(item: ApprovalRequestItem) {
         <Typography variant="caption" color="text.secondary">
           Boletim: {item.bulletinNumber || "Não informado"}
         </Typography>
+        {attemptsCount > 1 ? (
+          <Typography variant="caption" color="text.secondary">
+            Histórico com {attemptsCount} tentativas registradas
+          </Typography>
+        ) : null}
       </Stack>
     );
   }
@@ -231,6 +272,7 @@ export function CpcaPresidentApprovalsPage() {
   const [rejectTarget, setRejectTarget] = useState<ApprovalRequestItem | null>(
     null,
   );
+  const [rejectReason, setRejectReason] = useState("");
   const [overwriteTarget, setOverwriteTarget] =
     useState<ApprovalRequestItem | null>(null);
   const [detailsTarget, setDetailsTarget] =
@@ -253,6 +295,10 @@ export function CpcaPresidentApprovalsPage() {
   );
   const pendingCount = Number(requestsQuery.data?.pendingCount ?? 0);
   const canDecide = Boolean(requestsQuery.data?.canDecide);
+  const detailsHistory = useMemo(
+    () => sortCpcaSelfRegistrationHistory(detailsTarget?.history ?? []),
+    [detailsTarget?.history],
+  );
 
   useEffect(() => {
     let objectUrl = "";
@@ -358,16 +404,26 @@ export function CpcaPresidentApprovalsPage() {
 
   const rejectRequest = async () => {
     if (!rejectTarget) return;
+    const normalizedReason = rejectReason.trim();
+    if (!normalizedReason) {
+      toast.push({
+        message: "Informe o motivo da rejeição antes de continuar.",
+        severity: "warning",
+      });
+      return;
+    }
     try {
       await rejectMutation.mutateAsync({
         type: rejectTarget.type,
         id: rejectTarget.id,
+        notes: normalizedReason,
       });
       toast.push({
         message: "Solicitação rejeitada.",
         severity: "success",
       });
       setRejectTarget(null);
+      setRejectReason("");
     } catch (error) {
       toast.push({
         message:
@@ -562,7 +618,10 @@ export function CpcaPresidentApprovalsPage() {
                                   color="error"
                                   startIcon={<BlockRoundedIcon />}
                                   disabled={!canAct || rejectMutation.isPending}
-                                  onClick={() => setRejectTarget(item)}
+                                  onClick={() => {
+                                    setRejectTarget(item);
+                                    setRejectReason("");
+                                  }}
                                 >
                                   Rejeitar
                                 </Button>
@@ -621,6 +680,17 @@ export function CpcaPresidentApprovalsPage() {
                     }
                     size="small"
                   />
+                  {detailsTarget.type === "SELF_REGISTRATION" &&
+                  detailsTarget.attemptNumber ? (
+                    <Chip
+                      label={formatCpcaSelfRegistrationAttemptLabel(
+                        detailsTarget.attemptNumber,
+                      )}
+                      color="info"
+                      variant="outlined"
+                      size="small"
+                    />
+                  ) : null}
                   {detailsTarget.requestedAsSubstitution ? (
                     <Chip
                       label="Substituição"
@@ -679,6 +749,13 @@ export function CpcaPresidentApprovalsPage() {
                   <Typography variant="body2" color="text.secondary">
                     Boletim: {detailsTarget.bulletinNumber || "Não informado"}
                   </Typography>
+                  {detailsTarget.type === "SELF_REGISTRATION" &&
+                  detailsHistory.length > 1 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Histórico com {detailsHistory.length} tentativas
+                      registradas
+                    </Typography>
+                  ) : null}
                   {detailsTarget.decidedAt ? (
                     <Typography variant="body2" color="text.secondary">
                       Processada em {formatDateTime(detailsTarget.decidedAt)}
@@ -695,6 +772,130 @@ export function CpcaPresidentApprovalsPage() {
                 >
                   {detailsTarget.decisionNotes}
                 </Alert>
+              ) : null}
+
+              {detailsTarget.type === "SELF_REGISTRATION" &&
+              detailsHistory.length > 0 ? (
+                <Box
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 2,
+                    px: 1.5,
+                    py: 1.4,
+                  }}
+                >
+                  <Stack spacing={1.2}>
+                    <Typography variant="subtitle2" fontWeight={800}>
+                      Histórico da autoinscrição
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Consulte a sequência completa das tentativas, os motivos
+                      de rejeição e o momento em que cada uma foi analisada.
+                    </Typography>
+                    {detailsHistory.map((entry) => {
+                      const statusMeta = getCpcaSelfRegistrationStatusMeta(
+                        entry.status,
+                      );
+                      return (
+                        <Box
+                          key={entry.id}
+                          sx={{
+                            borderLeft: "3px solid",
+                            borderLeftColor:
+                              entry.status === "REJECTED"
+                                ? "error.main"
+                                : entry.status === "APPROVED"
+                                  ? "success.main"
+                                  : "warning.main",
+                            pl: 1.4,
+                            py: 0.3,
+                          }}
+                        >
+                          <Stack spacing={0.7}>
+                            <Stack
+                              direction={{ xs: "column", sm: "row" }}
+                              spacing={1}
+                              justifyContent="space-between"
+                              alignItems={{ xs: "flex-start", sm: "center" }}
+                            >
+                              <Stack
+                                direction="row"
+                                spacing={1}
+                                alignItems="center"
+                                flexWrap="wrap"
+                              >
+                                <Typography variant="body2" fontWeight={700}>
+                                  {formatCpcaSelfRegistrationAttemptLabel(
+                                    entry.attemptNumber,
+                                  )}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  label={statusMeta.label}
+                                  color={statusMeta.chipColor}
+                                  variant={
+                                    entry.status === "PENDING"
+                                      ? "filled"
+                                      : "outlined"
+                                  }
+                                />
+                                {entry.requestedAsSubstitution ? (
+                                  <Chip
+                                    size="small"
+                                    label="Substituição"
+                                    color="warning"
+                                    variant="outlined"
+                                  />
+                                ) : null}
+                              </Stack>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                Enviada em {formatDateTime(entry.createdAt)}
+                              </Typography>
+                            </Stack>
+                            <Typography variant="body2" color="text.secondary">
+                              Boletim: {entry.bulletinNumber}
+                              {entry.bulletinFile?.fileName
+                                ? ` • ${entry.bulletinFile.fileName}`
+                                : ""}
+                            </Typography>
+                            {entry.decidedAt ? (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                Processada em {formatDateTime(entry.decidedAt)}
+                                {entry.decidedByUser?.name
+                                  ? ` por ${entry.decidedByUser.name}`
+                                  : ""}
+                              </Typography>
+                            ) : null}
+                            {entry.decisionNotes ? (
+                              <Box
+                                sx={{
+                                  borderRadius: 1.5,
+                                  px: 1.1,
+                                  py: 0.9,
+                                  bgcolor:
+                                    entry.status === "REJECTED"
+                                      ? "rgba(211, 47, 47, 0.08)"
+                                      : "rgba(46, 125, 50, 0.08)",
+                                }}
+                              >
+                                <Typography variant="body2">
+                                  {entry.decisionNotes}
+                                </Typography>
+                              </Box>
+                            ) : null}
+                          </Stack>
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                </Box>
               ) : null}
 
               <Divider />
@@ -881,23 +1082,73 @@ export function CpcaPresidentApprovalsPage() {
         }}
       />
 
-      <ConfirmDialog
+      <Dialog
         open={Boolean(rejectTarget)}
-        title="Rejeitar solicitação"
-        message="Confirma a rejeição desta solicitação de homologação CPCA?"
-        highlightText={
-          rejectTarget?.locality
-            ? `${rejectTarget.locality.code} - ${rejectTarget.locality.name}`
-            : ""
-        }
-        severity="error"
-        confirmLabel="Rejeitar"
-        confirmLoading={rejectMutation.isPending}
-        onCancel={() => setRejectTarget(null)}
-        onConfirm={() => {
-          void rejectRequest();
+        onClose={() => {
+          if (rejectMutation.isPending) return;
+          setRejectTarget(null);
+          setRejectReason("");
         }}
-      />
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Rejeitar solicitação</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.5}>
+            <Alert severity="error">
+              O motivo informado ficará visível para o solicitante no
+              acompanhamento público e também fará parte do histórico da
+              homologação.
+            </Alert>
+            <Box>
+              <Typography variant="body2" fontWeight={700}>
+                {rejectTarget?.locality
+                  ? `${rejectTarget.locality.code} - ${rejectTarget.locality.name}`
+                  : "Solicitação sem OM vinculada"}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {rejectTarget
+                  ? `${getTypeMeta(rejectTarget.type).label} • enviada em ${formatDateTime(rejectTarget.createdAt)}`
+                  : ""}
+              </Typography>
+            </Box>
+            <TextField
+              label="Motivo da rejeição"
+              value={rejectReason}
+              onChange={(event) => setRejectReason(event.target.value)}
+              fullWidth
+              required
+              multiline
+              minRows={4}
+              placeholder="Descreva objetivamente o que precisa ser corrigido para nova submissão."
+              inputProps={{ maxLength: 320 }}
+              helperText={`${rejectReason.trim().length}/320`}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              if (rejectMutation.isPending) return;
+              setRejectTarget(null);
+              setRejectReason("");
+            }}
+            color="inherit"
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              void rejectRequest();
+            }}
+            disabled={rejectMutation.isPending || !rejectReason.trim()}
+          >
+            {rejectMutation.isPending ? "Rejeitando..." : "Rejeitar"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -14,8 +14,10 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { AddCpcaCaseCommentDto } from '../cpca/dto/add-cpca-case-comment.dto';
 import { CreateCpcaCaseCipavdThreadDto } from '../cpca/dto/create-cpca-case-cipavd-thread.dto';
 import { CreateCpcaCaseDto } from '../cpca/dto/create-cpca-case.dto';
+import { FinalizeCpcaCaseCipavdThreadDto } from '../cpca/dto/finalize-cpca-case-cipavd-thread.dto';
 import { ReopenCpcaCaseCipavdThreadDto } from '../cpca/dto/reopen-cpca-case-cipavd-thread.dto';
 import { ResolveCpcaCaseCipavdThreadDto } from '../cpca/dto/resolve-cpca-case-cipavd-thread.dto';
+import { UpdateCpcaCaseCipavdThreadDto } from '../cpca/dto/update-cpca-case-cipavd-thread.dto';
 import { UpdateCpcaCaseDto } from '../cpca/dto/update-cpca-case.dto';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
@@ -119,6 +121,27 @@ export class SmifComplaintsController {
     return this.smifComplaints.createCipavdThread(id, dto, user);
   }
 
+  @Put(':id/cipavd-threads/:threadId')
+  @RequirePermission('smif_complaints', 'view')
+  updateCipavdThread(
+    @Param('id') id: string,
+    @Param('threadId') threadId: string,
+    @Body() dto: UpdateCpcaCaseCipavdThreadDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.smifComplaints.updateCipavdThread(id, threadId, dto, user);
+  }
+
+  @Delete(':id/cipavd-threads/:threadId')
+  @RequirePermission('smif_complaints', 'view')
+  removeCipavdThread(
+    @Param('id') id: string,
+    @Param('threadId') threadId: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.smifComplaints.removeCipavdThread(id, threadId, user);
+  }
+
   @Post(':id/cipavd-threads/:threadId/resolve')
   @RequirePermission('smif_complaints', 'view')
   resolveCipavdThread(
@@ -146,9 +169,10 @@ export class SmifComplaintsController {
   finalizeCipavdThread(
     @Param('id') id: string,
     @Param('threadId') threadId: string,
+    @Body() dto: FinalizeCpcaCaseCipavdThreadDto,
     @CurrentUser() user: RbacUser,
   ) {
-    return this.smifComplaints.finalizeCipavdThread(id, threadId, user);
+    return this.smifComplaints.finalizeCipavdThread(id, threadId, dto, user);
   }
 
   @Get(':id/comments')

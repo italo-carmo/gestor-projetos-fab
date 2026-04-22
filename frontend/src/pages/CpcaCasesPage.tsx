@@ -45,6 +45,7 @@ import {
   usePostos,
   useReopenCpcaCaseCipavdThread,
   useResolveCpcaCaseCipavdThread,
+  useRemoveCpcaCaseCipavdThread,
   useSmifComplaintCase,
   useSmifComplaintCases,
   useSmifComplaintPendingSummary,
@@ -54,8 +55,11 @@ import {
   useFinalizeSmifComplaintCaseCipavdThread,
   useReopenSmifComplaintCaseCipavdThread,
   useResolveSmifComplaintCaseCipavdThread,
+  useRemoveSmifComplaintCaseCipavdThread,
   useUpdateSmifComplaintCase,
+  useUpdateCpcaCaseCipavdThread,
   useUpdateCpcaCase,
+  useUpdateSmifComplaintCaseCipavdThread,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
@@ -76,6 +80,7 @@ import {
   type CpcaCaseInconsistency,
 } from "../features/cpcaCaseConsistency";
 import {
+  formatComplaintCaseNumberForDisplay,
   getComplaintPendingKpiLabel,
   getComplaintPendingStatusTone,
   getComplaintPendencyBadge,
@@ -689,11 +694,16 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const [selectedId, setSelectedId] = useState("");
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmThreadDeleteTarget, setConfirmThreadDeleteTarget] = useState<{
+    id: string;
+    label?: string;
+  } | null>(null);
   const [pendingModalOpen, setPendingModalOpen] = useState(false);
   const [form, setForm] = useState(() => createDefaultForm());
   const [cipavdDraft, setCipavdDraft] = useState("");
   const [cipavdDraftIsPending, setCipavdDraftIsPending] = useState(true);
   const [threadDrafts, setThreadDrafts] = useState<Record<string, string>>({});
+  const [editingThreadId, setEditingThreadId] = useState("");
   const [focusedThreadId, setFocusedThreadId] = useState("");
   const [activeStep, setActiveStep] = useState(0);
   const [consistencyPopover, setConsistencyPopover] = useState<{
@@ -719,6 +729,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const updateCpcaCase = useUpdateCpcaCase();
   const deleteCpcaCase = useDeleteCpcaCase();
   const createCpcaCipavdThread = useCreateCpcaCaseCipavdThread();
+  const updateCpcaCipavdThread = useUpdateCpcaCaseCipavdThread();
+  const removeCpcaCipavdThread = useRemoveCpcaCaseCipavdThread();
   const resolveCpcaCipavdThread = useResolveCpcaCaseCipavdThread();
   const reopenCpcaCipavdThread = useReopenCpcaCaseCipavdThread();
   const finalizeCpcaCipavdThread = useFinalizeCpcaCaseCipavdThread();
@@ -726,6 +738,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const updateSmifCase = useUpdateSmifComplaintCase();
   const deleteSmifCase = useDeleteSmifComplaintCase();
   const createSmifCipavdThread = useCreateSmifComplaintCaseCipavdThread();
+  const updateSmifCipavdThread = useUpdateSmifComplaintCaseCipavdThread();
+  const removeSmifCipavdThread = useRemoveSmifComplaintCaseCipavdThread();
   const resolveSmifCipavdThread = useResolveSmifComplaintCaseCipavdThread();
   const reopenSmifCipavdThread = useReopenSmifComplaintCaseCipavdThread();
   const finalizeSmifCipavdThread = useFinalizeSmifComplaintCaseCipavdThread();
@@ -735,6 +749,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const createCipavdThread = isSmifWorkflow
     ? createSmifCipavdThread
     : createCpcaCipavdThread;
+  const updateCipavdThread = isSmifWorkflow
+    ? updateSmifCipavdThread
+    : updateCpcaCipavdThread;
+  const removeCipavdThread = isSmifWorkflow
+    ? removeSmifCipavdThread
+    : removeCpcaCipavdThread;
   const resolveCipavdThread = isSmifWorkflow
     ? resolveSmifCipavdThread
     : resolveCpcaCipavdThread;
@@ -1089,6 +1109,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setCipavdDraft("");
     setCipavdDraftIsPending(true);
     setThreadDrafts({});
+    setEditingThreadId("");
     setFocusedThreadId("");
     setActiveStep(0);
     setDrawerOpen(true);
@@ -1101,6 +1122,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setCipavdDraft("");
     setCipavdDraftIsPending(true);
     setThreadDrafts({});
+    setEditingThreadId("");
     setFocusedThreadId(threadId ?? "");
     setActiveStep(0);
     setDrawerOpen(true);
@@ -1111,11 +1133,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setSelectedId("");
     setIsCreateMode(false);
     setConfirmDeleteOpen(false);
+    setConfirmThreadDeleteTarget(null);
     setConsistencyPopover({ anchorEl: null, inconsistency: null });
     setForm(createDefaultForm());
     setCipavdDraft("");
     setCipavdDraftIsPending(true);
     setThreadDrafts({});
+    setEditingThreadId("");
     setFocusedThreadId("");
     setActiveStep(0);
   };
@@ -1125,6 +1149,40 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       ...current,
       [threadId]: value,
     }));
+  };
+
+  const clearThreadDraftValue = (threadId: string) => {
+    setThreadDrafts((current) => {
+      if (!(threadId in current)) return current;
+      const next = { ...current };
+      delete next[threadId];
+      return next;
+    });
+  };
+
+  const getActiveManagementThreadMessage = (thread: any) =>
+    [...(thread?.messages ?? [])]
+      .reverse()
+      .find((message: any) => message?.authorKind === "MANAGEMENT");
+
+  const canDeletePendingThread = (thread: any) =>
+    thread?.type === "PENDENCY" &&
+    thread?.status === "OPEN" &&
+    Number(thread?.reopenedCount ?? 0) === 0 &&
+    !(thread?.messages ?? []).some(
+      (message: any) => message?.authorKind === "PRESIDENT",
+    );
+
+  const startEditingPendingThread = (thread: any) => {
+    const activeMessage = getActiveManagementThreadMessage(thread);
+    setThreadDraftValue(thread.id, String(activeMessage?.body ?? ""));
+    setEditingThreadId(thread.id);
+    setFocusedThreadId(thread.id);
+  };
+
+  const stopEditingPendingThread = (threadId: string) => {
+    clearThreadDraftValue(threadId);
+    setEditingThreadId((current) => (current === threadId ? "" : current));
   };
 
   const saveCase = async () => {
@@ -1348,6 +1406,24 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     }
   };
 
+  const saveEditedPendingThread = async (threadId: string) => {
+    const text = String(threadDrafts[threadId] ?? "").trim();
+    if (!selectedId || !text) return;
+    try {
+      await updateCipavdThread.mutateAsync({ id: selectedId, threadId, text });
+      stopEditingPendingThread(threadId);
+      toast.push({
+        message: "Pendência atualizada.",
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Erro ao editar a pendência.",
+        severity: "error",
+      });
+    }
+  };
+
   const reopenPendingThread = async (threadId: string) => {
     const text = String(threadDrafts[threadId] ?? "").trim();
     if (!selectedId || !text) return;
@@ -1367,18 +1443,47 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   };
 
   const finalizePendingThread = async (threadId: string) => {
-    if (!selectedId) return;
+    const text = String(threadDrafts[threadId] ?? "").trim();
+    if (!selectedId || !text) return;
     try {
-      await finalizeCipavdThread.mutateAsync({ id: selectedId, threadId });
-      setThreadDraftValue(threadId, "");
+      await finalizeCipavdThread.mutateAsync({
+        id: selectedId,
+        threadId,
+        text,
+      });
+      clearThreadDraftValue(threadId);
       toast.push({
-        message: "Pendência finalizada.",
+        message: "Pendência validada e finalizada.",
         severity: "success",
       });
     } catch (error) {
       toast.push({
         message:
           parseApiError(error).message ?? "Erro ao finalizar a pendência.",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleConfirmDeleteThread = async () => {
+    if (!selectedId || !confirmThreadDeleteTarget?.id) return;
+    try {
+      await removeCipavdThread.mutateAsync({
+        id: selectedId,
+        threadId: confirmThreadDeleteTarget.id,
+      });
+      clearThreadDraftValue(confirmThreadDeleteTarget.id);
+      setEditingThreadId((current) =>
+        current === confirmThreadDeleteTarget.id ? "" : current,
+      );
+      setConfirmThreadDeleteTarget(null);
+      toast.push({
+        message: "Pendência excluída.",
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Erro ao excluir a pendência.",
         severity: "error",
       });
     }
@@ -2656,7 +2761,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 wordBreak: "break-word",
                               }}
                             >
-                              {item.caseNumber}
+                              {formatComplaintCaseNumberForDisplay(
+                                item.caseNumber,
+                              )}
                             </Typography>
                             {inconsistencies.map(
                               (inconsistency: CpcaCaseInconsistency) => (
@@ -2699,17 +2806,17 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 sx={{
                                   fontWeight: 700,
                                   color:
-                                    pendencyBadge.tone === "warning"
-                                      ? "#B45309"
+                                    pendencyBadge.tone === "error"
+                                      ? "#B91C1C"
                                       : "#166534",
                                   bgcolor:
-                                    pendencyBadge.tone === "warning"
-                                      ? "rgba(245, 158, 11, 0.14)"
+                                    pendencyBadge.tone === "error"
+                                      ? "rgba(239, 68, 68, 0.12)"
                                       : "rgba(34, 197, 94, 0.12)",
                                   border: "1px solid",
                                   borderColor:
-                                    pendencyBadge.tone === "warning"
-                                      ? "rgba(245, 158, 11, 0.28)"
+                                    pendencyBadge.tone === "error"
+                                      ? "rgba(239, 68, 68, 0.24)"
                                       : "rgba(34, 197, 94, 0.24)",
                                 }}
                               />
@@ -2870,8 +2977,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <Alert severity="warning" sx={{ mb: 2.5 }}>
             Registrar apenas dados genéricos (sem nomes). Acesso restrito a
             {isSmifWorkflow
-              ? " perfis CPCA autorizados, TI, Coordenação CIPAVD e COMGEP."
-              : " CPCA, Coordenação CIPAVD e COMGEP."}
+              ? " perfis CPCA autorizados e à gestão nacional."
+              : " CPCA e gestão nacional."}
           </Alert>
 
           {!isCreateMode && selectedCaseQuery.isLoading && <SkeletonState />}
@@ -3070,7 +3177,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                             Comentários da CIPAVD
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            Fluxo de alinhamento entre CIPAVD/COMGEP/TI e a
+                            Fluxo de alinhamento entre a gestão nacional e a
                             presidência da comissão da OM.
                           </Typography>
                         </Box>
@@ -3164,8 +3271,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                         </Box>
                       ) : (
                         <Alert severity="info">
-                          Somente Coordenação CIPAVD, COMGEP e TI iniciam novos
-                          comentários ou pendências neste fluxo.
+                          Somente a gestão nacional inicia novos comentários ou
+                          pendências neste fluxo.
                         </Alert>
                       )}
 
@@ -3182,6 +3289,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                             const draftValue = String(
                               threadDrafts[thread.id] ?? "",
                             );
+                            const activeManagementMessage =
+                              getActiveManagementThreadMessage(thread);
+                            const canDeleteThread =
+                              canDeletePendingThread(thread);
+                            const isEditingThread =
+                              editingThreadId === thread.id;
 
                             return (
                               <Box
@@ -3327,6 +3440,140 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
                                   {thread.type === "PENDENCY" &&
                                     thread.status === "OPEN" &&
+                                    canCreateCipavdThread && (
+                                      <Box
+                                        sx={{
+                                          p: 1.5,
+                                          borderRadius: 2.5,
+                                          border: "1px dashed",
+                                          borderColor: "rgba(180, 83, 9, 0.28)",
+                                          bgcolor: "rgba(245, 158, 11, 0.05)",
+                                        }}
+                                      >
+                                        <Stack spacing={1}>
+                                          <Stack
+                                            direction={{
+                                              xs: "column",
+                                              sm: "row",
+                                            }}
+                                            spacing={1}
+                                            justifyContent="space-between"
+                                            alignItems={{
+                                              xs: "flex-start",
+                                              sm: "center",
+                                            }}
+                                          >
+                                            <Box>
+                                              <Typography
+                                                variant="subtitle2"
+                                                fontWeight={800}
+                                              >
+                                                Gestão da pendência
+                                              </Typography>
+                                              <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                              >
+                                                Ajuste o texto atual ou exclua a
+                                                pendência quando ela tiver sido
+                                                aberta por engano.
+                                              </Typography>
+                                            </Box>
+                                            <Stack
+                                              direction="row"
+                                              spacing={1}
+                                              flexWrap="wrap"
+                                              useFlexGap
+                                            >
+                                              <Button
+                                                variant={
+                                                  isEditingThread
+                                                    ? "contained"
+                                                    : "outlined"
+                                                }
+                                                size="small"
+                                                color="inherit"
+                                                onClick={() =>
+                                                  isEditingThread
+                                                    ? stopEditingPendingThread(
+                                                        thread.id,
+                                                      )
+                                                    : startEditingPendingThread(
+                                                        thread,
+                                                      )
+                                                }
+                                                disabled={
+                                                  updateCipavdThread.isPending
+                                                }
+                                              >
+                                                {isEditingThread
+                                                  ? "Cancelar edição"
+                                                  : "Editar pendência"}
+                                              </Button>
+                                              <Button
+                                                variant="outlined"
+                                                size="small"
+                                                color="inherit"
+                                                onClick={() =>
+                                                  setConfirmThreadDeleteTarget({
+                                                    id: thread.id,
+                                                    label:
+                                                      activeManagementMessage?.body,
+                                                  })
+                                                }
+                                                disabled={
+                                                  !canDeleteThread ||
+                                                  removeCipavdThread.isPending
+                                                }
+                                              >
+                                                Excluir pendência
+                                              </Button>
+                                            </Stack>
+                                          </Stack>
+                                          {isEditingThread && (
+                                            <Stack spacing={1}>
+                                              <TextField
+                                                size="small"
+                                                label="Texto da pendência"
+                                                value={draftValue}
+                                                onChange={(event) =>
+                                                  setThreadDraftValue(
+                                                    thread.id,
+                                                    event.target.value,
+                                                  )
+                                                }
+                                                fullWidth
+                                                multiline
+                                                minRows={2}
+                                                helperText="A edição atualiza o texto ativo da pendência sem quebrar o histórico."
+                                              />
+                                              <Box
+                                                display="flex"
+                                                justifyContent="flex-end"
+                                              >
+                                                <Button
+                                                  variant="contained"
+                                                  onClick={() =>
+                                                    saveEditedPendingThread(
+                                                      thread.id,
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    !draftValue.trim() ||
+                                                    updateCipavdThread.isPending
+                                                  }
+                                                >
+                                                  Salvar ajuste
+                                                </Button>
+                                              </Box>
+                                            </Stack>
+                                          )}
+                                        </Stack>
+                                      </Box>
+                                    )}
+
+                                  {thread.type === "PENDENCY" &&
+                                    thread.status === "OPEN" &&
                                     canResolveCipavdPending && (
                                       <Box
                                         sx={{
@@ -3389,7 +3636,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                         <Stack spacing={1}>
                                           <TextField
                                             size="small"
-                                            label="Nova pendência atrelada"
+                                            label="Validação final ou nova pendência"
                                             value={draftValue}
                                             onChange={(event) =>
                                               setThreadDraftValue(
@@ -3400,7 +3647,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                             fullWidth
                                             multiline
                                             minRows={2}
-                                            helperText="Se necessário, registre uma nova exigência no mesmo histórico."
+                                            helperText="Descreva a solução validada para encerrar ou registre uma nova exigência no mesmo histórico."
                                           />
                                           <Stack
                                             direction={{
@@ -3417,10 +3664,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                                 finalizePendingThread(thread.id)
                                               }
                                               disabled={
+                                                !draftValue.trim() ||
                                                 finalizeCipavdThread.isPending
                                               }
                                             >
-                                              Finalizar pendência
+                                              Finalizar com solução
                                             </Button>
                                             <Button
                                               variant="contained"
@@ -3551,7 +3799,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                               justifyContent="space-between"
                             >
                               <Typography fontWeight={700}>
-                                {item.case.caseNumber}
+                                {formatComplaintCaseNumberForDisplay(
+                                  item.case.caseNumber,
+                                )}
                               </Typography>
                               <Typography
                                 variant="caption"
@@ -3625,7 +3875,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 justifyContent="space-between"
                               >
                                 <Typography fontWeight={700}>
-                                  {item.case.caseNumber}
+                                  {formatComplaintCaseNumberForDisplay(
+                                    item.case.caseNumber,
+                                  )}
                                 </Typography>
                                 <Typography
                                   variant="caption"
@@ -3719,6 +3971,21 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         confirmLabel={deleteCase.isPending ? "Excluindo..." : "Excluir"}
         severity="error"
         confirmLoading={deleteCase.isPending}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmThreadDeleteTarget)}
+        onCancel={() => setConfirmThreadDeleteTarget(null)}
+        onConfirm={handleConfirmDeleteThread}
+        title="Excluir pendência"
+        message="Tem certeza que deseja excluir esta pendência?"
+        highlightText={confirmThreadDeleteTarget?.label ?? undefined}
+        note="A exclusão só é permitida enquanto a pendência ainda não tiver histórico de resposta da comissão."
+        confirmLabel={
+          removeCipavdThread.isPending ? "Excluindo..." : "Excluir pendência"
+        }
+        severity="error"
+        confirmLoading={removeCipavdThread.isPending}
       />
     </Box>
   );

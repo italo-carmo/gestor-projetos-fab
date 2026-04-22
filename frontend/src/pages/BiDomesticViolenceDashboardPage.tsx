@@ -34,6 +34,7 @@ import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
@@ -72,10 +73,12 @@ import {
   BiExecutiveNotebookDialog,
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
+import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
 import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
+import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
 import { useSearchParams } from "react-router-dom";
 
 type MetricMode = "PERCENT" | "COUNT";
@@ -329,7 +332,8 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
   },
   "panel-filters": {
     title: "Filtros analíticos",
-    description: "Refine o recorte por período, perfil e respostas do formulário.",
+    description:
+      "Refine o recorte por período, perfil e respostas do formulário.",
   },
   "kpi-total": {
     title: "Respostas no recorte",
@@ -337,19 +341,23 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
   },
   "kpi-lifetime": {
     title: "Sofreram ao longo da vida",
-    description: "Quantidade de respondentes com marcação positiva ao longo da vida.",
+    description:
+      "Quantidade de respondentes com marcação positiva ao longo da vida.",
   },
   "kpi-last12": {
     title: "Últimos 12 meses",
-    description: "Quantidade de respondentes com marcação positiva nos últimos 12 meses.",
+    description:
+      "Quantidade de respondentes com marcação positiva nos últimos 12 meses.",
   },
   "kpi-sought-help": {
     title: "Buscaram canal",
-    description: "Quantidade de respondentes que buscaram algum canal de ajuda.",
+    description:
+      "Quantidade de respondentes que buscaram algum canal de ajuda.",
   },
   "kpi-sought-help-rate": {
     title: "Taxa de busca de ajuda",
-    description: "Percentual de busca de ajuda entre casos com violência declarada.",
+    description:
+      "Percentual de busca de ajuda entre casos com violência declarada.",
   },
   "kpi-recurring": {
     title: "Violência recorrente",
@@ -387,7 +395,8 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
   },
   "list-responses": {
     title: "Respostas do recorte",
-    description: "Tabela detalhada com os registros filtrados e ações de exclusão.",
+    description:
+      "Tabela detalhada com os registros filtrados e ações de exclusão.",
   },
   "chart-marital-status": {
     title: "Estado civil",
@@ -708,8 +717,7 @@ export function BiDomesticViolenceDashboardPage() {
       if (!cardId) continue;
       map.set(cardId, {
         title:
-          String(item?.title ?? "").trim() ||
-          getDefaultCardText(cardId).title,
+          String(item?.title ?? "").trim() || getDefaultCardText(cardId).title,
         description:
           typeof item?.description === "string"
             ? item.description
@@ -1141,6 +1149,14 @@ export function BiDomesticViolenceDashboardPage() {
   const responseTrendText = getCardText("chart-response-trend");
   const importsText = getCardText("list-imports");
   const responsesText = getCardText("list-responses");
+  const activeFiltersCount = useMemo(
+    () =>
+      countActiveBusinessIntelligenceFilters(filters, [
+        "combineMode",
+        "responseId",
+      ]),
+    [filters],
+  );
 
   const renderDistributionChartHeader = (cardId: string) => {
     const text = getCardText(cardId);
@@ -1197,7 +1213,10 @@ export function BiDomesticViolenceDashboardPage() {
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("page-header")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("page-header")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -1209,25 +1228,6 @@ export function BiDomesticViolenceDashboardPage() {
         </Box>
 
         <Stack direction="row" spacing={1} flexWrap="wrap">
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<DownloadRoundedIcon />}
-            component="a"
-            href="/templates/bi-domestic-violence-template.csv"
-            download
-            sx={{
-              borderColor: alpha(DV_PALETTE.primary, 0.45),
-              color: DV_PALETTE.primary,
-              "&:hover": {
-                borderColor: DV_PALETTE.primary,
-                bgcolor: alpha(DV_PALETTE.primary, 0.08),
-              },
-            }}
-          >
-            Baixar template
-          </Button>
-
           <Button
             size="small"
             variant="outlined"
@@ -1282,110 +1282,122 @@ export function BiDomesticViolenceDashboardPage() {
               ? "Gerando caderno..."
               : "Caderno PDF"}
           </Button>
-
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<AutoGraphRoundedIcon />}
-            onClick={resetFilters}
-            sx={{
-              bgcolor: DV_PALETTE.primary,
-              "&:hover": { bgcolor: DV_PALETTE.primaryDark },
-            }}
-          >
-            Limpar filtros
-          </Button>
         </Stack>
       </Stack>
 
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 12, md: 8 }}>
-          <Card sx={cardSx}>
-            <CardContent>
-              <Stack
-                direction={{ xs: "column", lg: "row" }}
-                justifyContent="space-between"
-                alignItems={{ lg: "center" }}
-                gap={1.2}
+      <BiCollapsibleSection
+        title={ingestionPanelText.title}
+        description={ingestionPanelText.description}
+        icon={<UploadFileRoundedIcon fontSize="small" />}
+        accentColor={DV_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              file
+                ? "Arquivo pronto"
+                : dashboard.latestImport?.fileName
+                  ? "Base atual disponível"
+                  : "Sem importação"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(DV_PALETTE.primary, 0.28),
+              color: DV_PALETTE.primary,
+              bgcolor: alpha(DV_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        headerActions={
+          isTiProfile ? (
+            <MuiTooltip title="Editar título/descrição">
+              <IconButton
+                size="small"
+                onClick={() => openCardEditor("panel-ingestion")}
               >
-                <Box>
-                  <Stack direction="row" spacing={0.8} alignItems="center">
-                    <Typography variant="subtitle1" fontWeight={700}>
-                      {ingestionPanelText.title}
-                    </Typography>
-                    {isTiProfile ? (
-                      <MuiTooltip title="Editar título/descrição">
-                        <IconButton
-                          size="small"
-                          onClick={() => openCardEditor("panel-ingestion")}
-                        >
-                          <EditOutlinedIcon fontSize="small" />
-                        </IconButton>
-                      </MuiTooltip>
-                    ) : null}
-                  </Stack>
-                  <Typography variant="body2" sx={{ color: DV_PALETTE.muted }}>
-                    {ingestionPanelText.description}
-                  </Typography>
-                </Box>
-
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Button
-                    component="label"
-                    size="small"
-                    variant="outlined"
-                    startIcon={<UploadFileRoundedIcon />}
-                    disabled={!canUpload}
-                    sx={{
-                      borderColor: alpha(DV_PALETTE.primary, 0.45),
-                      color: DV_PALETTE.primary,
-                      "&:hover": {
-                        borderColor: DV_PALETTE.primary,
-                        bgcolor: alpha(DV_PALETTE.primary, 0.08),
-                      },
+                <EditOutlinedIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+          ) : null
+        }
+        sx={{ mb: 2, ...cardSx }}
+      >
+        <Grid container spacing={2} sx={{ pt: 1.2 }}>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Stack spacing={1.2}>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<DownloadRoundedIcon />}
+                  component="a"
+                  href="/templates/bi-domestic-violence-template.csv"
+                  download
+                  sx={{
+                    borderColor: alpha(DV_PALETTE.primary, 0.45),
+                    color: DV_PALETTE.primary,
+                    "&:hover": {
+                      borderColor: DV_PALETTE.primary,
+                      bgcolor: alpha(DV_PALETTE.primary, 0.08),
+                    },
+                  }}
+                >
+                  Baixar template
+                </Button>
+                <Button
+                  component="label"
+                  size="small"
+                  variant="outlined"
+                  startIcon={<UploadFileRoundedIcon />}
+                  disabled={!canUpload}
+                  sx={{
+                    borderColor: alpha(DV_PALETTE.primary, 0.45),
+                    color: DV_PALETTE.primary,
+                    "&:hover": {
+                      borderColor: DV_PALETTE.primary,
+                      bgcolor: alpha(DV_PALETTE.primary, 0.08),
+                    },
+                  }}
+                >
+                  Selecionar arquivo
+                  <input
+                    hidden
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={(event) => {
+                      const selected = event.target.files?.[0] ?? null;
+                      setFile(selected);
                     }}
-                  >
-                    Selecionar arquivo
-                    <input
-                      hidden
-                      type="file"
-                      accept=".csv,.xlsx,.xls"
-                      onChange={(event) => {
-                        const selected = event.target.files?.[0] ?? null;
-                        setFile(selected);
-                      }}
-                    />
-                  </Button>
+                  />
+                </Button>
 
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={handleImport}
-                    disabled={
-                      !canUpload ||
-                      !file ||
-                      importMutation.isPending ||
-                      previewImportMutation.isPending
-                    }
-                    sx={{
-                      bgcolor: DV_PALETTE.accent,
-                      "&:hover": { bgcolor: "#CA3325" },
-                    }}
-                  >
-                    {previewImportMutation.isPending
-                      ? "Analisando..."
-                      : importMutation.isPending
-                        ? "Importando..."
-                        : "Importar"}
-                  </Button>
-                </Stack>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={handleImport}
+                  disabled={
+                    !canUpload ||
+                    !file ||
+                    importMutation.isPending ||
+                    previewImportMutation.isPending
+                  }
+                  sx={{
+                    bgcolor: DV_PALETTE.accent,
+                    "&:hover": { bgcolor: "#CA3325" },
+                  }}
+                >
+                  {previewImportMutation.isPending
+                    ? "Analisando..."
+                    : importMutation.isPending
+                      ? "Importando..."
+                      : "Importar"}
+                </Button>
               </Stack>
 
               <Stack
                 direction={{ xs: "column", lg: "row" }}
                 justifyContent="space-between"
                 alignItems={{ lg: "center" }}
-                mt={1.2}
                 gap={1}
               >
                 <Stack
@@ -1469,18 +1481,24 @@ export function BiDomesticViolenceDashboardPage() {
               </Stack>
 
               {dashboardQuery.isFetching || importsQuery.isFetching ? (
-                <Box sx={{ mt: 1.2 }}>
+                <Box sx={{ mt: 0.4 }}>
                   <LinearProgress />
                 </Box>
               ) : null}
-            </CardContent>
-          </Card>
-        </Grid>
+            </Stack>
+          </Grid>
 
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card sx={cardSx}>
-            <CardContent>
-              <Typography variant="subtitle1" fontWeight={700}>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Box
+              sx={{
+                borderRadius: 3,
+                border: "1px solid",
+                borderColor: alpha(DV_PALETTE.primary, 0.12),
+                bgcolor: alpha(DV_PALETTE.primary, 0.03),
+                p: 1.6,
+              }}
+            >
+              <Typography variant="subtitle2" fontWeight={700}>
                 Última atualização
               </Typography>
               {dashboard.latestImport ? (
@@ -1500,486 +1518,507 @@ export function BiDomesticViolenceDashboardPage() {
                   Nenhuma importação registrada até o momento.
                 </Alert>
               )}
-            </CardContent>
-          </Card>
+            </Box>
+          </Grid>
         </Grid>
-      </Grid>
+      </BiCollapsibleSection>
 
-      <Card sx={{ ...cardSx, mb: 2 }}>
-        <CardContent>
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 0.6 }}
-          >
-            <Typography variant="subtitle1" fontWeight={700}>
-              {filtersPanelText.title}
-            </Typography>
+      <BiCollapsibleSection
+        title={filtersPanelText.title}
+        description={filtersPanelText.description}
+        icon={<FilterListRoundedIcon fontSize="small" />}
+        accentColor={DV_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              activeFiltersCount > 0
+                ? `${activeFiltersCount} filtro${activeFiltersCount > 1 ? "s" : ""} ativo${activeFiltersCount > 1 ? "s" : ""}`
+                : "Sem filtros ativos"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(DV_PALETTE.primary, 0.28),
+              color: DV_PALETTE.primary,
+              bgcolor: alpha(DV_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        headerActions={
+          <Stack direction="row" spacing={1}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<AutoGraphRoundedIcon />}
+              onClick={resetFilters}
+              sx={{
+                borderColor: alpha(DV_PALETTE.primary, 0.35),
+                color: DV_PALETTE.primary,
+              }}
+            >
+              Limpar filtros
+            </Button>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("panel-filters")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("panel-filters")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
             ) : null}
           </Stack>
-          <Typography variant="caption" sx={{ color: DV_PALETTE.muted }}>
-            {filtersPanelText.description}
-          </Typography>
-
-          <Grid container spacing={1.2}>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="De"
-                type="date"
-                value={filters.from}
-                onChange={(event) => updateFilter("from", event.target.value)}
-                size="small"
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Até"
-                type="date"
-                value={filters.to}
-                onChange={(event) => updateFilter("to", event.target.value)}
-                size="small"
-                fullWidth
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Organização"
-                value={filters.organization}
-                onChange={(event) =>
-                  updateFilter("organization", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.organization ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Posto/Graduação"
-                value={filters.rank}
-                onChange={(event) => updateFilter("rank", event.target.value)}
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.rank ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Estado civil"
-                value={filters.maritalStatus}
-                onChange={(event) =>
-                  updateFilter("maritalStatus", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.maritalStatus ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Escolaridade"
-                value={filters.education}
-                onChange={(event) =>
-                  updateFilter("education", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.education ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Naturalidade"
-                value={filters.naturality}
-                onChange={(event) =>
-                  updateFilter("naturality", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.naturality ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Vínculo com FAB"
-                value={filters.fabBond}
-                onChange={(event) =>
-                  updateFilter("fabBond", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.fabBond ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Situação relatada"
-                value={filters.situationScope}
-                onChange={(event) =>
-                  updateFilter("situationScope", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.situationScope ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Frequência da ocorrência"
-                value={filters.frequency}
-                onChange={(event) =>
-                  updateFilter("frequency", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.frequency ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Vínculo afetivo (autor)"
-                value={filters.affectiveBond}
-                onChange={(event) =>
-                  updateFilter("affectiveBond", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.affectiveBond ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Tipo de autor do fato"
-                value={filters.authorRelation}
-                onChange={(event) =>
-                  updateFilter("authorRelation", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.authorRelation ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Autor com vínculo militar"
-                value={filters.authorMilitaryLink}
-                onChange={(event) =>
-                  updateFilter("authorMilitaryLink", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.authorMilitaryLink ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Local da ocorrência"
-                value={filters.occurrencePlace}
-                onChange={(event) =>
-                  updateFilter("occurrencePlace", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.occurrencePlace ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Houve testemunhas"
-                value={filters.witnesses}
-                onChange={(event) =>
-                  updateFilter("witnesses", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.witnesses ?? []).map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Sofreu (vida)"
-                value={filters.sufferedLifetime}
-                onChange={(event) =>
-                  updateFilter("sufferedLifetime", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.sufferedLifetime ?? []).map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Sofreu (12 meses)"
-                value={filters.sufferedLast12Months}
-                onChange={(event) =>
-                  updateFilter("sufferedLast12Months", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.sufferedLast12Months ?? []).map(
-                  (option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ),
-                )}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Tipo de violência"
-                value={filters.violenceType}
-                onChange={(event) =>
-                  updateFilter("violenceType", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.violenceTypes ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Intensidade do impacto"
-                value={filters.impactIntensity}
-                onChange={(event) =>
-                  updateFilter("impactIntensity", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.impactIntensity ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Área de impacto"
-                value={filters.impactArea}
-                onChange={(event) =>
-                  updateFilter("impactArea", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.impactAreas ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Canal de denúncia"
-                value={filters.complaintChannel}
-                onChange={(event) =>
-                  updateFilter("complaintChannel", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.complaintChannels ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Motivo de não denúncia"
-                value={filters.noComplaintReason}
-                onChange={(event) =>
-                  updateFilter("noComplaintReason", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.noComplaintReasons ?? []).map((option) => (
-                  <MenuItem key={option} value={option}>
-                    {option}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Procurou canal"
-                value={filters.soughtHelp}
-                onChange={(event) =>
-                  updateFilter("soughtHelp", event.target.value)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {(dashboard.filters.soughtHelp ?? []).map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Busca livre"
-                value={filters.q}
-                onChange={(event) => updateFilter("q", event.target.value)}
-                size="small"
-                fullWidth
-              />
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 2.4 }}>
-              <TextField
-                label="Combinação dos filtros"
-                value={filters.combineMode}
-                onChange={(event) =>
-                  updateFilter("combineMode", event.target.value as CombineMode)
-                }
-                select
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="AND">AND (mais restritivo)</MenuItem>
-                <MenuItem value="OR">OR (mais amplo)</MenuItem>
-              </TextField>
-            </Grid>
+        }
+        sx={{ mb: 2, ...cardSx }}
+      >
+        <Grid container spacing={1.2} sx={{ pt: 1.2 }}>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="De"
+              type="date"
+              value={filters.from}
+              onChange={(event) => updateFilter("from", event.target.value)}
+              size="small"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
           </Grid>
-        </CardContent>
-      </Card>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Até"
+              type="date"
+              value={filters.to}
+              onChange={(event) => updateFilter("to", event.target.value)}
+              size="small"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Organização"
+              value={filters.organization}
+              onChange={(event) =>
+                updateFilter("organization", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(dashboard.filters.organization ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Posto/Graduação"
+              value={filters.rank}
+              onChange={(event) => updateFilter("rank", event.target.value)}
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.rank ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Estado civil"
+              value={filters.maritalStatus}
+              onChange={(event) =>
+                updateFilter("maritalStatus", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.maritalStatus ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Escolaridade"
+              value={filters.education}
+              onChange={(event) =>
+                updateFilter("education", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(dashboard.filters.education ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Naturalidade"
+              value={filters.naturality}
+              onChange={(event) =>
+                updateFilter("naturality", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(dashboard.filters.naturality ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Vínculo com FAB"
+              value={filters.fabBond}
+              onChange={(event) => updateFilter("fabBond", event.target.value)}
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.fabBond ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Situação relatada"
+              value={filters.situationScope}
+              onChange={(event) =>
+                updateFilter("situationScope", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(dashboard.filters.situationScope ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Frequência da ocorrência"
+              value={filters.frequency}
+              onChange={(event) =>
+                updateFilter("frequency", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(dashboard.filters.frequency ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Vínculo afetivo (autor)"
+              value={filters.affectiveBond}
+              onChange={(event) =>
+                updateFilter("affectiveBond", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.affectiveBond ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Tipo de autor do fato"
+              value={filters.authorRelation}
+              onChange={(event) =>
+                updateFilter("authorRelation", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.authorRelation ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Autor com vínculo militar"
+              value={filters.authorMilitaryLink}
+              onChange={(event) =>
+                updateFilter("authorMilitaryLink", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.authorMilitaryLink ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Local da ocorrência"
+              value={filters.occurrencePlace}
+              onChange={(event) =>
+                updateFilter("occurrencePlace", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.occurrencePlace ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Houve testemunhas"
+              value={filters.witnesses}
+              onChange={(event) =>
+                updateFilter("witnesses", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.witnesses ?? []).map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Sofreu (vida)"
+              value={filters.sufferedLifetime}
+              onChange={(event) =>
+                updateFilter("sufferedLifetime", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.sufferedLifetime ?? []).map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Sofreu (12 meses)"
+              value={filters.sufferedLast12Months}
+              onChange={(event) =>
+                updateFilter("sufferedLast12Months", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.sufferedLast12Months ?? []).map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Tipo de violência"
+              value={filters.violenceType}
+              onChange={(event) =>
+                updateFilter("violenceType", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.violenceTypes ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Intensidade do impacto"
+              value={filters.impactIntensity}
+              onChange={(event) =>
+                updateFilter("impactIntensity", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(dashboard.filters.impactIntensity ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Área de impacto"
+              value={filters.impactArea}
+              onChange={(event) =>
+                updateFilter("impactArea", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todas</MenuItem>
+              {(dashboard.filters.impactAreas ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Canal de denúncia"
+              value={filters.complaintChannel}
+              onChange={(event) =>
+                updateFilter("complaintChannel", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.complaintChannels ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Motivo de não denúncia"
+              value={filters.noComplaintReason}
+              onChange={(event) =>
+                updateFilter("noComplaintReason", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.noComplaintReasons ?? []).map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Procurou canal"
+              value={filters.soughtHelp}
+              onChange={(event) =>
+                updateFilter("soughtHelp", event.target.value)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="">Todos</MenuItem>
+              {(dashboard.filters.soughtHelp ?? []).map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  {option.label}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Busca livre"
+              value={filters.q}
+              onChange={(event) => updateFilter("q", event.target.value)}
+              size="small"
+              fullWidth
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 2.4 }}>
+            <TextField
+              label="Combinação dos filtros"
+              value={filters.combineMode}
+              onChange={(event) =>
+                updateFilter("combineMode", event.target.value as CombineMode)
+              }
+              select
+              size="small"
+              fullWidth
+            >
+              <MenuItem value="AND">AND (mais restritivo)</MenuItem>
+              <MenuItem value="OR">OR (mais amplo)</MenuItem>
+            </TextField>
+          </Grid>
+        </Grid>
+      </BiCollapsibleSection>
 
       <Grid container spacing={1.2} sx={{ mb: 2 }}>
         {[
@@ -2039,13 +2078,20 @@ export function BiDomesticViolenceDashboardPage() {
               <CardContent
                 sx={{ py: 1.2, px: 1.4, "&:last-child": { pb: 1.2 } }}
               >
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                >
                   <Typography variant="body2" sx={{ color: DV_PALETTE.muted }}>
                     {kpi.label}
                   </Typography>
                   {isTiProfile ? (
                     <MuiTooltip title="Editar título/descrição">
-                      <IconButton size="small" onClick={() => openCardEditor(kpi.cardId)}>
+                      <IconButton
+                        size="small"
+                        onClick={() => openCardEditor(kpi.cardId)}
+                      >
                         <EditOutlinedIcon fontSize="small" />
                       </IconButton>
                     </MuiTooltip>
@@ -2068,13 +2114,20 @@ export function BiDomesticViolenceDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
               {insightMainText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("insight-main")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("insight-main")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -2137,13 +2190,20 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
                 <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                   {lifetimeDonutText.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("chart-lifetime-donut")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("chart-lifetime-donut")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
@@ -2209,13 +2269,20 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid size={{ xs: 12, lg: 6 }}>
           <Card sx={cardSx}>
             <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+              >
                 <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
                   {last12DonutText.title}
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("chart-last12-donut")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("chart-last12-donut")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>
@@ -2288,7 +2355,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-marital-status")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={maritalStatusBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={maritalStatusBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2343,7 +2414,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-education")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={educationBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={educationBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2395,7 +2470,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-naturality")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={naturalityBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={naturalityBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2447,7 +2526,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-fab-bond")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={fabBondBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={fabBondBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2501,7 +2584,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-situation-scope")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={situationScopeBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={situationScopeBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2556,7 +2643,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-frequency")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={frequencyBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={frequencyBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2608,7 +2699,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-affective-bond")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={affectiveBondBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={affectiveBondBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2663,7 +2758,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-author-relation")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={authorRelationBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={authorRelationBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2720,7 +2819,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-author-military-link")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={authorMilitaryLinkBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={authorMilitaryLinkBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2775,7 +2878,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-occurrence-place")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={occurrencePlaceBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={occurrencePlaceBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2830,7 +2937,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-witnesses")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={witnessesBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={witnessesBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2887,7 +2998,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-impact-intensity")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={impactIntensityBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={impactIntensityBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2922,10 +3037,7 @@ export function BiDomesticViolenceDashboardPage() {
                       radius={[8, 8, 0, 0]}
                       onClick={(entry: any) => {
                         if (entry?.level) {
-                          updateFilter(
-                            "impactIntensity",
-                            String(entry.level),
-                          );
+                          updateFilter("impactIntensity", String(entry.level));
                         }
                       }}
                     />
@@ -2942,7 +3054,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-sought-help-bar")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={soughtHelpBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={soughtHelpBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -2999,7 +3115,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-violence-types")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={violenceTypeBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={violenceTypeBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -3050,7 +3170,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-impact-areas")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={impactAreaBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={impactAreaBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -3101,7 +3225,11 @@ export function BiDomesticViolenceDashboardPage() {
           {renderDistributionChartHeader("chart-violence-by-org")}
           <Box sx={{ height: 280 }}>
             <ResponsiveContainer>
-              <BarChart barCategoryGap="42%" maxBarSize={14} data={violenceByOrganization?.items ?? []}>
+              <BarChart
+                barCategoryGap="42%"
+                maxBarSize={14}
+                data={violenceByOrganization?.items ?? []}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
                   dataKey="organization"
@@ -3159,7 +3287,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-org-distribution")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={organizationBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={organizationBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -3214,7 +3346,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-rank")}
               <Box sx={{ height: 236 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={rankBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={rankBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -3314,7 +3450,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-complaint-channels")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={channelBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={channelBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -3369,7 +3509,11 @@ export function BiDomesticViolenceDashboardPage() {
               {renderDistributionChartHeader("chart-no-complaint-reasons")}
               <Box sx={{ height: 248 }}>
                 <ResponsiveContainer>
-                  <BarChart barCategoryGap="42%" maxBarSize={14} data={reasonBars}>
+                  <BarChart
+                    barCategoryGap="42%"
+                    maxBarSize={14}
+                    data={reasonBars}
+                  >
                     <CartesianGrid
                       strokeDasharray="3 3"
                       stroke={chartGridStroke}
@@ -3421,13 +3565,20 @@ export function BiDomesticViolenceDashboardPage() {
 
       <Card sx={{ ...cardSx, mb: 2 }}>
         <CardContent>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
             <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1 }}>
               {responseTrendText.title}
             </Typography>
             {isTiProfile ? (
               <MuiTooltip title="Editar título/descrição">
-                <IconButton size="small" onClick={() => openCardEditor("chart-response-trend")}>
+                <IconButton
+                  size="small"
+                  onClick={() => openCardEditor("chart-response-trend")}
+                >
                   <EditOutlinedIcon fontSize="small" />
                 </IconButton>
               </MuiTooltip>
@@ -3461,7 +3612,9 @@ export function BiDomesticViolenceDashboardPage() {
                   formatter={(
                     value: number,
                     _name,
-                    props: { payload?: { total?: number; positiveCount?: number } },
+                    props: {
+                      payload?: { total?: number; positiveCount?: number };
+                    },
                   ) => {
                     const payload = props?.payload;
                     return [
@@ -3500,7 +3653,10 @@ export function BiDomesticViolenceDashboardPage() {
               </Typography>
               {isTiProfile ? (
                 <MuiTooltip title="Editar título/descrição">
-                  <IconButton size="small" onClick={() => openCardEditor("list-imports")}>
+                  <IconButton
+                    size="small"
+                    onClick={() => openCardEditor("list-imports")}
+                  >
                     <EditOutlinedIcon fontSize="small" />
                   </IconButton>
                 </MuiTooltip>
@@ -3569,7 +3725,10 @@ export function BiDomesticViolenceDashboardPage() {
                 </Typography>
                 {isTiProfile ? (
                   <MuiTooltip title="Editar título/descrição">
-                    <IconButton size="small" onClick={() => openCardEditor("list-responses")}>
+                    <IconButton
+                      size="small"
+                      onClick={() => openCardEditor("list-responses")}
+                    >
                       <EditOutlinedIcon fontSize="small" />
                     </IconButton>
                   </MuiTooltip>

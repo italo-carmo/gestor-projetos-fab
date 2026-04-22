@@ -31,6 +31,14 @@ export function normalizeComplaintCipavdSummary(
   };
 }
 
+export function formatComplaintCaseNumberForDisplay(
+  caseNumber: string | null | undefined,
+) {
+  const normalized = String(caseNumber ?? "").trim();
+  if (!normalized) return "";
+  return normalized.replace(/^(CPCA|SMIF)\s*-\s*/i, "");
+}
+
 export function getComplaintPendencyBadge(
   summary: ComplaintCipavdSummary | null | undefined,
   options?: { showResolved?: boolean },
@@ -39,7 +47,7 @@ export function getComplaintPendencyBadge(
 
   if (normalized.openPendingCount > 0) {
     return {
-      tone: "warning" as const,
+      tone: "error" as const,
       label:
         normalized.openPendingCount === 1
           ? "Pendência"

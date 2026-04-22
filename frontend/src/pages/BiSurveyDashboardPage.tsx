@@ -30,6 +30,7 @@ import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
@@ -68,11 +69,13 @@ import {
   BiExecutiveNotebookDialog,
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
+import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
 import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
+import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
 import { useSearchParams } from "react-router-dom";
 
 type MetricMode = "PERCENT" | "COUNT";
@@ -168,12 +171,16 @@ type BiDashboardResponse = {
   insights: {
     mostCommonType: { type: string; mentions: number } | null;
     riskiestOm: { om: string; simPercent: number; total: number } | null;
-    topMissionByMentions:
-      | { om: string; mentions: number; sharePercent: number }
-      | null;
-    topProfileByMentions:
-      | { posto: string; mentions: number; sharePercent: number }
-      | null;
+    topMissionByMentions: {
+      om: string;
+      mentions: number;
+      sharePercent: number;
+    } | null;
+    topProfileByMentions: {
+      posto: string;
+      mentions: number;
+      sharePercent: number;
+    } | null;
   };
   latestImport?: {
     id: string;
@@ -320,7 +327,7 @@ const TYPE_COLOR_BY_LABEL: Record<string, string> = {
 };
 
 const DONUT_COLOR_BY_LABEL: Record<string, string> = {
-  "Não": BI_PALETTE.primaryMid,
+  Não: BI_PALETTE.primaryMid,
   Sim: BI_PALETTE.accent,
   "Não informado": "#A5A5A5",
 };
@@ -434,8 +441,7 @@ function buildBiCardTextDefaults(
     },
     "chart-profile-types": {
       title: `Tipos por perfil funcional (${metricLabel})`,
-      description:
-        "Leitura de concentração por DISCENTE e GRADUADO E OFICIAL.",
+      description: "Leitura de concentração por DISCENTE e GRADUADO E OFICIAL.",
       textColor: BI_PALETTE.text,
     },
     "chart-monthly-trend": {
@@ -503,7 +509,9 @@ export function BiSurveyDashboardPage() {
     [metricMode],
   );
   const updateCardSettingMutation = useUpdateBiSurveyCardSetting();
-  const getCardTextStyle = (cardId: BiEditableCardId): BiEditableCardTextStyle => {
+  const getCardTextStyle = (
+    cardId: BiEditableCardId,
+  ): BiEditableCardTextStyle => {
     const defaults = cardTextDefaults[cardId];
     const custom = dashboard?.cardSettings?.find(
       (item) => item.cardId === cardId,
@@ -619,8 +627,7 @@ export function BiSurveyDashboardPage() {
   const totalPages = responses
     ? Math.max(1, Math.ceil(responses.total / responses.pageSize))
     : 1;
-  const hasAutodeclara =
-    (dashboard?.filters?.autodeclara?.length ?? 0) > 0;
+  const hasAutodeclara = (dashboard?.filters?.autodeclara?.length ?? 0) > 0;
 
   const handleImport = async () => {
     if (!file) {
@@ -681,7 +688,9 @@ export function BiSurveyDashboardPage() {
       setFile(null);
       closeImportPreview();
       const mentions = Number(result?.correlatedViolence?.mentionRows ?? 0);
-      const normalizedFields = Number(result?.normalization?.updatedFields ?? 0);
+      const normalizedFields = Number(
+        result?.normalization?.updatedFields ?? 0,
+      );
       toast.push({
         message:
           `Base substituída com sucesso. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
@@ -869,6 +878,14 @@ export function BiSurveyDashboardPage() {
   );
   const profileTypesText = getCardTextStyle("chart-profile-types");
   const monthlyTrendText = getCardTextStyle("chart-monthly-trend");
+  const activeFiltersCount = useMemo(
+    () =>
+      countActiveBusinessIntelligenceFilters(filters, [
+        "combineMode",
+        "responseId",
+      ]),
+    [filters],
+  );
 
   return (
     <Box
@@ -906,29 +923,6 @@ export function BiSurveyDashboardPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<DownloadRoundedIcon />}
-            component="a"
-            href="/templates/bi-survey-template.csv"
-            download
-            sx={{
-              height: 36,
-              px: 1.4,
-              fontSize: 13,
-              whiteSpace: "nowrap",
-              borderColor: alpha(BI_PALETTE.primary, 0.5),
-              color: BI_PALETTE.primary,
-              "& .MuiButton-startIcon > *": { fontSize: 18 },
-              "&:hover": {
-                borderColor: BI_PALETTE.primary,
-                bgcolor: alpha(BI_PALETTE.primary, 0.06),
-              },
-            }}
-          >
-            Baixar template
-          </Button>
           <Button
             size="small"
             variant="outlined"
@@ -996,23 +990,6 @@ export function BiSurveyDashboardPage() {
               ? "Gerando caderno..."
               : "Caderno PDF"}
           </Button>
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<AutoGraphRoundedIcon />}
-            onClick={resetFilters}
-            sx={{
-              height: 36,
-              px: 1.4,
-              fontSize: 13,
-              whiteSpace: "nowrap",
-              "& .MuiButton-startIcon > *": { fontSize: 18 },
-              bgcolor: BI_PALETTE.primary,
-              "&:hover": { bgcolor: BI_PALETTE.primaryDark },
-            }}
-          >
-            Limpar filtros
-          </Button>
         </Stack>
       </Stack>
 
@@ -1049,27 +1026,43 @@ export function BiSurveyDashboardPage() {
           >
             {contextMissionText.description}
           </Typography>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ mt: 1.2 }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1}
+            sx={{ mt: 1.2 }}
+          >
             <Chip
               size="small"
               variant="outlined"
               label={`Missão atual: ${filters.mission || "Todas"}`}
-              sx={{ borderColor: alpha(BI_PALETTE.primary, 0.4), color: BI_PALETTE.primaryDark }}
+              sx={{
+                borderColor: alpha(BI_PALETTE.primary, 0.4),
+                color: BI_PALETTE.primaryDark,
+              }}
             />
             <Chip
               size="small"
               variant="outlined"
               label={`Respostas no recorte: ${dashboard.kpis.totalResponses}`}
-              sx={{ borderColor: alpha(BI_PALETTE.accent, 0.45), color: BI_PALETTE.accent }}
+              sx={{
+                borderColor: alpha(BI_PALETTE.accent, 0.45),
+                color: BI_PALETTE.accent,
+              }}
             />
             <Chip
               size="small"
               variant="outlined"
               label={`Base total: ${dashboard.kpis.totalRowsInDb}`}
-              sx={{ borderColor: alpha(BI_PALETTE.primaryMid, 0.4), color: BI_PALETTE.primaryMid }}
+              sx={{
+                borderColor: alpha(BI_PALETTE.primaryMid, 0.4),
+                color: BI_PALETTE.primaryMid,
+              }}
             />
           </Stack>
-          <Typography variant="caption" sx={{ color: BI_PALETTE.muted, display: "block", mt: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{ color: BI_PALETTE.muted, display: "block", mt: 1 }}
+          >
             Fonte consolidada: abas BANCO_DADOS e BANCO_DADOS_VIOLENCIA.
           </Typography>
         </CardContent>
@@ -1111,11 +1104,15 @@ export function BiSurveyDashboardPage() {
 
           {!filters.mission ? (
             <Alert severity="info" sx={{ mt: 0.8 }}>
-              Selecione uma missão para visualizar as perguntas e o nível de preenchimento desta base.
+              Selecione uma missão para visualizar as perguntas e o nível de
+              preenchimento desta base.
             </Alert>
           ) : missionQuestionsQuery.isLoading ? (
             <Box sx={{ mt: 1 }}>
-              <Typography variant="body2" sx={{ color: BI_PALETTE.muted, mb: 0.8 }}>
+              <Typography
+                variant="body2"
+                sx={{ color: BI_PALETTE.muted, mb: 0.8 }}
+              >
                 Carregando perguntas da missão...
               </Typography>
               <LinearProgress />
@@ -1131,7 +1128,10 @@ export function BiSurveyDashboardPage() {
           ) : (
             <Box
               display="grid"
-              gridTemplateColumns={{ xs: "1fr", md: "repeat(2, minmax(0, 1fr))" }}
+              gridTemplateColumns={{
+                xs: "1fr",
+                md: "repeat(2, minmax(0, 1fr))",
+              }}
               gap={1}
               sx={{ mt: 1 }}
             >
@@ -1155,19 +1155,32 @@ export function BiSurveyDashboardPage() {
                       height: 8,
                       borderRadius: 999,
                       bgcolor: alpha(BI_PALETTE.primarySoft, 0.3),
-                      "& .MuiLinearProgress-bar": { bgcolor: BI_PALETTE.primaryMid },
+                      "& .MuiLinearProgress-bar": {
+                        bgcolor: BI_PALETTE.primaryMid,
+                      },
                     }}
                   />
-                  <Stack direction="row" spacing={0.8} sx={{ mt: 0.8, mb: 0.6 }} flexWrap="wrap">
+                  <Stack
+                    direction="row"
+                    spacing={0.8}
+                    sx={{ mt: 0.8, mb: 0.6 }}
+                    flexWrap="wrap"
+                  >
                     <Chip
                       size="small"
                       label={`Respondidas: ${question.answeredCount}`}
-                      sx={{ bgcolor: alpha(BI_PALETTE.success, 0.15), color: BI_PALETTE.success }}
+                      sx={{
+                        bgcolor: alpha(BI_PALETTE.success, 0.15),
+                        color: BI_PALETTE.success,
+                      }}
                     />
                     <Chip
                       size="small"
                       label={`Em branco: ${question.emptyCount}`}
-                      sx={{ bgcolor: alpha(BI_PALETTE.warning, 0.2), color: "#8E6200" }}
+                      sx={{
+                        bgcolor: alpha(BI_PALETTE.warning, 0.2),
+                        color: "#8E6200",
+                      }}
                     />
                     <Chip
                       size="small"
@@ -1195,8 +1208,12 @@ export function BiSurveyDashboardPage() {
                       ))}
                     </Stack>
                   ) : (
-                    <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
-                      Sem respostas registradas nesta pergunta para o recorte atual.
+                    <Typography
+                      variant="caption"
+                      sx={{ color: BI_PALETTE.muted }}
+                    >
+                      Sem respostas registradas nesta pergunta para o recorte
+                      atual.
                     </Typography>
                   )}
                 </Box>
@@ -1206,216 +1223,299 @@ export function BiSurveyDashboardPage() {
         </CardContent>
       </Card>
 
-      <Card sx={{ mb: 2, ...cardSx }}>
-        <CardContent>
-          <Stack
-            direction={{ xs: "column", lg: "row" }}
-            spacing={1.2}
-            alignItems={{ lg: "center" }}
-            sx={{ flexWrap: { lg: "wrap" }, rowGap: { lg: 1.2 } }}
+      <BiCollapsibleSection
+        title="Ingestão de dados"
+        description="Template, substituição da base e última importação ficam organizados em um único bloco."
+        icon={<UploadFileRoundedIcon fontSize="small" />}
+        accentColor={BI_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              file
+                ? "Arquivo pronto para envio"
+                : dashboard.latestImport?.fileName
+                  ? "Base carregada"
+                  : "Sem importação"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(BI_PALETTE.primary, 0.28),
+              color: BI_PALETTE.primary,
+              bgcolor: alpha(BI_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        sx={{ mb: 2, ...cardSx }}
+      >
+        <Stack
+          direction={{ xs: "column", lg: "row" }}
+          spacing={1.2}
+          alignItems={{ lg: "center" }}
+          sx={{ flexWrap: { lg: "wrap" }, rowGap: { lg: 1.2 }, pt: 1.2 }}
+        >
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<DownloadRoundedIcon />}
+            component="a"
+            href="/templates/bi-survey-template.csv"
+            download
+            sx={{
+              height: 40,
+              px: 1.6,
+              whiteSpace: "nowrap",
+              borderColor: alpha(BI_PALETTE.primary, 0.5),
+              color: BI_PALETTE.primary,
+              "& .MuiButton-startIcon > *": { fontSize: 18 },
+              "&:hover": {
+                borderColor: BI_PALETTE.primary,
+                bgcolor: alpha(BI_PALETTE.primary, 0.06),
+              },
+            }}
           >
-            <Button
-              variant="outlined"
-              component="label"
-              startIcon={<UploadFileRoundedIcon />}
-              sx={{
-                minWidth: 260,
-                height: 40,
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                borderColor: alpha(BI_PALETTE.primary, 0.5),
-                color: BI_PALETTE.primary,
-                "&:hover": {
-                  borderColor: BI_PALETTE.primary,
-                  bgcolor: alpha(BI_PALETTE.primary, 0.06),
-                },
+            Baixar template
+          </Button>
+          <Button
+            variant="outlined"
+            component="label"
+            startIcon={<UploadFileRoundedIcon />}
+            sx={{
+              minWidth: 260,
+              height: 40,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              borderColor: alpha(BI_PALETTE.primary, 0.5),
+              color: BI_PALETTE.primary,
+              "&:hover": {
+                borderColor: BI_PALETTE.primary,
+                bgcolor: alpha(BI_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            {file ? file.name : "Selecionar arquivo de pesquisa"}
+            <input
+              hidden
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={(event) => {
+                const selected = event.target.files?.[0] ?? null;
+                setFile(selected);
               }}
-            >
-              {file ? file.name : "Selecionar arquivo de pesquisa"}
-              <input
-                hidden
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={(event) => {
-                  const selected = event.target.files?.[0] ?? null;
-                  setFile(selected);
-                }}
-              />
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={handleImport}
-              disabled={importMutation.isPending || previewImportMutation.isPending}
-              sx={{
-                height: 40,
-                px: 2,
-                whiteSpace: "nowrap",
-                flexShrink: 0,
-                bgcolor: BI_PALETTE.primary,
-                "&:hover": { bgcolor: BI_PALETTE.primaryDark },
-              }}
-            >
-              {previewImportMutation.isPending
-                ? "Analisando..."
-                : importMutation.isPending
-                  ? "Importando..."
-                  : "Substituir base no banco"}
-            </Button>
-            <Box sx={{ ml: { lg: "auto" } }}>
-              <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
-                Ultima importacao
-              </Typography>
-              <Typography variant="body2" fontWeight={600}>
-                {dashboard.latestImport?.fileName ?? "Nenhuma"}
-              </Typography>
-            </Box>
-          </Stack>
-        </CardContent>
-      </Card>
+            />
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleImport}
+            disabled={
+              importMutation.isPending || previewImportMutation.isPending
+            }
+            sx={{
+              height: 40,
+              px: 2,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              bgcolor: BI_PALETTE.primary,
+              "&:hover": { bgcolor: BI_PALETTE.primaryDark },
+            }}
+          >
+            {previewImportMutation.isPending
+              ? "Analisando..."
+              : importMutation.isPending
+                ? "Importando..."
+                : "Substituir base no banco"}
+          </Button>
+          <Box sx={{ ml: { lg: "auto" } }}>
+            <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
+              Última importação
+            </Typography>
+            <Typography variant="body2" fontWeight={600}>
+              {dashboard.latestImport?.fileName ?? "Nenhuma"}
+            </Typography>
+          </Box>
+        </Stack>
+      </BiCollapsibleSection>
 
-      <Card sx={{ mb: 2, ...cardSx }}>
-        <CardContent>
-          <Box
-            display="grid"
-            gridTemplateColumns={{ xs: "1fr", md: "repeat(4, 1fr)" }}
-            gap={1.2}
+      <BiCollapsibleSection
+        title="Filtros do painel"
+        description="Expanda para refinar o recorte, trocar o modo de combinação e limpar a visão atual."
+        icon={<FilterListRoundedIcon fontSize="small" />}
+        accentColor={BI_PALETTE.primary}
+        summary={
+          <Chip
+            size="small"
+            label={
+              activeFiltersCount > 0
+                ? `${activeFiltersCount} filtro${activeFiltersCount > 1 ? "s" : ""} ativo${activeFiltersCount > 1 ? "s" : ""}`
+                : "Sem filtros ativos"
+            }
+            variant="outlined"
+            sx={{
+              borderColor: alpha(BI_PALETTE.primary, 0.28),
+              color: BI_PALETTE.primary,
+              bgcolor: alpha(BI_PALETTE.primary, 0.04),
+            }}
+          />
+        }
+        headerActions={
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<AutoGraphRoundedIcon />}
+            onClick={resetFilters}
+            sx={{
+              borderColor: alpha(BI_PALETTE.primary, 0.35),
+              color: BI_PALETTE.primary,
+            }}
           >
+            Limpar filtros
+          </Button>
+        }
+        sx={{ mb: 2, ...cardSx }}
+      >
+        <Box
+          display="grid"
+          gridTemplateColumns={{ xs: "1fr", md: "repeat(4, 1fr)" }}
+          gap={1.2}
+          pt={1.2}
+        >
+          <TextField
+            select
+            size="small"
+            label="Visualizacao dos graficos"
+            value={metricMode}
+            onChange={(event) =>
+              setMetricMode(event.target.value as MetricMode)
+            }
+          >
+            <MenuItem value="PERCENT">Percentual (%)</MenuItem>
+            <MenuItem value="COUNT">Quantidade (Qtd)</MenuItem>
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Combinacao dos filtros"
+            value={filters.combineMode}
+            onChange={(event) =>
+              updateFilter("combineMode", event.target.value as CombineMode)
+            }
+          >
+            <MenuItem value="AND">Todos os filtros (AND)</MenuItem>
+            <MenuItem value="OR">Qualquer filtro (OR)</MenuItem>
+          </TextField>
+          <TextField
+            size="small"
+            label="De"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={filters.from}
+            onChange={(event) => updateFilter("from", event.target.value)}
+          />
+          <TextField
+            size="small"
+            label="Ate"
+            type="date"
+            InputLabelProps={{ shrink: true }}
+            value={filters.to}
+            onChange={(event) => updateFilter("to", event.target.value)}
+          />
+          <TextField
+            select
+            size="small"
+            label="Missão"
+            value={filters.mission}
+            onChange={(event) => updateFilter("mission", event.target.value)}
+          >
+            <MenuItem value="">Todas</MenuItem>
+            {(dashboard.filters.mission ?? dashboard.filters.om ?? []).map(
+              (item) => (
+                <MenuItem key={item} value={item}>
+                  {item}
+                </MenuItem>
+              ),
+            )}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Posto/Graduacao"
+            value={filters.postoGraduacao}
+            onChange={(event) =>
+              updateFilter("postoGraduacao", event.target.value)
+            }
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {(dashboard.filters.postoGraduacao ?? []).map((item) => (
+              <MenuItem key={item} value={item}>
+                {item}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Posto"
+            value={filters.posto}
+            onChange={(event) => updateFilter("posto", event.target.value)}
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {(dashboard.filters.posto ?? []).map((item) => (
+              <MenuItem key={item} value={item}>
+                {item}
+              </MenuItem>
+            ))}
+          </TextField>
+          {hasAutodeclara && (
             <TextField
               select
               size="small"
-              label="Visualizacao dos graficos"
-              value={metricMode}
+              label="Autodeclaração"
+              value={filters.autodeclara}
               onChange={(event) =>
-                setMetricMode(event.target.value as MetricMode)
+                updateFilter("autodeclara", event.target.value)
               }
-            >
-              <MenuItem value="PERCENT">Percentual (%)</MenuItem>
-              <MenuItem value="COUNT">Quantidade (Qtd)</MenuItem>
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Combinacao dos filtros"
-              value={filters.combineMode}
-              onChange={(event) =>
-                updateFilter("combineMode", event.target.value as CombineMode)
-              }
-            >
-              <MenuItem value="AND">Todos os filtros (AND)</MenuItem>
-              <MenuItem value="OR">Qualquer filtro (OR)</MenuItem>
-            </TextField>
-            <TextField
-              size="small"
-              label="De"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={filters.from}
-              onChange={(event) => updateFilter("from", event.target.value)}
-            />
-            <TextField
-              size="small"
-              label="Ate"
-              type="date"
-              InputLabelProps={{ shrink: true }}
-              value={filters.to}
-              onChange={(event) => updateFilter("to", event.target.value)}
-            />
-            <TextField
-              select
-              size="small"
-              label="Missão"
-              value={filters.mission}
-              onChange={(event) => updateFilter("mission", event.target.value)}
             >
               <MenuItem value="">Todas</MenuItem>
-              {(dashboard.filters.mission ?? dashboard.filters.om ?? []).map((item) => (
+              {(dashboard.filters.autodeclara ?? []).map((item) => (
                 <MenuItem key={item} value={item}>
                   {item}
                 </MenuItem>
               ))}
             </TextField>
-            <TextField
-              select
-              size="small"
-              label="Posto/Graduacao"
-              value={filters.postoGraduacao}
-              onChange={(event) =>
-                updateFilter("postoGraduacao", event.target.value)
-              }
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {(dashboard.filters.postoGraduacao ?? []).map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Posto"
-              value={filters.posto}
-              onChange={(event) => updateFilter("posto", event.target.value)}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {(dashboard.filters.posto ?? []).map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-            </TextField>
-            {hasAutodeclara && (
-              <TextField
-                select
-                size="small"
-                label="Autodeclaração"
-                value={filters.autodeclara}
-                onChange={(event) =>
-                  updateFilter("autodeclara", event.target.value)
-                }
-              >
-                <MenuItem value="">Todas</MenuItem>
-                {(dashboard.filters.autodeclara ?? []).map((item) => (
-                  <MenuItem key={item} value={item}>
-                    {item}
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
-            <TextField
-              select
-              size="small"
-              label="Sofreu violência"
-              value={filters.suffered}
-              onChange={(event) => updateFilter("suffered", event.target.value)}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {(dashboard.filters.suffered ?? []).map((item) => (
-                <MenuItem key={item.value} value={item.value}>
-                  {item.label}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              select
-              size="small"
-              label="Tipo de violência"
-              value={filters.violenceType}
-              onChange={(event) =>
-                updateFilter("violenceType", event.target.value)
-              }
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {(dashboard.filters.violenceTypes ?? []).map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
-        </CardContent>
-      </Card>
+          )}
+          <TextField
+            select
+            size="small"
+            label="Sofreu violência"
+            value={filters.suffered}
+            onChange={(event) => updateFilter("suffered", event.target.value)}
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {(dashboard.filters.suffered ?? []).map((item) => (
+              <MenuItem key={item.value} value={item.value}>
+                {item.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            size="small"
+            label="Tipo de violência"
+            value={filters.violenceType}
+            onChange={(event) =>
+              updateFilter("violenceType", event.target.value)
+            }
+          >
+            <MenuItem value="">Todos</MenuItem>
+            {(dashboard.filters.violenceTypes ?? []).map((item) => (
+              <MenuItem key={item} value={item}>
+                {item}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
+      </BiCollapsibleSection>
 
       <Box
         display="grid"
@@ -1448,7 +1548,10 @@ export function BiSurveyDashboardPage() {
                   <IconButton
                     size="small"
                     onClick={() => openTextEditor("kpi-total-responses")}
-                    sx={{ color: kpiTotalResponsesText.textColor, opacity: 0.72 }}
+                    sx={{
+                      color: kpiTotalResponsesText.textColor,
+                      opacity: 0.72,
+                    }}
                   >
                     <EditOutlinedIcon fontSize="small" />
                   </IconButton>
@@ -1648,17 +1751,28 @@ export function BiSurveyDashboardPage() {
                 {kpiQuickInsightText.description}
               </Typography>
             ) : null}
-            <Typography variant="body2" sx={{ mt: 0.6, color: kpiQuickInsightText.textColor }}>
+            <Typography
+              variant="body2"
+              sx={{ mt: 0.6, color: kpiQuickInsightText.textColor }}
+            >
               Tipo mais frequente:{" "}
               <strong>{dashboard.insights.mostCommonType?.type ?? "-"}</strong>
             </Typography>
-            <Typography variant="body2" sx={{ color: kpiQuickInsightText.textColor }}>
+            <Typography
+              variant="body2"
+              sx={{ color: kpiQuickInsightText.textColor }}
+            >
               Missão com maior taxa:{" "}
               <strong>{dashboard.insights.riskiestOm?.om ?? "-"}</strong>
             </Typography>
-            <Typography variant="body2" sx={{ color: kpiQuickInsightText.textColor }}>
+            <Typography
+              variant="body2"
+              sx={{ color: kpiQuickInsightText.textColor }}
+            >
               Perfil com mais relatos:{" "}
-              <strong>{dashboard.insights.topProfileByMentions?.posto ?? "-"}</strong>
+              <strong>
+                {dashboard.insights.topProfileByMentions?.posto ?? "-"}
+              </strong>
             </Typography>
           </CardContent>
         </Card>
@@ -2083,7 +2197,10 @@ export function BiSurveyDashboardPage() {
               </Typography>
             ) : null}
             <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_SMALL}>
-              <BarChart data={dashboard.charts.omDistribution} barCategoryGap="32%">
+              <BarChart
+                data={dashboard.charts.omDistribution}
+                barCategoryGap="32%"
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
                 <XAxis
                   dataKey="label"
@@ -2241,7 +2358,10 @@ export function BiSurveyDashboardPage() {
             </Typography>
           ) : null}
           <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT_MEDIUM}>
-            <BarChart data={dashboard.charts.monthlyTrend ?? []} barCategoryGap="32%">
+            <BarChart
+              data={dashboard.charts.monthlyTrend ?? []}
+              barCategoryGap="32%"
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={chartGridStroke} />
               <XAxis
                 dataKey="month"
@@ -2474,27 +2594,17 @@ export function BiSurveyDashboardPage() {
                         }}
                       />
                     </TableCell>
-                    <TableCell sx={tableHeaderCellSx}>
-                      Data
-                    </TableCell>
-                    <TableCell sx={tableHeaderCellSx}>
-                      Missão
-                    </TableCell>
+                    <TableCell sx={tableHeaderCellSx}>Data</TableCell>
+                    <TableCell sx={tableHeaderCellSx}>Missão</TableCell>
                     <TableCell sx={tableHeaderCellSx}>
                       Posto/Graduação
                     </TableCell>
-                    <TableCell sx={tableHeaderCellSx}>
-                      Posto
-                    </TableCell>
-                    <TableCell sx={tableHeaderCellSx}>
-                      Autodeclaracao
-                    </TableCell>
+                    <TableCell sx={tableHeaderCellSx}>Posto</TableCell>
+                    <TableCell sx={tableHeaderCellSx}>Autodeclaracao</TableCell>
                     <TableCell sx={tableHeaderCellSx}>
                       Sofreu violência?
                     </TableCell>
-                    <TableCell sx={tableHeaderCellSx}>
-                      Tipos
-                    </TableCell>
+                    <TableCell sx={tableHeaderCellSx}>Tipos</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -2559,7 +2669,10 @@ export function BiSurveyDashboardPage() {
                     <Typography variant="body2" fontWeight={600}>
                       {item.fileName}
                     </Typography>
-                    <Typography variant="caption" sx={{ color: BI_PALETTE.muted }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: BI_PALETTE.muted }}
+                    >
                       {formatDate(item.importedAt)}
                     </Typography>
                   </Box>
