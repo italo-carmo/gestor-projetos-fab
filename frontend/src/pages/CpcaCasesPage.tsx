@@ -318,8 +318,9 @@ const SEPARATION_OPTIONS = [
 
 const STEP_DEFS = [
   {
-    title: "1) Notificação e provas",
-    subtitle: "ICA Art. 47: registro inicial, dados genéricos e evidências.",
+    title: "1) Notificação e fato",
+    subtitle:
+      "ICA Art. 47: registro inicial, dados genéricos e resumo do fato.",
   },
   {
     title: "2) Acolhimento e proteção",
@@ -334,6 +335,30 @@ const STEP_DEFS = [
     subtitle: "ICA Arts. 52 a 57: devolutivas, retaliação, defesa e conclusão.",
   },
 ];
+
+const FORM_SECTION_HEADER_SX = {
+  gridColumn: "1 / -1",
+  display: "flex",
+  flexDirection: "column",
+  gap: 0.75,
+} as const;
+
+const FORM_SECTION_HEADER_WITH_SPACING_SX = {
+  ...FORM_SECTION_HEADER_SX,
+  mt: { xs: 1.75, md: 2.5 },
+  pt: { xs: 0.25, md: 0.5 },
+} as const;
+
+const ACTIVE_STEP_HEADER_SX = {
+  mt: { xs: 2, md: 2.75 },
+  mb: { xs: 2, md: 2.5 },
+  pt: { xs: 1.5, md: 2 },
+  borderTop: "1px solid",
+  borderColor: "divider",
+  display: "flex",
+  flexDirection: "column",
+  gap: 0.75,
+} as const;
 
 const defaultForm = {
   localityId: "",
@@ -359,7 +384,6 @@ const defaultForm = {
   hierarchicalFunctionalRelation: "",
   occurrenceForms: [] as string[],
   procedureCurrentSituation: "",
-  evidenceCount: 0,
   evidenceSummary: "",
   confidentialityTermSigned: false,
   confidentialityHandlingNotes: "",
@@ -637,7 +661,6 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     toNullable(form.incidentFrequency) ||
     toNullable(form.hierarchicalFunctionalRelation) ||
     form.occurrenceForms.length > 0 ||
-    Number(form.evidenceCount ?? 0) > 0 ||
     toNullable(form.evidenceSummary),
   );
   const hasStep2Progress = Boolean(
@@ -721,7 +744,6 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             ? [String(item.occurrenceForm)]
             : [],
       procedureCurrentSituation: item.procedureCurrentSituation ?? "",
-      evidenceCount: Number(item.evidenceCount ?? 0),
       evidenceSummary: item.evidenceSummary ?? "",
       confidentialityTermSigned: Boolean(item.confidentialityTermSigned),
       confidentialityHandlingNotes: item.confidentialityHandlingNotes ?? "",
@@ -950,7 +972,6 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       ),
       occurrenceForms: form.occurrenceForms,
       procedureCurrentSituation: toNullable(form.procedureCurrentSituation),
-      evidenceCount: Number(form.evidenceCount ?? 0),
       evidenceSummary: toNullable(form.evidenceSummary),
       confidentialityTermSigned: Boolean(form.confidentialityTermSigned),
       confidentialityHandlingNotes: toNullable(
@@ -1070,10 +1091,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           sx={{
             display: "grid",
             gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-            gap: 1.2,
+            gap: 1.4,
           }}
         >
-          <Box sx={{ gridColumn: "1 / -1" }}>
+          <Box sx={FORM_SECTION_HEADER_SX}>
             <Typography variant="subtitle2" fontWeight={700}>
               Dados gerais da ocorrência
             </Typography>
@@ -1209,7 +1230,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             ))}
           </TextField>
 
-          <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+          <Box sx={FORM_SECTION_HEADER_WITH_SPACING_SX}>
             <Typography variant="subtitle2" fontWeight={700}>
               Dados do acusado
             </Typography>
@@ -1270,7 +1291,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             ))}
           </TextField>
 
-          <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+          <Box sx={FORM_SECTION_HEADER_WITH_SPACING_SX}>
             <Typography variant="subtitle2" fontWeight={700}>
               Dados da vítima
             </Typography>
@@ -1356,7 +1377,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           </TextField>
 
           {!notifierIsVictim && (
-            <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+            <Box sx={FORM_SECTION_HEADER_WITH_SPACING_SX}>
               <Typography variant="subtitle2" fontWeight={700}>
                 Dados do noticiante
               </Typography>
@@ -1424,7 +1445,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             </TextField>
           )}
 
-          <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+          <Box sx={FORM_SECTION_HEADER_WITH_SPACING_SX}>
             <Typography variant="subtitle2" fontWeight={700}>
               Dados complementares da ocorrência
             </Typography>
@@ -1511,32 +1532,16 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             ))}
           </TextField>
 
-          <Box sx={{ gridColumn: "1 / -1", mt: 0.5 }}>
+          <Box sx={FORM_SECTION_HEADER_WITH_SPACING_SX}>
             <Typography variant="subtitle2" fontWeight={700}>
-              Provas e evidências
+              Fato
             </Typography>
             <Divider />
           </Box>
 
           <TextField
             size="small"
-            type="number"
-            label="Quantidade de evidências"
-            value={form.evidenceCount}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                evidenceCount: Number(e.target.value) || 0,
-              }))
-            }
-            inputProps={{ min: 0 }}
-          />
-
-          <Box />
-
-          <TextField
-            size="small"
-            label="Resumo de evidências"
+            label="Resumo do Fato"
             value={form.evidenceSummary}
             onChange={(e) =>
               setForm((prev) => ({ ...prev, evidenceSummary: e.target.value }))
@@ -1544,7 +1549,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             multiline
             minRows={6}
             sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
-            helperText="Descreva contexto, canal, datas e material coletado (sem nomes)."
+            helperText="Descreva o contexto, o canal, as datas e o fato relatado (sem nomes)."
           />
         </Box>
       );
@@ -2288,19 +2293,46 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           },
         }}
       >
-        <Box p={3} sx={{ height: "100%", overflowY: "auto" }}>
+        <Box
+          sx={{
+            height: "100%",
+            overflowY: "auto",
+            px: { xs: 2, md: 3 },
+            pt: { xs: 2.25, md: 3.25 },
+            pb: 3,
+          }}
+        >
           <Stack
-            direction="row"
+            direction={{ xs: "column", md: "row" }}
             justifyContent="space-between"
-            alignItems="center"
-            mb={1}
+            alignItems={{ xs: "flex-start", md: "center" }}
+            spacing={1.5}
+            sx={{
+              pb: 2,
+              mb: 2.5,
+              borderBottom: "1px solid",
+              borderColor: "divider",
+            }}
           >
-            <Typography variant="h6" fontWeight={700}>
+            <Typography
+              variant="h6"
+              fontWeight={700}
+              sx={{
+                minWidth: 0,
+                pr: { xs: 0, md: 2 },
+                lineHeight: 1.25,
+                overflowWrap: "anywhere",
+              }}
+            >
               {isCreateMode
                 ? `Nova notificação ${workflowLabel}`
                 : `Caso ${selectedCaseQuery.data?.caseNumber ?? ""}`}
             </Typography>
-            <Stack direction="row" spacing={1}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ flexWrap: "wrap", rowGap: 1 }}
+            >
               {!isCreateMode && canDeleteCase && (
                 <Button
                   color="error"
@@ -2317,7 +2349,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             </Stack>
           </Stack>
 
-          <Alert severity="warning" sx={{ mb: 2 }}>
+          <Alert severity="warning" sx={{ mb: 2.5 }}>
             Registrar apenas dados genéricos (sem nomes). Acesso restrito a
             {isSmifWorkflow
               ? " TI, Coordenação CIPAVD e COMGEP."
@@ -2335,8 +2367,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           {(isCreateMode || selectedCaseQuery.data) && (
             <Stack spacing={2}>
               <Card>
-                <CardContent>
-                  <Box sx={{ overflowX: "auto", pb: 0.5 }}>
+                <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+                  <Box sx={{ overflowX: "auto", pb: 1 }}>
                     <Stepper
                       nonLinear
                       activeStep={activeStep}
@@ -2356,23 +2388,28 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                     </Stepper>
                   </Box>
 
-                  <Typography variant="subtitle1" fontWeight={700} mt={1}>
-                    {STEP_DEFS[activeStep].title}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" mb={1.5}>
-                    {STEP_DEFS[activeStep].subtitle}
-                  </Typography>
-                  {activeStep < STEP_DEFS.length - 1 &&
-                    activeStep >= maxUnlockedStep && (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: "block", mb: 1.2 }}
-                      >
-                        Preencha ao menos um campo útil desta etapa para liberar
-                        a próxima e atualizar o status.
-                      </Typography>
-                    )}
+                  <Box sx={ACTIVE_STEP_HEADER_SX}>
+                    <Typography
+                      variant="overline"
+                      color="text.secondary"
+                      sx={{ letterSpacing: 0.8 }}
+                    >
+                      Etapa atual
+                    </Typography>
+                    <Typography variant="h6" fontWeight={700}>
+                      {STEP_DEFS[activeStep].title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {STEP_DEFS[activeStep].subtitle}
+                    </Typography>
+                    {activeStep < STEP_DEFS.length - 1 &&
+                      activeStep >= maxUnlockedStep && (
+                        <Typography variant="caption" color="text.secondary">
+                          Preencha ao menos um campo útil desta etapa para liberar
+                          a próxima e atualizar o status.
+                        </Typography>
+                      )}
+                  </Box>
 
                   {renderStepContent()}
 
