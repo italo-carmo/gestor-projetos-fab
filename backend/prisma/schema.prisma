@@ -77,6 +77,7 @@ model User {
   cpcaCommissionPresidentAssignmentsMade CpcaCommissionPresident[] @relation("CpcaCommissionPresidentAssignedBy")
   cpcaCommissionMemberships CpcaCommissionMember[] @relation("CpcaCommissionMemberUser")
   cpcaCommissionMembershipsAdded CpcaCommissionMember[] @relation("CpcaCommissionMemberAddedBy")
+  cpcaChecklistUpdates     CpcaChecklistItem[]     @relation("CpcaChecklistUpdatedBy")
   cpcaPresidentRequests CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationApplicant")
   cpcaPresidentRequestDecisions CpcaPresidentSelfRegistration[] @relation("CpcaPresidentSelfRegistrationDecidedBy")
   cpcaPresidentNominationRequestsCreated CpcaPresidentNominationRequest[] @relation("CpcaPresidentNominationRequester")
@@ -107,6 +108,7 @@ model Om {
   cpcaCases                  CpcComplaintCase[]
   cpcaCommissionPresident    CpcaCommissionPresident?
   cpcaCommissionMembers      CpcaCommissionMember[]
+  cpcaChecklistItems         CpcaChecklistItem[]
   cpcaPresidentRequests      CpcaPresidentSelfRegistration[]
   cpcaPresidentNominationRequests CpcaPresidentNominationRequest[]
   cpcaCoverageRequests       CpcaCommissionCoverageRequest[]
@@ -798,6 +800,70 @@ model DocumentLink {
   @@index([entityType, entityId])
 }
 
+model KnowledgeBase {
+  id          String                  @id @default(cuid())
+  key         String                  @unique
+  name        String
+  description String?
+  theme       KnowledgeBaseTheme      @default(SHARED)
+  isActive    Boolean                 @default(true)
+  sortOrder   Int                     @default(0)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  documents   KnowledgeBaseDocument[]
+  chunks      KnowledgeBaseChunk[]
+
+  @@index([theme, isActive, sortOrder, createdAt])
+  @@index([isActive, sortOrder, createdAt])
+}
+
+model KnowledgeBaseDocument {
+  id              String                      @id @default(cuid())
+  knowledgeBaseId String
+  title           String
+  fileName        String
+  fileUrl         String
+  storageKey      String?
+  mimeType        String?
+  fileSize        Int?
+  checksum        String?
+  status          KnowledgeBaseDocumentStatus @default(PENDING)
+  contentText     String?
+  parsedAt        DateTime?
+  lastIndexedAt   DateTime?
+  chunkCount      Int                         @default(0)
+  indexError      String?
+  metadataJson    Json?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  knowledgeBase   KnowledgeBase               @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunks          KnowledgeBaseChunk[]
+
+  @@index([knowledgeBaseId, status, createdAt])
+  @@index([status, lastIndexedAt])
+}
+
+model KnowledgeBaseChunk {
+  id              String                @id @default(cuid())
+  knowledgeBaseId String
+  documentId      String
+  chunkIndex      Int
+  textContent     String
+  tokenCount      Int?
+  metadataJson    Json?
+  embedding       Unsupported("vector")?
+  createdAt       DateTime              @default(now())
+
+  knowledgeBase   KnowledgeBase         @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  document        KnowledgeBaseDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, chunkIndex])
+  @@index([knowledgeBaseId, documentId])
+  @@index([documentId])
+}
+
 model TaskComment {
   id             String   @id @default(cuid())
   taskInstanceId String
@@ -1415,6 +1481,27 @@ model CpcaCommissionMember {
   @@index([addedByUserId])
 }
 
+model CpcaChecklistItem {
+  id              String   @id @default(cuid())
+  omId            String
+  itemKey         String
+  isCompleted     Boolean  @default(false)
+  completedAt     DateTime?
+  details         String?
+  speakerName     String?
+  updatedByUserId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  om              Om       @relation(fields: [omId], references: [id], onDelete: Cascade)
+  updatedByUser   User?    @relation("CpcaChecklistUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([omId, itemKey])
+  @@index([omId, isCompleted])
+  @@index([updatedByUserId])
+  @@index([itemKey])
+}
+
 model CpcaPresidentSelfRegistration {
   id                       String                    @id @default(cuid())
   omId                     String?
@@ -1959,6 +2046,20 @@ enum DocumentLinkEntity {
   MEETING
   ELO
   LOCALITY
+}
+
+enum KnowledgeBaseTheme {
+  CIPAVD
+  SMIF
+  CPCA
+  SHARED
+}
+
+enum KnowledgeBaseDocumentStatus {
+  PENDING
+  INDEXING
+  READY
+  FAILED
 }
 
 enum TaskAssigneeType {

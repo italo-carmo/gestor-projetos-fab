@@ -11,6 +11,11 @@ export type ChatCompletionParams = {
   max_tokens?: number;
 };
 
+export type EmbeddingParams = {
+  input: string | string[];
+  model: string;
+};
+
 type OpenAiChoiceMessage = {
   content?: unknown;
   reasoning_content?: unknown;
@@ -18,6 +23,12 @@ type OpenAiChoiceMessage = {
 type OpenAiChatResponse = {
   model?: string;
   choices?: { message?: OpenAiChoiceMessage }[];
+  error?: { message?: string };
+};
+
+type OpenAiEmbeddingResponse = {
+  model?: string;
+  data?: Array<{ embedding?: unknown }>;
   error?: { message?: string };
 };
 
@@ -492,6 +503,90 @@ export class LitellmService {
       if (cleaned) yield { type: 'token', text: cleaned };
     }
     yield { type: 'done', model: resolvedModel };
+  }
+
+  async createEmbeddings(
+    params: EmbeddingParams,
+  ): Promise<{ embeddings: number[][]; model: string }> {
+    const apiKey = this.getApiKey();
+    const baseUrl = this.getBaseUrl();
+    if (!apiKey || !baseUrl) {
+      throw new Error(
+        'LiteLLM não configurado. Configure via Administração > IA ou defina no .env.',
+      );
+    }
+
+    const model = String(params.model ?? '').trim();
+    if (!model) {
+      throw new Error(
+        'Modelo de embeddings não configurado. Defina em Administração > IA.',
+      );
+    }
+
+    const rawInput = Array.isArray(params.input)
+      ? params.input
+      : [String(params.input ?? '')];
+    const input = rawInput
+      .map((item) => String(item ?? '').trim())
+      .filter(Boolean);
+    if (!input.length) {
+      return { embeddings: [], model };
+    }
+
+    const url = `${openAiV1Base(baseUrl)}/embeddings`;
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: this.buildHeaders(apiKey),
+        body: JSON.stringify({
+          model,
+          input,
+        }),
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`LiteLLM embedding request failed: ${msg}`);
+      throw new Error(`Falha de rede ao contatar LiteLLM embeddings: ${msg}`);
+    }
+
+    const text = await res.text();
+    let data: OpenAiEmbeddingResponse;
+    try {
+      data = JSON.parse(text) as OpenAiEmbeddingResponse;
+    } catch {
+      this.logger.warn(
+        `LiteLLM embeddings respondeu não-JSON (${res.status}): ${text.slice(0, 500)}`,
+      );
+      throw new Error(
+        res.ok
+          ? 'Resposta inválida do LiteLLM embeddings (não é JSON).'
+          : `LiteLLM embeddings retornou HTTP ${res.status}.`,
+      );
+    }
+
+    if (!res.ok) {
+      const errMsg = data.error?.message || text.slice(0, 800);
+      this.logger.warn(`LiteLLM embeddings HTTP ${res.status}: ${errMsg}`);
+      throw new Error(errMsg || `LiteLLM embeddings HTTP ${res.status}`);
+    }
+
+    const embeddings = (data.data ?? [])
+      .map((item) =>
+        Array.isArray(item?.embedding)
+          ? item.embedding
+              .map((value) => Number(value))
+              .filter((value) => Number.isFinite(value))
+          : [],
+      )
+      .filter((vector) => vector.length > 0);
+
+    if (!embeddings.length) {
+      throw new Error('LiteLLM embeddings não retornou vetores válidos.');
+    }
+
+    return { embeddings, model: data.model ?? model };
   }
 
   /** Quick connectivity test — GET /v1/models. */
