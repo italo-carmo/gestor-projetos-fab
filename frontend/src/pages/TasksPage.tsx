@@ -62,7 +62,7 @@ import {
   TASKS_PAGE_SIZE_OPTIONS,
   writeTasksPaginationParams,
 } from "../features/tasksPagination";
-import { buildTaskGroupingMetaByTaskId } from "../features/tasksGrouping";
+import { buildGroupedTaskRows } from "../features/tasksGrouping";
 
 function resolveTaskTitle(task: any) {
   const raw =
@@ -270,43 +270,16 @@ export function TasksPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
     taskIdFromUrl || null,
   );
-  const taskGroupingMetaByTaskId = useMemo(
-    () =>
-      buildTaskGroupingMetaByTaskId(
-        filteredItems,
-        (task) => resolveTaskLocalityName(task, localityMap),
-        resolveTaskTitle,
-      ),
-    [filteredItems, localityMap],
-  );
-
-  const displayRows = useMemo(
-    () =>
-      filteredItems.map((task: any) => {
-        const taskId = String(task.id);
-        const groupMeta = taskGroupingMetaByTaskId.get(taskId);
-        const localityName = resolveTaskLocalityName(task, localityMap);
-
-        return {
-          ...task,
-          id: taskId,
-          primaryTaskId: taskId,
-          groupedTaskIds: [taskId],
-          groupedLocalities: groupMeta?.linkedLocalities ?? [
-            {
-              id: String(task.localityId ?? ""),
-              name: localityName,
-            },
-          ],
-          groupedLocalityCount: Math.max(
-            1,
-            Number(groupMeta?.linkedLocalityCount ?? 1) || 1,
-          ),
-          localityName,
-        };
-      }),
-    [filteredItems, localityMap, taskGroupingMetaByTaskId],
-  );
+  const { rows: displayRows, metaByTaskId: taskGroupingMetaByTaskId } =
+    useMemo(
+      () =>
+        buildGroupedTaskRows(
+          filteredItems,
+          (task) => resolveTaskLocalityName(task, localityMap),
+          resolveTaskTitle,
+        ),
+      [filteredItems, localityMap],
+    );
 
   const taskById = useMemo(
     () => new Map(items.map((item: any) => [String(item.id), item])),
