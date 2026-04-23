@@ -40,6 +40,7 @@ import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
 import { can, canAccessAdminCatalog } from "./app/rbac";
+import { PageEntryGate } from "./components/states/PageEntryGate";
 import {
   hasAnyRole,
   resolveHomePath,
@@ -447,7 +448,12 @@ function App() {
                         can(user, "social_communication", "view")
                       }
                     >
-                      <SocialCommunicationPage />
+                      <PageEntryGate
+                        title="Carregando Impacto Positivo"
+                        description="Preparando matérias, destaques institucionais e filtros da comunicação."
+                      >
+                        <SocialCommunicationPage />
+                      </PageEntryGate>
                     </RequireRoleAccess>
                   }
                 />
@@ -467,7 +473,12 @@ function App() {
                     <RequireRoleAccess
                       allow={(user) => can(user, "library", "view")}
                     >
-                      <LibraryPage />
+                      <PageEntryGate
+                        title="Carregando Biblioteca"
+                        description="Preparando galeria, documentos e relatórios institucionais da biblioteca."
+                      >
+                        <LibraryPage />
+                      </PageEntryGate>
                     </RequireRoleAccess>
                   }
                 />
