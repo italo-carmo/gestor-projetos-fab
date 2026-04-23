@@ -100,6 +100,7 @@ describe('CpcaService reportedAt', () => {
     expect(createCall.data.reportedAt.toISOString()).toBe(
       '2024-01-15T12:00:00.000Z',
     );
+    expect(createCall.data).not.toHaveProperty('localityId');
   });
 
   it('atualiza a data da notificação informada na edição do caso', async () => {
@@ -167,5 +168,6 @@ describe('CpcaService reportedAt', () => {
     expect(updateCall.data.reportedAt.toISOString()).toBe(
       '2023-08-20T12:00:00.000Z',
     );
+    expect(updateCall.data).not.toHaveProperty('localityId');
   });
 });

@@ -1549,7 +1549,6 @@ export class CpcaService {
             caseNumber: nextCaseNumber,
             workflowScope: workflowContext.workflowScope,
             om: { connect: { id: localityId } },
-            localityId: null,
             createdBy: { connect: { id: actorId } },
             updatedBy: { connect: { id: actorId } },
             ...createData,
@@ -1790,7 +1789,6 @@ export class CpcaService {
       data: {
         om: nextLocalityId ? { connect: { id: nextLocalityId } } : undefined,
         locality: { disconnect: true },
-        localityId: null,
         complaintType: payload.complaintType,
         notifierType: payload.notifierType,
         status: nextStatus,
