@@ -31,6 +31,7 @@ import { useAiSettings, useSelectableKnowledgeBases } from "../api/hooks";
 import { ACTIVE_ROLE_STORAGE_KEY, api } from "../api/client";
 import { consumeJsonSseStream } from "../app/sse";
 import { useToast } from "../app/toast";
+import { StrategicTabGuideCard } from "../components/strategic/StrategicTabGuideCard";
 import { normalizeAiMarkdown } from "../features/aiMarkdown";
 import {
   buildCpcaAiScopeSummary,
@@ -51,6 +52,13 @@ type CpcaAiMessage = {
     kind: "screen" | "record";
   }>;
 };
+
+const CPCA_AI_GUIDE_LABELS = {
+  triggerLabel: "Como esta tela funciona?",
+  questionsTitle: "O que você consegue fazer aqui",
+  usageTitle: "Como usar esta tela",
+  badgeLabel: "Guia rápido",
+} as const;
 
 const mdStyles = {
   "& p": { my: 0.75, lineHeight: 1.75 },
@@ -373,6 +381,20 @@ export function CpcaAiPage() {
 
   return (
     <Stack spacing={2.5}>
+      <StrategicTabGuideCard
+        title="IA CPCA especializada"
+        description="Conversa dedicada para denúncias CPCA, workflow, inconsistências, leitura normativa, bases documentais e produção de briefings ou relatórios com rastreabilidade."
+        questions={[
+          "Como esta tela cruza denúncias CPCA, features habilitadas, fontes estruturadas e bases documentais liberadas para o perfil.",
+          "Quais análises a IA consegue entregar aqui, como inconsistências, leitura de workflow, interpretação normativa e respostas executivas.",
+          "Onde visualizar o contexto ativo do perfil, usar prompts rápidos e exportar a resposta final em PDF quando a análise estiver pronta.",
+        ]}
+        usageHint="Comece pelos prompts rápidos ou faça uma pergunta direta sobre um caso, regra ou padrão. Consulte o bloco de contexto disponível para entender as bases e features ativas antes de aprofundar a conversa."
+        accentColor="#7A1932"
+        icon={<SmartToyRoundedIcon />}
+        labels={CPCA_AI_GUIDE_LABELS}
+      />
+
       <Card
         sx={{
           borderRadius: 4,

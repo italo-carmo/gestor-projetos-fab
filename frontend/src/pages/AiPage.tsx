@@ -6,8 +6,11 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Grid,
-  IconButton,
   LinearProgress,
   Link as MuiLink,
   Paper,
@@ -59,6 +62,7 @@ import {
 } from "../app/aiCopilotLaunch";
 import { normalizeAiMarkdown } from "../features/aiMarkdown";
 import { normalizeAiPageTab, type AiPageTab } from "../features/aiTabs";
+import { StrategicTabGuideCard } from "../components/strategic/StrategicTabGuideCard";
 import { CpcaAiPage } from "./CpcaAiPage";
 
 const ANALYSIS_CARDS: {
@@ -167,6 +171,13 @@ const CHATBOT_QUICK_PROMPTS = [
   "Quais estados parecem concentrar mais pressão institucional ou operacional?",
   "Resuma o que o sistema mostra sobre missões, atividades e tarefas em andamento.",
 ] as const;
+
+const AI_GUIDE_LABELS = {
+  triggerLabel: "Como esta tela funciona?",
+  questionsTitle: "O que você consegue fazer aqui",
+  usageTitle: "Como usar esta tela",
+  badgeLabel: "Guia rápido",
+} as const;
 
 const COPILOT_MODE_DESCRIPTIONS: Record<
   "executive" | "analyst",
@@ -576,22 +587,15 @@ function AnalysisCard({
   card,
   state,
   onStart,
-  onExportPdf,
-  exportingPdf,
+  onOpenResult,
 }: {
   card: (typeof ANALYSIS_CARDS)[number];
   state?: AnalysisState;
   onStart: () => void;
-  onExportPdf: () => void;
-  exportingPdf?: boolean;
+  onOpenResult: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(state?.narrative ?? "");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const hasResult = Boolean(state?.narrative?.trim());
+  const hasError = Boolean(state?.error?.trim());
 
   return (
     <Card
@@ -601,6 +605,7 @@ function AnalysisCard({
         height: "100%",
         display: "flex",
         flexDirection: "column",
+        borderRadius: 3,
       }}
     >
       <CardContent
@@ -616,8 +621,53 @@ function AnalysisCard({
           {card.description}
         </Typography>
 
+        <Stack
+          direction="row"
+          spacing={0.8}
+          useFlexGap
+          flexWrap="wrap"
+          sx={{ mb: state?.running || hasResult || hasError ? 1.8 : 2.4 }}
+        >
+          <Chip
+            size="small"
+            label={
+              state?.running
+                ? "Processando"
+                : hasResult
+                  ? "Análise pronta"
+                  : hasError
+                    ? "Falha"
+                    : "Aguardando"
+            }
+            color={
+              state?.running
+                ? "info"
+                : hasResult
+                  ? "success"
+                  : hasError
+                    ? "error"
+                    : "default"
+            }
+            variant={hasResult ? "filled" : "outlined"}
+          />
+          {state?.model && !state.running && (
+            <Chip
+              size="small"
+              label={`Modelo: ${state.model}`}
+              variant="outlined"
+            />
+          )}
+          {state?.generatedAt && !state.running && (
+            <Chip
+              size="small"
+              label={new Date(state.generatedAt).toLocaleString("pt-BR")}
+              variant="outlined"
+            />
+          )}
+        </Stack>
+
         {state?.running && (
-          <Box sx={{ mb: 2 }}>
+          <Box sx={{ mb: 2.2 }}>
             <Stack
               direction="row"
               justifyContent="space-between"
@@ -642,59 +692,20 @@ function AnalysisCard({
           </Box>
         )}
 
-        {state?.narrative && (
-          <Box
-            sx={{
-              bgcolor: "#F8F9FA",
-              borderRadius: 2,
-              p: 2.5,
-              mb: 2,
-              maxHeight: 600,
-              overflow: "auto",
-              flexGrow: 1,
-              border: "1px solid #E8EAF0",
-            }}
-          >
-            <MdContent>{state.narrative}</MdContent>
-            {state.model && !state.running && (
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ mt: 1.5 }}
-                alignItems="center"
-                flexWrap="wrap"
-                useFlexGap
-              >
-                <Chip
-                  label={`Modelo: ${state.model}`}
-                  size="small"
-                  variant="outlined"
-                />
-                {state.generatedAt && (
-                  <Typography variant="caption" color="text.secondary">
-                    {new Date(state.generatedAt).toLocaleString("pt-BR")}
-                  </Typography>
-                )}
-                <IconButton
-                  size="small"
-                  onClick={handleCopy}
-                  title="Copiar texto"
-                >
-                  <ContentCopyRoundedIcon fontSize="small" />
-                </IconButton>
-                {copied && (
-                  <Typography variant="caption" color="success.main">
-                    Copiado
-                  </Typography>
-                )}
-              </Stack>
-            )}
-          </Box>
-        )}
-
         {state?.error && (
           <Typography variant="body2" color="error" sx={{ mb: 2 }}>
             {state.error}
+          </Typography>
+        )}
+
+        {hasResult && (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mb: 2, lineHeight: 1.7 }}
+          >
+            Resultado pronto. Abra o modal para ler a análise completa, copiar o
+            texto ou exportar em PDF.
           </Typography>
         )}
 
@@ -720,16 +731,228 @@ function AnalysisCard({
           </Button>
           <Button
             variant="outlined"
-            onClick={onExportPdf}
-            disabled={!state?.narrative || state?.running || exportingPdf}
-            startIcon={<PictureAsPdfRoundedIcon />}
+            onClick={onOpenResult}
+            disabled={!state?.running && !hasResult && !hasError}
             sx={{ borderColor: card.color, color: card.color }}
           >
-            {exportingPdf ? "Exportando PDF..." : "Exportar PDF"}
+            {state?.running
+              ? "Acompanhar análise"
+              : hasResult
+                ? "Abrir análise"
+                : hasError
+                  ? "Ver detalhes"
+                  : "Sem análise"}
           </Button>
         </Stack>
       </CardContent>
     </Card>
+  );
+}
+
+function AnalysisResultDialog({
+  card,
+  state,
+  open,
+  onClose,
+  onStart,
+  onExportPdf,
+  exportingPdf,
+}: {
+  card: (typeof ANALYSIS_CARDS)[number] | null;
+  state?: AnalysisState;
+  open: boolean;
+  onClose: () => void;
+  onStart: () => void;
+  onExportPdf: () => void;
+  exportingPdf?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setCopied(false);
+    }
+  }, [open]);
+
+  if (!card) return null;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(state?.narrative ?? "");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const hasNarrative = Boolean(state?.narrative?.trim());
+
+  return (
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
+      <DialogTitle sx={{ pb: 1.2 }}>
+        <Stack spacing={1}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.2}
+            justifyContent="space-between"
+            alignItems={{ xs: "flex-start", sm: "center" }}
+          >
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Box
+                sx={{
+                  color: card.color,
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                {card.icon}
+              </Box>
+              <Typography variant="h6" fontWeight={800}>
+                {card.title}
+              </Typography>
+            </Stack>
+            <Chip
+              size="small"
+              label={
+                state?.running
+                  ? "Processando"
+                  : hasNarrative
+                    ? "Análise pronta"
+                    : state?.error
+                      ? "Falha"
+                      : "Sem resultado"
+              }
+              color={
+                state?.running
+                  ? "info"
+                  : hasNarrative
+                    ? "success"
+                    : state?.error
+                      ? "error"
+                      : "default"
+              }
+              variant={hasNarrative ? "filled" : "outlined"}
+            />
+          </Stack>
+          <Typography variant="body2" color="text.secondary">
+            {card.description}
+          </Typography>
+        </Stack>
+      </DialogTitle>
+
+      <DialogContent dividers sx={{ p: { xs: 2, md: 2.5 } }}>
+        <Stack spacing={2}>
+          {state?.running && (
+            <Box>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                sx={{ mb: 0.6 }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  {state.stage}
+                </Typography>
+                <Typography variant="body2" fontWeight={700}>
+                  {state.percent}%
+                </Typography>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={state.percent}
+                sx={{
+                  height: 9,
+                  borderRadius: 999,
+                  "& .MuiLinearProgress-bar": { bgcolor: card.color },
+                }}
+              />
+            </Box>
+          )}
+
+          {hasNarrative ? (
+            <Box
+              sx={{
+                bgcolor: "#F8F9FA",
+                borderRadius: 2.5,
+                p: { xs: 2, md: 2.5 },
+                maxHeight: "70vh",
+                overflow: "auto",
+                border: "1px solid #E8EAF0",
+              }}
+            >
+              <MdContent>{state?.narrative ?? ""}</MdContent>
+            </Box>
+          ) : !state?.running ? (
+            <Alert severity={state?.error ? "error" : "info"}>
+              {state?.error ||
+                "Nenhuma análise foi gerada para este card ainda."}
+            </Alert>
+          ) : null}
+
+          {hasNarrative && (
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              flexWrap="wrap"
+              useFlexGap
+            >
+              {state?.model ? (
+                <Chip
+                  label={`Modelo: ${state.model}`}
+                  size="small"
+                  variant="outlined"
+                />
+              ) : null}
+              {state?.generatedAt ? (
+                <Chip
+                  label={new Date(state.generatedAt).toLocaleString("pt-BR")}
+                  size="small"
+                  variant="outlined"
+                />
+              ) : null}
+              <Button
+                size="small"
+                variant="text"
+                onClick={handleCopy}
+                startIcon={<ContentCopyRoundedIcon fontSize="small" />}
+              >
+                Copiar texto
+              </Button>
+              {copied ? (
+                <Typography variant="caption" color="success.main">
+                  Copiado
+                </Typography>
+              ) : null}
+            </Stack>
+          )}
+        </Stack>
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, py: 2 }}>
+        <Button onClick={onClose}>Fechar</Button>
+        <Button
+          variant="outlined"
+          onClick={onExportPdf}
+          disabled={!hasNarrative || state?.running || exportingPdf}
+          startIcon={<PictureAsPdfRoundedIcon />}
+          sx={{ borderColor: card.color, color: card.color }}
+        >
+          {exportingPdf ? "Exportando PDF..." : "Exportar PDF"}
+        </Button>
+        <Button
+          variant="contained"
+          onClick={onStart}
+          disabled={state?.running}
+          sx={{
+            bgcolor: card.color,
+            "&:hover": { bgcolor: card.color, filter: "brightness(0.9)" },
+          }}
+        >
+          {state?.running
+            ? "Gerando..."
+            : hasNarrative
+              ? "Gerar novamente"
+              : "Gerar análise"}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 
@@ -738,7 +961,32 @@ function AnalysesTab() {
   const [exportingByType, setExportingByType] = useState<
     Record<string, boolean>
   >({});
+  const [activeAnalysisType, setActiveAnalysisType] = useState<string | null>(
+    null,
+  );
   const toast = useToast();
+
+  const activeCard =
+    ANALYSIS_CARDS.find((item) => item.type === activeAnalysisType) ?? null;
+  const activeState = activeAnalysisType
+    ? states[activeAnalysisType]
+    : undefined;
+
+  const openAnalysisDialog = useCallback((cardType: string) => {
+    setActiveAnalysisType(cardType);
+  }, []);
+
+  const closeAnalysisDialog = useCallback(() => {
+    setActiveAnalysisType(null);
+  }, []);
+
+  const startAndOpen = useCallback(
+    (cardType: string) => {
+      openAnalysisDialog(cardType);
+      start(cardType);
+    },
+    [openAnalysisDialog, start],
+  );
 
   const exportPdf = useCallback(
     async (cardType: string, state?: AnalysisState) => {
@@ -803,35 +1051,56 @@ function AnalysesTab() {
   );
 
   return (
-    <Grid container spacing={2}>
-      <Grid size={{ xs: 12 }}>
-        <Alert
-          severity="info"
-          sx={{
-            borderRadius: 3,
-            alignItems: "flex-start",
-            "& .MuiAlert-message": { width: "100%" },
-          }}
-        >
-          <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
-            Os insights textuais do sistema foram concentrados nesta área de IA.
-            O Painel Estratégico agora fica restrito a leitura executiva,
-            perfil, território e priorização COMGEP.
-          </Typography>
-        </Alert>
-      </Grid>
-      {ANALYSIS_CARDS.map((card) => (
-        <Grid key={card.type} size={{ xs: 12 }}>
-          <AnalysisCard
-            card={card}
-            state={states[card.type]}
-            onStart={() => start(card.type)}
-            onExportPdf={() => exportPdf(card.type, states[card.type])}
-            exportingPdf={Boolean(exportingByType[card.type])}
-          />
+    <>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12 }}>
+          <Alert
+            severity="info"
+            sx={{
+              borderRadius: 3,
+              alignItems: "flex-start",
+              "& .MuiAlert-message": { width: "100%" },
+            }}
+          >
+            <Typography variant="body2" sx={{ lineHeight: 1.7 }}>
+              Os insights textuais do sistema foram concentrados nesta área de
+              IA. O Painel Estratégico agora fica restrito a leitura executiva,
+              perfil, território e priorização COMGEP.
+            </Typography>
+          </Alert>
         </Grid>
-      ))}
-    </Grid>
+        {ANALYSIS_CARDS.map((card) => (
+          <Grid key={card.type} size={{ xs: 12, md: 6 }}>
+            <AnalysisCard
+              card={card}
+              state={states[card.type]}
+              onStart={() => startAndOpen(card.type)}
+              onOpenResult={() => openAnalysisDialog(card.type)}
+            />
+          </Grid>
+        ))}
+      </Grid>
+
+      <AnalysisResultDialog
+        card={activeCard}
+        state={activeState}
+        open={Boolean(activeCard)}
+        onClose={closeAnalysisDialog}
+        onStart={() => {
+          if (!activeAnalysisType) return;
+          start(activeAnalysisType);
+        }}
+        onExportPdf={() => {
+          if (!activeAnalysisType) return;
+          void exportPdf(activeAnalysisType, states[activeAnalysisType]);
+        }}
+        exportingPdf={
+          activeAnalysisType
+            ? Boolean(exportingByType[activeAnalysisType])
+            : false
+        }
+      />
+    </>
   );
 }
 
@@ -1065,25 +1334,19 @@ function ChatbotTab({
 
   return (
     <Stack spacing={2}>
-      <Alert
-        severity="info"
-        sx={{
-          borderRadius: 3,
-          alignItems: "flex-start",
-          "& .MuiAlert-message": { width: "100%" },
-        }}
-      >
-        <Typography variant="subtitle1" fontWeight={800}>
-          Chatbot livre com escopo administrado
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.65 }}>
-          Esta aba é para perguntas abertas sobre CIPAVD, SMIF e CPCA. O chatbot
-          responde somente com base nas fontes permitidas em{" "}
-          <strong>Administração &gt; Configuração IA</strong>. Para criar
-          missão, atividade, tarefa, cronograma ou matéria, use a aba{" "}
-          <strong>Assistente virtual</strong>.
-        </Typography>
-      </Alert>
+      <StrategicTabGuideCard
+        title="Chatbot institucional"
+        description="Canal livre para perguntas abertas sobre CIPAVD, SMIF e CPCA, sempre respeitando o escopo liberado pela administração."
+        questions={[
+          "Quais perguntas abertas sobre dados, tendências, diferenças entre fluxos e panorama operacional esta conversa consegue responder.",
+          "Quais fontes e limites de contexto o chatbot respeita antes de responder.",
+          "Quando vale seguir no chatbot e quando é melhor migrar para o Assistente virtual para executar uma ação no sistema.",
+        ]}
+        usageHint="Faça perguntas em linguagem natural, refine a conversa com follow-up e use os atalhos abaixo para começar mais rápido. Para criar missão, atividade, tarefa, cronograma, matéria ou relatório, use a aba Assistente virtual."
+        accentColor="#00695C"
+        icon={<SmartToyRoundedIcon />}
+        labels={AI_GUIDE_LABELS}
+      />
 
       <Card variant="outlined" sx={{ borderRadius: 3 }}>
         <CardContent>
@@ -1091,7 +1354,7 @@ function ChatbotTab({
             <Stack direction="row" spacing={1} alignItems="center">
               <SmartToyRoundedIcon sx={{ color: "#00695C" }} />
               <Typography variant="subtitle1" fontWeight={800} color="#1A3C6E">
-                Como usar
+                Perguntas rápidas
               </Typography>
             </Stack>
             <Typography
@@ -1099,8 +1362,8 @@ function ChatbotTab({
               color="text.secondary"
               sx={{ lineHeight: 1.7 }}
             >
-              Faça perguntas livres sobre dados, tendências, diferenças entre
-              fluxos, panorama operacional e sinais institucionais do sistema.
+              Use estes atalhos para iniciar a conversa mais rápido com temas
+              frequentes do contexto institucional e operacional.
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               {CHATBOT_QUICK_PROMPTS.map((prompt) => (
@@ -2273,24 +2536,19 @@ function AssistantTab() {
 
   return (
     <Stack spacing={2}>
-      <Alert
-        severity="info"
-        sx={{
-          borderRadius: 3,
-          alignItems: "flex-start",
-          "& .MuiAlert-message": { width: "100%" },
-        }}
-      >
-        <Typography variant="subtitle1" fontWeight={800}>
-          Assistente virtual centralizado
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 0.5, lineHeight: 1.65 }}>
-          Esta área concentra os copilotos gerenciais e os fluxos operacionais
-          assistidos. Para ações de escrita, o sistema trabalha em modo guiado:
-          coleta só os campos essenciais, mostra opções válidas do sistema e só
-          executa após confirmação explícita.
-        </Typography>
-      </Alert>
+      <StrategicTabGuideCard
+        title="Assistente virtual operacional"
+        description="Ambiente centralizado para copilotos gerenciais e fluxos assistidos de criação e edição, sempre com confirmação explícita antes de gravar."
+        questions={[
+          "Quais copilotos gerenciais esta tela oferece para briefing executivo, análise detalhada, priorização e leitura contextual.",
+          "Quais fluxos operacionais assistidos podem ser iniciados daqui, como missão, atividade, tarefa, cronograma, matéria e relatório.",
+          "Como a conversa guiada coleta só os campos necessários, valida opções do sistema e mantém follow-up no mesmo contexto.",
+        ]}
+        usageHint="Escolha entre copiloto gerencial e fluxo operacional. Use o formato de leitura adequado, siga os passos guiados e só confirme a execução quando o resumo estiver correto."
+        accentColor="#1A3C6E"
+        icon={<AutoAwesomeRoundedIcon />}
+        labels={AI_GUIDE_LABELS}
+      />
 
       <Card variant="outlined" sx={{ borderRadius: 3 }}>
         <CardContent>

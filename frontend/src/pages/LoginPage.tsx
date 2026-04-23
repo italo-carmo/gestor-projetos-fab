@@ -283,8 +283,8 @@ export function LoginPage() {
     resetCpcaStatusLookup();
   };
 
-  const openCpcaSelfRegistrationDialog = (tab: "register" | "status") => {
-    setCpcaSelfRegistrationTab(tab);
+  const openCpcaSelfRegistrationDialog = () => {
+    setCpcaSelfRegistrationTab("register");
     setCpcaSelfRegistrationOpen(true);
   };
 
@@ -795,18 +795,10 @@ export function LoginPage() {
               </Button>
               <Button
                 variant="text"
-                onClick={() => openCpcaSelfRegistrationDialog("register")}
+                onClick={openCpcaSelfRegistrationDialog}
                 sx={{ mt: 0.4 }}
               >
-                Cadastro de presidente CPCA
-              </Button>
-              <Button
-                variant="text"
-                color="inherit"
-                onClick={() => openCpcaSelfRegistrationDialog("status")}
-                sx={{ mt: -0.6 }}
-              >
-                Acompanhar solicitação CPCA
+                Presidência CPCA
               </Button>
             </Box>
           </CardContent>
@@ -825,8 +817,8 @@ export function LoginPage() {
             <Box>
               <Typography variant="body2" color="text.secondary">
                 Use este espaço para solicitar a homologação como presidente da
-                comissão CPCA da sua OM ou acompanhar o andamento das tentativas
-                já enviadas.
+                comissão CPCA da sua OM, acompanhar o andamento das tentativas
+                já enviadas e reenviar uma solicitação rejeitada.
               </Typography>
             </Box>
 
@@ -837,8 +829,8 @@ export function LoginPage() {
               }
               variant="fullWidth"
             >
-              <Tab value="register" label="Nova solicitação" />
-              <Tab value="status" label="Acompanhar status" />
+              <Tab value="register" label="Solicitar" />
+              <Tab value="status" label="Acompanhar" />
             </Tabs>
 
             {cpcaSelfRegistrationTab === "register" ? (

@@ -22,6 +22,7 @@ export function StrategicTabGuideCard({
   icon,
   usageHint,
   action,
+  labels,
 }: {
   title: string;
   description: string;
@@ -30,6 +31,12 @@ export function StrategicTabGuideCard({
   icon: React.ReactNode;
   usageHint?: string;
   action?: React.ReactNode;
+  labels?: {
+    triggerLabel?: string;
+    badgeLabel?: string;
+    questionsTitle?: string;
+    usageTitle?: string;
+  };
 }) {
   const [open, setOpen] = useState(false);
   const copy = buildStrategicTabGuideUiCopy({
@@ -37,6 +44,7 @@ export function StrategicTabGuideCard({
     description,
     questions,
     usageHint,
+    labels,
   });
 
   return (

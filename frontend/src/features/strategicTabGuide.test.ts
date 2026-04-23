@@ -40,4 +40,21 @@ describe("strategicTabGuide", () => {
     expect(result.hasUsageHint).toBe(false);
     expect(result.usageHint).toBe("");
   });
+
+  it("allows overriding the default guide labels for other screens", () => {
+    const result = buildStrategicTabGuideUiCopy({
+      title: "Chatbot institucional",
+      description: "Perguntas abertas com escopo controlado.",
+      questions: ["O que posso perguntar aqui?"],
+      labels: {
+        triggerLabel: "Como esta tela funciona?",
+        questionsTitle: "O que você consegue fazer aqui",
+      },
+    });
+
+    expect(result.triggerLabel).toBe("Como esta tela funciona?");
+    expect(result.questionsTitle).toBe("O que você consegue fazer aqui");
+    expect(result.badgeLabel).toBe("Guia rápido");
+    expect(result.usageTitle).toBe("Como usar esta tela");
+  });
 });
