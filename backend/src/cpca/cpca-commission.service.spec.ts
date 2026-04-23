@@ -216,7 +216,7 @@ describe('CpcaCommissionService', () => {
       omId: om.id,
       localityId: om.id,
     });
-    prisma.cpcaPresidentSelfRegistration.findFirst.mockResolvedValue(null);
+    prisma.cpcaPresidentSelfRegistration.findMany.mockResolvedValue([]);
     prisma.cpcaPresidentSelfRegistration.create.mockResolvedValue({
       id: 'req-1',
       status: 'PENDING',
@@ -584,7 +584,17 @@ describe('CpcaCommissionService', () => {
       omId: om.id,
       localityId: om.id,
     });
-    prisma.cpcaPresidentSelfRegistration.findFirst.mockResolvedValue(null);
+    prisma.cpcaPresidentSelfRegistration.findMany.mockResolvedValue([
+      {
+        id: 'req-rejected-1',
+        omId: om.id,
+        applicantUserId: 'user-pres-1',
+        status: 'REJECTED',
+        retryRootRequestId: null,
+        attemptNumber: 1,
+        createdAt: new Date('2026-04-21T10:00:00Z'),
+      },
+    ]);
     prisma.cpcaPresidentSelfRegistration.findUnique.mockResolvedValue({
       id: 'req-rejected-1',
       omId: om.id,
@@ -592,6 +602,7 @@ describe('CpcaCommissionService', () => {
       status: 'REJECTED',
       retryRootRequestId: null,
       attemptNumber: 1,
+      createdAt: new Date('2026-04-21T10:00:00Z'),
     });
     prisma.cpcaPresidentSelfRegistration.create.mockResolvedValue({
       id: 'req-retry-2',
@@ -627,6 +638,99 @@ describe('CpcaCommissionService', () => {
       }),
     );
     expect(result.request.attemptNumber).toBe(2);
+  });
+
+  it('numera a próxima tentativa pela sequência na OM mesmo sem resubmissionOfId', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+
+    (resolveBestOmByFabOm as jest.Mock).mockResolvedValue(om);
+    ldap.lookupByEmail.mockResolvedValue({
+      uid: 'uid-pres-1',
+      email: 'presidente@fab.mil.br',
+      name: 'Cel Presidente',
+      fabom: 'BACO',
+    });
+    prisma.om.findUnique.mockResolvedValue(om);
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({
+      id: 'user-pres-1',
+      name: 'Cel Presidente',
+      email: 'presidente@fab.mil.br',
+      ldapUid: 'uid-pres-1',
+      omId: om.id,
+      localityId: om.id,
+    });
+    prisma.cpcaPresidentSelfRegistration.findMany.mockResolvedValue([
+      {
+        id: 'req-1',
+        omId: om.id,
+        applicantUserId: 'user-pres-1',
+        status: 'REJECTED',
+        retryRootRequestId: null,
+        attemptNumber: 1,
+        createdAt: new Date('2026-04-20T10:00:00Z'),
+      },
+      {
+        id: 'req-2',
+        omId: om.id,
+        applicantUserId: 'user-pres-1',
+        status: 'REJECTED',
+        retryRootRequestId: null,
+        attemptNumber: 1,
+        createdAt: new Date('2026-04-21T10:00:00Z'),
+      },
+    ]);
+    prisma.cpcaPresidentSelfRegistration.update.mockResolvedValue({} as any);
+    prisma.cpcaPresidentSelfRegistration.create.mockResolvedValue({
+      id: 'req-3',
+      status: 'PENDING',
+      createdAt: new Date('2026-04-22T13:00:00Z'),
+      attemptNumber: 3,
+      om,
+    });
+
+    const result = await service.createSelfRegistration(
+      {
+        identifier: 'presidente@fab.mil.br',
+        isSubstitution: false,
+        bulletinNumber: 'BOL 101',
+        bulletinFile: {
+          originalname: 'boletim-publicacao.pdf',
+          mimetype: 'application/pdf',
+          size: 1024,
+          buffer: Buffer.from('%PDF-1.4'),
+        } as any,
+      },
+      '127.0.0.1',
+    );
+
+    expect(prisma.cpcaPresidentSelfRegistration.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'req-2' },
+        data: expect.objectContaining({
+          attemptNumber: 2,
+          retryRootRequestId: 'req-1',
+        }),
+      }),
+    );
+    expect(prisma.cpcaPresidentSelfRegistration.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          retryRootRequestId: 'req-1',
+          previousAttemptId: 'req-2',
+          attemptNumber: 3,
+        }),
+      }),
+    );
+    expect(result.request.attemptNumber).toBe(3);
   });
 
   it('retorna o status público da autoinscrição com histórico e sinal de acesso liberado', async () => {

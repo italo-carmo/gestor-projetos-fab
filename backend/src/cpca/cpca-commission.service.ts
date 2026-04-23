@@ -5,6 +5,7 @@ import {
   CpcaCommissionPresidentAssignmentSource,
   CpcaPresidentRequestStatus,
   Prisma,
+  PrismaClient,
 } from '@prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { resolveBestOmByFabOm } from '../catalog/om-resolver';
@@ -71,6 +72,62 @@ export class CpcaCommissionService {
     return { items };
   }
 
+  /**
+   * Garante attemptNumber 1..n e retryRootRequestId coerentes para todas as
+   * autoinscrições do candidato na OM (corrige reenvios sem resubmissionOfId).
+   */
+  private async alignPresidentSelfRegistrationAttemptChainForOmApplicant(
+    prisma: Pick<PrismaClient, 'cpcaPresidentSelfRegistration'>,
+    omId: string,
+    applicantUserId: string,
+  ) {
+    const priorSameOmApplicant =
+      (await prisma.cpcaPresidentSelfRegistration.findMany({
+        where: {
+          omId,
+          applicantUserId,
+        },
+        select: {
+          id: true,
+          retryRootRequestId: true,
+          attemptNumber: true,
+          createdAt: true,
+        },
+        orderBy: [{ createdAt: 'asc' }, { attemptNumber: 'asc' }],
+      })) ?? [];
+    if (priorSameOmApplicant.length === 0) {
+      return;
+    }
+    const chainRootId =
+      String(priorSameOmApplicant[0].retryRootRequestId ?? '').trim() ||
+      priorSameOmApplicant[0].id;
+    for (let index = 0; index < priorSameOmApplicant.length; index += 1) {
+      const row = priorSameOmApplicant[index];
+      const wantAttemptNumber = index + 1;
+      const wantRetryRoot =
+        row.id !== chainRootId &&
+        !String(row.retryRootRequestId ?? '').trim()
+          ? chainRootId
+          : null;
+      const patch: {
+        attemptNumber?: number;
+        retryRootRequestId?: string;
+      } = {};
+      if (Number(row.attemptNumber) !== wantAttemptNumber) {
+        patch.attemptNumber = wantAttemptNumber;
+      }
+      if (wantRetryRoot) {
+        patch.retryRootRequestId = wantRetryRoot;
+      }
+      if (Object.keys(patch).length > 0) {
+        await prisma.cpcaPresidentSelfRegistration.update({
+          where: { id: row.id },
+          data: patch,
+        });
+      }
+    }
+  }
+
   async createSelfRegistration(
     payload: {
       identifier: string;
@@ -123,31 +180,42 @@ export class CpcaCommissionService {
     const applicantName = ldapProfile.name?.trim() || user.name;
     const resubmissionOfId = String(payload.resubmissionOfId ?? '').trim();
 
-    const pendingExisting =
-      await this.prisma.cpcaPresidentSelfRegistration.findFirst({
-        where: {
-          omId: locality.id,
-          applicantUserId: user.id,
-          status: 'PENDING',
-        },
-        select: { id: true },
-      });
-    if (pendingExisting) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'CPCA_PRESIDENT_REQUEST_ALREADY_PENDING',
-      });
-    }
-
-    let resubmissionTarget: {
+    type PriorSelfRegistrationRow = {
       id: string;
       omId: string | null;
       applicantUserId: string;
       status: CpcaPresidentRequestStatus;
       retryRootRequestId: string | null;
       attemptNumber: number;
-    } | null = null;
+      createdAt: Date;
+    };
+
+    const priorSameOmApplicant: PriorSelfRegistrationRow[] =
+      (await this.prisma.cpcaPresidentSelfRegistration.findMany({
+        where: {
+          omId: locality.id,
+          applicantUserId: user.id,
+        },
+        select: {
+          id: true,
+          omId: true,
+          applicantUserId: true,
+          status: true,
+          retryRootRequestId: true,
+          attemptNumber: true,
+          createdAt: true,
+        },
+        orderBy: [{ createdAt: 'asc' }, { attemptNumber: 'asc' }],
+      })) ?? [];
+
+    if (priorSameOmApplicant.some((row) => row.status === 'PENDING')) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_PRESIDENT_REQUEST_ALREADY_PENDING',
+      });
+    }
+
     if (resubmissionOfId) {
-      resubmissionTarget =
+      const validatedResubmission =
         await this.prisma.cpcaPresidentSelfRegistration.findUnique({
           where: { id: resubmissionOfId },
           select: {
@@ -157,15 +225,16 @@ export class CpcaCommissionService {
             status: true,
             retryRootRequestId: true,
             attemptNumber: true,
+            createdAt: true,
           },
         });
-      if (!resubmissionTarget) {
+      if (!validatedResubmission) {
         throwError('NOT_FOUND');
       }
-      if (resubmissionTarget.applicantUserId !== user.id) {
+      if (validatedResubmission.applicantUserId !== user.id) {
         throwError('RBAC_FORBIDDEN');
       }
-      if (resubmissionTarget.omId !== locality.id) {
+      if (validatedResubmission.omId !== locality.id) {
         throwError('VALIDATION_ERROR', {
           reason: 'CPCA_SELF_REGISTRATION_LOCALITY_MISMATCH',
           selectedLocalityId: locality.id,
@@ -174,12 +243,31 @@ export class CpcaCommissionService {
           ldapLocalityName: locality.name,
         });
       }
-      if (resubmissionTarget.status !== 'REJECTED') {
+      if (validatedResubmission.status !== 'REJECTED') {
         throwError('VALIDATION_ERROR', {
           reason: 'CPCA_PRESIDENT_REQUEST_RESUBMISSION_ONLY_AFTER_REJECTION',
         });
       }
     }
+
+    const priorTail =
+      priorSameOmApplicant.length > 0
+        ? priorSameOmApplicant[priorSameOmApplicant.length - 1]
+        : null;
+    if (priorTail && priorTail.status !== 'REJECTED') {
+      throwError('VALIDATION_ERROR', {
+        reason: 'CPCA_PRESIDENT_REQUEST_RESUBMISSION_ONLY_AFTER_REJECTION',
+      });
+    }
+
+    const chainRootId =
+      priorSameOmApplicant.length > 0
+        ? String(priorSameOmApplicant[0].retryRootRequestId ?? '').trim() ||
+          priorSameOmApplicant[0].id
+        : null;
+    const nextAttemptNumber = priorSameOmApplicant.length + 1;
+    const linkedPreviousAttemptId = priorTail ? priorTail.id : null;
+    const linkedRetryRootRequestId = chainRootId;
 
     const validatedBulletinFile = validateCpcaPresidentBulletinUpload(
       payload.bulletinFile,
@@ -196,32 +284,36 @@ export class CpcaCommissionService {
       om: { id: string; code: string; name: string } | null;
     };
     try {
-      created = await this.prisma.cpcaPresidentSelfRegistration.create({
-        data: {
-          omId: locality.id,
-          applicantUserId: user.id,
-          retryRootRequestId: resubmissionTarget
-            ? resubmissionTarget.retryRootRequestId || resubmissionTarget.id
-            : null,
-          previousAttemptId: resubmissionTarget?.id ?? null,
-          attemptNumber: resubmissionTarget
-            ? Number(resubmissionTarget.attemptNumber ?? 1) + 1
-            : 1,
-          applicantIdentifier: identifier,
-          applicantUid: ldapProfile.uid,
-          applicantEmail: ldapProfile.email,
-          applicantName,
-          requestedAsSubstitution: Boolean(payload.isSubstitution),
-          bulletinNumber,
-          bulletinFileName: storedBulletinFile.fileName,
-          bulletinStorageKey: storedBulletinFile.storageKey,
-          bulletinMimeType: storedBulletinFile.mimeType,
-          bulletinFileSize: storedBulletinFile.fileSize,
-          bulletinChecksum: storedBulletinFile.checksum,
-        },
-        include: {
-          om: { select: { id: true, code: true, name: true } },
-        },
+      created = await this.prisma.$transaction(async (tx) => {
+        await this.alignPresidentSelfRegistrationAttemptChainForOmApplicant(
+          tx,
+          locality.id,
+          user.id,
+        );
+
+        return tx.cpcaPresidentSelfRegistration.create({
+          data: {
+            omId: locality.id,
+            applicantUserId: user.id,
+            retryRootRequestId: linkedRetryRootRequestId,
+            previousAttemptId: linkedPreviousAttemptId,
+            attemptNumber: nextAttemptNumber,
+            applicantIdentifier: identifier,
+            applicantUid: ldapProfile.uid,
+            applicantEmail: ldapProfile.email,
+            applicantName,
+            requestedAsSubstitution: Boolean(payload.isSubstitution),
+            bulletinNumber,
+            bulletinFileName: storedBulletinFile.fileName,
+            bulletinStorageKey: storedBulletinFile.storageKey,
+            bulletinMimeType: storedBulletinFile.mimeType,
+            bulletinFileSize: storedBulletinFile.fileSize,
+            bulletinChecksum: storedBulletinFile.checksum,
+          },
+          include: {
+            om: { select: { id: true, code: true, name: true } },
+          },
+        });
       });
     } catch (error) {
       deleteCpcaPresidentBulletinFile(storedBulletinFile.storageKey);
@@ -246,7 +338,8 @@ export class CpcaCommissionService {
         bulletinFileSize: storedBulletinFile.fileSize,
         bulletinChecksum: storedBulletinFile.checksum,
         attemptNumber: created.attemptNumber,
-        resubmissionOfId: resubmissionTarget?.id ?? null,
+        resubmissionOfId: resubmissionOfId || null,
+        previousAttemptId: linkedPreviousAttemptId,
         ip: ip || null,
       },
     });
@@ -932,6 +1025,12 @@ export class CpcaCommissionService {
       },
     });
 
+    await this.alignPresidentSelfRegistrationAttemptChainForOmApplicant(
+      this.prisma,
+      requestOmId,
+      request.applicantUserId,
+    );
+
     return {
       request: approved,
       assignment,
@@ -987,6 +1086,14 @@ export class CpcaCommissionService {
         },
       },
     });
+
+    if (rejected.omId) {
+      await this.alignPresidentSelfRegistrationAttemptChainForOmApplicant(
+        this.prisma,
+        rejected.omId,
+        rejected.applicantUserId,
+      );
+    }
 
     await this.audit.log({
       userId: actorUserId,
