@@ -14,9 +14,9 @@ describe("strategicTabGuide", () => {
     });
 
     expect(result).toMatchObject({
-      triggerLabel: "Guia da aba",
+      triggerLabel: "O que essa tela responde?",
       badgeLabel: "Guia rápido",
-      questionsTitle: "O que esta aba responde",
+      questionsTitle: "O que esta tela responde",
       usageTitle: "Como usar esta tela",
       title: "Visão Geral",
       description: "Resumo executivo.",

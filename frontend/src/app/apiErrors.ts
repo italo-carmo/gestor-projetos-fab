@@ -59,6 +59,8 @@ const REASON_MESSAGES: Record<string, string> = {
     "Quando noticiante e vítima forem pessoas diferentes, informe o posto/graduação do noticiante.",
   NOTIFIER_GENDER_REQUIRED_WHEN_DIFFERENT:
     "Quando noticiante e vítima forem pessoas diferentes, informe o sexo do noticiante.",
+  AI_POSSIBLE_MILITARY_NAMES_DETECTED:
+    "A Inteligência Artificial identificou a presença de possíveis nomes no texto.",
   ACTIVITY_TYPE_IN_USE:
     "Este tipo não pode ser excluído porque já possui atividades vinculadas.",
   INVALID_STATUS_TRANSITION: "Transição de status inválida.",

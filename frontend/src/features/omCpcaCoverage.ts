@@ -1,3 +1,5 @@
+import { toMilitaryDisplayName } from "../app/militaryName";
+
 export type OmCpcaCoverageFilter =
   | "ALL"
   | "COVERED"
@@ -5,15 +7,33 @@ export type OmCpcaCoverageFilter =
   | "MANAGED_BY_OTHER"
   | "UNCOVERED";
 
+export type OmCpcaPresidentFilter =
+  | "ALL"
+  | "WITH_PRESIDENT"
+  | "WITHOUT_PRESIDENT";
+
 type OmCpcaCoverageLike = {
   hasCpca?: boolean | null;
   cpcaManagedByLocality?: { id?: string | null } | null;
+  currentPresident?: {
+    id?: string | null;
+    user?: { name?: string | null } | null;
+  } | null;
 };
 
 export type OmCpcaCoverageStatus =
   | "OWN_CPCA"
   | "MANAGED_BY_OTHER"
   | "UNCOVERED";
+
+const MILITARY_RANK_PREFIX =
+  /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN CEL|CEL|BRIG|BRIGADEIRO|GEN)\b/i;
+
+function normalizeWhitespace(value: string | null | undefined) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export function resolveOmCpcaCoverageStatus(
   item: OmCpcaCoverageLike,
@@ -36,6 +56,53 @@ export function matchesOmCpcaCoverageFilter(
   if (filter === "COVERED") return status !== "UNCOVERED";
   if (filter === "UNCOVERED") return status === "UNCOVERED";
   return status === filter;
+}
+
+export function hasOmCpcaPresident(item: OmCpcaCoverageLike) {
+  return Boolean(
+    String(item?.currentPresident?.id ?? "").trim() ||
+    String(item?.currentPresident?.user?.name ?? "").trim(),
+  );
+}
+
+export function matchesOmCpcaPresidentFilter(
+  item: OmCpcaCoverageLike,
+  filter: OmCpcaPresidentFilter,
+) {
+  if (filter === "ALL") return true;
+  if (filter === "WITH_PRESIDENT") return hasOmCpcaPresident(item);
+  return !hasOmCpcaPresident(item);
+}
+
+export function splitOmCpcaPresidentDisplayName(
+  raw: string | null | undefined,
+) {
+  const fullName = normalizeWhitespace(toMilitaryDisplayName(raw));
+  if (!fullName) {
+    return {
+      rank: null as string | null,
+      name: "",
+      fullName: "",
+    };
+  }
+
+  const match = fullName.match(MILITARY_RANK_PREFIX);
+  if (!match) {
+    return {
+      rank: null as string | null,
+      name: fullName,
+      fullName,
+    };
+  }
+
+  const rank = normalizeWhitespace(match[1] ?? "").toUpperCase() || null;
+  const strippedName = normalizeWhitespace(fullName.slice(match[0].length));
+
+  return {
+    rank,
+    name: strippedName || fullName,
+    fullName,
+  };
 }
 
 export function buildOmCpcaCoverageSummary(items: OmCpcaCoverageLike[]) {

@@ -814,6 +814,11 @@ export function BiCpcaMeetingDashboardPage() {
     }
   };
 
+  const activeFiltersCount = useMemo(
+    () => countActiveBusinessIntelligenceFilters(filters, ["combineMode"]),
+    [filters],
+  );
+
   if (dashboardQuery.isLoading) return <SkeletonState />;
 
   if (dashboardQuery.isError) {
@@ -840,10 +845,6 @@ export function BiCpcaMeetingDashboardPage() {
   const trendText = getCardText("chart-trend-q2");
   const importsText = getCardText("list-imports");
   const responsesText = getCardText("list-responses");
-  const activeFiltersCount = useMemo(
-    () => countActiveBusinessIntelligenceFilters(filters, ["combineMode"]),
-    [filters],
-  );
 
   const visibleColumns = (dashboard.columnsMeta ?? []).slice(0, 6);
   const trendOptions = dashboard.charts.question2TrendByDay?.options ?? [];

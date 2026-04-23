@@ -230,7 +230,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: user.id,
-      localityId: locality.id,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_president_self_registration_create',
       entityId: created.id,
@@ -653,7 +653,7 @@ export class CpcaCommissionService {
 
       await this.audit.log({
         userId: actorUserId,
-        localityId,
+        localityId: null,
         resource: 'cpca_cases',
         action: 'cpca_commission_coverage_request_create',
         entityId: request.id,
@@ -676,7 +676,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
-      localityId,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_commission_coverage_update',
       entityId: localityId,
@@ -990,7 +990,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
-      localityId: rejected.omId ?? null,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_president_request_reject',
       entityId: rejected.id,
@@ -1072,7 +1072,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: requesterUserId,
-      localityId,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_president_nomination_request_create',
       entityId: request.id,
@@ -1313,7 +1313,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
-      localityId: requestOmId,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_president_nomination_request_approve',
       entityId: approved.id,
@@ -1378,7 +1378,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
-      localityId: rejected.omId ?? null,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_president_nomination_request_reject',
       entityId: rejected.id,
@@ -1444,7 +1444,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
-      localityId: requestOmId,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_commission_coverage_request_approve',
       entityId: approved.id,
@@ -1504,7 +1504,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
-      localityId: rejected.omId ?? null,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_commission_coverage_request_reject',
       entityId: rejected.id,
@@ -1592,7 +1592,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
-      localityId,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_commission_member_add',
       entityId: created.id,
@@ -1652,7 +1652,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: actorUserId,
-      localityId: memberOmId,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_commission_member_remove',
       entityId: member.id,
@@ -1848,7 +1848,7 @@ export class CpcaCommissionService {
 
     await this.audit.log({
       userId: input.actorUserId,
-      localityId: input.localityId,
+      localityId: null,
       resource: 'cpca_cases',
       action: 'cpca_commission_president_assign',
       entityId: assigned.id,

@@ -21,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateOmDto } from './dto/create-om.dto';
 import { UpdateOmDto } from './dto/update-om.dto';
 import { UpdateOmsHasCpcaBatchDto } from './dto/update-oms-has-cpca-batch.dto';
+import { hasAnyRole, ROLE_TI } from '../rbac/role-access';
 
 @Controller('oms')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -28,11 +29,11 @@ export class OmsController {
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
-  @RequirePermission('localities', 'view')
+  @RequirePermission('cpca_coverage', 'view', PermissionScope.NATIONAL)
   async list(@CurrentUser() user: RbacUser) {
     const canViewAll = hasPermission(
       user,
-      'localities',
+      'cpca_coverage',
       'view',
       PermissionScope.NATIONAL,
     );
@@ -49,6 +50,19 @@ export class OmsController {
       where,
       orderBy: { name: 'asc' },
       include: {
+        cpcaCommissionPresident: {
+          select: {
+            id: true,
+            assignedAt: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
         cpcaCoverageAsManager: {
           select: {
             managedOm: {
@@ -111,6 +125,14 @@ export class OmsController {
               name: item.cpcaCoverageAsManaged[0].managerOm.name,
             }
           : null,
+        currentPresident: item.cpcaCommissionPresident
+          ? {
+              id: item.cpcaCommissionPresident.id,
+              assignedAt: item.cpcaCommissionPresident.assignedAt,
+              user: item.cpcaCommissionPresident.user,
+            }
+          : null,
+        cpcaCommissionPresident: undefined,
         cpcaCoverageAsManager: undefined,
         cpcaCoverageAsManaged: undefined,
       })),
@@ -128,7 +150,7 @@ export class OmsController {
   }
 
   @Post()
-  @RequirePermission('localities', 'create')
+  @RequirePermission('cpca_coverage', 'create', PermissionScope.NATIONAL)
   async create(@Body() dto: CreateOmDto) {
     return this.prisma.om.create({
       data: {
@@ -142,7 +164,7 @@ export class OmsController {
   }
 
   @Put('batch/has-cpca')
-  @RequirePermission('localities', 'update')
+  @RequirePermission('cpca_coverage', 'update', PermissionScope.NATIONAL)
   async updateHasCpcaBatch(@Body() dto: UpdateOmsHasCpcaBatchDto) {
     const ids = Array.from(
       new Set(
@@ -164,7 +186,7 @@ export class OmsController {
   }
 
   @Put(':id')
-  @RequirePermission('localities', 'update')
+  @RequirePermission('cpca_coverage', 'update', PermissionScope.NATIONAL)
   async update(@Param('id') id: string, @Body() dto: UpdateOmDto) {
     const existing = await this.prisma.om.findUnique({
       where: { id },
@@ -183,16 +205,22 @@ export class OmsController {
               ? sanitizeText(dto.uf).toUpperCase().slice(0, 2)
               : null
             : undefined,
-        hasCpca:
-          dto.hasCpca !== undefined ? Boolean(dto.hasCpca) : undefined,
-        notes: dto.notes !== undefined ? sanitizeText(dto.notes ?? '') || null : undefined,
+        hasCpca: dto.hasCpca !== undefined ? Boolean(dto.hasCpca) : undefined,
+        notes:
+          dto.notes !== undefined
+            ? sanitizeText(dto.notes ?? '') || null
+            : undefined,
       },
     });
   }
 
   @Delete(':id')
-  @RequirePermission('localities', 'delete')
-  async remove(@Param('id') id: string) {
+  @RequirePermission('cpca_coverage', 'delete', PermissionScope.NATIONAL)
+  async remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    if (!hasAnyRole(user, [ROLE_TI])) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
     const existing = await this.prisma.om.findUnique({
       where: { id },
       select: { id: true, code: true, name: true },
@@ -213,8 +241,12 @@ export class OmsController {
       this.prisma.cpcaCommissionPresident.count({ where: { omId: id } }),
       this.prisma.cpcaCommissionMember.count({ where: { omId: id } }),
       this.prisma.cpcaPresidentSelfRegistration.count({ where: { omId: id } }),
-      this.prisma.cpcaCommissionCoverageOm.count({ where: { managerOmId: id } }),
-      this.prisma.cpcaCommissionCoverageOm.count({ where: { managedOmId: id } }),
+      this.prisma.cpcaCommissionCoverageOm.count({
+        where: { managerOmId: id },
+      }),
+      this.prisma.cpcaCommissionCoverageOm.count({
+        where: { managedOmId: id },
+      }),
     ]);
 
     await this.prisma.$transaction(async (tx) => {

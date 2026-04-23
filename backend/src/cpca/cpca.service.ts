@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
@@ -16,6 +16,7 @@ import {
   getCpcaCaseInconsistencies,
   type CpcaCaseInconsistency,
 } from './cpca-case-inconsistency';
+import { ComplaintSummaryPrivacyService } from './complaint-summary-privacy.service';
 import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
 import {
@@ -173,6 +174,8 @@ export class CpcaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    @Optional()
+    private readonly complaintSummaryPrivacy?: ComplaintSummaryPrivacyService,
   ) {}
 
   async localityOptions(user?: RbacUser) {
@@ -1528,6 +1531,12 @@ export class CpcaService {
       archivedAt: null,
     } as const;
 
+    await this.assertEvidenceSummaryPrivacy({
+      currentSummary: null,
+      nextSummary: createData.evidenceSummary,
+      override: payload.evidenceSummaryPrivacyOverride ?? false,
+    });
+
     let created: any = null;
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const nextCaseNumber = await this.generateCaseNumber(
@@ -1618,6 +1627,7 @@ export class CpcaService {
         caseNumber: true,
         workflowScope: true,
         complaintType: true,
+        evidenceSummary: true,
         victimIsNotifier: true,
         victimRank: true,
         victimGender: true,
@@ -1749,6 +1759,10 @@ export class CpcaService {
         : payload.occurrenceForm !== undefined
           ? this.cleanMultiSelect(payload.occurrenceForm)
           : undefined;
+    const nextEvidenceSummary =
+      payload.evidenceSummary === undefined
+        ? current.evidenceSummary
+        : this.cleanOptional(payload.evidenceSummary);
 
     this.assertIcaConsistency({
       status: nextStatus,
@@ -1763,6 +1777,12 @@ export class CpcaService {
       outcomeSummary: nextOutcomeSummary,
       accusedDefenseEnsured: nextAccusedDefenseEnsured,
       procedureCurrentSituation: nextProcedureCurrentSituation,
+    });
+
+    await this.assertEvidenceSummaryPrivacy({
+      currentSummary: current.evidenceSummary ?? null,
+      nextSummary: nextEvidenceSummary,
+      override: payload.evidenceSummaryPrivacyOverride ?? false,
     });
 
     const updated = await complaintModel.update({
@@ -1839,7 +1859,7 @@ export class CpcaService {
         evidenceCount: payload.evidenceCount,
         evidenceSummary:
           payload.evidenceSummary !== undefined
-            ? this.cleanOptional(payload.evidenceSummary)
+            ? nextEvidenceSummary
             : undefined,
         confidentialityTermSigned: payload.confidentialityTermSigned,
         confidentialityHandlingNotes:
@@ -1969,6 +1989,8 @@ export class CpcaService {
         workflowScope: workflowContext.workflowScope,
         status: updated.status,
         procedureType: updated.procedureType,
+        evidenceSummaryPrivacyOverride:
+          payload.evidenceSummaryPrivacyOverride ?? false,
       },
     });
 
@@ -3292,6 +3314,32 @@ export class CpcaService {
     if (value === null) return null;
     const normalized = this.cleanText(value);
     return normalized || null;
+  }
+
+  private async assertEvidenceSummaryPrivacy(args: {
+    currentSummary: string | null | undefined;
+    nextSummary: string | null | undefined;
+    override: boolean;
+  }) {
+    if (!this.complaintSummaryPrivacy) return;
+    if (args.override) return;
+
+    const currentSummary = sanitizeText(String(args.currentSummary ?? ''));
+    const nextSummary = sanitizeText(String(args.nextSummary ?? ''));
+    if (!nextSummary) return;
+    if (currentSummary === nextSummary) return;
+
+    const review =
+      await this.complaintSummaryPrivacy.reviewSummary(nextSummary);
+    if (review.status !== 'flagged' || review.findings.length === 0) {
+      return;
+    }
+
+    throwError('VALIDATION_ERROR', {
+      field: 'evidenceSummary',
+      reason: 'AI_POSSIBLE_MILITARY_NAMES_DETECTED',
+      analysis: review,
+    });
   }
 
   private cleanMultiSelect(value?: string[] | string | null) {

@@ -847,6 +847,15 @@ export function BiSurveyDashboardPage() {
     }
   };
 
+  const activeFiltersCount = useMemo(
+    () =>
+      countActiveBusinessIntelligenceFilters(filters, [
+        "combineMode",
+        "responseId",
+      ]),
+    [filters],
+  );
+
   if (dashboardQuery.isLoading) return <SkeletonState />;
   if (dashboardQuery.isError)
     return (
@@ -878,14 +887,6 @@ export function BiSurveyDashboardPage() {
   );
   const profileTypesText = getCardTextStyle("chart-profile-types");
   const monthlyTrendText = getCardTextStyle("chart-monthly-trend");
-  const activeFiltersCount = useMemo(
-    () =>
-      countActiveBusinessIntelligenceFilters(filters, [
-        "combineMode",
-        "responseId",
-      ]),
-    [filters],
-  );
 
   return (
     <Box

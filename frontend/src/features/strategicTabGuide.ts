@@ -7,9 +7,9 @@ export type StrategicTabGuideConfig = {
 
 export function buildStrategicTabGuideUiCopy(config: StrategicTabGuideConfig) {
   return {
-    triggerLabel: "Guia da aba",
+    triggerLabel: "O que essa tela responde?",
     badgeLabel: "Guia rápido",
-    questionsTitle: "O que esta aba responde",
+    questionsTitle: "O que esta tela responde",
     usageTitle: "Como usar esta tela",
     title: config.title,
     description: config.description,

@@ -762,6 +762,167 @@ describe('CpcaCommissionService', () => {
     expect(prisma.cpcaPresidentSelfRegistration.update).not.toHaveBeenCalled();
   });
 
+  it('rejeita autoinscrição sem propagar omId para o FK de locality na auditoria', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+
+    prisma.cpcaPresidentSelfRegistration.findUnique.mockResolvedValue({
+      id: 'req-pending-2',
+      status: 'PENDING',
+    });
+    prisma.cpcaPresidentSelfRegistration.update.mockResolvedValue({
+      id: 'req-pending-2',
+      omId: om.id,
+      applicantUserId: 'user-pres-1',
+      status: 'REJECTED',
+      decisionNotes: 'Motivo da rejeição',
+      createdAt: new Date('2026-04-22T14:00:00Z'),
+      decidedAt: new Date('2026-04-22T15:00:00Z'),
+      applicantUser: {
+        id: 'user-pres-1',
+        name: 'Cel Presidente',
+        email: 'presidente@fab.mil.br',
+        ldapUid: 'uid-pres-1',
+      },
+      om,
+      decidedByUser: {
+        id: 'approver',
+        name: 'Aprovador',
+        email: 'approver@fab.mil.br',
+      },
+    });
+
+    await service.rejectPresidentRequest(
+      'req-pending-2',
+      { notes: 'Motivo da rejeição' },
+      makeUser({ id: 'approver', roles: ['COMGEP'] }) as any,
+    );
+
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localityId: null,
+        action: 'cpca_president_request_reject',
+      }),
+    );
+  });
+
+  it('rejeita sucessão de presidência sem propagar omId para o FK de locality na auditoria', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+
+    prisma.cpcaPresidentNominationRequest.findUnique.mockResolvedValue({
+      id: 'nomination-1',
+      omId: om.id,
+      status: 'PENDING',
+    });
+    prisma.cpcaPresidentNominationRequest.update.mockResolvedValue({
+      id: 'nomination-1',
+      omId: om.id,
+      nomineeIdentifier: '12345678901',
+      nomineeName: 'Maj Novo',
+      nomineeEmail: 'novo@fab.mil.br',
+      requestedAsSubstitution: true,
+      bulletinNumber: 'BOL 200',
+      status: 'REJECTED',
+      createdAt: new Date('2026-04-22T14:00:00Z'),
+      decidedAt: new Date('2026-04-22T15:00:00Z'),
+      decisionNotes: 'OM precisa corrigir dados',
+      om,
+      requestedByUser: {
+        id: 'president-1',
+        name: 'Cel Atual',
+        email: 'atual@fab.mil.br',
+      },
+      nomineeUser: {
+        id: 'user-target',
+        name: 'Maj Novo',
+        email: 'novo@fab.mil.br',
+        ldapUid: 'uid-novo',
+      },
+      decidedByUser: {
+        id: 'approver',
+        name: 'Aprovador',
+        email: 'approver@fab.mil.br',
+      },
+    });
+
+    await service.rejectPresidentNominationRequest(
+      'nomination-1',
+      { notes: 'OM precisa corrigir dados' },
+      makeUser({ id: 'approver', roles: ['COMGEP'] }) as any,
+    );
+
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localityId: null,
+        action: 'cpca_president_nomination_request_reject',
+      }),
+    );
+  });
+
+  it('rejeita solicitação de cobertura sem propagar omId para o FK de locality na auditoria', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+
+    prisma.cpcaCommissionCoverageRequest.findUnique.mockResolvedValue({
+      id: 'coverage-1',
+      omId: om.id,
+      status: 'PENDING',
+    });
+    prisma.om.findMany.mockResolvedValue([managedOm]);
+    prisma.cpcaCommissionCoverageRequest.update.mockResolvedValue({
+      id: 'coverage-1',
+      omId: om.id,
+      requestedManagedOmIds: [managedOm.id],
+      status: 'REJECTED',
+      createdAt: new Date('2026-04-22T14:00:00Z'),
+      decidedAt: new Date('2026-04-22T15:00:00Z'),
+      decisionNotes: 'Cobertura não aprovada',
+      om,
+      requestedByUser: {
+        id: 'president-1',
+        name: 'Cel Atual',
+        email: 'atual@fab.mil.br',
+      },
+      decidedByUser: {
+        id: 'approver',
+        name: 'Aprovador',
+        email: 'approver@fab.mil.br',
+      },
+    });
+
+    await service.rejectCoverageRequest(
+      'coverage-1',
+      { notes: 'Cobertura não aprovada' },
+      makeUser({ id: 'approver', roles: ['COMGEP'] }) as any,
+    );
+
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localityId: null,
+        action: 'cpca_commission_coverage_request_reject',
+      }),
+    );
+  });
+
   it('inclui o histórico completo da autoinscrição na fila de homologação', async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();

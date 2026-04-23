@@ -21,11 +21,13 @@ import { addDays, format } from "date-fns";
 import { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useSearchParams } from "react-router-dom";
 import {
+  useCipavdLocalities,
   useLocalities,
   useEloRoles,
   usePhases,
   useTaskTemplates,
   useTasks,
+  useTaskInstance,
   useMe,
   useBatchAssignTasks,
   useBatchDeleteTasks,
@@ -52,8 +54,14 @@ import { ptBR as dataGridPtBR } from "@mui/x-data-grid/locales";
 import { useToast } from "../app/toast";
 import { parseApiError } from "../app/apiErrors";
 import { TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "../constants/enums";
-import { selectTargetLocalities } from "../constants/localities";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
+import {
+  clampTasksPage,
+  resolveTasksPage,
+  resolveTasksPageSize,
+  TASKS_PAGE_SIZE_OPTIONS,
+  writeTasksPaginationParams,
+} from "../features/tasksPagination";
 
 function resolveTaskTitle(task: any) {
   const raw =
@@ -67,6 +75,7 @@ function resolveTaskTitle(task: any) {
 }
 
 const APP_HEADER_HEIGHT = 96;
+type TaskScope = "SMIF" | "CIPAVD";
 
 function resolveTaskLocalityName(task: any, localityMap: Map<string, string>) {
   const fromTask = String(
@@ -87,17 +96,21 @@ function resolveTaskLocalityName(task: any, localityMap: Map<string, string>) {
 
 export function TasksPage() {
   const [params, setParams] = useSearchParams();
-  const [tab, setTab] = useState(0);
+  const [viewTab, setViewTab] = useState(0);
   const { data: me } = useMe();
   const toast = useToast();
   const defaultBaseDate = format(new Date(), "yyyy-MM-dd");
 
   const search = params.get("q") ?? "";
   const debouncedSearch = useDebounce(search, 300);
+  const taskScope: TaskScope =
+    params.get("scope") === "CIPAVD" ? "CIPAVD" : "SMIF";
 
   const localityId = params.get("localityId") ?? "";
   const phaseId = params.get("phaseId") ?? "";
   const status = params.get("status") ?? "";
+  const page = resolveTasksPage(params.get("page"));
+  const pageSize = resolveTasksPageSize(params.get("pageSize"));
   const assigneeIdsParam =
     params.get("assigneeIds") ?? params.get("assigneeId") ?? "";
   const assigneeIds = assigneeIdsParam
@@ -111,6 +124,7 @@ export function TasksPage() {
 
   const taskFilters = useMemo(
     () => ({
+      scope: taskScope,
       localityId: localityId || undefined,
       phaseId: phaseId || undefined,
       status: status || undefined,
@@ -119,13 +133,22 @@ export function TasksPage() {
       dueTo: dueTo || undefined,
       eloRoleId: eloRoleId || undefined,
     }),
-    [localityId, phaseId, status, assigneeIdsFilter, dueFrom, dueTo, eloRoleId],
+    [
+      taskScope,
+      localityId,
+      phaseId,
+      status,
+      assigneeIdsFilter,
+      dueFrom,
+      dueTo,
+      eloRoleId,
+    ],
   );
 
   const tasksQuery = useTasks({
     ...taskFilters,
     page: "1",
-    pageSize: "500",
+    pageSize: "all",
   });
   const canManageTaskAssignments = can(me, "task_instances", "assign");
   const canManageTaskData = can(me, "task_instances", "update");
@@ -138,6 +161,7 @@ export function TasksPage() {
   const eloRoles = eloRolesQuery.data?.items ?? [];
   const templatesQuery = useTaskTemplates();
   const localitiesQuery = useLocalities();
+  const cipavdLocalitiesQuery = useCipavdLocalities();
 
   const templateMap = new Map(
     (templatesQuery.data?.items ?? []).map((t: any) => [t.id, t]),
@@ -155,41 +179,30 @@ export function TasksPage() {
       )
     : items;
 
-  const localitiesData = (localitiesQuery.data?.items ?? []) as any[];
-  /** Só para nomes na tabela, preservando o catálogo completo vindo do backend. */
-  const allLocalities = useMemo(() => {
-    if (!localitiesData.length) return [];
-    return localitiesData
+  const smifLocalitiesData = (localitiesQuery.data?.items ?? []) as any[];
+  const cipavdLocalitiesData = (cipavdLocalitiesQuery.data?.items ??
+    []) as any[];
+  const mapCatalogLocalities = (rows: any[]) =>
+    rows
       .map((loc: any) => ({
         id: String(loc.id),
         name: String(loc.name ?? loc.code ?? loc.id),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  }, [localitiesData]);
+  const smifLocalities = useMemo(
+    () => mapCatalogLocalities(smifLocalitiesData),
+    [smifLocalitiesData],
+  );
+  const cipavdLocalities = useMemo(
+    () => mapCatalogLocalities(cipavdLocalitiesData),
+    [cipavdLocalitiesData],
+  );
+  const localities = taskScope === "CIPAVD" ? cipavdLocalities : smifLocalities;
 
-  /** Fonte única para seleção: localidades SMIF (mesmo recorte usado na aba Admin > Localidades). */
-  const localities = useMemo(() => {
-    if (!localitiesData.length) return [];
-    const base = selectTargetLocalities(localitiesData).map((row: any) => ({
-      id: String(row?.id ?? "").trim(),
-      name:
-        String(row?.name ?? row?.code ?? row?.id ?? "").trim() ||
-        String(row?.id ?? "").trim(),
-    }));
-    return Array.from(
-      new Map(
-        base.filter((row) => row.id).map((row) => [row.id, row] as const),
-      ).values(),
-    ).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  }, [localitiesData]);
-
-  const localityMap = useMemo(() => {
-    const m = new Map(allLocalities.map((loc) => [loc.id, loc.name]));
-    for (const loc of localities) {
-      if (!m.has(loc.id)) m.set(loc.id, loc.name);
-    }
-    return m;
-  }, [allLocalities, localities]);
+  const localityMap = useMemo(
+    () => new Map(localities.map((loc) => [loc.id, loc.name])),
+    [localities],
+  );
 
   const phases = ((phasesQuery.data?.items ?? []) as any[]).map(
     (phase: any) => ({
@@ -212,10 +225,8 @@ export function TasksPage() {
           user.name ?? user.email ?? `Usuário ${String(user.id).slice(0, 8)}`,
       }))
       .sort(
-        (
-          a: { id: string; name: string },
-          b: { id: string; name: string },
-        ) => a.name.localeCompare(b.name, "pt-BR"),
+        (a: { id: string; name: string }, b: { id: string; name: string }) =>
+          a.name.localeCompare(b.name, "pt-BR"),
       );
   }, [canViewUsers, me?.executive_hide_pii, usersQuery.data?.items]);
 
@@ -225,7 +236,10 @@ export function TasksPage() {
       : me?.executive_hide_pii
         ? []
         : Array.from(
-            new Map<string, { id: string; name: string; localityId?: string | null }>(
+            new Map<
+              string,
+              { id: string; name: string; localityId?: string | null }
+            >(
               items
                 .filter((item: any) => item.assignedToId)
                 .map((item: any) => [
@@ -248,6 +262,10 @@ export function TasksPage() {
           );
 
   const taskIdFromUrl = params.get("taskId") ?? "";
+  const selectedTaskQuery = useTaskInstance(
+    taskIdFromUrl,
+    Boolean(taskIdFromUrl),
+  );
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
     taskIdFromUrl || null,
   );
@@ -265,8 +283,9 @@ export function TasksPage() {
       const meetingKey = String(task.meetingId ?? "");
       const specialtyKey = String(task.specialtyId ?? "");
       const eloRoleKey = String(task.eloRoleId ?? "");
+      const scopeKey = String(task.scope ?? "SMIF").trim();
       const titleKey = resolveTaskTitle(task).trim().toLowerCase();
-      const fallbackLegacyKey = `legacy:${templateKey}|${titleKey}|${phaseKey}|${createdDateKey}|${meetingKey}|${specialtyKey}|${eloRoleKey}`;
+      const fallbackLegacyKey = `legacy:${scopeKey}|${templateKey}|${titleKey}|${phaseKey}|${createdDateKey}|${meetingKey}|${specialtyKey}|${eloRoleKey}`;
       const key = explicitGroupKey || fallbackLegacyKey;
       const current = groups.get(key) ?? [];
       current.push(task);
@@ -370,7 +389,10 @@ export function TasksPage() {
   }, [groupedRows]);
 
   const selectedTask = selectedTaskId
-    ? (taskById.get(String(selectedTaskId)) ?? null)
+    ? (taskById.get(String(selectedTaskId)) ??
+      (taskIdFromUrl === selectedTaskId
+        ? (selectedTaskQuery.data ?? null)
+        : null))
     : null;
   const selectedTaskGroup = selectedTaskId
     ? (rowByAnyGroupedTaskId.get(String(selectedTaskId)) ?? null)
@@ -380,10 +402,27 @@ export function TasksPage() {
     if (taskIdFromUrl && taskIdFromUrl !== selectedTaskId)
       setSelectedTaskId(taskIdFromUrl);
   }, [taskIdFromUrl, selectedTaskId]);
+  useEffect(() => {
+    const detail = selectedTaskQuery.data;
+    if (!detail?.id) return;
+    const detailScope = String(detail.scope ?? "SMIF").toUpperCase();
+    if (detailScope === taskScope) return;
+    const next = new URLSearchParams(params);
+    next.set("scope", detailScope === "CIPAVD" ? "CIPAVD" : "SMIF");
+    next.delete("localityId");
+    setParams(next, { replace: true });
+  }, [selectedTaskQuery.data, taskScope, params, setParams]);
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>(
     () => ({ type: "include", ids: new Set() }),
   );
   const safeRows = groupedRows.filter((r: any) => r != null && r.id != null);
+  useEffect(() => {
+    const nextPage = clampTasksPage(page, safeRows.length, pageSize);
+    if (nextPage === page) return;
+    setParams(writeTasksPaginationParams(params, nextPage, pageSize), {
+      replace: true,
+    });
+  }, [page, pageSize, params, safeRows.length, setParams]);
   const rowTaskIdsMap = useMemo(
     () =>
       new Map(
@@ -440,6 +479,7 @@ export function TasksPage() {
   const [createMode, setCreateMode] = useState<"template" | "manual">(
     "template",
   );
+  const [createScope, setCreateScope] = useState<TaskScope>(taskScope);
   const [createTemplateId, setCreateTemplateId] = useState("");
   const [createManualTitle, setCreateManualTitle] = useState("");
   const [createManualDescription, setCreateManualDescription] = useState("");
@@ -453,6 +493,8 @@ export function TasksPage() {
   const [createCustomOffsets, setCreateCustomOffsets] = useState(false);
   const [createAssignedToId, setCreateAssignedToId] = useState("");
   const [createAssigneeIds, setCreateAssigneeIds] = useState<string[]>([]);
+  const createScopeLocalities =
+    createScope === "CIPAVD" ? cipavdLocalities : smifLocalities;
   const createAssigneesQuery = useTaskAssigneesMulti(
     canManageTaskAssignments ? createLocalityIds : [],
   );
@@ -463,11 +505,11 @@ export function TasksPage() {
   const createAssigneeOptions = useMemo(() => {
     if (me?.executive_hide_pii) return [];
     const fromTaskAssignees = createAssigneesQuery.data?.items ?? [];
-    const assignableUsers =
-      (createAssignableUsersQuery.data?.items ?? directoryUsers) as Array<{
-        id?: string | null;
-        name?: string | null;
-      }>;
+    const assignableUsers = (createAssignableUsersQuery.data?.items ??
+      directoryUsers) as Array<{
+      id?: string | null;
+      name?: string | null;
+    }>;
 
     const merged = new Map<string, { id: string; name: string }>();
     assignableUsers.forEach((item) => {
@@ -501,6 +543,7 @@ export function TasksPage() {
 
   const resetCreateForm = () => {
     setCreateMode("template");
+    setCreateScope(taskScope);
     setCreateTemplateId("");
     setCreateManualTitle("");
     setCreateManualDescription("");
@@ -519,9 +562,21 @@ export function TasksPage() {
     setCreateDrawerOpen(true);
   };
 
-  const selectedCreateLocalities = localities.filter((locality) =>
+  const selectedCreateLocalities = createScopeLocalities.filter((locality) =>
     createLocalityIds.includes(locality.id),
   );
+
+  useEffect(() => {
+    if (!createDrawerOpen) {
+      setCreateScope(taskScope);
+    }
+  }, [taskScope, createDrawerOpen]);
+  useEffect(() => {
+    setCreateLocalityIds([]);
+    setCreateOffsets({});
+    setCreateAssignedToId("");
+    setCreateAssigneeIds([]);
+  }, [createScope]);
 
   const createTemplate = useMemo(
     () =>
@@ -535,7 +590,7 @@ export function TasksPage() {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value);
     else next.delete(key);
-    setParams(next);
+    setParams(writeTasksPaginationParams(next, 1, pageSize));
   };
 
   const updateAssigneeIds = (values: string[]) => {
@@ -543,11 +598,29 @@ export function TasksPage() {
     if (values.length > 0) next.set("assigneeIds", values.join(","));
     else next.delete("assigneeIds");
     next.delete("assigneeId");
-    setParams(next);
+    setParams(writeTasksPaginationParams(next, 1, pageSize));
   };
 
   const clearFilters = () => {
-    setParams({});
+    setParams(
+      writeTasksPaginationParams(
+        new URLSearchParams({ scope: taskScope }),
+        1,
+        pageSize,
+      ),
+    );
+  };
+
+  const handleScopeTabChange = (_event: unknown, value: TaskScope) => {
+    const next = new URLSearchParams(params);
+    next.set("scope", value);
+    next.delete("localityId");
+    next.delete("taskId");
+    setParams(writeTasksPaginationParams(next, 1, pageSize), {
+      replace: true,
+    });
+    setSelectedTaskId(null);
+    clearSelection();
   };
 
   const clearSelection = () => {
@@ -619,6 +692,7 @@ export function TasksPage() {
         response = await generateInstances.mutateAsync({
           id: createTemplateId,
           payload: {
+            scope: createScope,
             localities: createLocalityIds.map((id) => ({
               localityId: id,
               dueDate: addDays(
@@ -647,6 +721,7 @@ export function TasksPage() {
           return;
         }
         response = await createTaskInstance.mutateAsync({
+          scope: createScope,
           title: createManualTitle.trim(),
           description: createManualDescription.trim() || null,
           phaseId: createManualPhaseId,
@@ -691,6 +766,11 @@ export function TasksPage() {
     );
   }
 
+  const scopeSubtitle =
+    taskScope === "CIPAVD"
+      ? "Tarefas operacionais vinculadas ao catálogo CIPAVD, com localidades próprias e gestão separada do fluxo SMIF."
+      : "Tarefas operacionais do escopo SMIF, com localidades e acompanhamento independentes do fluxo CIPAVD.";
+
   return (
     <Box>
       <Stack
@@ -700,7 +780,12 @@ export function TasksPage() {
         spacing={1.25}
         mb={2}
       >
-        <Typography variant="h4">Tarefas</Typography>
+        <Box>
+          <Typography variant="h4">Tarefas</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {scopeSubtitle}
+          </Typography>
+        </Box>
         <Stack
           direction="row"
           spacing={1}
@@ -729,6 +814,10 @@ export function TasksPage() {
           )}
         </Stack>
       </Stack>
+      <Tabs value={taskScope} onChange={handleScopeTabChange} sx={{ mb: 2 }}>
+        <Tab value="SMIF" label="SMIF" />
+        <Tab value="CIPAVD" label="CIPAVD" />
+      </Tabs>
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <FiltersBar
@@ -760,7 +849,11 @@ export function TasksPage() {
         </CardContent>
       </Card>
 
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
+      <Tabs
+        value={viewTab}
+        onChange={(_, value) => setViewTab(value)}
+        sx={{ mb: 2 }}
+      >
         <Tab label="Tabela" />
         <Tab label="Kanban" />
       </Tabs>
@@ -772,7 +865,7 @@ export function TasksPage() {
         />
       )}
 
-      {groupedRows.length > 0 && tab === 0 && (
+      {groupedRows.length > 0 && viewTab === 0 && (
         <Card sx={{ width: "100%" }}>
           <CardContent>
             <Stack
@@ -892,10 +985,27 @@ export function TasksPage() {
                 Excluir selecionadas
               </Button>
             </Stack>
-            <Box sx={{ height: 520, width: "100%" }}>
+            <Box sx={{ width: "100%" }}>
               <DataGrid
                 rows={safeRows}
                 getRowId={(row) => String(row.id)}
+                autoHeight
+                pagination
+                paginationMode="client"
+                pageSizeOptions={[...TASKS_PAGE_SIZE_OPTIONS]}
+                paginationModel={{ page: page - 1, pageSize }}
+                onPaginationModelChange={(model) => {
+                  const nextPageSize = resolveTasksPageSize(
+                    String(model.pageSize),
+                  );
+                  const nextPage =
+                    nextPageSize !== pageSize ? 1 : Number(model.page ?? 0) + 1;
+                  setParams(
+                    writeTasksPaginationParams(params, nextPage, nextPageSize),
+                    { replace: true },
+                  );
+                }}
+                hideFooterSelectedRowCount
                 localeText={
                   dataGridPtBR.components.MuiDataGrid.defaultProps.localeText
                 }
@@ -942,6 +1052,9 @@ export function TasksPage() {
                   "& .MuiDataGrid-cellCheckbox": {
                     cursor: "default",
                   },
+                  "& .MuiDataGrid-footerContainer": {
+                    borderTop: "1px solid #E3EAF3",
+                  },
                 }}
                 columns={
                   [
@@ -982,7 +1095,9 @@ export function TasksPage() {
                               <Chip
                                 size="small"
                                 label={String(commentsTotal)}
-                                color={unreadComments > 0 ? "warning" : "default"}
+                                color={
+                                  unreadComments > 0 ? "warning" : "default"
+                                }
                                 sx={{ height: 20, fontSize: 11, minWidth: 28 }}
                               />
                             )}
@@ -1112,7 +1227,7 @@ export function TasksPage() {
         </Card>
       )}
 
-      {groupedRows.length > 0 && tab === 1 && (
+      {groupedRows.length > 0 && viewTab === 1 && (
         <Box
           display="grid"
           gridTemplateColumns={{
@@ -1336,6 +1451,21 @@ export function TasksPage() {
 
             <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
               <TextField
+                select
+                size="small"
+                label="Escopo"
+                value={createScope}
+                onChange={(event) =>
+                  setCreateScope(
+                    event.target.value === "CIPAVD" ? "CIPAVD" : "SMIF",
+                  )
+                }
+                fullWidth
+              >
+                <MenuItem value="SMIF">SMIF</MenuItem>
+                <MenuItem value="CIPAVD">CIPAVD</MenuItem>
+              </TextField>
+              <TextField
                 size="small"
                 type="date"
                 label="Prazo base"
@@ -1363,7 +1493,7 @@ export function TasksPage() {
             <Autocomplete
               multiple
               disableCloseOnSelect
-              options={localities}
+              options={createScopeLocalities}
               value={selectedCreateLocalities}
               getOptionLabel={(option) => option.name}
               isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -1402,7 +1532,7 @@ export function TasksPage() {
                   placeholder={
                     createLocalityIds.length
                       ? ""
-                      : "Selecione uma ou mais localidades"
+                      : `Selecione uma ou mais localidades ${createScope}`
                   }
                 />
               )}
@@ -1415,7 +1545,7 @@ export function TasksPage() {
                 onClick={() => {
                   const ids = Array.from(
                     new Set(
-                      localities
+                      createScopeLocalities
                         .map((locality) => String(locality.id ?? "").trim())
                         .filter(Boolean),
                     ),

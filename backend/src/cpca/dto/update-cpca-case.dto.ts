@@ -163,6 +163,10 @@ export class UpdateCpcaCaseDto {
 
   @IsOptional()
   @IsBoolean()
+  evidenceSummaryPrivacyOverride?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   confidentialityTermSigned?: boolean;
 
   @IsOptional()

@@ -823,6 +823,11 @@ export function BiGsdEvaluationDashboardPage() {
     }
   };
 
+  const activeFiltersCount = useMemo(
+    () => countActiveBusinessIntelligenceFilters(filters, ["combineMode"]),
+    [filters],
+  );
+
   if (dashboardQuery.isLoading) return <SkeletonState />;
 
   if (dashboardQuery.isError) {
@@ -848,10 +853,6 @@ export function BiGsdEvaluationDashboardPage() {
   const insightMainText = getCardText("insight-main");
   const importsText = getCardText("list-imports");
   const responsesText = getCardText("list-responses");
-  const activeFiltersCount = useMemo(
-    () => countActiveBusinessIntelligenceFilters(filters, ["combineMode"]),
-    [filters],
-  );
 
   const visibleColumns = (dashboard.columnsMeta ?? []).slice(0, 6);
 

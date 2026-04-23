@@ -5,6 +5,7 @@ import { CpcaChecklistService } from './cpca-checklist.service';
 import { CpcaCommissionController } from './cpca-commission.controller';
 import { CpcaCommissionService } from './cpca-commission.service';
 import { CpcaController } from './cpca.controller';
+import { ComplaintSummaryPrivacyService } from './complaint-summary-privacy.service';
 import { CpcaService } from './cpca.service';
 
 @Module({
@@ -14,7 +15,17 @@ import { CpcaService } from './cpca.service';
     CpcaCommissionController,
     CpcaChecklistController,
   ],
-  providers: [CpcaService, CpcaCommissionService, CpcaChecklistService],
-  exports: [CpcaService, CpcaCommissionService, CpcaChecklistService],
+  providers: [
+    CpcaService,
+    CpcaCommissionService,
+    CpcaChecklistService,
+    ComplaintSummaryPrivacyService,
+  ],
+  exports: [
+    CpcaService,
+    CpcaCommissionService,
+    CpcaChecklistService,
+    ComplaintSummaryPrivacyService,
+  ],
 })
 export class CpcaModule {}

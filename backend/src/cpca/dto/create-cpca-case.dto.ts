@@ -50,6 +50,20 @@ export const CPCA_DETAILED_VIOLENCE_TYPES = [
   'VIOLENCIA_DOMESTICA_MORAL',
   'VIOLENCIA_DOMESTICA_PATRIMONIAL',
   'VIOLENCIA_DOMESTICA_SEXUAL',
+  'IMPORTUNACAO_SEXUAL',
+  'INJURIA_RACIAL',
+  'INJURIA',
+  'CALUNIA',
+  'DIFAMACAO',
+  'DENUNCIACAO_CALUNIOSA',
+  'ATO_DE_LIBIDINAGEM',
+  'PRESUNCAO_DE_VIOLENCIA',
+  'CORRUPCAO_DE_MENORES',
+  'ESTUPRO_DE_VULNERAVEL',
+  'SEDUCAO',
+  'REGISTRO_NAO_AUTORIZADO_DE_INTIMIDADE_SEXUAL',
+  'VIOLACAO_SEXUAL_MEDIANTE_FRAUDE',
+  'ESTUPRO',
 ] as const;
 export const CPCA_HARASSMENT_CONTEXTS = ['PRESENCIAL', 'VIRTUAL'] as const;
 export const CPCA_OCCURRENCE_LOCATIONS = [
@@ -285,6 +299,10 @@ export class CreateCpcaCaseDto {
   @IsString()
   @MaxLength(3000)
   evidenceSummary?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  evidenceSummaryPrivacyOverride?: boolean;
 
   @IsOptional()
   @IsBoolean()

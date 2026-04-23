@@ -1111,6 +1111,15 @@ export function BiDomesticViolenceDashboardPage() {
     }
   };
 
+  const activeFiltersCount = useMemo(
+    () =>
+      countActiveBusinessIntelligenceFilters(filters, [
+        "combineMode",
+        "responseId",
+      ]),
+    [filters],
+  );
+
   if (dashboardQuery.isLoading) return <SkeletonState />;
 
   if (dashboardQuery.isError) {
@@ -1149,14 +1158,6 @@ export function BiDomesticViolenceDashboardPage() {
   const responseTrendText = getCardText("chart-response-trend");
   const importsText = getCardText("list-imports");
   const responsesText = getCardText("list-responses");
-  const activeFiltersCount = useMemo(
-    () =>
-      countActiveBusinessIntelligenceFilters(filters, [
-        "combineMode",
-        "responseId",
-      ]),
-    [filters],
-  );
 
   const renderDistributionChartHeader = (cardId: string) => {
     const text = getCardText(cardId);

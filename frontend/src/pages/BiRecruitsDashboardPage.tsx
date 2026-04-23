@@ -890,6 +890,15 @@ export function BiRecruitsDashboardPage() {
     }
   };
 
+  const activeFiltersCount = useMemo(
+    () =>
+      countActiveBusinessIntelligenceFilters(filters, [
+        "combineMode",
+        "responseId",
+      ]),
+    [filters],
+  );
+
   if (dashboardQuery.isLoading) return <SkeletonState />;
 
   if (dashboardQuery.isError) {
@@ -988,14 +997,6 @@ export function BiRecruitsDashboardPage() {
   const kpiAttentionText = getCardText("kpi-attention");
   const trendText = getCardText("chart-response-trend");
   const insightText = getCardText("insight-main");
-  const activeFiltersCount = useMemo(
-    () =>
-      countActiveBusinessIntelligenceFilters(filters, [
-        "combineMode",
-        "responseId",
-      ]),
-    [filters],
-  );
   const freeTextCardText = getCardText("list-free-text");
   const responsesText = getCardText("list-responses");
   const importsText = getCardText("list-imports");

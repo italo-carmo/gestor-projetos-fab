@@ -29,17 +29,10 @@ import {
   useUpdateCpcaCommissionCoverage,
   useUpdateOm,
   useUpdateOmsHasCpcaBatch,
-  useUsers,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
-import {
-  hasAnyRole,
-  normalizeRoleName,
-  ROLE_COMGEP,
-  ROLE_CPCA,
-  ROLE_TI,
-} from "../app/roleAccess";
+import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from "../app/roleAccess";
 import { useToast } from "../app/toast";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { EmptyState } from "../components/states/EmptyState";
@@ -48,8 +41,11 @@ import { SkeletonState } from "../components/states/SkeletonState";
 import {
   buildOmCpcaCoverageSummary,
   matchesOmCpcaCoverageFilter,
+  matchesOmCpcaPresidentFilter,
   resolveOmCpcaCoverageStatus,
+  splitOmCpcaPresidentDisplayName,
   type OmCpcaCoverageFilter,
+  type OmCpcaPresidentFilter,
 } from "../features/omCpcaCoverage";
 
 type LocalityItem = {
@@ -72,14 +68,15 @@ type LocalityItem = {
     uf?: string | null;
     hasCpca?: boolean;
   }>;
-};
-
-type UserItem = {
-  id: string;
-  name: string;
-  omId?: string | null;
-  localityId?: string | null;
-  roles?: Array<{ role?: { id?: string; name?: string } | null }>;
+  currentPresident?: {
+    id: string;
+    assignedAt?: string | null;
+    user?: {
+      id: string;
+      name?: string | null;
+      email?: string | null;
+    } | null;
+  } | null;
 };
 
 const UF_OPTIONS = [
@@ -156,13 +153,6 @@ type CpcaCommissionHistoryItem = {
   actor?: { name?: string | null } | null;
 };
 
-function hasCpcaRole(user: UserItem) {
-  return (user.roles ?? []).some(
-    (entry) =>
-      normalizeRoleName(entry?.role?.name) === normalizeRoleName(ROLE_CPCA),
-  );
-}
-
 function extractReason(error: unknown) {
   const responseData = (
     error as { response?: { data?: { details?: { reason?: string } } } }
@@ -230,9 +220,7 @@ export function OmsAdminPage() {
   const canUpdateOms = can(me, "cpca_coverage", "update");
   const canDeleteOms =
     can(me, "cpca_coverage", "delete") && hasAnyRole(me, [ROLE_TI]);
-  const canViewUsers = can(me, "users", "view");
   const localitiesQuery = useOms();
-  const usersQuery = useUsers(Boolean(me?.id) && canViewUsers);
   const createLocality = useCreateOm();
   const updateLocality = useUpdateOm();
   const updateCpcaCoverage = useUpdateCpcaCommissionCoverage();
@@ -248,6 +236,8 @@ export function OmsAdminPage() {
   const [search, setSearch] = useState("");
   const [cpcaCoverageFilter, setCpcaCoverageFilter] =
     useState<OmCpcaCoverageFilter>("ALL");
+  const [presidentFilter, setPresidentFilter] =
+    useState<OmCpcaPresidentFilter>("ALL");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<LocalityItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -302,37 +292,17 @@ export function OmsAdminPage() {
       ),
     [localitiesQuery.data?.items],
   );
-  const users = useMemo(
-    () => (usersQuery.data?.items ?? []) as UserItem[],
-    [usersQuery.data?.items],
-  );
-
-  const cpcaByLocalityId = useMemo(() => {
-    const map = new Map<string, Array<{ id: string; name: string }>>();
-    for (const user of users) {
-      const localityId = String(user.omId ?? "").trim();
-      if (!localityId || !hasCpcaRole(user)) continue;
-      const current = map.get(localityId) ?? [];
-      current.push({ id: user.id, name: user.name });
-      map.set(localityId, current);
-    }
-    for (const [localityId, members] of map.entries()) {
-      members.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-      map.set(localityId, members);
-    }
-    return map;
-  }, [users]);
-
   const filteredLocalities = useMemo(() => {
     const term = search.trim().toLowerCase();
     return localities.filter((item) => {
       if (!matchesOmCpcaCoverageFilter(item, cpcaCoverageFilter)) return false;
+      if (!matchesOmCpcaPresidentFilter(item, presidentFilter)) return false;
       if (!term) return true;
       const code = String(item.code ?? "").toLowerCase();
       const name = String(item.name ?? "").toLowerCase();
       return code.includes(term) || name.includes(term);
     });
-  }, [localities, search, cpcaCoverageFilter]);
+  }, [localities, search, cpcaCoverageFilter, presidentFilter]);
 
   const coverage = useMemo(() => {
     return buildOmCpcaCoverageSummary(localities);
@@ -609,7 +579,7 @@ export function OmsAdminPage() {
       setPresidentCandidate(null);
       await Promise.allSettled([
         cpcaOverviewQuery.refetch(),
-        usersQuery.refetch(),
+        localitiesQuery.refetch(),
       ]);
     } catch (error) {
       const reason = extractReason(error);
@@ -651,21 +621,12 @@ export function OmsAdminPage() {
     }
   };
 
-  if (localitiesQuery.isLoading || usersQuery.isLoading)
-    return <SkeletonState />;
+  if (localitiesQuery.isLoading) return <SkeletonState />;
   if (localitiesQuery.isError) {
     return (
       <ErrorState
         error={localitiesQuery.error}
         onRetry={() => localitiesQuery.refetch()}
-      />
-    );
-  }
-  if (usersQuery.isError) {
-    return (
-      <ErrorState
-        error={usersQuery.error}
-        onRetry={() => usersQuery.refetch()}
       />
     );
   }
@@ -785,11 +746,31 @@ export function OmsAdminPage() {
               </MenuItem>
               <MenuItem value="UNCOVERED">Sem cobertura CPCA</MenuItem>
             </TextField>
+            <TextField
+              select
+              size="small"
+              label="Presidência"
+              value={presidentFilter}
+              onChange={(event) =>
+                setPresidentFilter(event.target.value as OmCpcaPresidentFilter)
+              }
+              sx={{ minWidth: 220 }}
+            >
+              <MenuItem value="ALL">Todas</MenuItem>
+              <MenuItem value="WITH_PRESIDENT">Com presidente</MenuItem>
+              <MenuItem value="WITHOUT_PRESIDENT">Sem presidente</MenuItem>
+            </TextField>
             <Button variant="text" onClick={() => setSearch("")}>
-              Limpar
+              Limpar busca
             </Button>
-            <Button variant="text" onClick={() => setCpcaCoverageFilter("ALL")}>
-              Limpar cobertura
+            <Button
+              variant="text"
+              onClick={() => {
+                setCpcaCoverageFilter("ALL");
+                setPresidentFilter("ALL");
+              }}
+            >
+              Limpar filtros
             </Button>
           </Stack>
           <Typography
@@ -905,7 +886,7 @@ export function OmsAdminPage() {
                     Comissão responsável
                   </TableCell>
                   <TableCell sx={{ color: "white", fontWeight: 700 }}>
-                    Militares CPCA
+                    Presidente
                   </TableCell>
                   <TableCell
                     sx={{ color: "white", fontWeight: 700 }}
@@ -917,9 +898,12 @@ export function OmsAdminPage() {
               </TableHead>
               <TableBody>
                 {filteredLocalities.map((locality) => {
-                  const cpcaMembers = cpcaByLocalityId.get(locality.id) ?? [];
                   const coverageStatus = resolveOmCpcaCoverageStatus(locality);
                   const managedBy = locality.cpcaManagedByLocality;
+                  const president = locality.currentPresident;
+                  const presidentDisplay = splitOmCpcaPresidentDisplayName(
+                    president?.user?.name,
+                  );
                   return (
                     <TableRow key={locality.id} hover>
                       {canUpdateOms ? (
@@ -990,9 +974,47 @@ export function OmsAdminPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {cpcaMembers.length > 0
-                          ? cpcaMembers.map((member) => member.name).join(", ")
-                          : "—"}
+                        {president ? (
+                          <Stack spacing={0.5} sx={{ minWidth: 0 }}>
+                            {presidentDisplay.rank ? (
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                label={presidentDisplay.rank}
+                                sx={{
+                                  alignSelf: "flex-start",
+                                  height: 22,
+                                  fontSize: 12,
+                                }}
+                              />
+                            ) : (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                Posto não informado
+                              </Typography>
+                            )}
+                            <Typography
+                              variant="body2"
+                              fontWeight={600}
+                              sx={{
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                              title={presidentDisplay.fullName || undefined}
+                            >
+                              {presidentDisplay.name ||
+                                presidentDisplay.fullName ||
+                                "Nome não informado"}
+                            </Typography>
+                          </Stack>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            Sem presidente
+                          </Typography>
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         {canUpdateOms ? (

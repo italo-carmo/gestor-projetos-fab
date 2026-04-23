@@ -910,6 +910,11 @@ export function BiBestPracticesCycleDashboardPage() {
     }
   };
 
+  const activeFiltersCount = useMemo(
+    () => countActiveBusinessIntelligenceFilters(filters, ["combineMode"]),
+    [filters],
+  );
+
   if (dashboardQuery.isLoading) return <SkeletonState />;
 
   if (dashboardQuery.isError) {
@@ -936,10 +941,6 @@ export function BiBestPracticesCycleDashboardPage() {
   const trendText = getCardText("chart-trend-q2");
   const listQ5Text = getCardText("list-q5");
   const listSpecialtyText = getCardText("list-specialty");
-  const activeFiltersCount = useMemo(
-    () => countActiveBusinessIntelligenceFilters(filters, ["combineMode"]),
-    [filters],
-  );
 
   const trendOptions = dashboard.charts.preparednessTrendByDay.options ?? [];
   const trendItems = dashboard.charts.preparednessTrendByDay.items ?? [];

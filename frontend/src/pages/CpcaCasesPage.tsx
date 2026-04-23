@@ -5,6 +5,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -87,6 +88,12 @@ import {
   normalizeComplaintCipavdSummary,
   sortComplaintPendingItems,
 } from "../features/cpcaCipavdThreads";
+import {
+  buildComplaintSummaryHighlightSegments,
+  extractComplaintSummaryPrivacyReview,
+  hasComplaintSummaryChanged,
+  type ComplaintSummaryPrivacyReview,
+} from "../features/complaintSummaryPrivacy";
 
 const STATUS_OPTIONS = [
   { value: "RECEIVED", label: "Recebida" },
@@ -713,6 +720,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     anchorEl: null,
     inconsistency: null,
   });
+  const [summarySaveState, setSummarySaveState] = useState<
+    "idle" | "analyzing" | "saving"
+  >("idle");
+  const [summaryPrivacyReview, setSummaryPrivacyReview] =
+    useState<ComplaintSummaryPrivacyReview | null>(null);
 
   const selectedCpcaCaseQuery = useCpcaCase(
     selectedId,
@@ -725,6 +737,15 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const selectedCaseQuery = isSmifWorkflow
     ? selectedSmifCaseQuery
     : selectedCpcaCaseQuery;
+  const initialEvidenceSummary = isCreateMode
+    ? ""
+    : String(selectedCaseQuery.data?.evidenceSummary ?? "");
+  const evidenceSummaryChanged = hasComplaintSummaryChanged(
+    initialEvidenceSummary,
+    form.evidenceSummary,
+  );
+  const shouldRunSummaryPrivacyReview =
+    evidenceSummaryChanged && Boolean(form.evidenceSummary.trim());
   const createCpcaCase = useCreateCpcaCase();
   const updateCpcaCase = useUpdateCpcaCase();
   const deleteCpcaCase = useDeleteCpcaCase();
@@ -839,6 +860,31 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     0,
     Number(pendingSummaryData?.summary?.resolvedPendingCount ?? 0) || 0,
   );
+  const summaryPrivacyHighlightSegments = useMemo(
+    () =>
+      summaryPrivacyReview
+        ? buildComplaintSummaryHighlightSegments(
+            summaryPrivacyReview.checkedText,
+            summaryPrivacyReview.findings,
+          )
+        : [],
+    [summaryPrivacyReview],
+  );
+  const isSavingCase =
+    createCase.isPending ||
+    updateCase.isPending ||
+    deleteCase.isPending ||
+    summarySaveState !== "idle";
+  const saveCaseLabel =
+    summarySaveState === "analyzing"
+      ? "Analisando resumo com IA..."
+      : summarySaveState === "saving"
+        ? isCreateMode
+          ? "Criando notificação..."
+          : "Salvando alterações..."
+        : isCreateMode
+          ? "Criar notificação"
+          : "Salvar alterações";
 
   const handlePageChange = (_event: unknown, nextPage: number) => {
     updateParam("page", String(nextPage + 1));
@@ -1102,6 +1148,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setIsCreateMode(true);
     setSelectedId("");
     setConfirmDeleteOpen(false);
+    setSummarySaveState("idle");
+    setSummaryPrivacyReview(null);
     setForm({
       ...createDefaultForm(),
       localityId: isNationalScope ? "" : String(me?.omId ?? ""),
@@ -1119,6 +1167,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setIsCreateMode(false);
     setSelectedId(id);
     setConfirmDeleteOpen(false);
+    setSummarySaveState("idle");
+    setSummaryPrivacyReview(null);
     setCipavdDraft("");
     setCipavdDraftIsPending(true);
     setThreadDrafts({});
@@ -1133,6 +1183,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setSelectedId("");
     setIsCreateMode(false);
     setConfirmDeleteOpen(false);
+    setSummarySaveState("idle");
+    setSummaryPrivacyReview(null);
     setConfirmThreadDeleteTarget(null);
     setConsistencyPopover({ anchorEl: null, inconsistency: null });
     setForm(createDefaultForm());
@@ -1185,7 +1237,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setEditingThreadId((current) => (current === threadId ? "" : current));
   };
 
-  const saveCase = async () => {
+  const saveCase = async (options?: {
+    allowSummaryPrivacyOverride?: boolean;
+  }) => {
+    const allowSummaryPrivacyOverride = Boolean(
+      options?.allowSummaryPrivacyOverride,
+    );
     if (isCreateMode && !canCreateCase) {
       toast.push({
         message: "Seu perfil nao possui permissao para criar notificações.",
@@ -1331,11 +1388,21 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       contractorFollowUpNotes: toNullable(form.contractorFollowUpNotes),
     };
 
+    if (allowSummaryPrivacyOverride) {
+      payload.evidenceSummaryPrivacyOverride = true;
+    }
+
     if (!isCreateMode) {
       payload.statusChangeNote = toNullable(form.statusChangeNote);
     }
 
+    const nextSummarySaveState =
+      shouldRunSummaryPrivacyReview && !allowSummaryPrivacyOverride
+        ? "analyzing"
+        : "saving";
+
     try {
+      setSummarySaveState(nextSummarySaveState);
       if (isCreateMode) {
         const created = await createCase.mutateAsync(payload);
         toast.push({
@@ -1344,20 +1411,31 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         });
         setIsCreateMode(false);
         setSelectedId(created.id);
+        setSummaryPrivacyReview(null);
       } else if (selectedId) {
         await updateCase.mutateAsync({ id: selectedId, payload });
         toast.push({
           message: "Caso atualizado com sucesso.",
           severity: "success",
         });
+        setSummaryPrivacyReview(null);
       }
     } catch (error) {
+      const review = allowSummaryPrivacyOverride
+        ? null
+        : extractComplaintSummaryPrivacyReview(error);
+      if (review?.status === "flagged" && review.findings.length > 0) {
+        setSummaryPrivacyReview(review);
+        return;
+      }
       toast.push({
         message:
           parseApiError(error).message ??
           `Erro ao salvar caso ${workflowLabel}.`,
         severity: "error",
       });
+    } finally {
+      setSummarySaveState("idle");
     }
   };
 
@@ -1984,9 +2062,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             size="small"
             label="Resumo do Fato"
             value={form.evidenceSummary}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, evidenceSummary: e.target.value }))
-            }
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              setSummaryPrivacyReview(null);
+              setForm((prev) => ({ ...prev, evidenceSummary: nextValue }));
+            }}
             multiline
             minRows={6}
             sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
@@ -3038,6 +3118,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
                   {renderStepContent()}
 
+                  {summarySaveState === "analyzing" && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      A IA está analisando o Resumo do Fato para verificar
+                      possíveis nomes de militares antes do salvamento.
+                    </Alert>
+                  )}
+
                   <Divider sx={{ my: 2 }} />
 
                   <Stack
@@ -3072,18 +3159,21 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                       </Button>
                       <Button
                         variant="contained"
-                        onClick={saveCase}
+                        onClick={() => {
+                          void saveCase();
+                        }}
                         disabled={
                           (isCreateMode && !canCreateCase) ||
                           (!isCreateMode && !canUpdateCase) ||
-                          createCase.isPending ||
-                          updateCase.isPending ||
-                          deleteCase.isPending
+                          isSavingCase
+                        }
+                        startIcon={
+                          isSavingCase ? (
+                            <CircularProgress size={16} color="inherit" />
+                          ) : undefined
                         }
                       >
-                        {isCreateMode
-                          ? "Criar notificação"
-                          : "Salvar alterações"}
+                        {saveCaseLabel}
                       </Button>
                     </Stack>
                   </Stack>
@@ -3738,6 +3828,169 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           )}
         </Box>
       </Drawer>
+
+      <Dialog
+        open={Boolean(summaryPrivacyReview)}
+        onClose={() => {
+          if (summarySaveState !== "idle") return;
+          setSummaryPrivacyReview(null);
+        }}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>
+          Possíveis nomes identificados no Resumo do Fato
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="warning">
+              {summaryPrivacyReview?.userMessage ??
+                "A Inteligência Artificial identificou a presença de possíveis nomes no texto."}{" "}
+              Revise o texto abaixo. Se entender que a sinalização não procede,
+              ainda é possível prosseguir com o salvamento.
+            </Alert>
+
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Chip
+                size="small"
+                label={`${summaryPrivacyReview?.findings.length ?? 0} trecho${
+                  (summaryPrivacyReview?.findings.length ?? 0) === 1 ? "" : "s"
+                } sinalizado${(summaryPrivacyReview?.findings.length ?? 0) === 1 ? "" : "s"}`}
+              />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={
+                  summaryPrivacyReview?.engine === "hybrid"
+                    ? "Heurística + IA"
+                    : summaryPrivacyReview?.engine === "llm"
+                      ? "IA"
+                      : "Heurística"
+                }
+              />
+              {summaryPrivacyReview?.model && (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  label={summaryPrivacyReview.model}
+                />
+              )}
+            </Stack>
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                Trechos sinalizados no texto
+              </Typography>
+              <Box
+                sx={{
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 2,
+                  bgcolor: "background.default",
+                  p: 2,
+                  whiteSpace: "pre-wrap",
+                  lineHeight: 1.7,
+                }}
+              >
+                {summaryPrivacyHighlightSegments.map((segment) => (
+                  <Box
+                    key={segment.key}
+                    component="span"
+                    sx={
+                      segment.highlighted
+                        ? {
+                            backgroundColor: "rgba(245, 158, 11, 0.32)",
+                            borderRadius: 0.75,
+                            px: 0.25,
+                            boxDecorationBreak: "clone",
+                          }
+                        : undefined
+                    }
+                  >
+                    {segment.text}
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+
+            <Box>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                O que revisar
+              </Typography>
+              <Stack spacing={1}>
+                {(summaryPrivacyReview?.findings ?? []).map(
+                  (finding, index) => (
+                    <Box
+                      key={`${finding.start}-${finding.end}-${index}`}
+                      sx={{
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 2,
+                        p: 1.5,
+                      }}
+                    >
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                        justifyContent="space-between"
+                      >
+                        <Typography fontWeight={700}>
+                          {finding.excerpt}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          color={
+                            finding.confidence === "HIGH"
+                              ? "warning"
+                              : "default"
+                          }
+                          label={
+                            finding.confidence === "HIGH"
+                              ? "Alta confiança"
+                              : "Média confiança"
+                          }
+                        />
+                      </Stack>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.75 }}
+                      >
+                        {finding.explanation ||
+                          "Possível nome próprio associado ao relato."}
+                      </Typography>
+                    </Box>
+                  ),
+                )}
+              </Stack>
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setSummaryPrivacyReview(null)}
+            disabled={summarySaveState !== "idle"}
+          >
+            Voltar e revisar
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={() => {
+              void saveCase({ allowSummaryPrivacyOverride: true });
+            }}
+            disabled={summarySaveState !== "idle"}
+            startIcon={
+              summarySaveState === "saving" ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : undefined
+            }
+          >
+            Prosseguir mesmo assim
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={pendingModalOpen}
