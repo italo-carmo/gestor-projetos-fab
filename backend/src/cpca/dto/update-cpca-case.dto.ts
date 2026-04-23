@@ -255,6 +255,11 @@ export class UpdateCpcaCaseDto {
   @IsOptional()
   @IsString()
   @MaxLength(4000)
+  archiveReason?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
   notifierFeedbackSummary?: string;
 
   @IsOptional()

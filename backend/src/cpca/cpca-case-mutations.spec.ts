@@ -76,6 +76,7 @@ function makeCurrentComplaint(overrides: Record<string, unknown> = {}) {
     contractorReferralDate: null,
     accusedDefenseEnsured: false,
     outcomeSummary: null,
+    archiveReason: null,
     archivedAt: null,
     ...overrides,
   };
@@ -109,6 +110,7 @@ function makePersistedComplaintFromCreate(
     notifierGender: data.notifierGender,
     notifierAgeRange: data.notifierAgeRange,
     evidenceSummary: data.evidenceSummary ?? null,
+    archiveReason: data.archiveReason ?? null,
     archivedAt: data.archivedAt ?? null,
     om: { id: omId, code: omCode, name: omName },
     locality: null,
@@ -159,6 +161,10 @@ function makePersistedComplaintFromUpdate(
       data.evidenceSummary !== undefined
         ? data.evidenceSummary
         : (extras.evidenceSummary ?? null),
+    archiveReason:
+      data.archiveReason !== undefined
+        ? data.archiveReason
+        : (extras.archiveReason ?? null),
     archivedAt:
       data.archivedAt !== undefined
         ? data.archivedAt
@@ -562,6 +568,8 @@ describe('CpcaService case mutations', () => {
         status: 'ARCHIVED',
         procedureType: 'SINDICANCIA',
         outcomeSummary: 'Procedimento concluído e encerrado.',
+        archiveReason:
+          'Arquivada após conclusão da apuração e encerramento formal do caso.',
         accusedDefenseEnsured: true,
         statusChangeNote: 'Encerrado após validação final.',
       } as any,
@@ -570,6 +578,9 @@ describe('CpcaService case mutations', () => {
 
     const updateCall = prisma.cpcComplaintCase.update.mock.calls[0]?.[0];
     expect(updateCall.data.status).toBe('ARCHIVED');
+    expect(updateCall.data.archiveReason).toBe(
+      'Arquivada após conclusão da apuração e encerramento formal do caso.',
+    );
     expect(updateCall.data.archivedAt).toBeInstanceOf(Date);
     expect(updateCall.data.archivedAt.toISOString()).toBe(
       '2026-04-23T12:00:00.000Z',
@@ -616,6 +627,8 @@ describe('CpcaService case mutations', () => {
       {
         status: 'RECEIVED',
         procedureCurrentSituation: 'ARQUIVADO_PELA_JUSTICA',
+        archiveReason:
+          'Arquivamento determinado por decisão judicial superveniente.',
         statusChangeNote: 'Arquivamento determinado por decisão judicial.',
       } as any,
       makeUser() as any,
@@ -623,6 +636,9 @@ describe('CpcaService case mutations', () => {
 
     const updateCall = prisma.cpcComplaintCase.update.mock.calls[0]?.[0];
     expect(updateCall.data.status).toBe('ARCHIVED');
+    expect(updateCall.data.archiveReason).toBe(
+      'Arquivamento determinado por decisão judicial superveniente.',
+    );
     expect(updateCall.data.procedureCurrentSituation).toBe(
       'ARQUIVADO_PELA_JUSTICA',
     );
@@ -635,6 +651,70 @@ describe('CpcaService case mutations', () => {
       }),
     });
     expect(result.status).toBe('ARCHIVED');
+  });
+
+  it('rejeita arquivamento sem motivo informado', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue(
+      makeCurrentComplaint({
+        status: 'CONCLUDED',
+        procedureType: 'SINDICANCIA',
+      }),
+    );
+
+    jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+    jest.spyOn(service as any, 'assertCaseAccess').mockResolvedValue(undefined);
+
+    await expectReason(
+      service.update(
+        'case-1',
+        {
+          status: 'ARCHIVED',
+          procedureType: 'SINDICANCIA',
+          outcomeSummary: 'Apuração encerrada.',
+          archiveReason: '   ',
+          accusedDefenseEnsured: true,
+        } as any,
+        makeUser() as any,
+      ),
+      'ARCHIVE_REASON_REQUIRED_FOR_ARCHIVE',
+    );
+
+    expect(prisma.cpcComplaintCase.update).not.toHaveBeenCalled();
+  });
+
+  it('rejeita arquivamento judicial sem motivo informado', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue(
+      makeCurrentComplaint({
+        status: 'RECEIVED',
+        procedureType: 'NOT_DEFINED',
+      }),
+    );
+
+    jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+    jest.spyOn(service as any, 'assertCaseAccess').mockResolvedValue(undefined);
+
+    await expectReason(
+      service.update(
+        'case-1',
+        {
+          status: 'RECEIVED',
+          procedureCurrentSituation: 'ARQUIVADO_PELA_JUSTICA',
+          archiveReason: '',
+        } as any,
+        makeUser() as any,
+      ),
+      'ARCHIVE_REASON_REQUIRED_FOR_ARCHIVE',
+    );
+
+    expect(prisma.cpcComplaintCase.update).not.toHaveBeenCalled();
   });
 
   it('bloqueia transição inválida de status na edição', async () => {

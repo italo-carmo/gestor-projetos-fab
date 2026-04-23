@@ -17,6 +17,8 @@ const REASON_MESSAGES: Record<string, string> = {
     "Marque que o acusado é terceirizado antes de informar a data de encaminhamento.",
   OUTCOME_SUMMARY_REQUIRED_FOR_CLOSURE:
     "Preencha o resumo do desfecho para concluir/arquivar o caso.",
+  ARCHIVE_REASON_REQUIRED_FOR_ARCHIVE:
+    "Preencha o motivo do arquivamento antes de salvar a denúncia como arquivada.",
   DEFENSE_CONFIRMATION_REQUIRED_FOR_CLOSURE:
     "Confirme que o direito de defesa do acusado foi assegurado antes de concluir/arquivar.",
   CPCA_NOT_ENABLED_FOR_LOCALITY:

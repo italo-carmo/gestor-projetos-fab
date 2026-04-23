@@ -1386,6 +1386,7 @@ model CpcComplaintCase {
   victimAccusedSeparationApplied   Boolean                   @default(false)
   accusedDefenseEnsured            Boolean                   @default(false)
   outcomeSummary                   String?
+  archiveReason                    String?
   notifierFeedbackSummary          String?
   victimFeedbackSummary            String?
   notifierFeedbackDate             DateTime?

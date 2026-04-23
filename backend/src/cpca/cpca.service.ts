@@ -1409,6 +1409,7 @@ export class CpcaService {
       outsourcedAccused: payload.outsourcedAccused ?? false,
       contractorReferralDate: payload.contractorReferralDate,
       outcomeSummary: payload.outcomeSummary,
+      archiveReason: payload.archiveReason,
       accusedDefenseEnsured: payload.accusedDefenseEnsured ?? false,
     });
 
@@ -1503,6 +1504,7 @@ export class CpcaService {
         payload.victimAccusedSeparationApplied ?? false,
       accusedDefenseEnsured: payload.accusedDefenseEnsured ?? false,
       outcomeSummary: this.cleanOptional(payload.outcomeSummary),
+      archiveReason: null,
       notifierFeedbackSummary: this.cleanOptional(
         payload.notifierFeedbackSummary,
       ),
@@ -1646,6 +1648,7 @@ export class CpcaService {
         contractorReferralDate: true,
         accusedDefenseEnsured: true,
         outcomeSummary: true,
+        archiveReason: true,
         archivedAt: true,
       },
     });
@@ -1719,6 +1722,12 @@ export class CpcaService {
       payload.outcomeSummary === undefined
         ? current.outcomeSummary
         : this.cleanOptional(payload.outcomeSummary);
+    const nextArchiveReason =
+      nextStatus === 'ARCHIVED'
+        ? payload.archiveReason === undefined
+          ? this.cleanOptional(current.archiveReason)
+          : this.cleanOptional(payload.archiveReason)
+        : null;
     const nextVictimRank =
       payload.victimRank === undefined
         ? current.victimRank
@@ -1774,6 +1783,7 @@ export class CpcaService {
       outsourcedAccused: nextOutsourcedAccused,
       contractorReferralDate: nextContractorReferralDate,
       outcomeSummary: nextOutcomeSummary,
+      archiveReason: nextArchiveReason,
       accusedDefenseEnsured: nextAccusedDefenseEnsured,
       procedureCurrentSituation: nextProcedureCurrentSituation,
     });
@@ -1907,6 +1917,12 @@ export class CpcaService {
           payload.outcomeSummary !== undefined
             ? this.cleanOptional(payload.outcomeSummary)
             : undefined,
+        archiveReason:
+          nextStatus === 'ARCHIVED'
+            ? nextArchiveReason
+            : current.archiveReason
+              ? null
+              : undefined,
         notifierFeedbackSummary:
           payload.notifierFeedbackSummary !== undefined
             ? this.cleanOptional(payload.notifierFeedbackSummary)
@@ -3480,6 +3496,7 @@ export class CpcaService {
     outsourcedAccused: boolean | null | undefined;
     contractorReferralDate: Date | string | null | undefined;
     outcomeSummary: string | null | undefined;
+    archiveReason?: string | null | undefined;
     accusedDefenseEnsured: boolean | null | undefined;
   }) {
     if (input.complaintType === 'SEXUAL' && !input.confidentialityTermSigned) {
@@ -3529,6 +3546,16 @@ export class CpcaService {
           reason: 'DEFENSE_CONFIRMATION_REQUIRED_FOR_CLOSURE',
         });
       }
+    }
+
+    if (
+      input.status === 'ARCHIVED' &&
+      !this.cleanOptional(input.archiveReason)
+    ) {
+      throwError('VALIDATION_ERROR', {
+        field: 'archiveReason',
+        reason: 'ARCHIVE_REASON_REQUIRED_FOR_ARCHIVE',
+      });
     }
   }
 

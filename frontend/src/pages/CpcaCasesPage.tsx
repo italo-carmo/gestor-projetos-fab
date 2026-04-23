@@ -94,6 +94,10 @@ import {
   hasComplaintSummaryChanged,
   type ComplaintSummaryPrivacyReview,
 } from "../features/complaintSummaryPrivacy";
+import {
+  getComplaintArchiveReasonMeta,
+  isComplaintArchiveReasonRequired,
+} from "../features/complaintArchiveReason";
 
 const STATUS_OPTIONS = [
   { value: "RECEIVED", label: "Recebida" },
@@ -551,6 +555,7 @@ function createDefaultForm() {
     victimAccusedSeparationApplied: false,
     accusedDefenseEnsured: false,
     outcomeSummary: "",
+    archiveReason: "",
     notifierFeedbackSummary: "",
     victimFeedbackSummary: "",
     notifierFeedbackDate: "",
@@ -725,6 +730,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   >("idle");
   const [summaryPrivacyReview, setSummaryPrivacyReview] =
     useState<ComplaintSummaryPrivacyReview | null>(null);
+  const [archiveReasonDialog, setArchiveReasonDialog] = useState<{
+    caseNumber?: string | null;
+    archiveReason?: string | null;
+    archivedAt?: string | null;
+    isMissingReason?: boolean;
+  } | null>(null);
 
   const selectedCpcaCaseQuery = useCpcaCase(
     selectedId,
@@ -812,6 +823,21 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const selectedLegacyComments = (
     ((selectedCaseQuery.data as any)?.comments ?? []) as any[]
   ).slice();
+  const archiveReasonRequired = isComplaintArchiveReasonRequired({
+    status: form.status,
+    procedureCurrentSituation: form.procedureCurrentSituation,
+  });
+  const archiveReasonMeta = getComplaintArchiveReasonMeta({
+    status: form.status,
+    procedureCurrentSituation: form.procedureCurrentSituation,
+    archiveReason: form.archiveReason,
+  });
+  const selectedArchiveReasonMeta = getComplaintArchiveReasonMeta({
+    status: (selectedCaseQuery.data as any)?.status,
+    procedureCurrentSituation: (selectedCaseQuery.data as any)
+      ?.procedureCurrentSituation,
+    archiveReason: (selectedCaseQuery.data as any)?.archiveReason,
+  });
   const canCreateCipavdThread = Boolean(cipavdAccess?.canCreateThread);
   const canResolveCipavdPending = Boolean(cipavdAccess?.canResolvePending);
   const canReviewResolvedPendencies = Boolean(
@@ -1068,6 +1094,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       ),
       accusedDefenseEnsured: Boolean(item.accusedDefenseEnsured),
       outcomeSummary: item.outcomeSummary ?? "",
+      archiveReason: item.archiveReason ?? "",
       notifierFeedbackSummary: item.notifierFeedbackSummary ?? "",
       victimFeedbackSummary: item.victimFeedbackSummary ?? "",
       notifierFeedbackDate: item.notifierFeedbackDate
@@ -1160,6 +1187,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setEditingThreadId("");
     setFocusedThreadId("");
     setActiveStep(0);
+    setArchiveReasonDialog(null);
     setDrawerOpen(true);
   };
 
@@ -1175,6 +1203,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setEditingThreadId("");
     setFocusedThreadId(threadId ?? "");
     setActiveStep(0);
+    setArchiveReasonDialog(null);
     setDrawerOpen(true);
   };
 
@@ -1194,6 +1223,24 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setEditingThreadId("");
     setFocusedThreadId("");
     setActiveStep(0);
+    setArchiveReasonDialog(null);
+  };
+
+  const openArchiveReasonDetails = (item: {
+    caseNumber?: string | null;
+    archiveReason?: string | null;
+    archivedAt?: string | null;
+    status?: string | null;
+    procedureCurrentSituation?: string | null;
+  }) => {
+    const meta = getComplaintArchiveReasonMeta(item);
+    if (!meta.isArchived) return;
+    setArchiveReasonDialog({
+      caseNumber: item.caseNumber ?? null,
+      archiveReason: meta.archiveReason,
+      archivedAt: item.archivedAt ?? null,
+      isMissingReason: meta.isMissingReason,
+    });
   };
 
   const setThreadDraftValue = (threadId: string, value: string) => {
@@ -1298,6 +1345,20 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       form.status,
       form.procedureCurrentSituation,
     );
+    const nextArchiveReasonRequired = isComplaintArchiveReasonRequired({
+      status: syncedStatus,
+      procedureCurrentSituation: form.procedureCurrentSituation,
+    });
+
+    if (nextArchiveReasonRequired && !toNullable(form.archiveReason)) {
+      setActiveStep(2);
+      toast.push({
+        message:
+          "Preencha o motivo do arquivamento antes de salvar a denúncia arquivada.",
+        severity: "warning",
+      });
+      return;
+    }
 
     if (macroComplaintType === "SEXUAL" && !form.confidentialityTermSigned) {
       setActiveStep(1);
@@ -1375,6 +1436,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       ),
       accusedDefenseEnsured: Boolean(form.accusedDefenseEnsured),
       outcomeSummary: toNullable(form.outcomeSummary),
+      archiveReason: toNullable(form.archiveReason),
       notifierFeedbackSummary: toNullable(form.notifierFeedbackSummary),
       victimFeedbackSummary: toNullable(form.victimFeedbackSummary),
       notifierFeedbackDate: toNullable(form.notifierFeedbackDate),
@@ -1421,6 +1483,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         setSummaryPrivacyReview(null);
       }
     } catch (error) {
+      const parsedError = parseApiError(error);
+      if (parsedError.details?.field === "archiveReason") {
+        setActiveStep(2);
+      }
       const review = allowSummaryPrivacyOverride
         ? null
         : extractComplaintSummaryPrivacyReview(error);
@@ -1429,9 +1495,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         return;
       }
       toast.push({
-        message:
-          parseApiError(error).message ??
-          `Erro ao salvar caso ${workflowLabel}.`,
+        message: parsedError.message ?? `Erro ao salvar caso ${workflowLabel}.`,
         severity: "error",
       });
     } finally {
@@ -2308,6 +2372,29 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               sx={{ minWidth: 220 }}
             />
           </Stack>
+
+          {archiveReasonRequired && (
+            <TextField
+              size="small"
+              label="Motivo do arquivamento"
+              value={form.archiveReason}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  archiveReason: e.target.value,
+                }))
+              }
+              error={archiveReasonMeta.isMissingReason}
+              helperText={
+                archiveReasonMeta.isMissingReason
+                  ? "Preencha o motivo do arquivamento para salvar a denúncia como arquivada."
+                  : "Explique de forma objetiva o fundamento do arquivamento."
+              }
+              fullWidth
+              multiline
+              minRows={3}
+            />
+          )}
         </Stack>
       );
     }
@@ -2800,6 +2887,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                     : Array.isArray(item.inconsistencies)
                       ? item.inconsistencies
                       : getCpcaCaseInconsistencies(item);
+                  const archiveBadge = getComplaintArchiveReasonMeta({
+                    status: item.status,
+                    procedureCurrentSituation: item.procedureCurrentSituation,
+                    archiveReason: item.archiveReason,
+                  });
                   const cipavdSummary = normalizeComplaintCipavdSummary(
                     item.cipavdCommentsSummary,
                   );
@@ -2901,6 +2993,24 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 }}
                               />
                             )}
+                            {archiveBadge.isArchived &&
+                              archiveBadge.badgeLabel && (
+                                <Chip
+                                  size="small"
+                                  clickable
+                                  label={archiveBadge.badgeLabel}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openArchiveReasonDetails(item);
+                                  }}
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: "#B91C1C",
+                                    bgcolor: "rgba(239, 68, 68, 0.12)",
+                                    border: "1px solid rgba(239, 68, 68, 0.28)",
+                                  }}
+                                />
+                              )}
                           </Stack>
                           {(item.lastCommentAt ||
                             cipavdSummary.lastActivityAt) && (
@@ -3060,6 +3170,26 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               ? " perfis CPCA autorizados e à gestão nacional."
               : " CPCA e gestão nacional."}
           </Alert>
+
+          {!isCreateMode &&
+            selectedArchiveReasonMeta.isArchived &&
+            selectedArchiveReasonMeta.badgeLabel && (
+              <Box sx={{ mb: 2 }}>
+                <Chip
+                  clickable
+                  label={selectedArchiveReasonMeta.badgeLabel}
+                  onClick={() =>
+                    openArchiveReasonDetails(selectedCaseQuery.data as any)
+                  }
+                  sx={{
+                    fontWeight: 700,
+                    color: "#B91C1C",
+                    bgcolor: "rgba(239, 68, 68, 0.12)",
+                    border: "1px solid rgba(239, 68, 68, 0.28)",
+                  }}
+                />
+              </Box>
+            )}
 
           {!isCreateMode && selectedCaseQuery.isLoading && <SkeletonState />}
           {!isCreateMode && selectedCaseQuery.isError && (
@@ -3989,6 +4119,65 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           >
             Prosseguir mesmo assim
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(archiveReasonDialog)}
+        onClose={() => setArchiveReasonDialog(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>
+          {archiveReasonDialog?.isMissingReason
+            ? "Arquivamento sem comentário"
+            : "Comentário de arquivamento"}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Alert severity="error">
+              {archiveReasonDialog?.isMissingReason
+                ? "Esta denúncia foi arquivada sem comentário registrado. Isso pode acontecer em registros antigos, anteriores à obrigatoriedade do motivo de arquivamento."
+                : "Motivo registrado para o arquivamento desta denúncia."}
+            </Alert>
+
+            {archiveReasonDialog?.caseNumber ? (
+              <Typography variant="subtitle2" fontWeight={700}>
+                {formatComplaintCaseNumberForDisplay(
+                  archiveReasonDialog.caseNumber,
+                )}
+              </Typography>
+            ) : null}
+
+            {archiveReasonDialog?.archivedAt ? (
+              <Typography variant="body2" color="text.secondary">
+                Arquivada em{" "}
+                {new Date(archiveReasonDialog.archivedAt).toLocaleString(
+                  "pt-BR",
+                )}
+              </Typography>
+            ) : null}
+
+            <Box
+              sx={{
+                border: "1px solid rgba(239, 68, 68, 0.24)",
+                borderRadius: 2,
+                bgcolor: "rgba(239, 68, 68, 0.04)",
+                p: 2,
+              }}
+            >
+              <Typography
+                variant="body2"
+                sx={{ whiteSpace: "pre-wrap", lineHeight: 1.75 }}
+              >
+                {archiveReasonDialog?.archiveReason ??
+                  "Nenhum comentário de arquivamento foi informado neste registro."}
+              </Typography>
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setArchiveReasonDialog(null)}>Fechar</Button>
         </DialogActions>
       </Dialog>
 
