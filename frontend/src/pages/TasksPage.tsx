@@ -62,6 +62,7 @@ import {
   TASKS_PAGE_SIZE_OPTIONS,
   writeTasksPaginationParams,
 } from "../features/tasksPagination";
+import { buildTaskGroupingMetaByTaskId } from "../features/tasksGrouping";
 
 function resolveTaskTitle(task: any) {
   const raw =
@@ -269,103 +270,43 @@ export function TasksPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(
     taskIdFromUrl || null,
   );
-  const groupedRows = useMemo(() => {
-    const groups = new Map<string, any[]>();
-    for (const task of filteredItems) {
-      const explicitGroupKey = String(task.groupKey ?? "").trim();
-      const createdDateKey =
-        String(task.createdAt ?? "").slice(0, 10) ||
-        String(task.dueDate ?? "").slice(0, 10);
-      const phaseKey = String(task.taskTemplate?.phaseId ?? "");
-      const templateKey = String(
-        task.taskTemplateId ?? task.taskTemplate?.id ?? "",
-      );
-      const meetingKey = String(task.meetingId ?? "");
-      const specialtyKey = String(task.specialtyId ?? "");
-      const eloRoleKey = String(task.eloRoleId ?? "");
-      const scopeKey = String(task.scope ?? "SMIF").trim();
-      const titleKey = resolveTaskTitle(task).trim().toLowerCase();
-      const fallbackLegacyKey = `legacy:${scopeKey}|${templateKey}|${titleKey}|${phaseKey}|${createdDateKey}|${meetingKey}|${specialtyKey}|${eloRoleKey}`;
-      const key = explicitGroupKey || fallbackLegacyKey;
-      const current = groups.get(key) ?? [];
-      current.push(task);
-      groups.set(key, current);
-    }
+  const taskGroupingMetaByTaskId = useMemo(
+    () =>
+      buildTaskGroupingMetaByTaskId(
+        filteredItems,
+        (task) => resolveTaskLocalityName(task, localityMap),
+        resolveTaskTitle,
+      ),
+    [filteredItems, localityMap],
+  );
 
-    const rows: any[] = [];
-    for (const [key, group] of Array.from(groups.entries())) {
-      const uniqueLocalities = Array.from(
-        new Set(group.map((item: any) => String(item.localityId ?? ""))),
-      ).filter(Boolean);
-      if (
-        key.startsWith("legacy:") &&
-        uniqueLocalities.length <= 1 &&
-        group.length <= 1
-      ) {
-        group.forEach((task: any) => {
-          rows.push({
-            ...task,
-            id: String(task.id),
-            primaryTaskId: String(task.id),
-            groupedTaskIds: [String(task.id)],
-            groupedLocalities: [
-              {
-                id: String(task.localityId),
-                name: resolveTaskLocalityName(task, localityMap),
-              },
-            ],
-            groupedLocalityCount: 1,
-            localityName: resolveTaskLocalityName(task, localityMap),
-          });
-        });
-        continue;
-      }
+  const displayRows = useMemo(
+    () =>
+      filteredItems.map((task: any) => {
+        const taskId = String(task.id);
+        const groupMeta = taskGroupingMetaByTaskId.get(taskId);
+        const localityName = resolveTaskLocalityName(task, localityMap);
 
-      const ordered = [...group].sort(
-        (a: any, b: any) =>
-          new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
-      );
-      const primary = ordered[0];
-      const taskIds = ordered.map((item: any) => String(item.id));
-      const localityEntries = ordered.map((item: any) => ({
-        id: String(item.localityId),
-        name: resolveTaskLocalityName(item, localityMap),
-      }));
-      const dedupLocalityMap = new Map<string, { id: string; name: string }>();
-      localityEntries.forEach((entry) => {
-        if (!dedupLocalityMap.has(entry.id)) {
-          dedupLocalityMap.set(entry.id, entry);
-        }
-      });
-      const groupedLocalities = Array.from(dedupLocalityMap.values());
-      const hasMixedStatus =
-        new Set(ordered.map((item: any) => String(item.status))).size > 1;
-      const averageProgress = Math.round(
-        ordered.reduce(
-          (acc: number, item: any) => acc + Number(item.progressPercent ?? 0),
-          0,
-        ) / ordered.length,
-      );
-
-      rows.push({
-        ...primary,
-        id: `group:${key}`,
-        primaryTaskId: String(primary.id),
-        groupedTaskIds: taskIds,
-        groupedLocalities,
-        groupedLocalityCount: groupedLocalities.length,
-        localityName:
-          groupedLocalities.length > 1
-            ? `${groupedLocalities.length} localidades`
-            : (groupedLocalities[0]?.name ?? "-"),
-        status: hasMixedStatus ? "IN_PROGRESS" : primary.status,
-        progressPercent: hasMixedStatus
-          ? averageProgress
-          : Number(primary.progressPercent ?? 0),
-      });
-    }
-    return rows;
-  }, [filteredItems, localityMap]);
+        return {
+          ...task,
+          id: taskId,
+          primaryTaskId: taskId,
+          groupedTaskIds: [taskId],
+          groupedLocalities: groupMeta?.linkedLocalities ?? [
+            {
+              id: String(task.localityId ?? ""),
+              name: localityName,
+            },
+          ],
+          groupedLocalityCount: Math.max(
+            1,
+            Number(groupMeta?.linkedLocalityCount ?? 1) || 1,
+          ),
+          localityName,
+        };
+      }),
+    [filteredItems, localityMap, taskGroupingMetaByTaskId],
+  );
 
   const taskById = useMemo(
     () => new Map(items.map((item: any) => [String(item.id), item])),
@@ -375,18 +316,26 @@ export function TasksPage() {
   /** Qualquer id de instância do grupo aponta para a linha agregada (evita drawer sem localidades vinculadas). */
   const rowByAnyGroupedTaskId = useMemo(() => {
     const m = new Map<string, any>();
-    for (const row of groupedRows) {
-      const ids = (
-        row.groupedTaskIds?.length
-          ? row.groupedTaskIds
-          : [String(row.primaryTaskId ?? row.id)]
-      ) as string[];
-      for (const id of ids) {
-        m.set(String(id), row);
+    for (const row of displayRows) {
+      const rowId = String(row.id ?? "").trim();
+      if (!rowId) continue;
+      const groupMeta = taskGroupingMetaByTaskId.get(rowId);
+      if (groupMeta) {
+        m.set(rowId, groupMeta);
+        groupMeta.linkedTaskIds.forEach((id: string) => {
+          m.set(String(id), groupMeta);
+        });
+        continue;
       }
+      m.set(rowId, {
+        primaryTaskId: rowId,
+        linkedTaskIds: [rowId],
+        linkedLocalities: row.groupedLocalities ?? [],
+        linkedLocalityCount: Number(row.groupedLocalityCount ?? 1) || 1,
+      });
     }
     return m;
-  }, [groupedRows]);
+  }, [displayRows, taskGroupingMetaByTaskId]);
 
   const selectedTask = selectedTaskId
     ? (taskById.get(String(selectedTaskId)) ??
@@ -415,7 +364,7 @@ export function TasksPage() {
   const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>(
     () => ({ type: "include", ids: new Set() }),
   );
-  const safeRows = groupedRows.filter((r: any) => r != null && r.id != null);
+  const safeRows = displayRows.filter((r: any) => r != null && r.id != null);
   useEffect(() => {
     const nextPage = clampTasksPage(page, safeRows.length, pageSize);
     if (nextPage === page) return;
@@ -463,7 +412,7 @@ export function TasksPage() {
     const excluded = new Set(ids);
     const rowIds = safeRows
       .map((row: any) => String(row.id))
-      .filter((id) => !excluded.has(id));
+      .filter((id: string) => !excluded.has(id));
     return normalizeRowIds(rowIds);
   }, [selectionModel, safeRows, rowTaskIdsMap]);
   const [batchAssignee, setBatchAssignee] = useState("");
@@ -858,14 +807,14 @@ export function TasksPage() {
         <Tab label="Kanban" />
       </Tabs>
 
-      {groupedRows.length === 0 && (
+      {displayRows.length === 0 && (
         <EmptyState
           title="Nenhuma tarefa encontrada"
           description="Ajuste os filtros ou tente uma nova busca."
         />
       )}
 
-      {groupedRows.length > 0 && viewTab === 0 && (
+      {displayRows.length > 0 && viewTab === 0 && (
         <Card sx={{ width: "100%" }}>
           <CardContent>
             <Stack
@@ -1227,7 +1176,7 @@ export function TasksPage() {
         </Card>
       )}
 
-      {groupedRows.length > 0 && viewTab === 1 && (
+      {displayRows.length > 0 && viewTab === 1 && (
         <Box
           display="grid"
           gridTemplateColumns={{
@@ -1245,7 +1194,7 @@ export function TasksPage() {
                   {TASK_STATUS_LABELS[column] ?? column}
                 </Typography>
                 <Box display="grid" gap={1}>
-                  {groupedRows
+                  {displayRows
                     .filter((task: any) => task.status === column)
                     .map((task: any) => (
                       <Card
@@ -1322,8 +1271,8 @@ export function TasksPage() {
         onDeleted={() => setSelectedTaskId(null)}
         user={me}
         localities={localities}
-        linkedTaskIds={selectedTaskGroup?.groupedTaskIds ?? []}
-        linkedLocalities={selectedTaskGroup?.groupedLocalities ?? []}
+        linkedTaskIds={selectedTaskGroup?.linkedTaskIds ?? []}
+        linkedLocalities={selectedTaskGroup?.linkedLocalities ?? []}
       />
 
       <Drawer
