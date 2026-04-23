@@ -76,20 +76,17 @@ export class CpcaCommissionService {
    * Garante attemptNumber 1..n e retryRootRequestId coerentes para todas as
    * autoinscrições do candidato na OM (corrige reenvios sem resubmissionOfId).
    */
-  private async alignPresidentSelfRegistrationAttemptChainForOmApplicant(
+  private async alignPresidentSelfRegistrationAttemptChain(
     prisma: Pick<PrismaClient, 'cpcaPresidentSelfRegistration'>,
-    omId: string,
-    applicantUserId: string,
+    where: Prisma.CpcaPresidentSelfRegistrationWhereInput,
   ) {
     const priorSameOmApplicant =
       (await prisma.cpcaPresidentSelfRegistration.findMany({
-        where: {
-          omId,
-          applicantUserId,
-        },
+        where,
         select: {
           id: true,
           retryRootRequestId: true,
+          previousAttemptId: true,
           attemptNumber: true,
           createdAt: true,
         },
@@ -101,23 +98,29 @@ export class CpcaCommissionService {
     const chainRootId =
       String(priorSameOmApplicant[0].retryRootRequestId ?? '').trim() ||
       priorSameOmApplicant[0].id;
+    let previousAttemptId: string | null = null;
     for (let index = 0; index < priorSameOmApplicant.length; index += 1) {
       const row = priorSameOmApplicant[index];
       const wantAttemptNumber = index + 1;
-      const wantRetryRoot =
-        row.id !== chainRootId &&
-        !String(row.retryRootRequestId ?? '').trim()
-          ? chainRootId
-          : null;
+      const wantRetryRoot = index === 0 ? null : chainRootId;
       const patch: {
         attemptNumber?: number;
-        retryRootRequestId?: string;
+        retryRootRequestId?: string | null;
+        previousAttemptId?: string | null;
       } = {};
       if (Number(row.attemptNumber) !== wantAttemptNumber) {
         patch.attemptNumber = wantAttemptNumber;
       }
-      if (wantRetryRoot) {
+      if (
+        (String(row.retryRootRequestId ?? '').trim() || null) !== wantRetryRoot
+      ) {
         patch.retryRootRequestId = wantRetryRoot;
+      }
+      if (
+        (String(row.previousAttemptId ?? '').trim() || null) !==
+        previousAttemptId
+      ) {
+        patch.previousAttemptId = previousAttemptId;
       }
       if (Object.keys(patch).length > 0) {
         await prisma.cpcaPresidentSelfRegistration.update({
@@ -125,6 +128,7 @@ export class CpcaCommissionService {
           data: patch,
         });
       }
+      previousAttemptId = row.id;
     }
   }
 
@@ -179,6 +183,13 @@ export class CpcaCommissionService {
     const user = await this.upsertLdapBackedUser(ldapProfile, ldapLocality.id);
     const applicantName = ldapProfile.name?.trim() || user.name;
     const resubmissionOfId = String(payload.resubmissionOfId ?? '').trim();
+    const attemptChainWhere = this.buildSelfRegistrationAttemptChainWhere({
+      omId: locality.id,
+      applicantUserId: user.id,
+      identifier,
+      applicantUid: ldapProfile.uid,
+      applicantEmail: ldapProfile.email,
+    });
 
     type PriorSelfRegistrationRow = {
       id: string;
@@ -192,10 +203,7 @@ export class CpcaCommissionService {
 
     const priorSameOmApplicant: PriorSelfRegistrationRow[] =
       (await this.prisma.cpcaPresidentSelfRegistration.findMany({
-        where: {
-          omId: locality.id,
-          applicantUserId: user.id,
-        },
+        where: attemptChainWhere,
         select: {
           id: true,
           omId: true,
@@ -222,6 +230,9 @@ export class CpcaCommissionService {
             id: true,
             omId: true,
             applicantUserId: true,
+            applicantIdentifier: true,
+            applicantUid: true,
+            applicantEmail: true,
             status: true,
             retryRootRequestId: true,
             attemptNumber: true,
@@ -231,7 +242,14 @@ export class CpcaCommissionService {
       if (!validatedResubmission) {
         throwError('NOT_FOUND');
       }
-      if (validatedResubmission.applicantUserId !== user.id) {
+      if (
+        !this.isSameSelfRegistrationApplicant(validatedResubmission, {
+          applicantUserId: user.id,
+          identifier,
+          applicantUid: ldapProfile.uid,
+          applicantEmail: ldapProfile.email,
+        })
+      ) {
         throwError('RBAC_FORBIDDEN');
       }
       if (validatedResubmission.omId !== locality.id) {
@@ -285,10 +303,9 @@ export class CpcaCommissionService {
     };
     try {
       created = await this.prisma.$transaction(async (tx) => {
-        await this.alignPresidentSelfRegistrationAttemptChainForOmApplicant(
+        await this.alignPresidentSelfRegistrationAttemptChain(
           tx,
-          locality.id,
-          user.id,
+          attemptChainWhere,
         );
 
         return tx.cpcaPresidentSelfRegistration.create({
@@ -401,12 +418,13 @@ export class CpcaCommissionService {
     const profile = await this.resolveLdapProfile(identifier);
     const militaryIdentity = this.extractMilitaryIdentity(profile.name);
     const locality = await this.resolveOmFromFabOm(profile.fabom);
+    const applicantWhere = this.buildSelfRegistrationApplicantWhere({
+      identifier,
+      applicantUid: profile.uid,
+      applicantEmail: profile.email,
+    });
     const history = await this.prisma.cpcaPresidentSelfRegistration.findMany({
-      where: this.buildSelfRegistrationApplicantWhere({
-        identifier,
-        applicantUid: profile.uid,
-        applicantEmail: profile.email,
-      }),
+      where: applicantWhere,
       include: {
         om: { select: { id: true, code: true, name: true } },
         applicantUser: {
@@ -419,6 +437,13 @@ export class CpcaCommissionService {
       orderBy: [{ createdAt: 'desc' }, { attemptNumber: 'desc' }],
     });
 
+    const serializedHistory = this.serializeSelfRegistrationHistory(history, {
+      includeBulletinFile: false,
+    });
+    const latestHistoryEntry =
+      serializedHistory.length > 0
+        ? serializedHistory[serializedHistory.length - 1]
+        : null;
     const latestRequest = history[0] ?? null;
     const accessGranted =
       latestRequest && latestRequest.omId
@@ -453,15 +478,14 @@ export class CpcaCommissionService {
         : null,
       latestRequest: latestRequest
         ? {
-            ...this.serializeSelfRegistrationHistoryEntry(latestRequest, {
-              includeBulletinFile: false,
-            }),
+            ...(latestHistoryEntry ??
+              this.serializeSelfRegistrationHistoryEntry(latestRequest, {
+                includeBulletinFile: false,
+              })),
             accessGranted,
           }
         : null,
-      history: this.serializeSelfRegistrationHistory(history, {
-        includeBulletinFile: false,
-      }),
+      history: serializedHistory,
       accessGranted,
       canResubmit: latestRequest?.status === 'REJECTED',
       hasPendingRequest: latestRequest?.status === 'PENDING',
@@ -1025,10 +1049,15 @@ export class CpcaCommissionService {
       },
     });
 
-    await this.alignPresidentSelfRegistrationAttemptChainForOmApplicant(
+    await this.alignPresidentSelfRegistrationAttemptChain(
       this.prisma,
-      requestOmId,
-      request.applicantUserId,
+      this.buildSelfRegistrationAttemptChainWhere({
+        omId: requestOmId,
+        applicantUserId: request.applicantUserId,
+        identifier: request.applicantIdentifier,
+        applicantUid: request.applicantUid,
+        applicantEmail: request.applicantEmail,
+      }),
     );
 
     return {
@@ -1088,10 +1117,15 @@ export class CpcaCommissionService {
     });
 
     if (rejected.omId) {
-      await this.alignPresidentSelfRegistrationAttemptChainForOmApplicant(
+      await this.alignPresidentSelfRegistrationAttemptChain(
         this.prisma,
-        rejected.omId,
-        rejected.applicantUserId,
+        this.buildSelfRegistrationAttemptChainWhere({
+          omId: rejected.omId,
+          applicantUserId: rejected.applicantUserId,
+          identifier: rejected.applicantIdentifier,
+          applicantUid: rejected.applicantUid,
+          applicantEmail: rejected.applicantEmail,
+        }),
       );
     }
 
@@ -2701,11 +2735,11 @@ export class CpcaCommissionService {
     };
   }
 
-  private buildSelfRegistrationApplicantWhere(args: {
+  private buildSelfRegistrationApplicantIdentityConditions(args: {
     identifier: string;
     applicantUid: string;
     applicantEmail?: string | null;
-  }): Prisma.CpcaPresidentSelfRegistrationWhereInput {
+  }): Prisma.CpcaPresidentSelfRegistrationWhereInput[] {
     const orConditions: Prisma.CpcaPresidentSelfRegistrationWhereInput[] = [
       { applicantIdentifier: args.identifier },
       { applicantUid: args.applicantUid },
@@ -2714,7 +2748,79 @@ export class CpcaCommissionService {
     if (normalizedEmail) {
       orConditions.push({ applicantEmail: normalizedEmail });
     }
-    return { OR: orConditions };
+    return orConditions;
+  }
+
+  private buildSelfRegistrationAttemptChainWhere(args: {
+    omId: string;
+    applicantUserId?: string | null;
+    identifier: string;
+    applicantUid: string;
+    applicantEmail?: string | null;
+  }): Prisma.CpcaPresidentSelfRegistrationWhereInput {
+    const orConditions = this.buildSelfRegistrationApplicantIdentityConditions({
+      identifier: args.identifier,
+      applicantUid: args.applicantUid,
+      applicantEmail: args.applicantEmail,
+    });
+    const applicantUserId = String(args.applicantUserId ?? '').trim();
+    if (applicantUserId) {
+      orConditions.unshift({ applicantUserId });
+    }
+    return {
+      omId: args.omId,
+      OR: orConditions,
+    };
+  }
+
+  private buildSelfRegistrationApplicantWhere(args: {
+    identifier: string;
+    applicantUid: string;
+    applicantEmail?: string | null;
+  }): Prisma.CpcaPresidentSelfRegistrationWhereInput {
+    return {
+      OR: this.buildSelfRegistrationApplicantIdentityConditions(args),
+    };
+  }
+
+  private isSameSelfRegistrationApplicant(
+    request: {
+      applicantUserId?: string | null;
+      applicantIdentifier?: string | null;
+      applicantUid?: string | null;
+      applicantEmail?: string | null;
+    },
+    applicant: {
+      applicantUserId?: string | null;
+      identifier: string;
+      applicantUid: string;
+      applicantEmail?: string | null;
+    },
+  ) {
+    const applicantUserId = String(applicant.applicantUserId ?? '').trim();
+    if (
+      applicantUserId &&
+      String(request.applicantUserId ?? '').trim() === applicantUserId
+    ) {
+      return true;
+    }
+
+    if (
+      String(request.applicantIdentifier ?? '').trim() === applicant.identifier
+    ) {
+      return true;
+    }
+
+    if (String(request.applicantUid ?? '').trim() === applicant.applicantUid) {
+      return true;
+    }
+
+    const applicantEmail = this.normalizeEmail(applicant.applicantEmail);
+    if (!applicantEmail) {
+      return false;
+    }
+
+    return this.normalizeEmail(request.applicantEmail) === applicantEmail;
   }
 
   private getSelfRegistrationGroupId(request: {
@@ -2794,16 +2900,25 @@ export class CpcaCommissionService {
     }>,
     options?: { includeBulletinFile?: boolean },
   ) {
-    return [...requests]
-      .sort((a, b) => {
-        const attemptDiff =
-          Number(a.attemptNumber ?? 1) - Number(b.attemptNumber ?? 1);
-        if (attemptDiff !== 0) return attemptDiff;
-        return a.createdAt.getTime() - b.createdAt.getTime();
-      })
-      .map((entry) =>
-        this.serializeSelfRegistrationHistoryEntry(entry, options),
-      );
+    const sortedRequests = [...requests].sort((a, b) => {
+      const createdAtDiff = a.createdAt.getTime() - b.createdAt.getTime();
+      if (createdAtDiff !== 0) return createdAtDiff;
+      return Number(a.attemptNumber ?? 1) - Number(b.attemptNumber ?? 1);
+    });
+
+    return sortedRequests.map((entry, index) =>
+      this.serializeSelfRegistrationHistoryEntry(
+        {
+          ...entry,
+          retryRootRequestId:
+            index === 0
+              ? null
+              : (sortedRequests[0].retryRootRequestId ?? sortedRequests[0].id),
+          attemptNumber: index + 1,
+        },
+        options,
+      ),
+    );
   }
 
   private async loadSelfRegistrationHistoryByGroupId(groupIdsRaw: string[]) {

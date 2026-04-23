@@ -7,7 +7,7 @@ import {
 } from "./cpcaSelfRegistrationStatus";
 
 describe("cpcaSelfRegistrationStatus helpers", () => {
-  it("ordena o histórico da tentativa mais recente para a mais antiga", () => {
+  it("ordena o histórico da tentativa mais antiga para a mais recente", () => {
     const sorted = sortCpcaSelfRegistrationHistory([
       {
         id: "req-1",
@@ -27,7 +27,7 @@ describe("cpcaSelfRegistrationStatus helpers", () => {
       },
     ]);
 
-    expect(sorted.map((entry) => entry.id)).toEqual(["req-2", "req-1"]);
+    expect(sorted.map((entry) => entry.id)).toEqual(["req-1", "req-2"]);
   });
 
   it("gera o resumo correto para homologação aprovada com acesso liberado", () => {

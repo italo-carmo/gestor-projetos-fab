@@ -49,10 +49,10 @@ export function sortCpcaSelfRegistrationHistory<
 >(items: T[] | null | undefined) {
   return [...(items ?? [])].sort((left, right) => {
     const attemptDiff =
-      Number(right.attemptNumber ?? 1) - Number(left.attemptNumber ?? 1);
+      Number(left.attemptNumber ?? 1) - Number(right.attemptNumber ?? 1);
     if (attemptDiff !== 0) return attemptDiff;
     return (
-      new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+      new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
     );
   });
 }
