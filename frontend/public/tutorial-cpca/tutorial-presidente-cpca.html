@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tutorial do Presidente CPCA</title>
+    <style>
+      :root {
+        --ink: #102938;
+        --muted: #526b79;
+        --soft: #eef6f9;
+        --line: #d8e5eb;
+        --brand: #006b82;
+        --brand-2: #0f3d4b;
+        --accent: #eaf7fb;
+        --warning: #fff4df;
+        --warning-ink: #7a4300;
+        --paper: #ffffff;
+        --shadow: 0 24px 70px rgba(12, 42, 56, 0.14);
+        --radius: 18px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Arial,
+          sans-serif;
+        line-height: 1.58;
+        background:
+          radial-gradient(
+            circle at top left,
+            rgba(0, 107, 130, 0.16),
+            transparent 34rem
+          ),
+          linear-gradient(180deg, #f5fbfd 0%, #eef6f9 42%, #f8fbfc 100%);
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        justify-content: center;
+        padding: 12px 18px;
+        backdrop-filter: blur(16px);
+        background: rgba(245, 251, 253, 0.86);
+        border-bottom: 1px solid rgba(216, 229, 235, 0.9);
+      }
+
+      .toolbar-inner {
+        width: min(1120px, 100%);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .toolbar-title {
+        font-size: 14px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .print-button {
+        appearance: none;
+        border: 1px solid rgba(0, 107, 130, 0.22);
+        border-radius: 999px;
+        padding: 10px 16px;
+        background: var(--brand);
+        color: white;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 8px 22px rgba(0, 107, 130, 0.2);
+      }
+
+      .print-button:hover {
+        background: var(--brand-2);
+      }
+
+      .document {
+        width: min(1120px, calc(100% - 36px));
+        margin: 28px auto 64px;
+      }
+
+      .cover {
+        min-height: 720px;
+        display: grid;
+        align-items: end;
+        padding: 54px;
+        border-radius: 30px;
+        color: white;
+        overflow: hidden;
+        position: relative;
+        background:
+          linear-gradient(
+            135deg,
+            rgba(6, 69, 86, 0.96),
+            rgba(0, 107, 130, 0.86)
+          ),
+          url("prints/07-presidente-menu-cpca-producao.png") center / cover
+            no-repeat;
+        box-shadow: var(--shadow);
+      }
+
+      .cover::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(
+            90deg,
+            rgba(5, 38, 48, 0.98) 0%,
+            rgba(5, 38, 48, 0.82) 44%,
+            rgba(5, 38, 48, 0.32) 100%
+          ),
+          linear-gradient(0deg, rgba(5, 38, 48, 0.55), rgba(5, 38, 48, 0.12));
+      }
+
+      .cover-content {
+        position: relative;
+        max-width: 720px;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        border-radius: 999px;
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      h1 {
+        margin: 24px 0 16px;
+        font-size: clamp(44px, 7vw, 76px);
+        line-height: 0.96;
+        letter-spacing: 0;
+      }
+
+      .lead {
+        font-size: 20px;
+        max-width: 680px;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 36px;
+      }
+
+      .meta-card {
+        padding: 16px;
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.09);
+      }
+
+      .meta-label {
+        display: block;
+        color: rgba(255, 255, 255, 0.72);
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .meta-value {
+        display: block;
+        margin-top: 5px;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .content-grid {
+        display: grid;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 26px;
+        margin-top: 28px;
+      }
+
+      .side-index {
+        position: sticky;
+        top: 76px;
+        align-self: start;
+        padding: 20px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: 0 14px 42px rgba(12, 42, 56, 0.08);
+      }
+
+      .side-index h2 {
+        margin: 0 0 12px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      .side-index ol {
+        margin: 0;
+        padding-left: 19px;
+      }
+
+      .side-index li {
+        margin: 9px 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .side-index a {
+        color: var(--muted);
+        text-decoration: none;
+      }
+
+      .side-index a:hover {
+        color: var(--brand);
+      }
+
+      main {
+        display: grid;
+        gap: 22px;
+      }
+
+      .section {
+        padding: 30px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 18px 54px rgba(12, 42, 56, 0.08);
+      }
+
+      .section-header {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+        margin-bottom: 18px;
+      }
+
+      .step-number {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        background: var(--brand);
+        color: white;
+        font-weight: 900;
+        box-shadow: 0 10px 20px rgba(0, 107, 130, 0.22);
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 27px;
+        line-height: 1.16;
+        letter-spacing: 0;
+      }
+
+      h3 {
+        margin: 26px 0 8px;
+        font-size: 20px;
+        line-height: 1.2;
+      }
+
+      p {
+        margin: 10px 0;
+        color: var(--muted);
+      }
+
+      strong {
+        color: var(--ink);
+      }
+
+      .callout {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr);
+        gap: 13px;
+        padding: 16px;
+        margin: 18px 0;
+        border-radius: 16px;
+        border: 1px solid #f3d7a1;
+        background: var(--warning);
+        color: var(--warning-ink);
+      }
+
+      .callout p {
+        margin: 0;
+        color: var(--warning-ink);
+      }
+
+      .info {
+        border-color: #b8dce7;
+        background: #e8f7fb;
+      }
+
+      .info p {
+        color: #17495a;
+      }
+
+      .icon-badge {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        font-weight: 900;
+        background: rgba(0, 107, 130, 0.12);
+        color: var(--brand);
+      }
+
+      .checklist {
+        display: grid;
+        gap: 10px;
+        margin: 16px 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .checklist li {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr);
+        gap: 10px;
+        align-items: start;
+        color: var(--muted);
+      }
+
+      .checklist li::before {
+        content: "";
+        width: 20px;
+        height: 20px;
+        margin-top: 2px;
+        border-radius: 7px;
+        background: linear-gradient(135deg, var(--brand), #1f9bb5);
+        box-shadow: inset 0 0 0 5px rgba(255, 255, 255, 0.9);
+      }
+
+      .setup-steps {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin: 18px 0 20px;
+      }
+
+      .setup-step {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr);
+        gap: 12px;
+        align-items: start;
+        padding: 15px;
+        border: 1px solid #c7e6ef;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #f8fdff, #eaf7fb);
+        break-inside: avoid;
+      }
+
+      .setup-step-number {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        display: grid;
+        place-items: center;
+        color: white;
+        background: var(--brand);
+        font-weight: 900;
+        line-height: 1;
+      }
+
+      .setup-step-title {
+        margin: 0 0 4px;
+        color: var(--ink);
+        font-weight: 900;
+        line-height: 1.25;
+      }
+
+      .setup-step p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .no-break {
+        white-space: nowrap;
+      }
+
+      .screen {
+        margin: 22px 0 6px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        overflow: hidden;
+        background: #f7fbfc;
+        break-inside: avoid;
+      }
+
+      .screen img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .caption {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 14px;
+        color: var(--muted);
+        border-top: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.88);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .subsection {
+        margin-top: 24px;
+        padding-top: 20px;
+        border-top: 1px solid var(--line);
+      }
+
+      .pill-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 16px 0;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: var(--accent);
+        border: 1px solid #c7e6ef;
+        color: #164d5d;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .footer-note {
+        margin: 26px 0 0;
+        padding: 18px 20px;
+        border-radius: var(--radius);
+        background: var(--ink);
+        color: rgba(255, 255, 255, 0.86);
+      }
+
+      .footer-note p {
+        color: rgba(255, 255, 255, 0.86);
+      }
+
+      .footer-note strong {
+        color: white;
+      }
+
+      @media (max-width: 920px) {
+        .cover {
+          min-height: 620px;
+          padding: 34px;
+        }
+
+        .meta-grid,
+        .content-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .side-index {
+          position: static;
+        }
+
+        .setup-steps {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media print {
+        @page {
+          size: A4;
+          margin: 12mm;
+        }
+
+        body {
+          background: white;
+          color: #000;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .toolbar,
+        .side-index {
+          display: none !important;
+        }
+
+        .document {
+          width: 100%;
+          margin: 0;
+        }
+
+        .cover {
+          min-height: 257mm;
+          border-radius: 0;
+          box-shadow: none;
+          page-break-after: always;
+        }
+
+        .content-grid {
+          display: block;
+          margin-top: 0;
+        }
+
+        .section {
+          box-shadow: none;
+          border-radius: 12px;
+          margin: 0 0 12mm;
+          page-break-inside: avoid;
+        }
+
+        .section.major {
+          page-break-before: always;
+        }
+
+        .screen {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+
+        .screen img {
+          max-height: 165mm;
+          object-fit: contain;
+        }
+
+        .setup-steps {
+          grid-template-columns: repeat(2, minmax(68mm, 1fr));
+          gap: 4mm;
+        }
+
+        .setup-step {
+          padding: 4mm;
+        }
+
+        h1,
+        h2,
+        h3 {
+          page-break-after: avoid;
+        }
+
+        p,
+        li {
+          orphans: 3;
+          widows: 3;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar" aria-hidden="true">
+      <div class="toolbar-inner">
+        <div class="toolbar-title">Tutorial do Presidente CPCA</div>
+        <button class="print-button" type="button" onclick="window.print()">
+          Imprimir ou salvar em PDF
+        </button>
+      </div>
+    </div>
+
+    <div class="document">
+      <section class="cover">
+        <div class="cover-content">
+          <span class="eyebrow">Gestor CIPAVD · CPCA</span>
+          <h1>Tutorial do Presidente CPCA</h1>
+          <p class="lead">
+            Passo a passo visual para solicitar a presidência da CPCA,
+            acompanhar a homologação, configurar 2FA, operar a comissão e
+            registrar denúncias no sistema e resolver pendências apontadas pela
+            gestão nacional.
+          </p>
+          <div class="meta-grid">
+            <div class="meta-card">
+              <span class="meta-label">Como acessar</span>
+              <span class="meta-value">http://cipavd.ccabr.intraer/</span>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Público</span>
+              <span class="meta-value">Presidente CPCA</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="content-grid">
+        <aside class="side-index">
+          <h2>Sumário</h2>
+          <ol>
+            <li><a href="#cadastro">Solicitar cadastro</a></li>
+            <li><a href="#status">Acompanhar homologação</a></li>
+            <li><a href="#dois-fatores">Configurar 2FA</a></li>
+            <li><a href="#modulo">Acessar módulo CPCA</a></li>
+            <li><a href="#checklist">Preencher checklist</a></li>
+            <li><a href="#cobertura">Cadastrar OMs gerenciadas</a></li>
+            <li><a href="#membros">Cadastrar membros</a></li>
+            <li><a href="#denuncia">Cadastrar denúncia</a></li>
+            <li><a href="#pendencia-comgep">Resolver pendência COMGEP</a></li>
+          </ol>
+        </aside>
+
+        <main>
+          <section class="section major" id="cadastro">
+            <div class="section-header">
+              <div class="step-number">1</div>
+              <div>
+                <h2>Solicitar cadastro como presidente CPCA</h2>
+                <p>
+                  Na tela de login, clique em <strong>Presidência CPCA</strong>.
+                </p>
+              </div>
+            </div>
+
+            <figure class="screen">
+              <img
+                src="prints/01-login-producao.png"
+                alt="Tela de login com botão Presidência CPCA"
+              />
+              <figcaption class="caption">
+                <span>Tela de login</span><span>Produção</span>
+              </figcaption>
+            </figure>
+
+            <p>
+              Na aba <strong>Solicitar</strong>, preencha o e-mail ou CPF,
+              clique em <strong>Buscar</strong> e confira os dados retornados.
+              Depois informe se é substituição, preencha o número do boletim e
+              anexe a publicação em PDF, PNG ou JPG.
+            </p>
+            <p>
+              Após revisar os dados, clique em
+              <strong>Enviar para homologação</strong>.
+            </p>
+
+            <figure class="screen">
+              <img
+                src="prints/02-autocadastro-solicitar-preenchido.png"
+                alt="Formulário de solicitação de presidência CPCA preenchido"
+              />
+              <figcaption class="caption">
+                <span>Solicitação preenchida</span
+                ><span>Enviar para homologação</span>
+              </figcaption>
+            </figure>
+          </section>
+
+          <section class="section" id="status">
+            <div class="section-header">
+              <div class="step-number">2</div>
+              <div>
+                <h2>Acompanhar a homologação</h2>
+                <p>
+                  Enquanto o COMGEP não aprovar a solicitação, volte ao botão
+                  <strong>Presidência CPCA</strong>, abra a aba
+                  <strong>Acompanhar</strong>, informe CPF ou e-mail e clique em
+                  <strong>Consultar</strong>.
+                </p>
+              </div>
+            </div>
+
+            <p>
+              O sistema mostra o status mais recente, o histórico de tentativas
+              e, se houver rejeição, o motivo para correção e reenvio.
+            </p>
+
+            <figure class="screen">
+              <img
+                src="prints/03-autocadastro-acompanhar-status.png"
+                alt="Consulta de status da solicitação de presidência CPCA"
+              />
+              <figcaption class="caption">
+                <span>Consulta de status</span><span>Acompanhar</span>
+              </figcaption>
+            </figure>
+          </section>
+
+          <section class="section major" id="dois-fatores">
+            <div class="section-header">
+              <div class="step-number">3</div>
+              <div>
+                <h2>Primeiro login e cadastro do 2FA</h2>
+                <p>
+                  Depois da homologação, o presidente faz login com CPF e senha.
+                  No primeiro acesso, o sistema solicita a configuração da
+                  autenticação em dois fatores.
+                </p>
+              </div>
+            </div>
+
+            <div class="setup-steps" aria-label="Passos para ativar o 2FA">
+              <div class="setup-step">
+                <div class="setup-step-number">1</div>
+                <div>
+                  <p class="setup-step-title">Baixe o aplicativo</p>
+                  <p>
+                    Instale o
+                    <strong class="no-break">Google Authenticator</strong> no
+                    celular.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">2</div>
+                <div>
+                  <p class="setup-step-title">Escaneie o QR Code</p>
+                  <p>
+                    Aponte a câmera do aplicativo para o código exibido pelo
+                    sistema.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">3</div>
+                <div>
+                  <p class="setup-step-title">Digite o código</p>
+                  <p>Informe o código de 6 dígitos gerado no aplicativo.</p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">4</div>
+                <div>
+                  <p class="setup-step-title">Ative a proteção</p>
+                  <p>
+                    Clique em
+                    <strong class="no-break">Confirmar e Ativar</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <figure class="screen">
+              <img
+                src="prints/04-2fa-cadastro-qr-code.png"
+                alt="Tela de cadastro do 2FA com QR Code"
+              />
+              <figcaption class="caption">
+                <span>Cadastro do 2FA</span><span>Google Authenticator</span>
+              </figcaption>
+            </figure>
+
+            <p>
+              Depois da ativação, o sistema exibe códigos de recuperação. Guarde
+              esses códigos em local seguro, marque a confirmação e conclua o
+              acesso.
+            </p>
+
+            <figure class="screen">
+              <img
+                src="prints/05-2fa-codigos-recuperacao.png"
+                alt="Tela com códigos de recuperação do 2FA"
+              />
+              <figcaption class="caption">
+                <span>Códigos de recuperação</span
+                ><span>Guardar em local seguro</span>
+              </figcaption>
+            </figure>
+          </section>
+
+          <section class="section" id="modulo">
+            <div class="section-header">
+              <div class="step-number">4</div>
+              <div>
+                <h2>Acessar o módulo CPCA</h2>
+                <p>
+                  Com o papel <strong>CPCA</strong> ativo, o presidente acessa o
+                  bloco <strong>CPCA</strong> no menu lateral.
+                </p>
+              </div>
+            </div>
+
+            <div class="pill-row">
+              <span class="pill">Denúncias</span>
+              <span class="pill">Comissão CPCA</span>
+            </div>
+
+            <figure class="screen">
+              <img
+                src="prints/07-presidente-menu-cpca-producao.png"
+                alt="Menu lateral mostrando o bloco CPCA com Denúncias e Comissão CPCA"
+              />
+              <figcaption class="caption">
+                <span>Bloco CPCA</span><span>Papel ativo CPCA</span>
+              </figcaption>
+            </figure>
+          </section>
+
+          <section class="section major" id="checklist">
+            <div class="section-header">
+              <div class="step-number">5</div>
+              <div>
+                <h2>Preencher o checklist da comissão</h2>
+                <p>
+                  Acesse <strong>CPCA &gt; Comissão CPCA</strong> e abra a aba
+                  <strong>Checklist</strong>. Nessa aba, acompanhe o progresso
+                  geral e registre as ações executadas pela comissão da OM.
+                </p>
+              </div>
+            </div>
+
+            <div
+              class="setup-steps"
+              aria-label="Passos para preencher o checklist da comissão"
+            >
+              <div class="setup-step">
+                <div class="setup-step-number">1</div>
+                <div>
+                  <p class="setup-step-title">Abra o item</p>
+                  <p>Clique na seta do item que deseja atualizar.</p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">2</div>
+                <div>
+                  <p class="setup-step-title">Preencha itens diretos</p>
+                  <p>
+                    Em e-mail e página Intraer, selecione <strong>Sim</strong>,
+                    informe a data e preencha o campo solicitado.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">3</div>
+                <div>
+                  <p class="setup-step-title">Registre as ações</p>
+                  <p>
+                    Em palestra, seminário, materiais, mensagens, pop-ups e
+                    apresentação, clique em
+                    <strong>Adicionar registro</strong>.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">4</div>
+                <div>
+                  <p class="setup-step-title">Salve o checklist</p>
+                  <p>
+                    Revise os lançamentos e clique em
+                    <strong>Salvar checklist</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <figure class="screen">
+              <img
+                src="prints/08-comissao-checklist-visao-producao.png"
+                alt="Tela do checklist da comissão CPCA"
+              />
+              <figcaption class="caption">
+                <span>Checklist da comissão</span><span>Salvar checklist</span>
+              </figcaption>
+            </figure>
+          </section>
+
+          <section class="section" id="cobertura">
+            <div class="section-header">
+              <div class="step-number">6</div>
+              <div>
+                <h2>Cadastrar OMs gerenciadas pela CPCA</h2>
+                <p>
+                  Ainda em <strong>Comissão CPCA</strong>, abra a aba
+                  <strong>Cobertura</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div class="callout info">
+              <div class="icon-badge">i</div>
+              <p>
+                Use esta tela quando a sua OM for responsável por receber e
+                apurar denúncias de outras OMs.
+              </p>
+            </div>
+
+            <p>
+              Selecione as OMs adicionais que serão atendidas pela sua CPCA. A
+              própria OM permanece vinculada automaticamente e não precisa ser
+              cadastrada novamente.
+            </p>
+            <p>
+              Depois de selecionar as OMs, clique em
+              <strong>Salvar cobertura</strong>.
+            </p>
+
+            <figure class="screen">
+              <img
+                src="prints/09-comissao-cobertura-producao.png"
+                alt="Tela de cobertura da comissão CPCA"
+              />
+              <figcaption class="caption">
+                <span>Cobertura da comissão</span><span>OMs adicionais</span>
+              </figcaption>
+            </figure>
+          </section>
+
+          <section class="section" id="membros">
+            <div class="section-header">
+              <div class="step-number">7</div>
+              <div>
+                <h2>Cadastrar membros da comissão</h2>
+                <p>
+                  Abra a aba <strong>Membros</strong>, informe o e-mail ou CPF
+                  do militar e clique em <strong>Adicionar membro</strong>.
+                </p>
+              </div>
+            </div>
+
+            <p>
+              O sistema localiza o militar. Os membros cadastrados passam a
+              aparecer na tabela abaixo do campo de inclusão.
+            </p>
+
+            <figure class="screen">
+              <img
+                src="prints/10-comissao-membros-producao.png"
+                alt="Tela para cadastrar membros da comissão CPCA"
+              />
+              <figcaption class="caption">
+                <span>Membros da comissão</span><span>Adicionar membro</span>
+              </figcaption>
+            </figure>
+          </section>
+
+          <section class="section major" id="denuncia">
+            <div class="section-header">
+              <div class="step-number">8</div>
+              <div>
+                <h2>Cadastrar uma nova denúncia</h2>
+                <p>
+                  Acesse <strong>CPCA &gt; Denúncias</strong> e clique em
+                  <strong>Nova notificação</strong>.
+                </p>
+              </div>
+            </div>
+
+            <figure class="screen">
+              <img
+                src="prints/11-denuncias-lista-producao.png"
+                alt="Tela de listagem de denúncias CPCA"
+              />
+              <figcaption class="caption">
+                <span>Tela de denúncias</span><span>Nova notificação</span>
+              </figcaption>
+            </figure>
+
+            <div class="subsection">
+              <h3>Etapa 1: Notificação e fato</h3>
+              <p>
+                Preencha a OM, o tipo de assédio ou violência, o noticiante, as
+                datas, o local da ocorrência, os dados genéricos do acusado e da
+                vítima, a frequência, a relação funcional, a forma de ocorrência
+                e o resumo do fato.
+              </p>
+              <div class="callout">
+                <div class="icon-badge">!</div>
+                <p>
+                  Use apenas dados genéricos. Não informe nomes de pessoas no
+                  resumo.
+                </p>
+              </div>
+              <figure class="screen">
+                <img
+                  src="prints/12-denuncia-nova-etapa1-preenchida.png"
+                  alt="Nova denúncia CPCA na etapa 1"
+                />
+                <figcaption class="caption">
+                  <span>Etapa 1</span><span>Notificação e fato</span>
+                </figcaption>
+              </figure>
+            </div>
+
+            <div class="subsection">
+              <h3>Etapa 2: Acolhimento e proteção</h3>
+              <p>
+                Registre as medidas imediatas tomadas pela comissão, como
+                acolhimento, orientação, suporte psicológico, suporte social,
+                restrição de contato e termo de sigilo. Depois clique em
+                <strong>Próxima etapa</strong>.
+              </p>
+              <figure class="screen">
+                <img
+                  src="prints/13-denuncia-nova-etapa2-preenchida.png"
+                  alt="Nova denúncia CPCA na etapa 2"
+                />
+                <figcaption class="caption">
+                  <span>Etapa 2</span><span>Acolhimento e proteção</span>
+                </figcaption>
+              </figure>
+            </div>
+
+            <div class="subsection">
+              <h3>Etapa 3: Triagem e apuração</h3>
+              <p>
+                Informe o status da triagem, o procedimento administrativo, a
+                situação atual do procedimento, a referência do processo e a
+                data do relatório. Depois clique em
+                <strong>Próxima etapa</strong>.
+              </p>
+              <figure class="screen">
+                <img
+                  src="prints/14-denuncia-nova-etapa3-preenchida.png"
+                  alt="Nova denúncia CPCA na etapa 3"
+                />
+                <figcaption class="caption">
+                  <span>Etapa 3</span><span>Triagem e apuração</span>
+                </figcaption>
+              </figure>
+            </div>
+
+            <div class="subsection">
+              <h3>Etapa 4: Condução e encerramento</h3>
+              <p>
+                Registre a situação final ou atual, a medida de separação
+                vítima/acusado, eventual retaliação, retornos ao noticiante e à
+                vítima, e a síntese do resultado.
+              </p>
+              <p>
+                Revise todas as informações. Quando estiver tudo correto, clique
+                em <strong>Criar notificação</strong>
+                para salvar a denúncia.
+              </p>
+              <figure class="screen">
+                <img
+                  src="prints/15-denuncia-nova-etapa4-preenchida.png"
+                  alt="Nova denúncia CPCA na etapa 4"
+                />
+                <figcaption class="caption">
+                  <span>Etapa 4</span><span>Condução e encerramento</span>
+                </figcaption>
+              </figure>
+            </div>
+          </section>
+
+          <section class="section major" id="pendencia-comgep">
+            <div class="section-header">
+              <div class="step-number">9</div>
+              <div>
+                <h2>Resolver pendência criada pelo COMGEP</h2>
+                <p>
+                  Depois que a denúncia é cadastrada, o COMGEP pode verificar o
+                  registro e analisar se existem inconsistências ou informações
+                  que precisam ser complementadas.
+                </p>
+              </div>
+            </div>
+
+            <div
+              class="setup-steps"
+              aria-label="Passos para resolver pendência do COMGEP"
+            >
+              <div class="setup-step">
+                <div class="setup-step-number">1</div>
+                <div>
+                  <p class="setup-step-title">Identifique a pendência</p>
+                  <p>
+                    A denúncia aparece com o marcador
+                    <strong>Pendência</strong> na lista.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">2</div>
+                <div>
+                  <p class="setup-step-title">Abra o caso</p>
+                  <p>
+                    Clique na denúncia e vá até
+                    <strong>Comentários da CIPAVD</strong>.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">3</div>
+                <div>
+                  <p class="setup-step-title">Responda a orientação</p>
+                  <p>
+                    Em <strong>Resposta da comissão</strong>, descreva o ajuste
+                    realizado ou a justificativa da CPCA.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">4</div>
+                <div>
+                  <p class="setup-step-title">Envie para validação</p>
+                  <p>
+                    Clique em <strong>Responder e resolver</strong>. A pendência
+                    retorna para validação do COMGEP.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <figure class="screen">
+              <img
+                src="prints/16-denuncia-pendencia-aberta-producao.png"
+                alt="Denúncia CPCA com pendência aberta pelo COMGEP"
+              />
+              <figcaption class="caption">
+                <span>Pendência aberta</span><span>Comentários da CIPAVD</span>
+              </figcaption>
+            </figure>
+
+            <figure class="screen">
+              <img
+                src="prints/17-denuncia-resolver-pendencia-producao.png"
+                alt="Resposta da comissão para resolver pendência da denúncia"
+              />
+              <figcaption class="caption">
+                <span>Resposta da comissão</span
+                ><span>Responder e resolver</span>
+              </figcaption>
+            </figure>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

@@ -10,15 +10,18 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  IconButton,
   Tab,
   Tabs,
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import ImageRoundedIcon from "@mui/icons-material/ImageRounded";
@@ -50,6 +53,9 @@ import {
   type CpcaSelfRegistrationAttempt,
   type CpcaSelfRegistrationStatusLookupResult,
 } from "../features/cpcaSelfRegistrationStatus";
+
+const CPCA_PRESIDENT_TUTORIAL_URL =
+  "/tutorial-cpca/tutorial-presidente-cpca.html";
 
 type TwoFactorState = {
   twoFactorToken: string;
@@ -793,13 +799,40 @@ export function LoginPage() {
               >
                 {loginMutation.isPending ? "Entrando..." : "Entrar"}
               </Button>
-              <Button
-                variant="text"
-                onClick={openCpcaSelfRegistrationDialog}
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="center"
+                spacing={0.5}
                 sx={{ mt: 0.4 }}
               >
-                Presidência CPCA
-              </Button>
+                <Button
+                  variant="text"
+                  onClick={openCpcaSelfRegistrationDialog}
+                  sx={{ minWidth: 0 }}
+                >
+                  Presidência CPCA
+                </Button>
+                <Tooltip title="Abrir tutorial de cadastro">
+                  <IconButton
+                    component="a"
+                    href={CPCA_PRESIDENT_TUTORIAL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    size="small"
+                    aria-label="Abrir tutorial de cadastro da Presidência CPCA"
+                    sx={{
+                      color: "text.secondary",
+                      "&:hover": {
+                        bgcolor: "action.hover",
+                        color: "primary.main",
+                      },
+                    }}
+                  >
+                    <HelpOutlineRoundedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
             </Box>
           </CardContent>
         </Card>
