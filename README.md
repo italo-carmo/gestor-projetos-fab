@@ -119,13 +119,20 @@ npm run e2e
 node scripts/generate-client.ts full
 ```
 
-## Deploy (produção)
-Produção atual (servidor `172.16.31.178`) não usa fluxo Docker deste repositório.
+## Deploy (ambientes oficiais)
+Regra fixa de ambientes:
+- **Desenvolvimento:** `172.16.31.177`
+- **Produção:** `172.16.31.178`
+
+Antes de qualquer deploy, confirme explicitamente o ambiente solicitado. Nunca use o servidor de produção (`172.16.31.178`) para um deploy de desenvolvimento.
+
+Os servidores atuais não usam o fluxo Docker deste repositório.
 
 Use o tutorial oficial:
+- [`DEPLOY_DESENVOLVIMENTO.md`](./DEPLOY_DESENVOLVIMENTO.md)
 - [`DEPLOY_PRODUCAO.md`](./DEPLOY_PRODUCAO.md)
 
-Resumo:
+Resumo do fluxo sem Docker:
 1) atualizar `/home/sddm/gestor-projetos-fab` via `git pull`
 2) sincronizar para `/opt/gestao-projetos`
 3) build backend/frontend em `/opt/gestao-projetos`
@@ -143,9 +150,11 @@ psql -h localhost -U postgres smif_gestao < backup.sql
 ```
 
 ## Procedimentos de atualização
-1) `git pull`
-2) `docker compose -f docker-compose.prod.yml up -d --build`
-3) `npm run prisma:migrate`
+Para os servidores oficiais, use sempre os documentos de deploy sem Docker:
+- Desenvolvimento: [`DEPLOY_DESENVOLVIMENTO.md`](./DEPLOY_DESENVOLVIMENTO.md) (`172.16.31.177`)
+- Produção: [`DEPLOY_PRODUCAO.md`](./DEPLOY_PRODUCAO.md) (`172.16.31.178`)
+
+O fluxo Docker é legado/local e não deve ser usado para publicar nos servidores `172.16.31.177` ou `172.16.31.178`.
 
 ## Manual rápido
 - TI: Admin RBAC, usuários, localidades, especialidades, auditoria.

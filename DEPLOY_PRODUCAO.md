@@ -2,6 +2,12 @@
 
 Fluxo oficial para publicar no servidor `172.16.31.178`, evitando divergencia entre pasta de codigo e pasta realmente servida.
 
+**Regra fixa de ambientes:**
+- Desenvolvimento: `172.16.31.177`
+- Producao: `172.16.31.178`
+
+Antes de executar qualquer comando, confirme que a solicitacao e de **producao**. Se a solicitacao for de desenvolvimento, use [`DEPLOY_DESENVOLVIMENTO.md`](./DEPLOY_DESENVOLVIMENTO.md). Nunca use `172.16.31.178` para deploy de desenvolvimento.
+
 ## Topologia real de producao
 - Host: `172.16.31.178`
 - Usuario: `root`
@@ -11,9 +17,11 @@ Fluxo oficial para publicar no servidor `172.16.31.178`, evitando divergencia en
 - Frontend: Nginx com `root /opt/gestao-projetos/frontend/dist`
 
 ## Checklist rapido antes de deploy
-1. Confirmar commit esperado em `origin/main`.
-2. Garantir acesso SSH ao servidor com usuario `root`.
-3. Fazer deploy sempre para `/opt/gestao-projetos` (nao apenas em `/home/sddm/...`).
+1. Confirmar que o deploy solicitado e para **producao**.
+2. Confirmar commit esperado em `origin/main`.
+3. Garantir acesso SSH ao servidor `172.16.31.178` com usuario `root`.
+4. Fazer deploy sempre para `/opt/gestao-projetos` (nao apenas em `/home/sddm/...`).
+5. Nao usar `172.16.31.177` neste fluxo.
 
 ## Deploy completo (passo a passo)
 
@@ -93,7 +101,7 @@ Esperado: sem referencia fixa de API local para producao.
 
 ## Comando unico (copiar e colar)
 ```bash
-ssh root@172.16.31.178 '
+ssh root@172.16.31.178 'bash -s' <<'REMOTE'
 set -e
 cd /home/sddm/gestor-projetos-fab
 git checkout main
@@ -126,7 +134,7 @@ sleep 3
 curl -s -o /dev/null -w "HEALTH=%{http_code}\n" http://127.0.0.1:3000/health
 curl -s -o /dev/null -w "ROOT=%{http_code}\n" http://127.0.0.1/
 stat -c "FRONT index.html %y" /opt/gestao-projetos/frontend/dist/index.html
-'
+REMOTE
 ```
 
 ## Troubleshooting
