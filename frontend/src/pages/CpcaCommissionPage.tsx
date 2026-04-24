@@ -13,12 +13,14 @@ import {
   LinearProgress,
   MenuItem,
   Stack,
+  Tab,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  Tabs,
   TextField,
   Typography,
 } from "@mui/material";
@@ -158,6 +160,15 @@ type ChecklistLocalityResponse = {
   userIsPresident: boolean;
 };
 
+type CommissionTab =
+  | "resumo"
+  | "checklist"
+  | "cobertura"
+  | "membros"
+  | "pendencias"
+  | "presidencia"
+  | "historico";
+
 function extractReason(error: unknown) {
   const responseData = (
     error as { response?: { data?: { details?: { reason?: string } } } }
@@ -281,6 +292,7 @@ export function CpcaCommissionPage() {
     useState(true);
   const [memberIdentifier, setMemberIdentifier] = useState("");
   const [managedLocalityIds, setManagedLocalityIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<CommissionTab>("resumo");
   const [pendingPresidentOverwrite, setPendingPresidentOverwrite] = useState<{
     identifier: string;
     localityId: string;
@@ -373,6 +385,7 @@ export function CpcaCommissionPage() {
   const canNominatePresident = Boolean(
     overviewQuery.data?.canNominatePresident,
   );
+  const canManagePresidentFlow = canAssignPresident || canNominatePresident;
   const canManageCoverage = Boolean(overviewQuery.data?.canManageCoverage);
   const managesCoverageByApproval = Boolean(
     overviewQuery.data?.managesCoverageByApproval,
@@ -449,6 +462,12 @@ export function CpcaCommissionPage() {
       setSelectedLocalityId(resolvedLocalityId);
     }
   }, [isApprover, locality?.id, ownLocalityId, selectedLocalityId]);
+
+  useEffect(() => {
+    if (activeTab === "presidencia" && !canManagePresidentFlow) {
+      setActiveTab("resumo");
+    }
+  }, [activeTab, canManagePresidentFlow]);
 
   useEffect(() => {
     setManagedLocalityIds(managedLocalities.map((item) => item.id));
@@ -958,923 +977,993 @@ export function CpcaCommissionPage() {
                   )}
                 </TextField>
               </Stack>
-
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: {
-                    xs: "1fr",
-                    sm: "repeat(2, minmax(0, 1fr))",
-                    xl: "repeat(4, minmax(0, 1fr))",
-                  },
-                  gap: 1,
-                }}
-              >
-                <Box
-                  sx={{
-                    p: 1.5,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1.5,
-                    bgcolor: "background.default",
-                  }}
-                >
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <WorkspacePremiumRoundedIcon
-                      sx={{ color: "primary.main", fontSize: 20 }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      Presidente atual
-                    </Typography>
-                  </Stack>
-                  <Typography
-                    variant="body2"
-                    fontWeight={800}
-                    sx={{ mt: 0.75 }}
-                  >
-                    {currentPresident?.user?.name ?? "Não designado"}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {currentPresident
-                      ? `${currentPresident.assignmentSourceLabel ?? "Origem não identificada"}${currentPresident.assignedByUser?.name ? ` por ${currentPresident.assignedByUser.name}` : ""}`
-                      : "Aguardando designação"}
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{
-                    p: 1.5,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1.5,
-                    bgcolor: "background.default",
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    Boletim
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight={800}
-                    sx={{ mt: 0.75 }}
-                  >
-                    Boletim atual:{" "}
-                    {currentPresident?.designationBulletin || "Não informado"}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {currentPresident
-                      ? `Registrado em ${formatDateTime(currentPresident.assignedAt)}`
-                      : "Sem registro de publicação"}
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{
-                    p: 1.5,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1.5,
-                    bgcolor: "background.default",
-                  }}
-                >
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <GroupRoundedIcon
-                      sx={{ color: "primary.main", fontSize: 20 }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      Equipe
-                    </Typography>
-                  </Stack>
-                  <Typography
-                    variant="body2"
-                    fontWeight={800}
-                    sx={{ mt: 0.75 }}
-                  >
-                    {members.length} membro{members.length === 1 ? "" : "s"}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Cadastrados na comissão desta OM
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{
-                    p: 1.5,
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1.5,
-                    bgcolor: "background.default",
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    Cobertura
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight={800}
-                    sx={{ mt: 0.75 }}
-                  >
-                    <Box component="span" sx={{ mr: 0.5 }}>
-                      {coveredOmCount}
-                    </Box>
-                    {`OM${coveredOmCount === 1 ? "" : "s"} atendida${coveredOmCount === 1 ? "" : "s"}`}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Inclui a própria OM automaticamente
-                  </Typography>
-                </Box>
-              </Box>
             </Stack>
           </CardContent>
         </Card>
 
         <Card
           sx={{
-            borderRadius: 2,
-            overflow: "hidden",
             border: "1px solid",
             borderColor: "divider",
+            borderRadius: 2,
             boxShadow: "none",
           }}
         >
-          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Stack spacing={2}>
-              <Stack
-                direction={{ xs: "column", lg: "row" }}
-                spacing={1.5}
-                justifyContent="space-between"
-                alignItems={{ xs: "flex-start", lg: "center" }}
-              >
-                <Box sx={{ maxWidth: 760 }}>
-                  <Typography variant="h6" fontWeight={800}>
-                    Checklist da Comissão
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    Registre as ações executadas pela comissão. Cada item abre
-                    individualmente para reduzir ruído e manter o preenchimento
-                    focado.
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  <Chip
-                    label={checklistSummary?.statusLabel ?? "Não iniciado"}
-                    color={checklistTone.color}
-                    sx={{
-                      fontWeight: 700,
-                      background: checklistTone.background,
-                    }}
-                  />
-                  <Chip
-                    label={`${checklistSummary?.completedCount ?? 0}/${checklistSummary?.totalCount ?? checklistItems.length} concluídos`}
-                    variant="outlined"
-                  />
-                </Stack>
-              </Stack>
-
-              <Box
-                sx={{
-                  p: 1.5,
-                  borderRadius: 1.5,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  bgcolor: "background.default",
-                }}
-              >
-                <Stack spacing={1}>
-                  <Stack
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                  >
-                    <Typography variant="caption" color="text.secondary">
-                      Progresso do checklist
-                    </Typography>
-                    <Typography variant="caption" fontWeight={800}>
-                      {checklistSummary?.completionRate ?? 0}%
-                    </Typography>
-                  </Stack>
-                  <LinearProgress
-                    variant="determinate"
-                    value={checklistSummary?.completionRate ?? 0}
-                    color={
-                      checklistTone.color === "default"
-                        ? "inherit"
-                        : checklistTone.color
-                    }
-                    sx={{
-                      height: 8,
-                      borderRadius: 999,
-                      bgcolor: "action.hover",
-                    }}
-                  />
-                  <Stack
-                    direction={{ xs: "column", md: "row" }}
-                    spacing={1}
-                    sx={{ pt: 0.5 }}
-                  >
-                    <Typography variant="caption" color="text.secondary">
-                      Última ação:{" "}
-                      <strong>
-                        {formatCpcaChecklistDate(
-                          checklistSummary?.lastUpdatedAt,
-                        )}
-                      </strong>
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Última entrega:{" "}
-                      <strong>
-                        {formatCpcaChecklistDate(
-                          checklistSummary?.lastCompletedAt,
-                        )}
-                      </strong>
-                    </Typography>
-                  </Stack>
-                </Stack>
-              </Box>
-
-              {!canEditChecklist ? (
-                <Alert severity="info">
-                  Apenas o presidente atualmente designado para a OM pode
-                  preencher este checklist.
-                </Alert>
+          <CardContent sx={{ p: 0 }}>
+            <Tabs
+              value={activeTab}
+              onChange={(_, value) => setActiveTab(value as CommissionTab)}
+              variant="scrollable"
+              scrollButtons="auto"
+              aria-label="Áreas da comissão CPCA"
+              sx={{
+                minHeight: 52,
+                px: 1,
+                borderBottom: "1px solid",
+                borderColor: "divider",
+                "& .MuiTab-root": {
+                  minHeight: 52,
+                  textTransform: "none",
+                  fontWeight: 800,
+                },
+              }}
+            >
+              <Tab value="resumo" label="Resumo" />
+              <Tab value="checklist" label="Checklist" />
+              <Tab value="cobertura" label="Cobertura" />
+              <Tab value="membros" label="Membros" />
+              <Tab value="pendencias" label="Pendências" />
+              {canManagePresidentFlow ? (
+                <Tab value="presidencia" label="Presidência" />
               ) : null}
+              <Tab value="historico" label="Histórico" />
+            </Tabs>
+            {activeTab === "resumo" ? (
+              <Box sx={{ p: { xs: 2, md: 2.5 } }}>
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography variant="h6" fontWeight={800}>
+                      Visão geral da comissão
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 0.5 }}
+                    >
+                      Indicadores principais da OM selecionada.
+                    </Typography>
+                  </Box>
 
-              <Box
-                sx={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 1,
-                }}
-              >
-                {checklistItems.map((item, index) => {
-                  const draftItem = checklistDraft.find(
-                    (entry) => entry.itemKey === item.itemKey,
-                  ) ?? {
-                    itemKey: item.itemKey,
-                    supportsHistory: isCpcaChecklistHistoryItem(item.itemKey),
-                    isCompleted: Boolean(item.isCompleted),
-                    completedAt: item.completedAt
-                      ? item.completedAt.slice(0, 10)
-                      : "",
-                    details: String(item.details ?? ""),
-                    speakerName: String(item.speakerName ?? ""),
-                    historyEntries: Array.isArray(item.historyEntries)
-                      ? item.historyEntries.map((entry) => ({
-                          id: entry.id,
-                          completedAt: entry.completedAt
-                            ? entry.completedAt.slice(0, 10)
-                            : "",
-                          details: String(entry.details ?? ""),
-                          speakerName: String(entry.speakerName ?? ""),
-                          createdAt: entry.createdAt ?? null,
-                          updatedAt: entry.updatedAt ?? null,
-                        }))
-                      : [],
-                  };
-                  const historyEntries = draftItem.historyEntries ?? [];
-                  const itemCompleted = draftItem.supportsHistory
-                    ? historyEntries.length > 0
-                    : Boolean(draftItem?.isCompleted);
-                  const fieldConfig = getCpcaChecklistFieldConfig(item.itemKey);
-                  const isBinaryQuestion = isCpcaChecklistBinaryQuestionItem(
-                    item.itemKey,
-                  );
-                  const historyEntryDraft =
-                    checklistHistoryEntryDrafts[item.itemKey] ??
-                    createEmptyChecklistHistoryEntryDraft();
-                  return (
-                    <Accordion
-                      key={item.itemKey}
-                      defaultExpanded={index === 0}
-                      disableGutters
-                      elevation={0}
-                      slotProps={{ transition: { unmountOnExit: true } }}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        sm: "repeat(2, minmax(0, 1fr))",
+                        xl: "repeat(4, minmax(0, 1fr))",
+                      },
+                      gap: 1,
+                    }}
+                  >
+                    <Box
                       sx={{
+                        p: 1.5,
                         border: "1px solid",
-                        borderColor: itemCompleted
-                          ? "success.light"
-                          : "divider",
+                        borderColor: "divider",
                         borderRadius: 1.5,
-                        bgcolor: "background.paper",
-                        "&:before": { display: "none" },
-                        "&.Mui-expanded": { margin: 0 },
+                        bgcolor: "background.default",
                       }}
                     >
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreRoundedIcon />}
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <WorkspacePremiumRoundedIcon
+                          sx={{ color: "primary.main", fontSize: 20 }}
+                        />
+                        <Typography variant="caption" color="text.secondary">
+                          Presidência
+                        </Typography>
+                      </Stack>
+                      <Typography
+                        variant="body2"
+                        fontWeight={800}
+                        sx={{ mt: 0.75 }}
+                      >
+                        {currentPresident?.user?.name ?? "Não designado"}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {currentPresident?.designationBulletin
+                          ? `Boletim ${currentPresident.designationBulletin}`
+                          : "Boletim não informado"}
+                      </Typography>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 1.5,
+                        bgcolor: "background.default",
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        Checklist
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        fontWeight={800}
+                        sx={{ mt: 0.75 }}
+                      >
+                        {checklistSummary?.completionRate ?? 0}% concluído
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {checklistSummary?.completedCount ?? 0}/
+                        {checklistSummary?.totalCount ?? checklistItems.length}{" "}
+                        itens preenchidos
+                      </Typography>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 1.5,
+                        bgcolor: "background.default",
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        Comissão
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        fontWeight={800}
+                        sx={{ mt: 0.75 }}
+                      >
+                        {members.length} membro{members.length === 1 ? "" : "s"}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {coveredOmCount} OM{coveredOmCount === 1 ? "" : "s"}{" "}
+                        atendida{coveredOmCount === 1 ? "" : "s"}
+                      </Typography>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 1.5,
+                        bgcolor: "background.default",
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        Denúncias
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        fontWeight={800}
+                        sx={{ mt: 0.75 }}
+                      >
+                        {commissionPendingBadge?.label ?? "Sem pendências"}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Pendências da OM selecionada
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Stack>
+              </Box>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        {activeTab === "checklist" ? (
+          <Card
+            sx={{
+              borderRadius: 2,
+              overflow: "hidden",
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "none",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+              <Stack spacing={2}>
+                <Stack
+                  direction={{ xs: "column", lg: "row" }}
+                  spacing={1.5}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", lg: "center" }}
+                >
+                  <Box sx={{ maxWidth: 760 }}>
+                    <Typography variant="h6" fontWeight={800}>
+                      Checklist da Comissão
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 0.5 }}
+                    >
+                      Registre as ações executadas pela comissão. Cada item abre
+                      individualmente para reduzir ruído e manter o
+                      preenchimento focado.
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    <Chip
+                      label={checklistSummary?.statusLabel ?? "Não iniciado"}
+                      color={checklistTone.color}
+                      sx={{
+                        fontWeight: 700,
+                        background: checklistTone.background,
+                      }}
+                    />
+                    <Chip
+                      label={`${checklistSummary?.completedCount ?? 0}/${checklistSummary?.totalCount ?? checklistItems.length} concluídos`}
+                      variant="outlined"
+                    />
+                  </Stack>
+                </Stack>
+
+                <Box
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1.5,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    bgcolor: "background.default",
+                  }}
+                >
+                  <Stack spacing={1}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        Progresso do checklist
+                      </Typography>
+                      <Typography variant="caption" fontWeight={800}>
+                        {checklistSummary?.completionRate ?? 0}%
+                      </Typography>
+                    </Stack>
+                    <LinearProgress
+                      variant="determinate"
+                      value={checklistSummary?.completionRate ?? 0}
+                      color={
+                        checklistTone.color === "default"
+                          ? "inherit"
+                          : checklistTone.color
+                      }
+                      sx={{
+                        height: 8,
+                        borderRadius: 999,
+                        bgcolor: "action.hover",
+                      }}
+                    />
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={1}
+                      sx={{ pt: 0.5 }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        Última ação:{" "}
+                        <strong>
+                          {formatCpcaChecklistDate(
+                            checklistSummary?.lastUpdatedAt,
+                          )}
+                        </strong>
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Última entrega:{" "}
+                        <strong>
+                          {formatCpcaChecklistDate(
+                            checklistSummary?.lastCompletedAt,
+                          )}
+                        </strong>
+                      </Typography>
+                    </Stack>
+                  </Stack>
+                </Box>
+
+                {!canEditChecklist ? (
+                  <Alert severity="info">
+                    Apenas o presidente atualmente designado para a OM pode
+                    preencher este checklist.
+                  </Alert>
+                ) : null}
+
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1,
+                  }}
+                >
+                  {checklistItems.map((item, index) => {
+                    const draftItem = checklistDraft.find(
+                      (entry) => entry.itemKey === item.itemKey,
+                    ) ?? {
+                      itemKey: item.itemKey,
+                      supportsHistory: isCpcaChecklistHistoryItem(item.itemKey),
+                      isCompleted: Boolean(item.isCompleted),
+                      completedAt: item.completedAt
+                        ? item.completedAt.slice(0, 10)
+                        : "",
+                      details: String(item.details ?? ""),
+                      speakerName: String(item.speakerName ?? ""),
+                      historyEntries: Array.isArray(item.historyEntries)
+                        ? item.historyEntries.map((entry) => ({
+                            id: entry.id,
+                            completedAt: entry.completedAt
+                              ? entry.completedAt.slice(0, 10)
+                              : "",
+                            details: String(entry.details ?? ""),
+                            speakerName: String(entry.speakerName ?? ""),
+                            createdAt: entry.createdAt ?? null,
+                            updatedAt: entry.updatedAt ?? null,
+                          }))
+                        : [],
+                    };
+                    const historyEntries = draftItem.historyEntries ?? [];
+                    const itemCompleted = draftItem.supportsHistory
+                      ? historyEntries.length > 0
+                      : Boolean(draftItem?.isCompleted);
+                    const fieldConfig = getCpcaChecklistFieldConfig(
+                      item.itemKey,
+                    );
+                    const isBinaryQuestion = isCpcaChecklistBinaryQuestionItem(
+                      item.itemKey,
+                    );
+                    const historyEntryDraft =
+                      checklistHistoryEntryDrafts[item.itemKey] ??
+                      createEmptyChecklistHistoryEntryDraft();
+                    return (
+                      <Accordion
+                        key={item.itemKey}
+                        defaultExpanded={index === 0}
+                        disableGutters
+                        elevation={0}
+                        slotProps={{ transition: { unmountOnExit: true } }}
                         sx={{
-                          minHeight: 64,
-                          px: 1.5,
-                          py: 0.75,
-                          "& .MuiAccordionSummary-content": {
-                            my: 0,
-                            minWidth: 0,
-                          },
+                          border: "1px solid",
+                          borderColor: itemCompleted
+                            ? "success.light"
+                            : "divider",
+                          borderRadius: 1.5,
+                          bgcolor: "background.paper",
+                          "&:before": { display: "none" },
+                          "&.Mui-expanded": { margin: 0 },
                         }}
                       >
-                        <Stack
-                          direction={{ xs: "column", sm: "row" }}
-                          spacing={1}
-                          justifyContent="space-between"
-                          alignItems={{ xs: "flex-start", sm: "center" }}
-                          sx={{ width: "100%", pr: 1, minWidth: 0 }}
+                        <AccordionSummary
+                          expandIcon={<ExpandMoreRoundedIcon />}
+                          sx={{
+                            minHeight: 64,
+                            px: 1.5,
+                            py: 0.75,
+                            "& .MuiAccordionSummary-content": {
+                              my: 0,
+                              minWidth: 0,
+                            },
+                          }}
                         >
                           <Stack
-                            direction="row"
+                            direction={{ xs: "column", sm: "row" }}
                             spacing={1}
-                            alignItems="center"
+                            justifyContent="space-between"
+                            alignItems={{ xs: "flex-start", sm: "center" }}
+                            sx={{ width: "100%", pr: 1, minWidth: 0 }}
                           >
-                            <Box
-                              sx={{
-                                width: 34,
-                                height: 34,
-                                borderRadius: 1.5,
-                                display: "grid",
-                                placeItems: "center",
-                                bgcolor: itemCompleted
-                                  ? "rgba(46,125,50,0.10)"
-                                  : "action.hover",
-                                color: itemCompleted
-                                  ? "success.main"
-                                  : "text.secondary",
-                              }}
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
                             >
-                              {resolveChecklistIcon(item.itemKey)}
-                            </Box>
-                            <Box sx={{ minWidth: 0 }}>
-                              <Typography variant="subtitle2" fontWeight={800}>
-                                {item.label}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
+                              <Box
+                                sx={{
+                                  width: 34,
+                                  height: 34,
+                                  borderRadius: 1.5,
+                                  display: "grid",
+                                  placeItems: "center",
+                                  bgcolor: itemCompleted
+                                    ? "rgba(46,125,50,0.10)"
+                                    : "action.hover",
+                                  color: itemCompleted
+                                    ? "success.main"
+                                    : "text.secondary",
+                                }}
                               >
-                                {item.description}
-                              </Typography>
-                            </Box>
-                          </Stack>
-                          <Stack
-                            direction="row"
-                            spacing={0.75}
-                            alignItems="center"
-                            flexWrap="wrap"
-                          >
-                            {draftItem.supportsHistory &&
-                            historyEntries.length > 0 ? (
-                              <Chip
-                                size="small"
-                                label={`${historyEntries.length} registro${historyEntries.length > 1 ? "s" : ""}`}
-                                variant="outlined"
-                              />
-                            ) : null}
-                            {itemCompleted ? (
-                              <CheckCircleRoundedIcon
-                                color="success"
-                                fontSize="small"
-                              />
-                            ) : (
-                              <RadioButtonUncheckedRoundedIcon
-                                color="disabled"
-                                fontSize="small"
-                              />
-                            )}
-                          </Stack>
-                        </Stack>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ px: 1.5, pt: 0, pb: 1.5 }}>
-                        <Stack spacing={1.25}>
-                          {isBinaryQuestion ? (
-                            <>
-                              <Stack
-                                direction={{ xs: "column", md: "row" }}
-                                spacing={1.2}
-                                alignItems={{ xs: "stretch", md: "center" }}
-                              >
-                                <TextField
-                                  select
-                                  label="Resposta"
-                                  size="small"
-                                  value={
-                                    draftItem?.isCompleted ? "done" : "pending"
-                                  }
-                                  onChange={(event) =>
-                                    handleChecklistFieldChange(
-                                      item.itemKey,
-                                      "isCompleted",
-                                      event.target.value === "done",
-                                    )
-                                  }
-                                  disabled={!canEditChecklist}
-                                  sx={{ minWidth: { xs: "100%", md: 170 } }}
+                                {resolveChecklistIcon(item.itemKey)}
+                              </Box>
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography
+                                  variant="subtitle2"
+                                  fontWeight={800}
                                 >
-                                  <MenuItem value="pending">
-                                    {fieldConfig.statusPendingLabel}
-                                  </MenuItem>
-                                  <MenuItem value="done">
-                                    {fieldConfig.statusDoneLabel}
-                                  </MenuItem>
-                                </TextField>
-                                <TextField
-                                  label="Data do registro"
-                                  type="date"
-                                  size="small"
-                                  value={draftItem?.completedAt ?? ""}
-                                  onChange={(event) =>
-                                    handleChecklistFieldChange(
-                                      item.itemKey,
-                                      "completedAt",
-                                      event.target.value,
-                                    )
-                                  }
-                                  disabled={!canEditChecklist || !itemCompleted}
-                                  InputLabelProps={{ shrink: true }}
-                                  sx={{ minWidth: { xs: "100%", md: 170 } }}
-                                />
-                                <Stack
-                                  direction="row"
-                                  spacing={0.75}
-                                  alignItems="center"
-                                >
-                                  <TodayRoundedIcon
-                                    sx={{
-                                      fontSize: 16,
-                                      color: "text.secondary",
-                                    }}
-                                  />
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    Última atualização:{" "}
-                                    {formatCpcaChecklistDate(item.updatedAt)}
-                                  </Typography>
-                                </Stack>
-                              </Stack>
-
-                              <TextField
-                                label={fieldConfig.detailsLabel}
-                                size="small"
-                                multiline
-                                minRows={2}
-                                value={draftItem?.details ?? ""}
-                                onChange={(event) =>
-                                  handleChecklistFieldChange(
-                                    item.itemKey,
-                                    "details",
-                                    event.target.value,
-                                  )
-                                }
-                                disabled={!canEditChecklist || !itemCompleted}
-                                placeholder={fieldConfig.detailsPlaceholder}
-                                helperText={
-                                  itemCompleted
-                                    ? fieldConfig.detailsHelperText
-                                    : undefined
-                                }
-                              />
-                            </>
-                          ) : (
-                            <>
-                              <Stack
-                                direction={{ xs: "column", md: "row" }}
-                                spacing={1.2}
-                                alignItems={{ xs: "stretch", md: "center" }}
-                              >
-                                <Stack
-                                  direction="row"
-                                  spacing={0.75}
-                                  alignItems="center"
-                                >
-                                  <HistoryRoundedIcon
-                                    sx={{
-                                      fontSize: 16,
-                                      color: "text.secondary",
-                                    }}
-                                  />
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    Último registro:{" "}
-                                    {formatCpcaChecklistDate(item.completedAt)}
-                                  </Typography>
-                                </Stack>
+                                  {item.label}
+                                </Typography>
                                 <Typography
                                   variant="caption"
                                   color="text.secondary"
                                 >
-                                  Histórico acumulado da OM para este item.
+                                  {item.description}
                                 </Typography>
-                              </Stack>
-
-                              {canEditChecklist ? (
-                                <Box
-                                  sx={{
-                                    p: 1.5,
-                                    borderRadius: 2.5,
-                                    border: "1px dashed",
-                                    borderColor: "rgba(25,118,210,0.24)",
-                                    bgcolor: "rgba(25,118,210,0.03)",
-                                  }}
+                              </Box>
+                            </Stack>
+                            <Stack
+                              direction="row"
+                              spacing={0.75}
+                              alignItems="center"
+                              flexWrap="wrap"
+                            >
+                              {draftItem.supportsHistory &&
+                              historyEntries.length > 0 ? (
+                                <Chip
+                                  size="small"
+                                  label={`${historyEntries.length} registro${historyEntries.length > 1 ? "s" : ""}`}
+                                  variant="outlined"
+                                />
+                              ) : null}
+                              {itemCompleted ? (
+                                <CheckCircleRoundedIcon
+                                  color="success"
+                                  fontSize="small"
+                                />
+                              ) : (
+                                <RadioButtonUncheckedRoundedIcon
+                                  color="disabled"
+                                  fontSize="small"
+                                />
+                              )}
+                            </Stack>
+                          </Stack>
+                        </AccordionSummary>
+                        <AccordionDetails sx={{ px: 1.5, pt: 0, pb: 1.5 }}>
+                          <Stack spacing={1.25}>
+                            {isBinaryQuestion ? (
+                              <>
+                                <Stack
+                                  direction={{ xs: "column", md: "row" }}
+                                  spacing={1.2}
+                                  alignItems={{ xs: "stretch", md: "center" }}
                                 >
-                                  <Stack spacing={1}>
+                                  <TextField
+                                    select
+                                    label="Resposta"
+                                    size="small"
+                                    value={
+                                      draftItem?.isCompleted
+                                        ? "done"
+                                        : "pending"
+                                    }
+                                    onChange={(event) =>
+                                      handleChecklistFieldChange(
+                                        item.itemKey,
+                                        "isCompleted",
+                                        event.target.value === "done",
+                                      )
+                                    }
+                                    disabled={!canEditChecklist}
+                                    sx={{ minWidth: { xs: "100%", md: 170 } }}
+                                  >
+                                    <MenuItem value="pending">
+                                      {fieldConfig.statusPendingLabel}
+                                    </MenuItem>
+                                    <MenuItem value="done">
+                                      {fieldConfig.statusDoneLabel}
+                                    </MenuItem>
+                                  </TextField>
+                                  <TextField
+                                    label="Data do registro"
+                                    type="date"
+                                    size="small"
+                                    value={draftItem?.completedAt ?? ""}
+                                    onChange={(event) =>
+                                      handleChecklistFieldChange(
+                                        item.itemKey,
+                                        "completedAt",
+                                        event.target.value,
+                                      )
+                                    }
+                                    disabled={
+                                      !canEditChecklist || !itemCompleted
+                                    }
+                                    InputLabelProps={{ shrink: true }}
+                                    sx={{ minWidth: { xs: "100%", md: 170 } }}
+                                  />
+                                  <Stack
+                                    direction="row"
+                                    spacing={0.75}
+                                    alignItems="center"
+                                  >
+                                    <TodayRoundedIcon
+                                      sx={{
+                                        fontSize: 16,
+                                        color: "text.secondary",
+                                      }}
+                                    />
                                     <Typography
-                                      variant="subtitle2"
-                                      fontWeight={800}
+                                      variant="caption"
+                                      color="text.secondary"
                                     >
-                                      Adicionar registro
+                                      Última atualização:{" "}
+                                      {formatCpcaChecklistDate(item.updatedAt)}
                                     </Typography>
-                                    <Stack
-                                      direction={{ xs: "column", md: "row" }}
-                                      spacing={1}
+                                  </Stack>
+                                </Stack>
+
+                                <TextField
+                                  label={fieldConfig.detailsLabel}
+                                  size="small"
+                                  multiline
+                                  minRows={2}
+                                  value={draftItem?.details ?? ""}
+                                  onChange={(event) =>
+                                    handleChecklistFieldChange(
+                                      item.itemKey,
+                                      "details",
+                                      event.target.value,
+                                    )
+                                  }
+                                  disabled={!canEditChecklist || !itemCompleted}
+                                  placeholder={fieldConfig.detailsPlaceholder}
+                                  helperText={
+                                    itemCompleted
+                                      ? fieldConfig.detailsHelperText
+                                      : undefined
+                                  }
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <Stack
+                                  direction={{ xs: "column", md: "row" }}
+                                  spacing={1.2}
+                                  alignItems={{ xs: "stretch", md: "center" }}
+                                >
+                                  <Stack
+                                    direction="row"
+                                    spacing={0.75}
+                                    alignItems="center"
+                                  >
+                                    <HistoryRoundedIcon
+                                      sx={{
+                                        fontSize: 16,
+                                        color: "text.secondary",
+                                      }}
+                                    />
+                                    <Typography
+                                      variant="caption"
+                                      color="text.secondary"
                                     >
-                                      <TextField
-                                        label="Data"
-                                        type="date"
-                                        size="small"
-                                        value={historyEntryDraft.completedAt}
-                                        onChange={(event) =>
-                                          handleChecklistHistoryDraftChange(
-                                            item.itemKey,
-                                            "completedAt",
-                                            event.target.value,
-                                          )
-                                        }
-                                        InputLabelProps={{ shrink: true }}
-                                        sx={{
-                                          minWidth: { xs: "100%", md: 170 },
-                                        }}
-                                      />
-                                      {item.requiresSpeakerName ? (
+                                      Último registro:{" "}
+                                      {formatCpcaChecklistDate(
+                                        item.completedAt,
+                                      )}
+                                    </Typography>
+                                  </Stack>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    Histórico acumulado da OM para este item.
+                                  </Typography>
+                                </Stack>
+
+                                {canEditChecklist ? (
+                                  <Box
+                                    sx={{
+                                      p: 1.5,
+                                      borderRadius: 2.5,
+                                      border: "1px dashed",
+                                      borderColor: "rgba(25,118,210,0.24)",
+                                      bgcolor: "rgba(25,118,210,0.03)",
+                                    }}
+                                  >
+                                    <Stack spacing={1}>
+                                      <Typography
+                                        variant="subtitle2"
+                                        fontWeight={800}
+                                      >
+                                        Adicionar registro
+                                      </Typography>
+                                      <Stack
+                                        direction={{ xs: "column", md: "row" }}
+                                        spacing={1}
+                                      >
                                         <TextField
-                                          label="Quem ministrou a palestra"
+                                          label="Data"
+                                          type="date"
                                           size="small"
-                                          value={historyEntryDraft.speakerName}
+                                          value={historyEntryDraft.completedAt}
                                           onChange={(event) =>
                                             handleChecklistHistoryDraftChange(
                                               item.itemKey,
-                                              "speakerName",
+                                              "completedAt",
                                               event.target.value,
                                             )
                                           }
-                                          sx={{ flex: 1 }}
-                                        />
-                                      ) : null}
-                                    </Stack>
-                                    <TextField
-                                      label={fieldConfig.detailsLabel}
-                                      size="small"
-                                      multiline
-                                      minRows={2}
-                                      value={historyEntryDraft.details}
-                                      onChange={(event) =>
-                                        handleChecklistHistoryDraftChange(
-                                          item.itemKey,
-                                          "details",
-                                          event.target.value,
-                                        )
-                                      }
-                                      placeholder={
-                                        fieldConfig.detailsPlaceholder
-                                      }
-                                      helperText={
-                                        fieldConfig.detailsHelperText ??
-                                        "Cada novo registro entra no histórico da OM."
-                                      }
-                                    />
-                                    <Box
-                                      display="flex"
-                                      justifyContent="flex-end"
-                                    >
-                                      <Button
-                                        variant="contained"
-                                        onClick={() =>
-                                          handleAddChecklistHistoryEntry(
-                                            item.itemKey,
-                                          )
-                                        }
-                                      >
-                                        Adicionar ao histórico
-                                      </Button>
-                                    </Box>
-                                  </Stack>
-                                </Box>
-                              ) : null}
-
-                              <Stack spacing={1}>
-                                {historyEntries.length === 0 ? (
-                                  <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                  >
-                                    Nenhum registro lançado para este item.
-                                  </Typography>
-                                ) : (
-                                  historyEntries.map((entry, index) => (
-                                    <Box
-                                      key={`${item.itemKey}-${entry.id ?? `draft-${index}`}`}
-                                      sx={{
-                                        p: 1.25,
-                                        borderRadius: 2.25,
-                                        border: "1px solid",
-                                        borderColor: "divider",
-                                        backgroundColor:
-                                          index === 0
-                                            ? "rgba(46,125,50,0.05)"
-                                            : "rgba(15,23,42,0.02)",
-                                      }}
-                                    >
-                                      <Stack spacing={0.5}>
-                                        <Stack
-                                          direction={{
-                                            xs: "column",
-                                            sm: "row",
+                                          InputLabelProps={{ shrink: true }}
+                                          sx={{
+                                            minWidth: { xs: "100%", md: 170 },
                                           }}
-                                          spacing={1}
-                                          justifyContent="space-between"
-                                        >
-                                          <Typography
-                                            variant="caption"
-                                            fontWeight={800}
-                                          >
-                                            {formatCpcaChecklistDate(
-                                              entry.completedAt,
-                                            )}
-                                          </Typography>
-                                          <Typography
-                                            variant="caption"
-                                            color="text.secondary"
-                                          >
-                                            Registrado em{" "}
-                                            {formatCpcaChecklistDate(
-                                              entry.updatedAt ??
-                                                entry.createdAt ??
-                                                entry.completedAt,
-                                            )}
-                                          </Typography>
-                                        </Stack>
-                                        <Typography variant="body2">
-                                          {entry.details}
-                                        </Typography>
-                                        {entry.speakerName ? (
-                                          <Typography
-                                            variant="caption"
-                                            fontWeight={700}
-                                          >
-                                            Palestrante: {entry.speakerName}
-                                          </Typography>
+                                        />
+                                        {item.requiresSpeakerName ? (
+                                          <TextField
+                                            label="Quem ministrou a palestra"
+                                            size="small"
+                                            value={
+                                              historyEntryDraft.speakerName
+                                            }
+                                            onChange={(event) =>
+                                              handleChecklistHistoryDraftChange(
+                                                item.itemKey,
+                                                "speakerName",
+                                                event.target.value,
+                                              )
+                                            }
+                                            sx={{ flex: 1 }}
+                                          />
                                         ) : null}
                                       </Stack>
-                                    </Box>
-                                  ))
-                                )}
-                              </Stack>
-                            </>
-                          )}
-                        </Stack>
-                      </AccordionDetails>
-                    </Accordion>
-                  );
-                })}
-              </Box>
+                                      <TextField
+                                        label={fieldConfig.detailsLabel}
+                                        size="small"
+                                        multiline
+                                        minRows={2}
+                                        value={historyEntryDraft.details}
+                                        onChange={(event) =>
+                                          handleChecklistHistoryDraftChange(
+                                            item.itemKey,
+                                            "details",
+                                            event.target.value,
+                                          )
+                                        }
+                                        placeholder={
+                                          fieldConfig.detailsPlaceholder
+                                        }
+                                        helperText={
+                                          fieldConfig.detailsHelperText ??
+                                          "Cada novo registro entra no histórico da OM."
+                                        }
+                                      />
+                                      <Box
+                                        display="flex"
+                                        justifyContent="flex-end"
+                                      >
+                                        <Button
+                                          variant="contained"
+                                          onClick={() =>
+                                            handleAddChecklistHistoryEntry(
+                                              item.itemKey,
+                                            )
+                                          }
+                                        >
+                                          Adicionar ao histórico
+                                        </Button>
+                                      </Box>
+                                    </Stack>
+                                  </Box>
+                                ) : null}
 
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={1}
-                justifyContent="space-between"
-                alignItems={{ xs: "stretch", md: "center" }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  O checklist nacional consolida automaticamente estas marcações
-                  para COMGEP e Coordenação CIPAVD.
-                </Typography>
-                <Stack direction="row" spacing={1}>
-                  <Button
-                    variant="text"
-                    color="inherit"
-                    startIcon={<RestartAltRoundedIcon />}
-                    onClick={handleResetChecklist}
-                    disabled={!canEditChecklist || !checklistDirty}
-                  >
-                    Restaurar
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<SaveRoundedIcon />}
-                    onClick={handleSaveChecklist}
-                    disabled={
-                      !canEditChecklist ||
-                      !checklistDirty ||
-                      updateChecklistMutation.isPending
-                    }
-                  >
-                    Salvar checklist
-                  </Button>
-                </Stack>
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
-
-        <Card
-          sx={{
-            borderRadius: 2,
-            border: "1px solid",
-            borderColor: "divider",
-            boxShadow: "none",
-          }}
-        >
-          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Stack spacing={2}>
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={1.25}
-                justifyContent="space-between"
-                alignItems={{ xs: "flex-start", md: "center" }}
-              >
-                <Box>
-                  <Typography variant="h6" fontWeight={800}>
-                    Pendências das denúncias
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    Visão operacional das pendências abertas para a OM e, quando
-                    disponível, das resoluções aguardando validação.
-                  </Typography>
-                </Box>
-                <Stack direction="row" spacing={1} flexWrap="wrap">
-                  {commissionPendingBadge ? (
-                    <Chip
-                      label={commissionPendingBadge.label}
-                      sx={{
-                        fontWeight: 700,
-                        color:
-                          commissionPendingBadge.tone === "error"
-                            ? "#B91C1C"
-                            : "#166534",
-                        bgcolor:
-                          commissionPendingBadge.tone === "error"
-                            ? "rgba(239, 68, 68, 0.12)"
-                            : "rgba(34, 197, 94, 0.12)",
-                        border: "1px solid",
-                        borderColor:
-                          commissionPendingBadge.tone === "error"
-                            ? "rgba(239, 68, 68, 0.24)"
-                            : "rgba(34, 197, 94, 0.24)",
-                      }}
-                    />
-                  ) : (
-                    <Chip label="Sem pendências" variant="outlined" />
-                  )}
-                </Stack>
-              </Stack>
-
-              {commissionOpenPendingItems.length === 0 &&
-              commissionResolvedPendingItems.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Nenhuma pendência de denúncia encontrada para a OM
-                  selecionada.
-                </Typography>
-              ) : (
-                <Stack spacing={1.25}>
-                  {commissionOpenPendingItems.map((item: any) => (
-                    <Box
-                      key={`${item.workflow}-${item.threadId}`}
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 2.5,
-                        border: "1px solid",
-                        borderColor: "divider",
-                      }}
-                    >
-                      <Stack spacing={0.8}>
-                        <Stack
-                          direction={{ xs: "column", md: "row" }}
-                          spacing={1}
-                          justifyContent="space-between"
-                          alignItems={{ xs: "flex-start", md: "center" }}
-                        >
-                          <Stack
-                            direction="row"
-                            spacing={0.75}
-                            alignItems="center"
-                          >
-                            <Chip
-                              size="small"
-                              label={item.workflow}
-                              variant="outlined"
-                            />
-                            <Typography fontWeight={700}>
-                              {item.case.caseNumber}
-                            </Typography>
-                          </Stack>
-                          <Button
-                            size="small"
-                            variant="text"
-                            onClick={() =>
-                              navigate(
-                                `${item.route}?q=${encodeURIComponent(item.case.caseNumber)}`,
-                              )
-                            }
-                          >
-                            Abrir denúncia
-                          </Button>
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatOmLabel(
-                            item.case.locality?.code ?? null,
-                            item.case.locality?.name ?? null,
-                          )}
-                        </Typography>
-                        <Typography variant="body2">
-                          {item.lastMessage?.body ?? "Sem detalhe informado."}
-                        </Typography>
-                      </Stack>
-                    </Box>
-                  ))}
-
-                  {commissionResolvedPendingItems.length > 0 && (
-                    <Box sx={{ pt: 0.5 }}>
-                      <Typography
-                        variant="subtitle2"
-                        fontWeight={700}
-                        color="text.secondary"
-                        sx={{ mb: 1 }}
-                      >
-                        Resolvidas aguardando validação
-                      </Typography>
-                      <Stack spacing={1}>
-                        {commissionResolvedPendingItems.map((item: any) => (
-                          <Box
-                            key={`${item.workflow}-${item.threadId}`}
-                            sx={{
-                              p: 1.5,
-                              borderRadius: 2.5,
-                              border: "1px solid",
-                              borderColor: "divider",
-                              backgroundColor: "rgba(34, 197, 94, 0.04)",
-                            }}
-                          >
-                            <Stack spacing={0.8}>
-                              <Stack
-                                direction={{ xs: "column", md: "row" }}
-                                spacing={1}
-                                justifyContent="space-between"
-                                alignItems={{ xs: "flex-start", md: "center" }}
-                              >
-                                <Stack
-                                  direction="row"
-                                  spacing={0.75}
-                                  alignItems="center"
-                                >
-                                  <Chip
-                                    size="small"
-                                    label={item.workflow}
-                                    variant="outlined"
-                                  />
-                                  <Typography fontWeight={700}>
-                                    {item.case.caseNumber}
-                                  </Typography>
+                                <Stack spacing={1}>
+                                  {historyEntries.length === 0 ? (
+                                    <Typography
+                                      variant="body2"
+                                      color="text.secondary"
+                                    >
+                                      Nenhum registro lançado para este item.
+                                    </Typography>
+                                  ) : (
+                                    historyEntries.map((entry, index) => (
+                                      <Box
+                                        key={`${item.itemKey}-${entry.id ?? `draft-${index}`}`}
+                                        sx={{
+                                          p: 1.25,
+                                          borderRadius: 2.25,
+                                          border: "1px solid",
+                                          borderColor: "divider",
+                                          backgroundColor:
+                                            index === 0
+                                              ? "rgba(46,125,50,0.05)"
+                                              : "rgba(15,23,42,0.02)",
+                                        }}
+                                      >
+                                        <Stack spacing={0.5}>
+                                          <Stack
+                                            direction={{
+                                              xs: "column",
+                                              sm: "row",
+                                            }}
+                                            spacing={1}
+                                            justifyContent="space-between"
+                                          >
+                                            <Typography
+                                              variant="caption"
+                                              fontWeight={800}
+                                            >
+                                              {formatCpcaChecklistDate(
+                                                entry.completedAt,
+                                              )}
+                                            </Typography>
+                                            <Typography
+                                              variant="caption"
+                                              color="text.secondary"
+                                            >
+                                              Registrado em{" "}
+                                              {formatCpcaChecklistDate(
+                                                entry.updatedAt ??
+                                                  entry.createdAt ??
+                                                  entry.completedAt,
+                                              )}
+                                            </Typography>
+                                          </Stack>
+                                          <Typography variant="body2">
+                                            {entry.details}
+                                          </Typography>
+                                          {entry.speakerName ? (
+                                            <Typography
+                                              variant="caption"
+                                              fontWeight={700}
+                                            >
+                                              Palestrante: {entry.speakerName}
+                                            </Typography>
+                                          ) : null}
+                                        </Stack>
+                                      </Box>
+                                    ))
+                                  )}
                                 </Stack>
-                                <Button
-                                  size="small"
-                                  variant="text"
-                                  onClick={() =>
-                                    navigate(
-                                      `${item.route}?q=${encodeURIComponent(item.case.caseNumber)}`,
-                                    )
-                                  }
-                                >
-                                  Revisar denúncia
-                                </Button>
-                              </Stack>
-                              <Typography
-                                variant="body2"
-                                color="text.secondary"
-                              >
-                                {item.lastMessage?.body ??
-                                  "Sem resolução registrada."}
+                              </>
+                            )}
+                          </Stack>
+                        </AccordionDetails>
+                      </Accordion>
+                    );
+                  })}
+                </Box>
+
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={1}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "stretch", md: "center" }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    O checklist nacional consolida automaticamente estas
+                    marcações para COMGEP e Coordenação CIPAVD.
+                  </Typography>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      variant="text"
+                      color="inherit"
+                      startIcon={<RestartAltRoundedIcon />}
+                      onClick={handleResetChecklist}
+                      disabled={!canEditChecklist || !checklistDirty}
+                    >
+                      Restaurar
+                    </Button>
+                    <Button
+                      variant="contained"
+                      startIcon={<SaveRoundedIcon />}
+                      onClick={handleSaveChecklist}
+                      disabled={
+                        !canEditChecklist ||
+                        !checklistDirty ||
+                        updateChecklistMutation.isPending
+                      }
+                    >
+                      Salvar checklist
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Stack>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {activeTab === "pendencias" ? (
+          <Card
+            sx={{
+              borderRadius: 2,
+              border: "1px solid",
+              borderColor: "divider",
+              boxShadow: "none",
+            }}
+          >
+            <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+              <Stack spacing={2}>
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={1.25}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", md: "center" }}
+                >
+                  <Box>
+                    <Typography variant="h6" fontWeight={800}>
+                      Pendências das denúncias
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 0.5 }}
+                    >
+                      Visão operacional das pendências abertas para a OM e,
+                      quando disponível, das resoluções aguardando validação.
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    {commissionPendingBadge ? (
+                      <Chip
+                        label={commissionPendingBadge.label}
+                        sx={{
+                          fontWeight: 700,
+                          color:
+                            commissionPendingBadge.tone === "error"
+                              ? "#B91C1C"
+                              : "#166534",
+                          bgcolor:
+                            commissionPendingBadge.tone === "error"
+                              ? "rgba(239, 68, 68, 0.12)"
+                              : "rgba(34, 197, 94, 0.12)",
+                          border: "1px solid",
+                          borderColor:
+                            commissionPendingBadge.tone === "error"
+                              ? "rgba(239, 68, 68, 0.24)"
+                              : "rgba(34, 197, 94, 0.24)",
+                        }}
+                      />
+                    ) : (
+                      <Chip label="Sem pendências" variant="outlined" />
+                    )}
+                  </Stack>
+                </Stack>
+
+                {commissionOpenPendingItems.length === 0 &&
+                commissionResolvedPendingItems.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    Nenhuma pendência de denúncia encontrada para a OM
+                    selecionada.
+                  </Typography>
+                ) : (
+                  <Stack spacing={1.25}>
+                    {commissionOpenPendingItems.map((item: any) => (
+                      <Box
+                        key={`${item.workflow}-${item.threadId}`}
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 2.5,
+                          border: "1px solid",
+                          borderColor: "divider",
+                        }}
+                      >
+                        <Stack spacing={0.8}>
+                          <Stack
+                            direction={{ xs: "column", md: "row" }}
+                            spacing={1}
+                            justifyContent="space-between"
+                            alignItems={{ xs: "flex-start", md: "center" }}
+                          >
+                            <Stack
+                              direction="row"
+                              spacing={0.75}
+                              alignItems="center"
+                            >
+                              <Chip
+                                size="small"
+                                label={item.workflow}
+                                variant="outlined"
+                              />
+                              <Typography fontWeight={700}>
+                                {item.case.caseNumber}
                               </Typography>
                             </Stack>
-                          </Box>
-                        ))}
-                      </Stack>
-                    </Box>
-                  )}
-                </Stack>
-              )}
-            </Stack>
-          </CardContent>
-        </Card>
+                            <Button
+                              size="small"
+                              variant="text"
+                              onClick={() =>
+                                navigate(
+                                  `${item.route}?q=${encodeURIComponent(item.case.caseNumber)}`,
+                                )
+                              }
+                            >
+                              Abrir denúncia
+                            </Button>
+                          </Stack>
+                          <Typography variant="body2" color="text.secondary">
+                            {formatOmLabel(
+                              item.case.locality?.code ?? null,
+                              item.case.locality?.name ?? null,
+                            )}
+                          </Typography>
+                          <Typography variant="body2">
+                            {item.lastMessage?.body ?? "Sem detalhe informado."}
+                          </Typography>
+                        </Stack>
+                      </Box>
+                    ))}
 
-        {canAssignPresident ? (
+                    {commissionResolvedPendingItems.length > 0 && (
+                      <Box sx={{ pt: 0.5 }}>
+                        <Typography
+                          variant="subtitle2"
+                          fontWeight={700}
+                          color="text.secondary"
+                          sx={{ mb: 1 }}
+                        >
+                          Resolvidas aguardando validação
+                        </Typography>
+                        <Stack spacing={1}>
+                          {commissionResolvedPendingItems.map((item: any) => (
+                            <Box
+                              key={`${item.workflow}-${item.threadId}`}
+                              sx={{
+                                p: 1.5,
+                                borderRadius: 2.5,
+                                border: "1px solid",
+                                borderColor: "divider",
+                                backgroundColor: "rgba(34, 197, 94, 0.04)",
+                              }}
+                            >
+                              <Stack spacing={0.8}>
+                                <Stack
+                                  direction={{ xs: "column", md: "row" }}
+                                  spacing={1}
+                                  justifyContent="space-between"
+                                  alignItems={{
+                                    xs: "flex-start",
+                                    md: "center",
+                                  }}
+                                >
+                                  <Stack
+                                    direction="row"
+                                    spacing={0.75}
+                                    alignItems="center"
+                                  >
+                                    <Chip
+                                      size="small"
+                                      label={item.workflow}
+                                      variant="outlined"
+                                    />
+                                    <Typography fontWeight={700}>
+                                      {item.case.caseNumber}
+                                    </Typography>
+                                  </Stack>
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    onClick={() =>
+                                      navigate(
+                                        `${item.route}?q=${encodeURIComponent(item.case.caseNumber)}`,
+                                      )
+                                    }
+                                  >
+                                    Revisar denúncia
+                                  </Button>
+                                </Stack>
+                                <Typography
+                                  variant="body2"
+                                  color="text.secondary"
+                                >
+                                  {item.lastMessage?.body ??
+                                    "Sem resolução registrada."}
+                                </Typography>
+                              </Stack>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+                    )}
+                  </Stack>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {activeTab === "presidencia" && canAssignPresident ? (
           <Card
             sx={{
               border: "1px solid",
@@ -1967,7 +2056,7 @@ export function CpcaCommissionPage() {
           </Card>
         ) : null}
 
-        {canNominatePresident ? (
+        {activeTab === "presidencia" && canNominatePresident ? (
           <Card
             sx={{
               border: "1px solid",
@@ -2083,117 +2172,250 @@ export function CpcaCommissionPage() {
           </Card>
         ) : null}
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              xl: "minmax(0, 0.95fr) minmax(0, 1.05fr)",
-            },
-            gap: 2,
-            alignItems: "start",
-          }}
-        >
-          <Card
+        {activeTab === "cobertura" || activeTab === "membros" ? (
+          <Box
             sx={{
-              border: "1px solid",
-              borderColor: "divider",
-              borderRadius: 2,
-              boxShadow: "none",
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                xl: "minmax(0, 0.95fr) minmax(0, 1.05fr)",
+              },
+              gap: 2,
+              alignItems: "start",
             }}
           >
-            <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-              <Typography variant="h6" fontWeight={700}>
-                Cobertura da Comissão
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mb: 1.5 }}
+            {activeTab === "cobertura" ? (
+              <Card
+                sx={{
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 2,
+                  boxShadow: "none",
+                }}
               >
-                {canAssignPresident
-                  ? "A gestão nacional pode aplicar a cobertura imediatamente."
-                  : managesCoverageByApproval
-                    ? "A presidência propõe a cobertura e a alteração só vale após homologação da gestão nacional."
-                    : "Consulte abaixo quais OMs esta comissão atende além da própria OM."}
-              </Typography>
+                <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+                  <Typography variant="h6" fontWeight={700}>
+                    Cobertura da Comissão
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 1.5 }}
+                  >
+                    {canAssignPresident
+                      ? "A gestão nacional pode aplicar a cobertura imediatamente."
+                      : managesCoverageByApproval
+                        ? "A presidência propõe a cobertura e a alteração só vale após homologação da gestão nacional."
+                        : "Consulte abaixo quais OMs esta comissão atende além da própria OM."}
+                  </Typography>
 
-              {pendingCoverageRequest ? (
-                <Alert severity="info" sx={{ mb: 1.5 }}>
-                  Existe uma solicitação pendente de cobertura para esta OM,
-                  enviada em {formatDateTime(pendingCoverageRequest.createdAt)}.
-                  {pendingCoverageRequest.requestedByUser?.name
-                    ? ` Responsável: ${pendingCoverageRequest.requestedByUser.name}.`
-                    : ""}
-                </Alert>
-              ) : null}
+                  {pendingCoverageRequest ? (
+                    <Alert severity="info" sx={{ mb: 1.5 }}>
+                      Existe uma solicitação pendente de cobertura para esta OM,
+                      enviada em{" "}
+                      {formatDateTime(pendingCoverageRequest.createdAt)}.
+                      {pendingCoverageRequest.requestedByUser?.name
+                        ? ` Responsável: ${pendingCoverageRequest.requestedByUser.name}.`
+                        : ""}
+                    </Alert>
+                  ) : null}
 
-              <Autocomplete
-                multiple
-                disableCloseOnSelect
-                options={availableManagedLocalities}
-                value={availableManagedLocalities.filter((option) =>
-                  managedLocalityIds.includes(option.id),
-                )}
-                onChange={(_, value) =>
-                  setManagedLocalityIds(value.map((item) => item.id))
-                }
-                getOptionDisabled={(option) => Boolean(option.hasCpca)}
-                getOptionLabel={(option) =>
-                  `${formatOmLabel(option.code, option.name)}${option.uf ? ` - ${option.uf}` : ""}`
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    size="small"
-                    label="OMs adicionais cobertas por esta comissão"
-                    helperText="OMs com CPCA próprio ficam bloqueadas para evitar sobreposição de gestão."
-                  />
-                )}
-                disabled={
-                  !canManageCoverage ||
-                  updateCoverageMutation.isPending ||
-                  (!canAssignPresident && Boolean(pendingCoverageRequest))
-                }
-              />
-
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={1.2}
-                alignItems={{ xs: "stretch", md: "center" }}
-                sx={{ mt: 1.5 }}
-              >
-                <Chip
-                  size="small"
-                  color="primary"
-                  label="A própria OM sempre permanece vinculada"
-                />
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={`${managedLocalityIds.length} OMs adicionais vinculadas`}
-                />
-                {canManageCoverage ? (
-                  <Button
-                    variant="contained"
-                    onClick={handleSaveCoverage}
+                  <Autocomplete
+                    multiple
+                    disableCloseOnSelect
+                    options={availableManagedLocalities}
+                    value={availableManagedLocalities.filter((option) =>
+                      managedLocalityIds.includes(option.id),
+                    )}
+                    onChange={(_, value) =>
+                      setManagedLocalityIds(value.map((item) => item.id))
+                    }
+                    getOptionDisabled={(option) => Boolean(option.hasCpca)}
+                    getOptionLabel={(option) =>
+                      `${formatOmLabel(option.code, option.name)}${option.uf ? ` - ${option.uf}` : ""}`
+                    }
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        size="small"
+                        label="OMs adicionais cobertas por esta comissão"
+                        helperText="OMs com CPCA próprio ficam bloqueadas para evitar sobreposição de gestão."
+                      />
+                    )}
                     disabled={
+                      !canManageCoverage ||
                       updateCoverageMutation.isPending ||
                       (!canAssignPresident && Boolean(pendingCoverageRequest))
                     }
-                    sx={{ minWidth: { md: 220 } }}
-                  >
-                    {updateCoverageMutation.isPending
-                      ? "Enviando..."
-                      : canAssignPresident
-                        ? "Salvar cobertura"
-                        : "Enviar para homologação"}
-                  </Button>
-                ) : null}
-              </Stack>
-            </CardContent>
-          </Card>
+                  />
 
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1.2}
+                    alignItems={{ xs: "stretch", md: "center" }}
+                    sx={{ mt: 1.5 }}
+                  >
+                    <Chip
+                      size="small"
+                      color="primary"
+                      label="A própria OM sempre permanece vinculada"
+                    />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={`${managedLocalityIds.length} OMs adicionais vinculadas`}
+                    />
+                    {canManageCoverage ? (
+                      <Button
+                        variant="contained"
+                        onClick={handleSaveCoverage}
+                        disabled={
+                          updateCoverageMutation.isPending ||
+                          (!canAssignPresident &&
+                            Boolean(pendingCoverageRequest))
+                        }
+                        sx={{ minWidth: { md: 220 } }}
+                      >
+                        {updateCoverageMutation.isPending
+                          ? "Enviando..."
+                          : canAssignPresident
+                            ? "Salvar cobertura"
+                            : "Enviar para homologação"}
+                      </Button>
+                    ) : null}
+                  </Stack>
+                </CardContent>
+              </Card>
+            ) : null}
+
+            {activeTab === "membros" ? (
+              <Card
+                sx={{
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 2,
+                  boxShadow: "none",
+                }}
+              >
+                <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+                  <Typography variant="h6" fontWeight={700}>
+                    Membros da Comissão
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 1.5 }}
+                  >
+                    {canManageMembers
+                      ? "Informe e-mail ou CPF. O sistema localiza o militar e inclui na comissão."
+                      : "Somente o presidente da comissão ou a gestão nacional pode cadastrar ou remover membros."}
+                  </Typography>
+
+                  <Stack
+                    direction={{ xs: "column", md: "row" }}
+                    spacing={1.2}
+                    alignItems={{ xs: "stretch", md: "flex-end" }}
+                    sx={{ mb: 1.5 }}
+                  >
+                    <TextField
+                      size="small"
+                      label="E-mail ou CPF"
+                      value={memberIdentifier}
+                      onChange={(event) =>
+                        setMemberIdentifier(event.target.value)
+                      }
+                      fullWidth
+                      disabled={
+                        !canManageMembers || addMemberMutation.isPending
+                      }
+                      sx={{ flex: 1 }}
+                    />
+                    <Button
+                      variant="contained"
+                      disabled={
+                        !canManageMembers ||
+                        !memberIdentifier.trim() ||
+                        addMemberMutation.isPending
+                      }
+                      onClick={handleAddMember}
+                      sx={{
+                        minHeight: 40,
+                        height: { md: 40 },
+                        minWidth: { md: 170 },
+                        whiteSpace: "nowrap",
+                        alignSelf: { xs: "stretch", md: "flex-end" },
+                        flexShrink: 0,
+                      }}
+                    >
+                      {addMemberMutation.isPending
+                        ? "Adicionando..."
+                        : "Adicionar membro"}
+                    </Button>
+                  </Stack>
+
+                  {members.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhum membro cadastrado nesta OM.
+                    </Typography>
+                  ) : (
+                    <TableContainer
+                      sx={{
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 1.5,
+                      }}
+                    >
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Militar</TableCell>
+                            <TableCell>E-mail</TableCell>
+                            <TableCell>UID</TableCell>
+                            <TableCell>Cadastrado por</TableCell>
+                            <TableCell>Em</TableCell>
+                            <TableCell align="right">Ações</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {members.map((member) => (
+                            <TableRow key={member.id}>
+                              <TableCell>{member.user.name}</TableCell>
+                              <TableCell>{member.user.email}</TableCell>
+                              <TableCell>
+                                {member.user.ldapUid ?? "-"}
+                              </TableCell>
+                              <TableCell>
+                                {member.addedByUser?.name ?? "-"}
+                              </TableCell>
+                              <TableCell>
+                                {formatDateTime(member.createdAt)}
+                              </TableCell>
+                              <TableCell align="right">
+                                <IconButton
+                                  color="error"
+                                  size="small"
+                                  disabled={
+                                    !canManageMembers ||
+                                    removeMemberMutation.isPending
+                                  }
+                                  onClick={() => setMemberToRemove(member)}
+                                >
+                                  <DeleteOutlineRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </CardContent>
+              </Card>
+            ) : null}
+          </Box>
+        ) : null}
+
+        {activeTab === "historico" ? (
           <Card
             sx={{
               border: "1px solid",
@@ -2203,189 +2425,81 @@ export function CpcaCommissionPage() {
             }}
           >
             <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-              <Typography variant="h6" fontWeight={700}>
-                Membros da Comissão
-              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                sx={{ mb: 1.5 }}
+              >
+                <HistoryRoundedIcon color="primary" fontSize="small" />
+                <Typography variant="h6" fontWeight={700}>
+                  Histórico da OM
+                </Typography>
+              </Stack>
               <Typography
                 variant="body2"
                 color="text.secondary"
                 sx={{ mb: 1.5 }}
               >
-                {canManageMembers
-                  ? "Informe e-mail ou CPF. O sistema localiza o militar e inclui na comissão."
-                  : "Somente o presidente da comissão ou a gestão nacional pode cadastrar ou remover membros."}
+                Todas as inclusões, exclusões e mudanças de presidência ou
+                cobertura ficam registradas aqui com autor, data e hora.
               </Typography>
-
-              <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={1.2}
-                alignItems={{ xs: "stretch", md: "flex-end" }}
-                sx={{ mb: 1.5 }}
-              >
-                <TextField
-                  size="small"
-                  label="E-mail ou CPF"
-                  value={memberIdentifier}
-                  onChange={(event) => setMemberIdentifier(event.target.value)}
-                  fullWidth
-                  disabled={!canManageMembers || addMemberMutation.isPending}
-                  sx={{ flex: 1 }}
-                />
-                <Button
-                  variant="contained"
-                  disabled={
-                    !canManageMembers ||
-                    !memberIdentifier.trim() ||
-                    addMemberMutation.isPending
-                  }
-                  onClick={handleAddMember}
-                  sx={{
-                    minHeight: 40,
-                    height: { md: 40 },
-                    minWidth: { md: 170 },
-                    whiteSpace: "nowrap",
-                    alignSelf: { xs: "stretch", md: "flex-end" },
-                    flexShrink: 0,
-                  }}
-                >
-                  {addMemberMutation.isPending
-                    ? "Adicionando..."
-                    : "Adicionar membro"}
-                </Button>
-              </Stack>
-
-              {members.length === 0 ? (
+              {history.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
-                  Nenhum membro cadastrado nesta OM.
+                  Ainda não há eventos registrados para esta OM.
                 </Typography>
               ) : (
-                <TableContainer
-                  sx={{
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1.5,
-                  }}
-                >
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Militar</TableCell>
-                        <TableCell>E-mail</TableCell>
-                        <TableCell>UID</TableCell>
-                        <TableCell>Cadastrado por</TableCell>
-                        <TableCell>Em</TableCell>
-                        <TableCell align="right">Ações</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {members.map((member) => (
-                        <TableRow key={member.id}>
-                          <TableCell>{member.user.name}</TableCell>
-                          <TableCell>{member.user.email}</TableCell>
-                          <TableCell>{member.user.ldapUid ?? "-"}</TableCell>
-                          <TableCell>
-                            {member.addedByUser?.name ?? "-"}
-                          </TableCell>
-                          <TableCell>
-                            {formatDateTime(member.createdAt)}
-                          </TableCell>
-                          <TableCell align="right">
-                            <IconButton
-                              color="error"
-                              size="small"
-                              disabled={
-                                !canManageMembers ||
-                                removeMemberMutation.isPending
-                              }
-                              onClick={() => setMemberToRemove(member)}
+                <Stack spacing={1}>
+                  {history.map((item) => (
+                    <Accordion key={item.id} disableGutters>
+                      <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+                        <Stack
+                          direction={{ xs: "column", md: "row" }}
+                          spacing={1}
+                          justifyContent="space-between"
+                          alignItems={{ xs: "flex-start", md: "center" }}
+                          sx={{ width: "100%", pr: 1 }}
+                        >
+                          <Box>
+                            <Typography variant="body2" fontWeight={700}>
+                              {item.actionLabel}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
                             >
-                              <DeleteOutlineRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                              {item.summary}
+                            </Typography>
+                          </Box>
+                          <Typography variant="caption" color="text.secondary">
+                            {item.actor?.name ? `${item.actor.name} • ` : ""}
+                            {formatDateTime(item.createdAt)}
+                          </Typography>
+                        </Stack>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Stack spacing={0.5}>
+                          <Typography variant="caption" color="text.secondary">
+                            O que isso significa
+                          </Typography>
+                          <Typography variant="body2">
+                            {item.summary}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Responsável: {item.actor?.name ?? "Sistema"}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Data e hora: {formatDateTime(item.createdAt)}
+                          </Typography>
+                        </Stack>
+                      </AccordionDetails>
+                    </Accordion>
+                  ))}
+                </Stack>
               )}
             </CardContent>
           </Card>
-        </Box>
-
-        <Card
-          sx={{
-            border: "1px solid",
-            borderColor: "divider",
-            borderRadius: 2,
-            boxShadow: "none",
-          }}
-        >
-          <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              sx={{ mb: 1.5 }}
-            >
-              <HistoryRoundedIcon color="primary" fontSize="small" />
-              <Typography variant="h6" fontWeight={700}>
-                Histórico da OM
-              </Typography>
-            </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              Todas as inclusões, exclusões e mudanças de presidência ou
-              cobertura ficam registradas aqui com autor, data e hora.
-            </Typography>
-            {history.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                Ainda não há eventos registrados para esta OM.
-              </Typography>
-            ) : (
-              <Stack spacing={1}>
-                {history.map((item) => (
-                  <Accordion key={item.id} disableGutters>
-                    <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
-                      <Stack
-                        direction={{ xs: "column", md: "row" }}
-                        spacing={1}
-                        justifyContent="space-between"
-                        alignItems={{ xs: "flex-start", md: "center" }}
-                        sx={{ width: "100%", pr: 1 }}
-                      >
-                        <Box>
-                          <Typography variant="body2" fontWeight={700}>
-                            {item.actionLabel}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {item.summary}
-                          </Typography>
-                        </Box>
-                        <Typography variant="caption" color="text.secondary">
-                          {item.actor?.name ? `${item.actor.name} • ` : ""}
-                          {formatDateTime(item.createdAt)}
-                        </Typography>
-                      </Stack>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Stack spacing={0.5}>
-                        <Typography variant="caption" color="text.secondary">
-                          O que isso significa
-                        </Typography>
-                        <Typography variant="body2">{item.summary}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Responsável: {item.actor?.name ?? "Sistema"}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Data e hora: {formatDateTime(item.createdAt)}
-                        </Typography>
-                      </Stack>
-                    </AccordionDetails>
-                  </Accordion>
-                ))}
-              </Stack>
-            )}
-          </CardContent>
-        </Card>
+        ) : null}
       </Stack>
 
       <ConfirmDialog

@@ -50,7 +50,7 @@ Com o papel `CPCA` ativo, o presidente acessa o bloco **CPCA** no menu lateral. 
 
 ## 5. Preencher o checklist da comissão
 
-Acesse **CPCA > Comissão CPCA**. No bloco **Checklist da Comissão**, acompanhe o progresso geral e registre as ações executadas pela comissão da OM.
+Acesse **CPCA > Comissão CPCA** e abra a aba **Checklist**. Nessa aba, acompanhe o progresso geral e registre as ações executadas pela comissão da OM.
 
 Cada item do checklist aparece em uma linha. Clique na seta do item que deseja preencher para abrir os campos. Para os itens de resposta direta, como e-mail e página Intraer, selecione **Sim**, informe a data e preencha o campo correspondente. Para ações como palestra, seminário, materiais, mensagens, pop-ups e reunião de apresentação, abra o item e use **Adicionar registro** para informar data e detalhamento.
 
@@ -60,7 +60,7 @@ Ao terminar, clique em **Salvar checklist**.
 
 ## 6. Cadastrar OMs gerenciadas pela CPCA
 
-Ainda em **Comissão CPCA**, vá ao bloco **Cobertura da Comissão**.
+Ainda em **Comissão CPCA**, abra a aba **Cobertura**.
 
 Selecione as OMs adicionais atendidas por essa CPCA. A própria OM permanece vinculada automaticamente. Depois de selecionar as OMs, clique em **Salvar cobertura**.
 
@@ -68,7 +68,7 @@ Selecione as OMs adicionais atendidas por essa CPCA. A própria OM permanece vin
 
 ## 7. Cadastrar membros da comissão
 
-No bloco **Membros da Comissão**, informe o e-mail ou CPF do militar e clique em **Adicionar membro**.
+Abra a aba **Membros**, informe o e-mail ou CPF do militar e clique em **Adicionar membro**.
 
 O sistema localiza o militar. Os membros cadastrados passam a aparecer na tabela abaixo do campo de inclusão.
 
