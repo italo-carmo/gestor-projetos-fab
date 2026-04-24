@@ -1266,13 +1266,6 @@ export function CpcaCommissionPage() {
                   </Stack>
                 </Box>
 
-                {!canEditChecklist ? (
-                  <Alert severity="info">
-                    Apenas o presidente atualmente designado para a OM pode
-                    preencher este checklist.
-                  </Alert>
-                ) : null}
-
                 <Box
                   sx={{
                     display: "flex",
@@ -1280,7 +1273,7 @@ export function CpcaCommissionPage() {
                     gap: 1,
                   }}
                 >
-                  {checklistItems.map((item, index) => {
+                  {checklistItems.map((item) => {
                     const draftItem = checklistDraft.find(
                       (entry) => entry.itemKey === item.itemKey,
                     ) ?? {
@@ -1321,7 +1314,6 @@ export function CpcaCommissionPage() {
                     return (
                       <Accordion
                         key={item.itemKey}
-                        defaultExpanded={index === 0}
                         disableGutters
                         elevation={0}
                         slotProps={{ transition: { unmountOnExit: true } }}
@@ -2176,10 +2168,7 @@ export function CpcaCommissionPage() {
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                xl: "minmax(0, 0.95fr) minmax(0, 1.05fr)",
-              },
+              gridTemplateColumns: "minmax(0, 1fr)",
               gap: 2,
               alignItems: "start",
             }}
