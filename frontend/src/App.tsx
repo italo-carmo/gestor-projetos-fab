@@ -25,6 +25,7 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { BusinessIntelligencePage } from "./pages/BusinessIntelligencePage";
 import { StrategicDashboardPage } from "./pages/StrategicDashboardPage";
 import { AiPage } from "./pages/AiPage";
+import { ManualCipavdPage } from "./pages/ManualCipavdPage";
 import { ComgepSituationRoomPage } from "./pages/ComgepSituationRoomPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
@@ -215,6 +216,22 @@ function App() {
                       allow={(user) => can(user, "ai", "view")}
                     >
                       <AiPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/manual-cipavd"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        hasAnyRole(user, [
+                          ROLE_TI,
+                          ROLE_COMGEP,
+                          ROLE_COORDENACAO_CIPAVD,
+                        ])
+                      }
+                    >
+                      <ManualCipavdPage />
                     </RequireRoleAccess>
                   }
                 />

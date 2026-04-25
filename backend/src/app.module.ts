@@ -35,6 +35,7 @@ import { StrategicModule } from './strategic/strategic.module';
 import { LitellmModule } from './llm/litellm.module';
 import { SettingsModule } from './settings/settings.module';
 import { AiModule } from './ai/ai.module';
+import { ManualsModule } from './manuals/manuals.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { AiModule } from './ai/ai.module';
     MenuUpdatesModule,
     StrategicModule,
     SettingsModule,
+    ManualsModule,
     AiModule,
   ],
   controllers: [AppController],

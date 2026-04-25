@@ -48,6 +48,7 @@ import FactCheckRoundedIcon from "@mui/icons-material/FactCheckRounded";
 import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
+import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can, canAccessAdminCatalog } from "../app/rbac";
@@ -398,6 +399,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const canUseGlobalLocalityFilter =
     can(me, "dashboard", "view", "NATIONAL") ||
     can(me, "localities", "view", "NATIONAL");
+  const canSeeCipavdManual = hasAnyRole(me, [
+    ROLE_TI,
+    ROLE_COMGEP,
+    ROLE_COORDENACAO_CIPAVD,
+  ]);
   const availableGlobalLocalities = useMemo(
     () =>
       selectTargetLocalities(
@@ -1141,6 +1147,38 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Box>
               </Popover>
             </Box>
+          )}
+          {canSeeCipavdManual && (
+            <Tooltip title="Manual CIPAVD">
+              <Button
+                component={Link}
+                to="/manual-cipavd"
+                size="small"
+                variant="outlined"
+                startIcon={<MenuBookRoundedIcon sx={{ fontSize: 18 }} />}
+                aria-label="Abrir manual CIPAVD"
+                sx={{
+                  minWidth: 0,
+                  px: { xs: 1, sm: 1.2 },
+                  border: `1px solid ${alpha("#114259", 0.2)}`,
+                  bgcolor:
+                    location.pathname === "/manual-cipavd"
+                      ? alpha("#0C657E", 0.14)
+                      : alpha("#FFFFFF", 0.45),
+                  color: "text.primary",
+                  "& .MuiButton-startIcon": {
+                    mr: { xs: 0, sm: 0.6 },
+                  },
+                }}
+              >
+                <Box
+                  component="span"
+                  sx={{ display: { xs: "none", sm: "inline" } }}
+                >
+                  Manual
+                </Box>
+              </Button>
+            </Tooltip>
           )}
           {canUseGlobalLocalityFilter && !isTasksPath && (
             <TextField
