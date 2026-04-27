@@ -26,6 +26,7 @@ import {
   Tabs,
   Pagination,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import CheckBoxRoundedIcon from '@mui/icons-material/CheckBoxRounded';
@@ -324,6 +325,28 @@ function getActivitySpecialtyLabel(activity: any) {
     .filter(Boolean);
   if (!names.length) return 'Comissão CIPAVD';
   return names.join(' / ');
+}
+
+function getActivityReportIndicator(activity: any) {
+  const hasReport = Boolean(activity?.report);
+  const isSigned = Boolean(activity?.report?.hasSignature);
+  if (hasReport) {
+    return {
+      isFilled: true,
+      color: isSigned || activity?.status === 'DONE' ? 'success' : 'primary',
+      label: isSigned
+        ? 'Relatório preenchido e assinado'
+        : 'Relatório preenchido',
+    } as const;
+  }
+  if (activity?.reportRequired) {
+    return {
+      isFilled: false,
+      color: 'inherit',
+      label: 'Relatório pendente',
+    } as const;
+  }
+  return null;
 }
 
 type ActivitiesPageScope = 'smif' | 'cipavd';
@@ -1888,22 +1911,34 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                           })()}
                         </TableCell>
                         <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
-                          {item.reportRequired ? (
-                            <IconButton
-                              size="small"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openActivityDrawer(item.id, 'report');
-                              }}
-                              aria-label="Abrir relatório"
-                            >
-                              {item.report?.hasSignature ? (
-                                <CheckBoxRoundedIcon color="success" fontSize="small" />
-                              ) : (
-                                <CheckBoxOutlineBlankRoundedIcon fontSize="small" />
-                              )}
-                            </IconButton>
-                          ) : null}
+                          {(() => {
+                            const reportIndicator = getActivityReportIndicator(item);
+                            if (!reportIndicator) return null;
+                            return (
+                              <Tooltip title={reportIndicator.label}>
+                                <IconButton
+                                  size="small"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openActivityDrawer(item.id, 'report');
+                                  }}
+                                  aria-label={reportIndicator.label}
+                                >
+                                  {reportIndicator.isFilled ? (
+                                    <CheckBoxRoundedIcon
+                                      color={reportIndicator.color}
+                                      fontSize="small"
+                                    />
+                                  ) : (
+                                    <CheckBoxOutlineBlankRoundedIcon
+                                      color={reportIndicator.color}
+                                      fontSize="small"
+                                    />
+                                  )}
+                                </IconButton>
+                              </Tooltip>
+                            );
+                          })()}
                         </TableCell>
                       </TableRow>
                     ))}
