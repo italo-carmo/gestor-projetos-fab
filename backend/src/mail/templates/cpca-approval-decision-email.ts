@@ -52,7 +52,12 @@ function formatLocalityLabel(
 ) {
   const code = String(locality?.code ?? '').trim();
   const name = String(locality?.name ?? '').trim();
-  if (code && name) return `${code} · ${name}`;
+  if (code && name) {
+    if (code.localeCompare(name, 'pt-BR', { sensitivity: 'base' }) === 0) {
+      return code;
+    }
+    return `${code} · ${name}`;
+  }
   return code || name || null;
 }
 

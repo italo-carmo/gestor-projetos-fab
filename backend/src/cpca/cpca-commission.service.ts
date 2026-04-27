@@ -50,6 +50,23 @@ type CpcaApprovalRequestType = (typeof CPCA_APPROVAL_REQUEST_TYPES)[number];
 const MILITARY_RANK_PREFIX =
   /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN CEL|CEL|BRIG|BRIGADEIRO|GEN)\b/i;
 
+function formatOmLabel(
+  code: string | null | undefined,
+  name: string | null | undefined,
+) {
+  const codeValue = String(code ?? '').trim();
+  const nameValue = String(name ?? '').trim();
+  if (codeValue && nameValue) {
+    if (
+      codeValue.localeCompare(nameValue, 'pt-BR', { sensitivity: 'base' }) === 0
+    ) {
+      return codeValue;
+    }
+    return `${codeValue} · ${nameValue}`;
+  }
+  return codeValue || nameValue;
+}
+
 @Injectable()
 export class CpcaCommissionService {
   private readonly logger = new Logger(CpcaCommissionService.name);
@@ -2769,7 +2786,8 @@ export class CpcaCommissionService {
     const managedLocalitiesLabel =
       managedLocalities && managedLocalities.length > 0
         ? managedLocalities
-            .map((item) => `${item.code} · ${item.name}`)
+            .map((item) => formatOmLabel(item.code, item.name))
+            .filter(Boolean)
             .join(', ')
         : null;
 

@@ -522,12 +522,29 @@ function formatActivityScopeLabel(scope: string) {
   return normalized || "—";
 }
 
+function formatOmLabel(
+  code: string | null | undefined,
+  name: string | null | undefined,
+) {
+  const codeValue = String(code ?? "").trim();
+  const nameValue = String(name ?? "").trim();
+  if (codeValue && nameValue) {
+    if (
+      codeValue.localeCompare(nameValue, "pt-BR", { sensitivity: "base" }) === 0
+    ) {
+      return codeValue;
+    }
+    return `${codeValue} - ${nameValue}`;
+  }
+  return codeValue || nameValue || "";
+}
+
 function formatCoveredOmResponsibility(item: any) {
   const managers = Array.isArray(item?.coveredByOms) ? item.coveredByOms : [];
   if (Boolean(item?.hasCpca)) return "Própria OM";
   if (managers.length === 0) return "Cobertura vinculada";
   return managers
-    .map((manager: any) => [manager?.code, manager?.name].filter(Boolean).join(" - "))
+    .map((manager: any) => formatOmLabel(manager?.code, manager?.name))
     .filter(Boolean)
     .join(", ");
 }

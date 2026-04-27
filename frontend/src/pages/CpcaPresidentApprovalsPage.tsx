@@ -159,6 +159,23 @@ function formatDateTime(value: string | null | undefined) {
   return date.toLocaleString("pt-BR");
 }
 
+function formatOmLabel(
+  code: string | null | undefined,
+  name: string | null | undefined,
+) {
+  const codeValue = String(code ?? "").trim();
+  const nameValue = String(name ?? "").trim();
+  if (codeValue && nameValue) {
+    if (
+      codeValue.localeCompare(nameValue, "pt-BR", { sensitivity: "base" }) === 0
+    ) {
+      return codeValue;
+    }
+    return `${codeValue} - ${nameValue}`;
+  }
+  return codeValue || nameValue || "-";
+}
+
 function getStatusMeta(status: ApprovalRequestItem["status"]) {
   if (status === "APPROVED") {
     return { label: "Homologada", color: "success" as const };
@@ -579,7 +596,10 @@ export function CpcaPresidentApprovalsPage() {
                         </TableCell>
                         <TableCell>
                           {item.locality
-                            ? `${item.locality.code} - ${item.locality.name}`
+                            ? formatOmLabel(
+                                item.locality.code,
+                                item.locality.name,
+                              )
                             : "-"}
                         </TableCell>
                         <TableCell>{renderDetail(item)}</TableCell>
@@ -658,7 +678,10 @@ export function CpcaPresidentApprovalsPage() {
                 <Box>
                   <Typography variant="h6" fontWeight={800}>
                     {detailsTarget.locality
-                      ? `${detailsTarget.locality.code} - ${detailsTarget.locality.name}`
+                      ? formatOmLabel(
+                          detailsTarget.locality.code,
+                          detailsTarget.locality.name,
+                        )
                       : "Solicitação sem OM vinculada"}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
@@ -1046,7 +1069,10 @@ export function CpcaPresidentApprovalsPage() {
         message="Confirma a homologação desta solicitação? A aprovação será aplicada imediatamente no fluxo da OM correspondente."
         highlightText={
           approveTarget?.locality
-            ? `${approveTarget.locality.code} - ${approveTarget.locality.name}`
+            ? formatOmLabel(
+                approveTarget.locality.code,
+                approveTarget.locality.name,
+              )
             : ""
         }
         confirmLabel="Homologar"
@@ -1064,7 +1090,10 @@ export function CpcaPresidentApprovalsPage() {
         message="Esta OM já possui um presidente registrado. Deseja registrar ciência e prosseguir com a homologação mesmo assim?"
         highlightText={
           overwriteTarget?.locality
-            ? `${overwriteTarget.locality.code} - ${overwriteTarget.locality.name}`
+            ? formatOmLabel(
+                overwriteTarget.locality.code,
+                overwriteTarget.locality.name,
+              )
             : ""
         }
         note={
@@ -1103,7 +1132,10 @@ export function CpcaPresidentApprovalsPage() {
             <Box>
               <Typography variant="body2" fontWeight={700}>
                 {rejectTarget?.locality
-                  ? `${rejectTarget.locality.code} - ${rejectTarget.locality.name}`
+                  ? formatOmLabel(
+                      rejectTarget.locality.code,
+                      rejectTarget.locality.name,
+                    )
                   : "Solicitação sem OM vinculada"}
               </Typography>
               <Typography variant="body2" color="text.secondary">
