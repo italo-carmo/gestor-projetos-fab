@@ -29,6 +29,8 @@ ALTER COLUMN "scope" SET DEFAULT 'SMIF';
 ALTER TABLE "ActivityType"
 DROP CONSTRAINT IF EXISTS "ActivityType_name_key";
 
+DROP INDEX IF EXISTS "ActivityType_name_key";
+
 CREATE INDEX "ActivityType_scope_idx"
 ON "ActivityType"("scope");
 
