@@ -183,10 +183,17 @@ export function CalendarView({
   return (
     <Box
       sx={{
+        position: 'relative',
+        isolation: 'isolate',
+        zIndex: 0,
         height,
         width: '100%',
         overflowX: 'hidden',
-        '& .rbc-calendar': { fontFamily: 'inherit' },
+        '& .rbc-calendar': {
+          fontFamily: 'inherit',
+          position: 'relative',
+          zIndex: 0,
+        },
         '& .rbc-toolbar': {
           flexWrap: 'wrap',
           gap: 0.8,
@@ -257,6 +264,10 @@ export function CalendarView({
           color: 'primary.main',
           fontWeight: 700,
         },
+        '& .rbc-overlay': {
+          zIndex: 2,
+          maxWidth: 'calc(100vw - 32px)',
+        },
       }}
     >
       <CalendarControlled
@@ -272,7 +283,8 @@ export function CalendarView({
         onView={(nextView: RbcView) => setCurrentView(nextView)}
         date={currentDate}
         onNavigate={(nextDate: Date) => setCurrentDate(new Date(nextDate.getTime()))}
-        popup
+        popup={false}
+        doShowMoreDrillDown
         components={{ event: EventCard }}
         eventPropGetter={(event: any) => {
           const kind: CalendarEventKind = event.kind ?? 'task';

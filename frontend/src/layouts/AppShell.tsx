@@ -426,6 +426,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const sidebarWidth = sidebarCollapsed
     ? drawerCollapsedWidth
     : drawerExpandedWidth;
+  const mobileDrawerClosed = isMobile && !mobileOpen;
   const isTasksPath =
     location.pathname === "/tasks" || location.pathname.startsWith("/tasks/");
 
@@ -1298,7 +1299,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           onClose={() => setMobileOpen(false)}
           ModalProps={{ keepMounted: true }}
           sx={{
+            pointerEvents: mobileDrawerClosed ? "none" : "auto",
+            "&.MuiModal-hidden": {
+              pointerEvents: "none",
+            },
             "& .MuiDrawer-paper": {
+              pointerEvents: "auto",
               width: { xs: drawerExpandedWidth, lg: sidebarWidth },
               boxSizing: "border-box",
               top: { lg: `${headerHeight}px` },

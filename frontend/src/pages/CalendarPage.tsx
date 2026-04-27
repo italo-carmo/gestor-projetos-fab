@@ -318,17 +318,19 @@ export function CalendarPage() {
         </Card>
       )}
 
-      <TaskDetailsDrawer
-        task={selectedTask}
-        open={Boolean(selectedTaskId)}
-        onClose={() => setSelectedTaskId(null)}
-        onDeleted={() => setSelectedTaskId(null)}
-        user={me}
-        localities={
-          smifLocalitiesForTaskDrawer.length > 0 ? smifLocalitiesForTaskDrawer : localities
-        }
-        loading={Boolean(selectedTaskId) && !selectedTaskFromList && selectedTaskQuery.isLoading}
-      />
+      {selectedTaskId ? (
+        <TaskDetailsDrawer
+          task={selectedTask}
+          open
+          onClose={() => setSelectedTaskId(null)}
+          onDeleted={() => setSelectedTaskId(null)}
+          user={me}
+          localities={
+            smifLocalitiesForTaskDrawer.length > 0 ? smifLocalitiesForTaskDrawer : localities
+          }
+          loading={!selectedTaskFromList && selectedTaskQuery.isLoading}
+        />
+      ) : null}
     </Box>
   );
 }
