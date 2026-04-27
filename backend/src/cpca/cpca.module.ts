@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MailModule } from '../mail/mail.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { CpcaChecklistController } from './cpca-checklist.controller';
 import { CpcaChecklistService } from './cpca-checklist.service';
@@ -9,7 +10,7 @@ import { ComplaintSummaryPrivacyService } from './complaint-summary-privacy.serv
 import { CpcaService } from './cpca.service';
 
 @Module({
-  imports: [RbacModule],
+  imports: [RbacModule, MailModule],
   controllers: [
     CpcaController,
     CpcaCommissionController,

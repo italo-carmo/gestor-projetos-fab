@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import {
@@ -12,6 +12,8 @@ import { resolveBestOmByFabOm } from '../catalog/om-resolver';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { FabLdapProfile, FabLdapService } from '../ldap/fab-ldap.service';
+import { MailService } from '../mail/mail.service';
+import { buildCpcaApprovalDecisionEmail } from '../mail/templates/cpca-approval-decision-email';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   normalizeRoleName,
@@ -50,10 +52,13 @@ const MILITARY_RANK_PREFIX =
 
 @Injectable()
 export class CpcaCommissionService {
+  private readonly logger = new Logger(CpcaCommissionService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly fabLdap: FabLdapService,
+    @Optional() private readonly mail?: MailService,
   ) {}
 
   async listSelfRegistrationLocalities() {
@@ -1059,6 +1064,7 @@ export class CpcaCommissionService {
         applicantEmail: request.applicantEmail,
       }),
     );
+    await this.notifySelfRegistrationDecisionByEmail(approved);
 
     return {
       request: approved,
@@ -1141,6 +1147,7 @@ export class CpcaCommissionService {
         decisionNotes: rejected.decisionNotes,
       },
     });
+    await this.notifySelfRegistrationDecisionByEmail(rejected);
 
     return { request: rejected };
   }
@@ -1463,6 +1470,7 @@ export class CpcaCommissionService {
         nomineeUserId: approved.nomineeUserId,
       },
     });
+    await this.notifyNominationDecisionByEmail(approved);
 
     return {
       request: this.serializePresidentNominationRequest(approved),
@@ -1528,6 +1536,7 @@ export class CpcaCommissionService {
         decisionNotes: rejected.decisionNotes,
       },
     });
+    await this.notifyNominationDecisionByEmail(rejected);
 
     return { request: this.serializePresidentNominationRequest(rejected) };
   }
@@ -1594,6 +1603,7 @@ export class CpcaCommissionService {
         managedLocalityIds: request.requestedManagedOmIds,
       },
     });
+    await this.notifyCoverageDecisionByEmail(approved, managedLocalities);
 
     return {
       request: await this.serializeCoverageRequest(approved),
@@ -1654,6 +1664,7 @@ export class CpcaCommissionService {
         decisionNotes: rejected.decisionNotes,
       },
     });
+    await this.notifyCoverageDecisionByEmail(rejected);
 
     return { request: await this.serializeCoverageRequest(rejected) };
   }
@@ -2684,6 +2695,154 @@ export class CpcaCommissionService {
       decidedByUser: request.decidedByUser ?? null,
       requestedManagedLocalities: managedLocalities,
     };
+  }
+
+  private async notifySelfRegistrationDecisionByEmail(request: {
+    id: string;
+    status: CpcaPresidentRequestStatus;
+    applicantName: string;
+    applicantEmail?: string | null;
+    requestedAsSubstitution: boolean;
+    bulletinNumber: string;
+    attemptNumber: number;
+    decidedAt?: Date | null;
+    decisionNotes?: string | null;
+    om?: { id: string; code: string; name: string } | null;
+    applicantUser?: { email?: string | null } | null;
+  }) {
+    await this.sendCpcaApprovalDecisionEmail({
+      requestId: request.id,
+      requestTypeLabel: 'Solicitação de presidência CPCA',
+      to: request.applicantEmail ?? request.applicantUser?.email ?? null,
+      recipientName: request.applicantName,
+      status: request.status,
+      locality: request.om ?? null,
+      bulletinNumber: request.bulletinNumber,
+      attemptLabel: `Tentativa ${Number(request.attemptNumber ?? 1)}`,
+      requestedAsSubstitution: request.requestedAsSubstitution,
+      decidedAt: request.decidedAt ?? null,
+      decisionReason: request.decisionNotes ?? null,
+    });
+  }
+
+  private async notifyNominationDecisionByEmail(request: {
+    id: string;
+    status: CpcaPresidentRequestStatus;
+    nomineeName: string;
+    requestedAsSubstitution: boolean;
+    bulletinNumber?: string | null;
+    decidedAt?: Date | null;
+    decisionNotes?: string | null;
+    om?: { id: string; code: string; name: string } | null;
+    requestedByUser?: { name: string; email: string } | null;
+  }) {
+    await this.sendCpcaApprovalDecisionEmail({
+      requestId: request.id,
+      requestTypeLabel: 'Solicitação de sucessão da presidência CPCA',
+      to: request.requestedByUser?.email ?? null,
+      recipientName: request.requestedByUser?.name ?? null,
+      status: request.status,
+      locality: request.om ?? null,
+      bulletinNumber: request.bulletinNumber ?? null,
+      nomineeName: request.nomineeName,
+      requestedAsSubstitution: request.requestedAsSubstitution,
+      decidedAt: request.decidedAt ?? null,
+      decisionReason: request.decisionNotes ?? null,
+    });
+  }
+
+  private async notifyCoverageDecisionByEmail(
+    request: {
+      id: string;
+      status: CpcaPresidentRequestStatus;
+      decidedAt?: Date | null;
+      decisionNotes?: string | null;
+      om?: { id: string; code: string; name: string } | null;
+      requestedByUser?: { name: string; email: string } | null;
+    },
+    managedLocalities?: Array<{
+      id: string;
+      code: string;
+      name: string;
+    }>,
+  ) {
+    const managedLocalitiesLabel =
+      managedLocalities && managedLocalities.length > 0
+        ? managedLocalities
+            .map((item) => `${item.code} · ${item.name}`)
+            .join(', ')
+        : null;
+
+    await this.sendCpcaApprovalDecisionEmail({
+      requestId: request.id,
+      requestTypeLabel: 'Solicitação de cobertura CPCA',
+      to: request.requestedByUser?.email ?? null,
+      recipientName: request.requestedByUser?.name ?? null,
+      status: request.status,
+      locality: request.om ?? null,
+      managedLocalitiesLabel,
+      decidedAt: request.decidedAt ?? null,
+      decisionReason: request.decisionNotes ?? null,
+    });
+  }
+
+  private async sendCpcaApprovalDecisionEmail(input: {
+    requestId: string;
+    requestTypeLabel: string;
+    to?: string | null;
+    recipientName?: string | null;
+    status: CpcaPresidentRequestStatus;
+    locality?: { code?: string | null; name?: string | null } | null;
+    bulletinNumber?: string | null;
+    attemptLabel?: string | null;
+    requestedAsSubstitution?: boolean;
+    nomineeName?: string | null;
+    managedLocalitiesLabel?: string | null;
+    decidedAt?: Date | null;
+    decisionReason?: string | null;
+  }) {
+    if (!this.mail) {
+      return;
+    }
+
+    const to = this.normalizeEmail(input.to);
+    if (!to) {
+      this.logger.warn(
+        `Notificacao por e-mail ignorada para ${input.requestTypeLabel} ${input.requestId}: destinatario ausente.`,
+      );
+      return;
+    }
+
+    if (input.status !== 'APPROVED' && input.status !== 'REJECTED') {
+      return;
+    }
+
+    try {
+      const message = buildCpcaApprovalDecisionEmail({
+        requestTypeLabel: input.requestTypeLabel,
+        recipientName: input.recipientName,
+        status: input.status,
+        locality: input.locality,
+        bulletinNumber: input.bulletinNumber,
+        attemptLabel: input.attemptLabel,
+        requestedAsSubstitution: input.requestedAsSubstitution,
+        nomineeName: input.nomineeName,
+        managedLocalitiesLabel: input.managedLocalitiesLabel,
+        decidedAt: input.decidedAt,
+        decisionReason: input.decisionReason,
+      });
+
+      await this.mail.sendMail({
+        to,
+        ...message,
+      });
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : 'falha desconhecida';
+      this.logger.warn(
+        `Falha ao enviar e-mail de decisao CPCA para ${to} (${input.requestTypeLabel} ${input.requestId}): ${detail}.`,
+      );
+    }
   }
 
   private serializePresidentNominationRequest(request: {

@@ -6,6 +6,7 @@ import {
   persistCpcaPresidentBulletinFile,
   validateCpcaPresidentBulletinUpload,
 } from './cpca-president-bulletin-file';
+import { MailService } from '../mail/mail.service';
 
 jest.mock('../catalog/om-resolver', () => ({
   resolveBestOmByFabOm: jest.fn(),
@@ -109,6 +110,15 @@ function createLdapMock() {
     lookupByCpf: jest.fn(),
     lookupByUid: jest.fn(),
   };
+}
+
+function createMailMock() {
+  return {
+    sendMail: jest.fn().mockResolvedValue({
+      messageId: '<mail-1>',
+      accepted: ['presidente@fab.mil.br'],
+    }),
+  } as unknown as MailService;
 }
 
 function makeUser(args: {
@@ -309,10 +319,12 @@ describe('CpcaCommissionService', () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();
     const ldap = createLdapMock();
+    const mail = createMailMock();
     const service = new CpcaCommissionService(
       prisma as any,
       audit as any,
       ldap as any,
+      mail as any,
     );
 
     prisma.cpcaPresidentSelfRegistration.findUnique.mockResolvedValue({
@@ -385,6 +397,11 @@ describe('CpcaCommissionService', () => {
     prisma.cpcaPresidentSelfRegistration.update.mockResolvedValue({
       id: 'req-approve-2',
       status: 'APPROVED',
+      applicantName: 'Maj Novo',
+      requestedAsSubstitution: true,
+      bulletinNumber: 'BOL 222',
+      attemptNumber: 2,
+      decidedAt: new Date('2026-04-22T13:05:00Z'),
       om,
       applicantUser: {
         id: 'user-target',
@@ -426,6 +443,13 @@ describe('CpcaCommissionService', () => {
     expect(deleteCpcaPresidentBulletinFile).toHaveBeenCalledWith(
       'old-storage.pdf',
     );
+    expect((mail.sendMail as jest.Mock).mock.calls[0][0]).toMatchObject({
+      to: 'novo@fab.mil.br',
+      subject: expect.stringContaining('homologada'),
+      html: expect.stringContaining(
+        'Solicitação de presidência CPCA homologada',
+      ),
+    });
   });
 
   it('presidente local envia alteração de cobertura para homologação sem aplicar a cobertura diretamente', async () => {
@@ -1078,10 +1102,12 @@ describe('CpcaCommissionService', () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();
     const ldap = createLdapMock();
+    const mail = createMailMock();
     const service = new CpcaCommissionService(
       prisma as any,
       audit as any,
       ldap as any,
+      mail as any,
     );
 
     prisma.cpcaPresidentSelfRegistration.findUnique.mockResolvedValue({
@@ -1093,6 +1119,11 @@ describe('CpcaCommissionService', () => {
       omId: om.id,
       applicantUserId: 'user-pres-1',
       status: 'REJECTED',
+      applicantName: 'Cel Presidente',
+      applicantEmail: 'presidente@fab.mil.br',
+      requestedAsSubstitution: false,
+      bulletinNumber: 'BOL 111',
+      attemptNumber: 2,
       decisionNotes: 'Motivo da rejeição',
       createdAt: new Date('2026-04-22T14:00:00Z'),
       decidedAt: new Date('2026-04-22T15:00:00Z'),
@@ -1122,6 +1153,11 @@ describe('CpcaCommissionService', () => {
         action: 'cpca_president_request_reject',
       }),
     );
+    expect((mail.sendMail as jest.Mock).mock.calls[0][0]).toMatchObject({
+      to: 'presidente@fab.mil.br',
+      subject: expect.stringContaining('rejeitada'),
+      html: expect.stringContaining('Motivo da rejeição'),
+    });
   });
 
   it('rejeita sucessão de presidência sem propagar omId para o FK de locality na auditoria', async () => {
