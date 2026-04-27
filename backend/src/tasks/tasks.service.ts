@@ -349,6 +349,7 @@ export class TasksService {
   async generateInstances(
     templateId: string,
     payload: {
+      scope?: ActivityScope | string | null;
       localities: { localityId: string; dueDate: string }[];
       reportRequired?: boolean;
       priority?: TaskPriority | string;
@@ -362,6 +363,32 @@ export class TasksService {
       where: { id: templateId, deletedAt: null },
     });
     if (!template) throwError('NOT_FOUND');
+
+    const scope = this.normalizeTaskScope(payload.scope);
+    const localityCatalogType = this.resolveTaskLocalityCatalogType(scope);
+    const localityIds = Array.from(
+      new Set(
+        (payload.localities ?? [])
+          .map((entry) => String(entry?.localityId ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    const localityRecords = localityIds.length
+      ? await this.prisma.locality.findMany({
+          where: {
+            id: { in: localityIds },
+            catalogType: localityCatalogType,
+          },
+          select: { id: true },
+        })
+      : [];
+    if (localityRecords.length !== localityIds.length) {
+      throwError('NOT_FOUND');
+    }
+    for (const localityId of localityIds) {
+      this.assertConstraints(localityId, template.specialtyId ?? null, user);
+      this.assertCanAssignInLocality(localityId, user);
+    }
 
     const reportRequired =
       payload.reportRequired ?? template.reportRequiredDefault;
@@ -387,6 +414,7 @@ export class TasksService {
           data: {
             taskTemplateId: templateId,
             localityId: entry.localityId,
+            scope,
             specialtyId: template.specialtyId ?? null,
             dueDate: new Date(entry.dueDate),
             status: TaskStatus.NOT_STARTED,
@@ -417,7 +445,7 @@ export class TasksService {
       resource: 'task_instances',
       action: 'create_batch',
       localityId: user?.localityId ?? undefined,
-      diffJson: { templateId, count: created.length },
+      diffJson: { templateId, count: created.length, scope },
     });
 
     const items = await this.loadTaskInstancesMapped(
@@ -429,6 +457,7 @@ export class TasksService {
 
   async createTaskInstancesManual(
     payload: {
+      scope?: ActivityScope | string | null;
       title: string;
       description?: string | null;
       phaseId: string;
@@ -440,6 +469,8 @@ export class TasksService {
     },
     user?: RbacUser,
   ) {
+    const scope = this.normalizeTaskScope(payload.scope);
+    const localityCatalogType = this.resolveTaskLocalityCatalogType(scope);
     const title = sanitizeText(String(payload.title ?? '').trim());
     if (!title) {
       throwError('VALIDATION_ERROR', {
@@ -492,6 +523,16 @@ export class TasksService {
     for (const localityId of localityIds) {
       this.assertConstraints(localityId, null, user);
     }
+    const localityRecords = await this.prisma.locality.findMany({
+      where: {
+        id: { in: localityIds },
+        catalogType: localityCatalogType,
+      },
+      select: { id: true },
+    });
+    if (localityRecords.length !== localityIds.length) {
+      throwError('NOT_FOUND');
+    }
 
     const normalizedAssigneeIds = Array.from(
       new Set(
@@ -538,6 +579,7 @@ export class TasksService {
           data: {
             taskTemplateId: template.id,
             localityId,
+            scope,
             titleOverride: title,
             groupKey,
             dueDate,
@@ -569,6 +611,7 @@ export class TasksService {
       diffJson: {
         title,
         phaseId,
+        scope,
         count: created.length,
         localityIds,
       },
@@ -603,15 +646,19 @@ export class TasksService {
    */
   private async allowedLocalityIdsForTaskQueries(
     user?: RbacUser,
+    scopeRaw?: ActivityScope | string | null,
   ): Promise<string[] | undefined> {
-    if (!user?.id) return this.getTargetLocalityIds();
+    const scope = this.normalizeTaskScope(scopeRaw);
+    if (scope === ActivityScope.CIPAVD) return undefined;
+    if (!user?.id) return this.getTargetLocalityIds(scope);
     const profile = resolveAccessProfile(user);
     if (profile.ti || profile.nationalCommission) return undefined;
-    return this.getTargetLocalityIds();
+    return this.getTargetLocalityIds(scope);
   }
 
   async listTaskInstances(
     filters: {
+      scope?: string;
       localityId?: string;
       phaseId?: string;
       status?: string;
@@ -628,7 +675,7 @@ export class TasksService {
     user?: RbacUser,
   ) {
     const allowedLocalityIds =
-      await this.allowedLocalityIdsForTaskQueries(user);
+      await this.allowedLocalityIdsForTaskQueries(user, filters.scope);
     if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0) {
       const { page, pageSize } = this.parsePagination(
         filters.page,
@@ -1105,7 +1152,7 @@ export class TasksService {
         taskTemplate: { select: { specialtyId: true } },
         assignedElo: { select: { id: true, eloRoleId: true } },
         responsibles: { select: { userId: true } },
-        meeting: { select: { id: true, localityId: true } },
+        meeting: { select: { id: true, localityId: true, scope: true } },
       },
     });
     if (!instance) throwError('NOT_FOUND');
@@ -1272,10 +1319,13 @@ export class TasksService {
 
   async updateTaskLocalities(
     id: string,
+    scopeRaw: ActivityScope | string | null | undefined,
     localityIdsRaw: string[],
     sourceTaskIdsRaw: string[] = [],
     user?: RbacUser,
   ) {
+    const scope = this.normalizeTaskScope(scopeRaw);
+    const localityCatalogType = this.resolveTaskLocalityCatalogType(scope);
     const desiredLocalityIds = Array.from(
       new Set(
         (localityIdsRaw ?? [])
@@ -1300,7 +1350,7 @@ export class TasksService {
           include: { user: { select: { id: true, localityId: true } } },
           orderBy: [{ createdAt: 'asc' }],
         },
-        meeting: { select: { id: true, localityId: true } },
+        meeting: { select: { id: true, localityId: true, scope: true } },
       },
     });
     if (!baseInstance) throwError('NOT_FOUND');
@@ -1382,7 +1432,7 @@ export class TasksService {
     const localityRecords = await this.prisma.locality.findMany({
       where: {
         id: { in: desiredLocalityIds },
-        catalogType: LocalityCatalogType.SMIF,
+        catalogType: localityCatalogType,
       },
       select: { id: true, commandName: true, commanderName: true },
     });
@@ -1392,6 +1442,12 @@ export class TasksService {
     const localityById = new Map(
       localityRecords.map((locality) => [locality.id, locality]),
     );
+    const canReuseMeetingForLocality = (localityId: string) =>
+      !baseInstance.meeting ||
+      ((!baseInstance.meeting.scope ||
+        this.normalizeTaskScope(baseInstance.meeting.scope) === scope) &&
+        (!baseInstance.meeting.localityId ||
+          baseInstance.meeting.localityId === localityId));
 
     const resolveAssignmentForLocality = (localityId: string) => {
       const locality = localityById.get(localityId);
@@ -1421,12 +1477,9 @@ export class TasksService {
           externalAssigneeName: null as string | null,
           externalAssigneeRole: null as string | null,
           responsibles,
-          meetingId:
-            !baseInstance.meeting ||
-            !baseInstance.meeting.localityId ||
-            baseInstance.meeting.localityId === localityId
-              ? baseInstance.meetingId
-              : null,
+          meetingId: canReuseMeetingForLocality(localityId)
+            ? baseInstance.meetingId
+            : null,
         };
       }
       if (assignedEloId) {
@@ -1437,12 +1490,9 @@ export class TasksService {
           externalAssigneeName: null as string | null,
           externalAssigneeRole: null as string | null,
           responsibles,
-          meetingId:
-            !baseInstance.meeting ||
-            !baseInstance.meeting.localityId ||
-            baseInstance.meeting.localityId === localityId
-              ? baseInstance.meetingId
-              : null,
+          meetingId: canReuseMeetingForLocality(localityId)
+            ? baseInstance.meetingId
+            : null,
         };
       }
       if (baseInstance.assigneeType === TaskAssigneeType.LOCALITY_COMMAND) {
@@ -1454,12 +1504,9 @@ export class TasksService {
           externalAssigneeName: name,
           externalAssigneeRole: name ? 'GSD / Comando' : null,
           responsibles: [] as string[],
-          meetingId:
-            !baseInstance.meeting ||
-            !baseInstance.meeting.localityId ||
-            baseInstance.meeting.localityId === localityId
-              ? baseInstance.meetingId
-              : null,
+          meetingId: canReuseMeetingForLocality(localityId)
+            ? baseInstance.meetingId
+            : null,
         };
       }
       if (baseInstance.assigneeType === TaskAssigneeType.LOCALITY_COMMANDER) {
@@ -1471,12 +1518,9 @@ export class TasksService {
           externalAssigneeName: name,
           externalAssigneeRole: name ? 'Comandante' : null,
           responsibles: [] as string[],
-          meetingId:
-            !baseInstance.meeting ||
-            !baseInstance.meeting.localityId ||
-            baseInstance.meeting.localityId === localityId
-              ? baseInstance.meetingId
-              : null,
+          meetingId: canReuseMeetingForLocality(localityId)
+            ? baseInstance.meetingId
+            : null,
         };
       }
 
@@ -1487,12 +1531,9 @@ export class TasksService {
         externalAssigneeName: null as string | null,
         externalAssigneeRole: null as string | null,
         responsibles: [] as string[],
-        meetingId:
-          !baseInstance.meeting ||
-          !baseInstance.meeting.localityId ||
-          baseInstance.meeting.localityId === localityId
-            ? baseInstance.meetingId
-            : null,
+        meetingId: canReuseMeetingForLocality(localityId)
+          ? baseInstance.meetingId
+          : null,
       };
     };
 
@@ -1530,12 +1571,16 @@ export class TasksService {
     const persisted = await this.prisma.$transaction(async (tx) => {
       const createdIds: string[] = [];
 
-      if (baseInstance.localityId !== primaryLocalityId) {
+      if (
+        baseInstance.localityId !== primaryLocalityId ||
+        this.normalizeTaskScope(baseInstance.scope) !== scope
+      ) {
         const assignment = resolveAssignmentForLocality(primaryLocalityId);
         await tx.taskInstance.update({
           where: { id: baseInstance.id },
           data: {
             localityId: primaryLocalityId,
+            scope,
             meetingId: assignment.meetingId,
             assignedToId: assignment.assignedToId,
             assignedEloId: assignment.assignedEloId,
@@ -1563,6 +1608,7 @@ export class TasksService {
           data: {
             taskTemplateId: baseInstance.taskTemplateId,
             localityId,
+            scope,
             specialtyId: baseInstance.specialtyId,
             dueDate: baseInstance.dueDate,
             status: baseInstance.status,
@@ -1621,7 +1667,7 @@ export class TasksService {
           : null;
       await tx.taskInstance.updateMany({
         where: { id: { in: finalIds } },
-        data: { groupKey: nextGroupKey },
+        data: { groupKey: nextGroupKey, scope },
       });
 
       return { finalIds, nextGroupKey };
@@ -1668,6 +1714,7 @@ export class TasksService {
       localityId: primaryLocalityId,
       diffJson: {
         sourceTaskIds: sourceTaskIds,
+        scope,
         keptTaskIds: Array.from(keptIds),
         deletedTaskIds: Array.from(deletedIds),
         localityIds: desiredLocalityIds,
@@ -5159,6 +5206,7 @@ export class TasksService {
 
   private buildTaskWhere(
     filters: {
+      scope?: string;
       localityId?: string;
       allowedLocalityIds?: string[];
       phaseId?: string;
@@ -5174,6 +5222,7 @@ export class TasksService {
     user?: RbacUser,
   ) {
     const andClauses: Prisma.TaskInstanceWhereInput[] = [];
+    andClauses.push({ scope: this.normalizeTaskScope(filters.scope) });
 
     if (Array.isArray(filters.allowedLocalityIds)) {
       if (filters.allowedLocalityIds.length === 0) {
@@ -5237,6 +5286,7 @@ export class TasksService {
    */
   private async expandTaskWhereForSharedGroupKey(
     filters: {
+      scope?: string;
       localityId?: string;
       allowedLocalityIds?: string[];
       phaseId?: string;
@@ -5363,6 +5413,7 @@ export class TasksService {
 
   async listTaskInstancesForExport(
     filters: {
+      scope?: string;
       localityId?: string;
       allowedLocalityIds?: string[];
       phaseId?: string;
@@ -5376,7 +5427,7 @@ export class TasksService {
     user?: RbacUser,
   ) {
     const allowedLocalityIds =
-      await this.allowedLocalityIdsForTaskQueries(user);
+      await this.allowedLocalityIdsForTaskQueries(user, filters.scope);
     if (allowedLocalityIds !== undefined && allowedLocalityIds.length === 0)
       return [];
     const { where } = this.buildTaskWhere(
@@ -5500,6 +5551,12 @@ export class TasksService {
   }
 
   private parsePagination(pageRaw?: string, pageSizeRaw?: string) {
+    const normalizedPageSize = String(pageSizeRaw ?? '')
+      .trim()
+      .toLowerCase();
+    if (normalizedPageSize === 'all') {
+      return { page: 1, pageSize: -1, skip: 0, take: undefined };
+    }
     const page = Math.max(1, Number(pageRaw ?? 1) || 1);
     const pageSize = Math.min(
       100,
@@ -5509,9 +5566,10 @@ export class TasksService {
     return { page, pageSize, skip, take: pageSize };
   }
 
-  private async getTargetLocalityIds() {
+  private async getTargetLocalityIds(scope: ActivityScope = ActivityScope.SMIF) {
+    const localityCatalogType = this.resolveTaskLocalityCatalogType(scope);
     const localities = await this.prisma.locality.findMany({
-      where: { catalogType: LocalityCatalogType.SMIF },
+      where: { catalogType: localityCatalogType },
       select: {
         id: true,
         name: true,
@@ -5519,6 +5577,23 @@ export class TasksService {
         updatedAt: true,
       },
     });
+    if (scope === ActivityScope.CIPAVD) {
+      return localities.map((locality) => locality.id);
+    }
     return selectTargetLocalities(localities).map((locality) => locality.id);
+  }
+
+  private normalizeTaskScope(
+    raw?: ActivityScope | string | null,
+  ): ActivityScope {
+    return String(raw ?? '').toUpperCase() === 'CIPAVD'
+      ? ActivityScope.CIPAVD
+      : ActivityScope.SMIF;
+  }
+
+  private resolveTaskLocalityCatalogType(scope: ActivityScope) {
+    return scope === ActivityScope.CIPAVD
+      ? LocalityCatalogType.CIPAVD
+      : LocalityCatalogType.SMIF;
   }
 }

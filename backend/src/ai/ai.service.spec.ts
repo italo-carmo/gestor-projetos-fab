@@ -272,6 +272,9 @@ describe('AiService', () => {
       'rag_knowledge_bases',
       'traceability_links',
     ]);
+    litellmMock.chatCompletion.mockRejectedValue(
+      new Error('Path /v1/chat/completions not found'),
+    );
     litellmMock.chatCompletionStream.mockImplementation(
       () =>
         (async function* () {
@@ -359,5 +362,145 @@ describe('AiService', () => {
       }),
     );
     expect(done?.data.narrative).toContain('/cpca-cases?q=CPCA-2026-BACG-00001');
+  });
+
+  it('rewrites CPCA chat output to pt-BR when the model answers in English', async () => {
+    settingsMock.getAnalysisSourcesForType.mockResolvedValue([
+      'complaints_cpca',
+      'tasks',
+    ]);
+    settingsMock.getAnalysisFeaturesForType.mockResolvedValue([
+      'structured_complaints',
+      'rag_knowledge_bases',
+      'traceability_links',
+      'cpca_case_inconsistencies',
+    ]);
+    litellmMock.chatCompletion
+      .mockResolvedValueOnce({
+        content:
+          '## Findings\nThe case CPCA-2026-BACG-00001 should be reviewed immediately.',
+        model: 'llama-local',
+      })
+      .mockResolvedValueOnce({
+        content:
+          '## Achados\nO caso CPCA-2026-BACG-00001 deve ser revisado imediatamente.',
+        model: 'llama-local',
+      });
+
+    const events = await collectSse(
+      service.chatStream(
+        'Analise o caso CPCA-2026-BACG-00001',
+        [],
+        'cpca_agent',
+      ),
+    );
+    const done = events.find((event) => event.event === 'done');
+
+    expect(done?.data.narrative).toContain(
+      '## Achados\nO caso CPCA-2026-BACG-00001 deve ser revisado imediatamente.',
+    );
+    expect(done?.data.narrative).not.toContain('## Findings');
+    expect(litellmMock.chatCompletion).toHaveBeenCalledTimes(2);
+    expect(litellmMock.chatCompletion).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        messages: expect.arrayContaining([
+          expect.objectContaining({
+            role: 'system',
+            content: expect.stringContaining(
+              'Você é um revisor final de idioma.',
+            ),
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it('normalizes streamed analysis output to pt-BR before the final narrative', async () => {
+    settingsMock.getAnalysisFeaturesForType.mockResolvedValue([
+      'structured_situational',
+      'traceability_links',
+    ]);
+    litellmMock.chatCompletionStream.mockImplementation(
+      () =>
+        (async function* () {
+          yield {
+            type: 'token',
+            text: '## Summary\nThe data indicates operational pressure.\n',
+          };
+          yield { type: 'done', model: 'llama-local' };
+        })(),
+    );
+    litellmMock.chatCompletion.mockResolvedValueOnce({
+      content: '## Síntese\nOs dados indicam pressão operacional.',
+      model: 'llama-local',
+    });
+
+    const events = await collectSse(service.analyzeStream('situational'));
+    const done = events.find((event) => event.event === 'done');
+
+    expect(done?.data.narrative).toContain(
+      '## Síntese\nOs dados indicam pressão operacional.',
+    );
+    expect(done?.data.narrative).not.toContain('## Summary');
+    expect(litellmMock.chatCompletion).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries chat generation once before returning the local fallback banner', async () => {
+    settingsMock.getAnalysisSourcesForType.mockResolvedValue([
+      'complaints_cpca',
+      'tasks',
+    ]);
+    settingsMock.getAnalysisFeaturesForType.mockResolvedValue([
+      'structured_complaints',
+      'rag_knowledge_bases',
+      'traceability_links',
+    ]);
+    litellmMock.chatCompletion
+      .mockRejectedValueOnce(new Error('LITELLM_CHAT_TIMEOUT'))
+      .mockResolvedValueOnce({
+        content: '## Resposta\nO caso exige revisão adicional.',
+        model: 'llama-local',
+      });
+
+    const events = await collectSse(
+      service.chatStream('Analise o caso CPCA-2026-BACG-00001', [], 'cpca_agent'),
+    );
+    const done = events.find((event) => event.event === 'done');
+
+    expect(done?.data.narrative).toContain(
+      '## Resposta\nO caso exige revisão adicional.',
+    );
+    expect(done?.data.narrative).not.toContain(
+      'O gateway generativo está indisponível neste momento.',
+    );
+    expect(litellmMock.chatCompletion).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries analysis generation once before returning the structured local fallback', async () => {
+    settingsMock.getAnalysisFeaturesForType.mockResolvedValue([
+      'structured_situational',
+      'traceability_links',
+    ]);
+    litellmMock.chatCompletionStream.mockImplementation(
+      () =>
+        (async function* () {
+          throw new Error('Path /v1/chat/completions not found');
+        })(),
+    );
+    litellmMock.chatCompletion.mockResolvedValueOnce({
+      content: '## Síntese\nOs indicadores seguem sob monitoramento.',
+      model: 'llama-local',
+    });
+
+    const events = await collectSse(service.analyzeStream('situational'));
+    const done = events.find((event) => event.event === 'done');
+
+    expect(done?.data.narrative).toContain(
+      '## Síntese\nOs indicadores seguem sob monitoramento.',
+    );
+    expect(done?.data.narrative).not.toContain(
+      'Análise estruturada local, baseada diretamente nos dados do sistema',
+    );
+    expect(litellmMock.chatCompletion).toHaveBeenCalledTimes(1);
   });
 });

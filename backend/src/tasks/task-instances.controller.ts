@@ -49,6 +49,7 @@ export class TaskInstancesController {
   @Get()
   @RequirePermission('task_instances', 'view')
   list(
+    @Query('scope') scope: string | undefined,
     @Query('localityId') localityId: string | undefined,
     @Query('phaseId') phaseId: string | undefined,
     @Query('status') status: string | undefined,
@@ -65,6 +66,7 @@ export class TaskInstancesController {
   ) {
     return this.tasks.listTaskInstances(
       {
+        scope,
         localityId,
         phaseId,
         status,
@@ -87,6 +89,7 @@ export class TaskInstancesController {
   create(@Body() dto: CreateTaskInstanceDto, @CurrentUser() user: RbacUser) {
     return this.tasks.createTaskInstancesManual(
       {
+        scope: dto.scope,
         title: dto.title,
         description: dto.description ?? null,
         phaseId: dto.phaseId,
@@ -218,6 +221,7 @@ export class TaskInstancesController {
   ) {
     return this.tasks.updateTaskLocalities(
       id,
+      dto.scope,
       dto.localityIds ?? [],
       dto.sourceTaskIds ?? [],
       user,

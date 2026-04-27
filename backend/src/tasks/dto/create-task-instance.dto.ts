@@ -1,6 +1,17 @@
-import { IsArray, IsDateString, IsOptional, IsString } from 'class-validator';
+import { ActivityScope } from '@prisma/client';
+import {
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateTaskInstanceDto {
+  @IsOptional()
+  @IsEnum(ActivityScope)
+  scope?: ActivityScope;
+
   @IsString()
   title: string;
 

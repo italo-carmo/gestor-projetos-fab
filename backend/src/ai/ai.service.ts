@@ -261,6 +261,50 @@ Regras:
 6. Prefira resposta objetiva, com seções curtas, listas e destaque do que é mais relevante para o gestor ou operador.
 7. Nunca exponha raciocínio interno.`;
 
+const ENGLISH_OUTPUT_MARKERS = [
+  /\bthe\b/g,
+  /\band\b/g,
+  /\bwith\b/g,
+  /\bfrom\b/g,
+  /\bthis\b/g,
+  /\bthat\b/g,
+  /\bthese\b/g,
+  /\bthose\b/g,
+  /\bhere(?:\s+is|['’]s)\b/g,
+  /\bbased on\b/g,
+  /\baccording to\b/g,
+  /\bin summary\b/g,
+  /\bsummary\b/g,
+  /\bnext steps?\b/g,
+  /\bfindings?\b/g,
+  /\bevidence\b/g,
+  /\bdata\b/g,
+  /\bindicat(?:e|es|ed|ing)\b/g,
+  /\breview(?:s|ed|ing)?\b/g,
+  /\bimmediately\b/g,
+  /\bshould\b/g,
+  /\bmust\b/g,
+  /\bwill\b/g,
+] as const;
+
+const PORTUGUESE_OUTPUT_MARKERS = [
+  /\bnao\b/g,
+  /\bpara\b/g,
+  /\bcom\b/g,
+  /\buma\b/g,
+  /\bdados\b/g,
+  /\bdenuncia(?:s)?\b/g,
+  /\banalise\b/g,
+  /\bresposta\b/g,
+  /\bcontexto\b/g,
+  /\bcaso(?:s)?\b/g,
+  /\bencaminhamento(?:s)?\b/g,
+  /\bsituacao\b/g,
+  /\brelatorio(?:s)?\b/g,
+  /\bfonte(?:s)?\b/g,
+  /\breferencia(?:s)?\b/g,
+] as const;
+
 const COMGEP_UF_ALIASES: Record<string, string[]> = {
   AC: ['acre'],
   AL: ['alagoas'],
@@ -691,22 +735,42 @@ export class AiService {
         ...finalResult,
         narrative: await this.appendTraceabilityReferences(
           safeType,
-          this.sanitizeComgepNarrative(finalResult.narrative, {
-            agentType: safeType,
-            room,
-            scopeUf,
-            mode,
-            intent,
-            focus,
-            evidences,
-            history: session.messages,
-            userMessage: initialUserMessage,
-            configuredPrompt: config.configuredPrompt,
-            configuredSources: config.configuredSources,
-            configuredKnowledgeBaseIds: config.configuredKnowledgeBaseIds,
-            configuredFeatures: config.configuredFeatures,
-            knowledgeContextText: knowledgeContext.text,
-            knowledgeReferences: knowledgeContext.references,
+          await this.enforcePortugueseNarrative({
+            narrative: this.sanitizeComgepNarrative(finalResult.narrative, {
+              agentType: safeType,
+              room,
+              scopeUf,
+              mode,
+              intent,
+              focus,
+              evidences,
+              history: session.messages,
+              userMessage: initialUserMessage,
+              configuredPrompt: config.configuredPrompt,
+              configuredSources: config.configuredSources,
+              configuredKnowledgeBaseIds: config.configuredKnowledgeBaseIds,
+              configuredFeatures: config.configuredFeatures,
+              knowledgeContextText: knowledgeContext.text,
+              knowledgeReferences: knowledgeContext.references,
+            }),
+            fallbackNarrative: this.buildDeterministicComgepFallbackNarrative({
+              agentType: safeType,
+              room,
+              scopeUf,
+              mode,
+              intent,
+              focus,
+              evidences,
+              history: session.messages,
+              userMessage: initialUserMessage,
+              configuredPrompt: config.configuredPrompt,
+              configuredSources: config.configuredSources,
+              configuredKnowledgeBaseIds: config.configuredKnowledgeBaseIds,
+              configuredFeatures: config.configuredFeatures,
+              knowledgeContextText: knowledgeContext.text,
+              knowledgeReferences: knowledgeContext.references,
+            }),
+            contextLabel: `copiloto ${safeType}`,
           }),
           config.configuredSources,
           knowledgeContext.references,
@@ -858,22 +922,42 @@ export class AiService {
         ...finalResult,
         narrative: await this.appendTraceabilityReferences(
           session.agentType,
-          this.sanitizeComgepNarrative(finalResult.narrative, {
-            agentType: session.agentType,
-            room,
-            scopeUf,
-            mode,
-            intent,
-            focus,
-            evidences,
-            history: session.messages,
-            userMessage: userMessage.content,
-            configuredPrompt: session.configuredPrompt,
-            configuredSources: session.configuredSources,
-            configuredKnowledgeBaseIds: session.configuredKnowledgeBaseIds,
-            configuredFeatures: session.configuredFeatures,
-            knowledgeContextText: knowledgeContext.text,
-            knowledgeReferences: knowledgeContext.references,
+          await this.enforcePortugueseNarrative({
+            narrative: this.sanitizeComgepNarrative(finalResult.narrative, {
+              agentType: session.agentType,
+              room,
+              scopeUf,
+              mode,
+              intent,
+              focus,
+              evidences,
+              history: session.messages,
+              userMessage: userMessage.content,
+              configuredPrompt: session.configuredPrompt,
+              configuredSources: session.configuredSources,
+              configuredKnowledgeBaseIds: session.configuredKnowledgeBaseIds,
+              configuredFeatures: session.configuredFeatures,
+              knowledgeContextText: knowledgeContext.text,
+              knowledgeReferences: knowledgeContext.references,
+            }),
+            fallbackNarrative: this.buildDeterministicComgepFallbackNarrative({
+              agentType: session.agentType,
+              room,
+              scopeUf,
+              mode,
+              intent,
+              focus,
+              evidences,
+              history: session.messages,
+              userMessage: userMessage.content,
+              configuredPrompt: session.configuredPrompt,
+              configuredSources: session.configuredSources,
+              configuredKnowledgeBaseIds: session.configuredKnowledgeBaseIds,
+              configuredFeatures: session.configuredFeatures,
+              knowledgeContextText: knowledgeContext.text,
+              knowledgeReferences: knowledgeContext.references,
+            }),
+            contextLabel: `copiloto ${session.agentType}`,
           }),
           session.configuredSources,
           knowledgeContext.references,
@@ -1028,6 +1112,10 @@ export class AiService {
     ];
 
     const configuredModel = this.litellm.getDefaultModel();
+    const deterministicFallback = this.buildDeterministicAnalysisNarrative(
+      type,
+      data,
+    );
     let fullText = '';
     let tokenCount = 0;
     type StreamChunk =
@@ -1068,9 +1156,14 @@ export class AiService {
           );
           yield this.sseEvent('token', { text: chunk.text, percent: progress });
         } else if (chunk.type === 'done') {
+          const finalNarrative = await this.enforcePortugueseNarrative({
+            narrative: fullText,
+            fallbackNarrative: deterministicFallback,
+            contextLabel: `análise ${type}`,
+          });
           const narrativeWithRefs = await this.appendTraceabilityReferences(
             type,
-            fullText,
+            finalNarrative,
             config.configuredSources,
             knowledgeContext.references,
             this.hasFeature(
@@ -1096,13 +1189,47 @@ export class AiService {
           )}s; usando análise estruturada local.`,
         );
         yield this.sseEvent('progress', {
+          percent: 72,
+          stage:
+            'Gateway indisponível na primeira tentativa; reprocessando uma vez antes do fallback local...',
+        });
+        const retry = await this.retryNarrativeGenerationOnce({
+          messages,
+          maxTokens: 3000,
+          contextLabel: `análise ${type}`,
+        });
+        if (retry) {
+          const finalNarrative = await this.enforcePortugueseNarrative({
+            narrative: retry.narrative,
+            fallbackNarrative: deterministicFallback,
+            contextLabel: `análise ${type}`,
+          });
+          const narrativeWithRefs = await this.appendTraceabilityReferences(
+            type,
+            finalNarrative,
+            config.configuredSources,
+            knowledgeContext.references,
+            this.hasFeature(
+              config.configuredFeatures,
+              AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+            ),
+          );
+          yield this.sseEvent('done', {
+            percent: 100,
+            narrative: narrativeWithRefs,
+            model: retry.model,
+            generatedAt: new Date().toISOString(),
+          });
+          return;
+        }
+        yield this.sseEvent('progress', {
           percent: 90,
           stage:
             'Gateway indisponível para análise generativa; produzindo análise estruturada local...',
         });
         const narrativeWithRefs = await this.appendTraceabilityReferences(
           type,
-          this.buildDeterministicAnalysisNarrative(type, data),
+          deterministicFallback,
           config.configuredSources,
           knowledgeContext.references,
           this.hasFeature(
@@ -1123,13 +1250,47 @@ export class AiService {
           `LiteLLM indisponível para análise ${type}; usando análise estruturada local. Motivo: ${msg}`,
         );
         yield this.sseEvent('progress', {
+          percent: 72,
+          stage:
+            'Gateway indisponível na primeira tentativa; reprocessando uma vez antes do fallback local...',
+        });
+        const retry = await this.retryNarrativeGenerationOnce({
+          messages,
+          maxTokens: 3000,
+          contextLabel: `análise ${type}`,
+        });
+        if (retry) {
+          const finalNarrative = await this.enforcePortugueseNarrative({
+            narrative: retry.narrative,
+            fallbackNarrative: deterministicFallback,
+            contextLabel: `análise ${type}`,
+          });
+          const narrativeWithRefs = await this.appendTraceabilityReferences(
+            type,
+            finalNarrative,
+            config.configuredSources,
+            knowledgeContext.references,
+            this.hasFeature(
+              config.configuredFeatures,
+              AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+            ),
+          );
+          yield this.sseEvent('done', {
+            percent: 100,
+            narrative: narrativeWithRefs,
+            model: retry.model,
+            generatedAt: new Date().toISOString(),
+          });
+          return;
+        }
+        yield this.sseEvent('progress', {
           percent: 90,
           stage:
             'Gateway indisponível para análise generativa; produzindo análise estruturada local...',
         });
         const narrativeWithRefs = await this.appendTraceabilityReferences(
           type,
-          this.buildDeterministicAnalysisNarrative(type, data),
+          deterministicFallback,
           config.configuredSources,
           knowledgeContext.references,
           this.hasFeature(
@@ -1149,9 +1310,14 @@ export class AiService {
       return;
     }
 
+    const finalNarrative = await this.enforcePortugueseNarrative({
+      narrative: fullText,
+      fallbackNarrative: deterministicFallback,
+      contextLabel: `análise ${type}`,
+    });
     const narrativeWithRefs = await this.appendTraceabilityReferences(
       type,
-      fullText,
+      finalNarrative,
       config.configuredSources,
       knowledgeContext.references,
       this.hasFeature(
@@ -1262,18 +1428,45 @@ export class AiService {
         ),
       ])) as { content: string; model: string };
 
+      const deterministicFallback = this.buildDeterministicChatFallback({
+        question: safeMessage,
+        profile: safeProfile,
+        contextSummary: context.summaryMarkdown,
+        sourceLabels: context.sourceLabels,
+        knowledgeSummary: this.summarizeKnowledgeHits(knowledgeContext.hits),
+      });
       let finalNarrative = stripReasoningPrefix(
         String(completion?.content ?? '').trim(),
       ).trim();
       if (!finalNarrative || looksLikeInternalReasoning(finalNarrative)) {
-        finalNarrative = this.buildDeterministicChatFallback({
-          question: safeMessage,
-          profile: safeProfile,
-          contextSummary: context.summaryMarkdown,
-          sourceLabels: context.sourceLabels,
-          knowledgeSummary: this.summarizeKnowledgeHits(knowledgeContext.hits),
-        });
+        finalNarrative = deterministicFallback;
       }
+      let finalModel = completion.model;
+      if (this.isGatewayUnavailableFallbackNarrative(finalNarrative)) {
+        yield this.sseEvent('progress', {
+          percent: 58,
+          stage:
+            'A resposta caiu em fallback local; reprocessando uma vez antes de concluir...',
+        });
+        const retry = await this.retryNarrativeGenerationOnce({
+          messages,
+          maxTokens: 2200,
+          contextLabel:
+            safeProfile === 'cpca_agent'
+              ? 'chat IA CPCA'
+              : `chat ${safeProfile}`,
+        });
+        if (retry) {
+          finalNarrative = retry.narrative;
+          finalModel = retry.model;
+        }
+      }
+      finalNarrative = await this.enforcePortugueseNarrative({
+        narrative: finalNarrative,
+        fallbackNarrative: deterministicFallback,
+        contextLabel:
+          safeProfile === 'cpca_agent' ? 'chat IA CPCA' : `chat ${safeProfile}`,
+      });
 
       finalNarrative = await this.appendTraceabilityReferences(
         safeProfile,
@@ -1309,7 +1502,7 @@ export class AiService {
       ]);
 
       yield this.sseEvent('done', {
-        model: completion.model,
+        model: finalModel,
         narrative: finalNarrative,
         generatedAt: new Date().toISOString(),
         suggestedLinks,
@@ -1323,6 +1516,74 @@ export class AiService {
         msg === 'LITELLM_STREAM_IDLE_TIMEOUT' ||
         this.shouldUseDeterministicComgepFallback(msg)
       ) {
+        yield this.sseEvent('progress', {
+          percent: 58,
+          stage:
+            'Gateway indisponível na primeira tentativa; reprocessando uma vez antes do fallback local...',
+        });
+        const retry = await this.retryNarrativeGenerationOnce({
+          messages,
+          maxTokens: 2200,
+          contextLabel:
+            safeProfile === 'cpca_agent'
+              ? 'chat IA CPCA'
+              : `chat ${safeProfile}`,
+        });
+        if (retry) {
+          let finalNarrative = await this.enforcePortugueseNarrative({
+            narrative: retry.narrative,
+            fallbackNarrative: this.buildDeterministicChatFallback({
+              question: safeMessage,
+              profile: safeProfile,
+              contextSummary: context.summaryMarkdown,
+              sourceLabels: context.sourceLabels,
+              knowledgeSummary: this.summarizeKnowledgeHits(knowledgeContext.hits),
+            }),
+            contextLabel:
+              safeProfile === 'cpca_agent'
+                ? 'chat IA CPCA'
+                : `chat ${safeProfile}`,
+          });
+          finalNarrative = await this.appendTraceabilityReferences(
+            safeProfile,
+            finalNarrative,
+            config.configuredSources,
+            [...(context.extraRefs ?? []), ...knowledgeContext.references],
+            this.hasFeature(
+              config.configuredFeatures,
+              AI_PROFILE_FEATURE_IDS.TRACEABILITY_LINKS,
+            ),
+          );
+          const [suggestedLinks, suggestedActions] = await Promise.all([
+            this.hasFeature(
+              config.configuredFeatures,
+              AI_PROFILE_FEATURE_IDS.SUGGESTED_LINKS,
+            )
+              ? this.buildChatSuggestedLinks(
+                  finalNarrative,
+                  safeMessage,
+                  safeProfile,
+                  config.configuredSources,
+                )
+              : Promise.resolve([]),
+            Promise.resolve(
+              this.hasFeature(
+                config.configuredFeatures,
+                AI_PROFILE_FEATURE_IDS.SUGGESTED_ACTIONS,
+              )
+                ? this.buildChatSuggestedActions(safeMessage, finalNarrative)
+                : [],
+            ),
+          ]);
+          yield this.sseEvent('done', {
+            model: retry.model,
+            narrative: finalNarrative,
+            generatedAt: new Date().toISOString(),
+            suggestedLinks,
+            suggestedActions,
+          });
+          return;
+        }
         const fallback = await this.appendTraceabilityReferences(
           safeProfile,
           this.buildDeterministicChatFallback({
@@ -1619,6 +1880,202 @@ export class AiService {
     const normalized = stripReasoningPrefix(String(content ?? '')).trim();
     if (normalized.length <= 1400) return normalized;
     return `${normalized.slice(0, 1400)}\n…(histórico resumido)`;
+  }
+
+  private normalizeTextForLanguageCheck(text: string) {
+    return String(text ?? '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`[^`]*`/g, ' ')
+      .replace(/!\[[^\]]*\]\([^)]+\)/g, ' ')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/https?:\/\/\S+/gi, ' ')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private countLanguagePatternMatches(
+    source: string,
+    patterns: readonly RegExp[],
+  ) {
+    return patterns.reduce((total, pattern) => {
+      const matches = source.match(pattern);
+      return total + (matches?.length ?? 0);
+    }, 0);
+  }
+
+  private looksLikeEnglishOutput(text: string) {
+    const sample = this.normalizeTextForLanguageCheck(text);
+    if (!sample || sample.length < 24) return false;
+
+    const englishMatches = this.countLanguagePatternMatches(
+      sample,
+      ENGLISH_OUTPUT_MARKERS,
+    );
+    const portugueseMatches = this.countLanguagePatternMatches(
+      sample,
+      PORTUGUESE_OUTPUT_MARKERS,
+    );
+    const startsInEnglish =
+      /^(the|this|these|those|here(?:\s+is|['’]s)|based on|according to|in summary|findings?|summary|overview|recommendations?)\b/.test(
+        sample,
+      );
+    const hasEnglishHeading =
+      /^#{1,6}\s*(findings?|summary|overview|recommendations?)\b/im.test(
+        String(text ?? ''),
+      );
+
+    if (hasEnglishHeading && portugueseMatches === 0) {
+      return true;
+    }
+
+    if (startsInEnglish && englishMatches >= 2 && portugueseMatches === 0) {
+      return true;
+    }
+
+    if (englishMatches >= 3 && portugueseMatches === 0) {
+      return true;
+    }
+
+    return englishMatches >= 6 && englishMatches >= portugueseMatches * 2 + 2;
+  }
+
+  private async rewriteNarrativeToPortuguese(
+    narrative: string,
+    contextLabel: string,
+  ) {
+    try {
+      const rewrite = (await Promise.race([
+        this.litellm.chatCompletion({
+          messages: [
+            {
+              role: 'system',
+              content: [
+                'Você é um revisor final de idioma.',
+                'Reescreva exclusivamente em português do Brasil.',
+                'Preserve integralmente fatos, números, datas, códigos, nomes próprios, links e a estrutura Markdown.',
+                'Não acrescente informação nova, não resuma e não explique o que fez.',
+                'Entregue apenas a versão final reescrita.',
+              ].join(' '),
+            },
+            {
+              role: 'user',
+              content: `Reescreva o texto abaixo para pt-BR, preservando o conteúdo:\n\n${narrative}`,
+            },
+          ],
+          temperature: 0.05,
+          max_tokens: 2400,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('LITELLM_PORTUGUESE_REWRITE_TIMEOUT')),
+            12_000,
+          ),
+        ),
+      ])) as { content: string };
+
+      const cleaned = stripReasoningPrefix(
+        String(rewrite?.content ?? '').trim(),
+      ).trim();
+      return cleaned || null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Falha ao reescrever resposta em português para ${contextLabel}: ${message}`,
+      );
+      return null;
+    }
+  }
+
+  private isGatewayUnavailableFallbackNarrative(text: string) {
+    const normalized = this.normalizeTextForLanguageCheck(text);
+    return (
+      normalized.includes('o gateway generativo esta indisponivel neste momento') ||
+      normalized.includes(
+        'analise estruturada local baseada diretamente nos dados do sistema produzida porque o gateway generativo esta indisponivel neste momento',
+      )
+    );
+  }
+
+  private async retryNarrativeGenerationOnce(args: {
+    messages: ChatMessage[];
+    maxTokens: number;
+    temperature?: number;
+    contextLabel: string;
+  }): Promise<{ narrative: string; model: string } | null> {
+    try {
+      const completion = (await Promise.race([
+        this.litellm.chatCompletion({
+          messages: args.messages,
+          temperature: args.temperature,
+          max_tokens: args.maxTokens,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('LITELLM_RETRY_TIMEOUT')),
+            this.streamIdleTimeoutMs,
+          ),
+        ),
+      ])) as { content: string; model: string };
+
+      const cleaned = stripReasoningPrefix(
+        String(completion?.content ?? '').trim(),
+      ).trim();
+      if (
+        !cleaned ||
+        looksLikeInternalReasoning(cleaned) ||
+        this.isGatewayUnavailableFallbackNarrative(cleaned)
+      ) {
+        this.logger.warn(
+          `Reprocessamento único em ${args.contextLabel} retornou conteúdo inválido ou fallback local.`,
+        );
+        return null;
+      }
+
+      return {
+        narrative: cleaned,
+        model: completion.model,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Falha no reprocessamento único em ${args.contextLabel}: ${message}`,
+      );
+      return null;
+    }
+  }
+
+  private async enforcePortugueseNarrative(args: {
+    narrative: string;
+    fallbackNarrative: string;
+    contextLabel: string;
+  }) {
+    const cleaned = stripReasoningPrefix(String(args.narrative ?? '').trim()).trim();
+    if (!cleaned) {
+      return String(args.fallbackNarrative ?? '').trim();
+    }
+    if (!this.looksLikeEnglishOutput(cleaned)) {
+      return cleaned;
+    }
+
+    this.logger.warn(
+      `Saída em idioma divergente detectada em ${args.contextLabel}; tentando reescrever para pt-BR.`,
+    );
+    const rewritten = await this.rewriteNarrativeToPortuguese(
+      cleaned,
+      args.contextLabel,
+    );
+    if (rewritten && !this.looksLikeEnglishOutput(rewritten)) {
+      return rewritten;
+    }
+
+    this.logger.warn(
+      `Não foi possível garantir pt-BR em ${args.contextLabel}; usando fallback determinístico.`,
+    );
+    return String(args.fallbackNarrative ?? '').trim();
   }
 
   private async buildChatContext(

@@ -35,6 +35,7 @@ import { StrategicModule } from './strategic/strategic.module';
 import { LitellmModule } from './llm/litellm.module';
 import { SettingsModule } from './settings/settings.module';
 import { AiModule } from './ai/ai.module';
+import { KnowledgeBasesModule } from './knowledge-bases/knowledge-bases.module';
 import { ManualsModule } from './manuals/manuals.module';
 
 @Module({
@@ -77,6 +78,7 @@ import { ManualsModule } from './manuals/manuals.module';
     MenuUpdatesModule,
     StrategicModule,
     SettingsModule,
+    KnowledgeBasesModule,
     ManualsModule,
     AiModule,
   ],

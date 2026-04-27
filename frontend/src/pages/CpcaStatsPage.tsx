@@ -86,6 +86,21 @@ const DETAILED_VIOLENCE_TYPE_LABELS: Record<string, string> = {
   VIOLENCIA_DOMESTICA_MORAL: "Violência doméstica - Moral",
   VIOLENCIA_DOMESTICA_PATRIMONIAL: "Violência doméstica - Patrimonial",
   VIOLENCIA_DOMESTICA_SEXUAL: "Violência doméstica - Sexual",
+  IMPORTUNACAO_SEXUAL: "Importunação sexual",
+  INJURIA_RACIAL: "Injúria racial",
+  INJURIA: "Injúria",
+  CALUNIA: "Calúnia",
+  DIFAMACAO: "Difamação",
+  DENUNCIACAO_CALUNIOSA: "Denunciação caluniosa",
+  ATO_DE_LIBIDINAGEM: "Ato de libidinagem",
+  PRESUNCAO_DE_VIOLENCIA: "Presunção de violência",
+  CORRUPCAO_DE_MENORES: "Corrupção de menores",
+  ESTUPRO_DE_VULNERAVEL: "Estupro de vulnerável",
+  SEDUCAO: "Sedução",
+  REGISTRO_NAO_AUTORIZADO_DE_INTIMIDADE_SEXUAL:
+    "Registro não autorizado de intimidade sexual",
+  VIOLACAO_SEXUAL_MEDIANTE_FRAUDE: "Violação sexual mediante fraude",
+  ESTUPRO: "Estupro",
 };
 
 const AGE_RANGE_LABELS: Record<string, string> = {

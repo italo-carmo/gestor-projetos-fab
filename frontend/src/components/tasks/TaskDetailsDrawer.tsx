@@ -23,8 +23,10 @@ import {
   useBatchDeleteTasks,
   useBatchProgressTasks,
   useBatchStatusTasks,
+  useCipavdLocalities,
   useDeleteTask,
   useEloRoles,
+  useLocalities,
   useMarkTaskCommentsSeen,
   useMeetings,
   useSpecialties,
@@ -69,6 +71,12 @@ function uniqueLocalityIds(values: Array<string | null | undefined>) {
   );
 }
 
+function normalizeTaskScope(raw: unknown): "SMIF" | "CIPAVD" {
+  return String(raw ?? "").trim().toUpperCase() === "CIPAVD"
+    ? "CIPAVD"
+    : "SMIF";
+}
+
 export type TaskDetailsDrawerProps = {
   task: any | null;
   open: boolean;
@@ -99,6 +107,9 @@ export function TaskDetailsDrawer({
   const [selectedAssigneeValue, setSelectedAssigneeValue] = useState("");
   const [commentText, setCommentText] = useState("");
   const [taskTitleDraft, setTaskTitleDraft] = useState("");
+  const [taskScopeDraft, setTaskScopeDraft] = useState<"SMIF" | "CIPAVD">(
+    "SMIF",
+  );
   const [linkedLocalityIdsDraft, setLinkedLocalityIdsDraft] = useState<
     string[]
   >([]);
@@ -122,6 +133,8 @@ export function TaskDetailsDrawer({
   const canViewUsers = can(user, "users", "view");
   const canManageTaskData = canUpdate;
   const canDelete = can(user, "task_instances", "delete");
+  const smifLocalitiesQuery = useLocalities();
+  const cipavdLocalitiesQuery = useCipavdLocalities();
   const meetingsQuery = useMeetings({});
   const meetings = meetingsQuery.data?.items ?? [];
   const updateTaskMeeting = useUpdateTaskMeeting();
@@ -212,6 +225,42 @@ export function TaskDetailsDrawer({
       .toLowerCase() === "tarefa manual";
   const saveTitleByTaskInstance =
     hasCustomTitle || isManualTaskTemplate || hasLinkedTasks;
+  const smifCatalogLocalities = useMemo(() => {
+    const items = (smifLocalitiesQuery.data?.items ?? []) as any[];
+    const merged = new Map<string, { id: string; name: string }>();
+    [...items, ...localities].forEach((locality: any) => {
+      const id = String(locality?.id ?? "").trim();
+      if (!id || merged.has(id)) return;
+      merged.set(id, {
+        id,
+        name:
+          String(locality?.name ?? locality?.code ?? locality?.id ?? "").trim() ||
+          id,
+      });
+    });
+    return Array.from(merged.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR"),
+    );
+  }, [localities, smifLocalitiesQuery.data?.items]);
+  const cipavdCatalogLocalities = useMemo(() => {
+    const items = (cipavdLocalitiesQuery.data?.items ?? []) as any[];
+    const merged = new Map<string, { id: string; name: string }>();
+    items.forEach((locality: any) => {
+      const id = String(locality?.id ?? "").trim();
+      if (!id || merged.has(id)) return;
+      merged.set(id, {
+        id,
+        name:
+          String(locality?.name ?? locality?.code ?? locality?.id ?? "").trim() ||
+          id,
+      });
+    });
+    return Array.from(merged.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR"),
+    );
+  }, [cipavdLocalitiesQuery.data?.items]);
+  const catalogLocalities =
+    taskScopeDraft === "CIPAVD" ? cipavdCatalogLocalities : smifCatalogLocalities;
   const localityOptions = useMemo(() => {
     const optionMap = new Map<string, { id: string; name: string }>();
     const normalizedNameToId = new Map<string, string>();
@@ -244,8 +293,7 @@ export function TaskDetailsDrawer({
       if (normalizedName) normalizedNameToId.set(normalizedName, id);
     };
 
-    /** Lista final limitada ao catálogo SMIF recebido da página. */
-    localities.forEach((locality) => {
+    catalogLocalities.forEach((locality) => {
       addOption(locality, { prefer: true, allowIfUnknownName: true });
     });
     linkedLocalities.forEach((locality) => {
@@ -269,7 +317,17 @@ export function TaskDetailsDrawer({
     return Array.from(optionMap.values()).sort((a, b) =>
       a.name.localeCompare(b.name, "pt-BR"),
     );
-  }, [linkedLocalities, localities, task?.localityId, task?.localityName]);
+  }, [catalogLocalities, linkedLocalities, task?.localityId, task?.localityName]);
+  const editableLinkedLocalities =
+    linkedLocalities.length > 0 || Boolean(task?.localityId);
+  const filteredMeetings = useMemo(
+    () =>
+      meetings.filter(
+        (meeting: any) =>
+          normalizeTaskScope(meeting?.scope) === taskScopeDraft,
+      ),
+    [meetings, taskScopeDraft],
+  );
 
   const assigneeValueFromTask = (taskItem: any) => {
     if (taskItem?.assignee?.type === "USER" && taskItem?.assignee?.id) {
@@ -289,6 +347,7 @@ export function TaskDetailsDrawer({
 
   useEffect(() => {
     if (!task) {
+      setTaskScopeDraft("SMIF");
       setSelectedLocalityId("");
       setSelectedAssigneeValue("");
       setCommentText("");
@@ -296,14 +355,20 @@ export function TaskDetailsDrawer({
       setConfirmDeleteOpen(false);
       return;
     }
+    const nextTaskScope = normalizeTaskScope(task.scope);
+    setTaskScopeDraft(nextTaskScope);
+    const catalogSource =
+      nextTaskScope === "CIPAVD"
+        ? cipavdCatalogLocalities
+        : smifCatalogLocalities;
     const taskLocalityId = String(task.localityId ?? "").trim();
     const catalogLocalityIds = new Set(
-      localities
+      catalogSource
         .map((locality) => String(locality?.id ?? "").trim())
         .filter(Boolean),
     );
     const catalogByNormalizedName = new Map(
-      localities
+      catalogSource
         .map((locality) => {
           const normalizedName = normalizeLocalityName(locality?.name);
           if (!normalizedName) return null;
@@ -346,17 +411,32 @@ export function TaskDetailsDrawer({
     setLinkedLocalityIdsDraft(uniqueLocalityIds(linkedIds));
   }, [
     task?.id,
+    task?.scope,
     task?.localityId,
     task?.assignedToId,
     task?.assignedEloId,
     task?.assigneeType,
-    localities,
+    cipavdCatalogLocalities,
     linkedLocalitiesKey,
+    smifCatalogLocalities,
   ]);
   const linkedLocalityIdSet = useMemo(
     () => new Set(uniqueLocalityIds(linkedLocalityIdsDraft)),
     [linkedLocalityIdsDraft],
   );
+
+  useEffect(() => {
+    const optionIds = new Set(
+      localityOptions.map((option) => String(option.id ?? "").trim()),
+    );
+    if (selectedLocalityId && !optionIds.has(String(selectedLocalityId))) {
+      setSelectedLocalityId("");
+      setSelectedAssigneeValue("");
+    }
+    setLinkedLocalityIdsDraft((prev) =>
+      prev.filter((value) => optionIds.has(String(value ?? "").trim())),
+    );
+  }, [localityOptions, selectedLocalityId]);
 
   useEffect(() => {
     if (!open || !task?.id) return;
@@ -558,7 +638,7 @@ export function TaskDetailsDrawer({
         didSomething = true;
       }
 
-      if (linkedLocalities.length > 0) {
+      if (editableLinkedLocalities) {
         if (!nextLocalityIds.length) {
           toast.push({
             message: "Selecione ao menos uma localidade.",
@@ -567,6 +647,7 @@ export function TaskDetailsDrawer({
         } else {
           await updateTaskLocalities.mutateAsync({
             id: task.id,
+            scope: taskScopeDraft,
             localityIds: nextLocalityIds,
             sourceTaskIds: normalizedLinkedIds,
           });
@@ -697,15 +778,31 @@ export function TaskDetailsDrawer({
                       : "A alteração atualiza o título do modelo vinculado."
                   }
                 />
-                {linkedLocalities.length > 0 && (
+                {editableLinkedLocalities && (
                   <Box>
+                    <TextField
+                      select
+                      size="small"
+                      label="Escopo"
+                      value={taskScopeDraft}
+                      onChange={(event) =>
+                        setTaskScopeDraft(
+                          event.target.value === "CIPAVD" ? "CIPAVD" : "SMIF",
+                        )
+                      }
+                      disabled={!canManageTaskData || updateTaskLocalities.isPending}
+                      sx={{ mb: 1.5, maxWidth: 220 }}
+                    >
+                      <MenuItem value="SMIF">SMIF</MenuItem>
+                      <MenuItem value="CIPAVD">CIPAVD</MenuItem>
+                    </TextField>
                     <Typography
                       variant="caption"
                       color="text.secondary"
                       display="block"
                       gutterBottom
                     >
-                      Localidades vinculadas ({linkedLocalities.length})
+                      Localidades vinculadas ({linkedLocalityIdsDraft.length})
                     </Typography>
                     <Autocomplete
                       multiple
@@ -909,7 +1006,7 @@ export function TaskDetailsDrawer({
                   >
                     Vinculada à reunião
                   </Typography>
-                  <TextField
+                    <TextField
                     select
                     size="small"
                     fullWidth
@@ -918,7 +1015,7 @@ export function TaskDetailsDrawer({
                     disabled={!canManageTaskData}
                   >
                     <MenuItem value="">Nenhuma</MenuItem>
-                    {meetings.map((m: any) => (
+                    {filteredMeetings.map((m: any) => (
                       <MenuItem key={m.id} value={m.id}>
                         {format(new Date(m.datetime), "dd/MM/yyyy HH:mm")} —{" "}
                         {m.scope || "Reunião"}

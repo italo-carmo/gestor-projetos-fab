@@ -18,10 +18,11 @@ export class AuditService {
     const diffJson = params.diffJson
       ? this.truncateDiff(params.diffJson)
       : Prisma.JsonNull;
+    const localityId = await this.resolveValidLocalityId(params.localityId);
     return this.prisma.auditLog.create({
       data: {
         userId: params.userId ?? null,
-        localityId: params.localityId ?? null,
+        localityId,
         resource: params.resource,
         action: params.action,
         entityId: params.entityId ?? null,
@@ -34,6 +35,19 @@ export class AuditService {
     const raw = JSON.stringify(diff);
     if (raw.length <= 2000) return diff;
     return { truncated: raw.slice(0, 2000) };
+  }
+
+  private async resolveValidLocalityId(localityId?: string | null) {
+    const normalized = String(localityId ?? '').trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const locality = await this.prisma.locality.findUnique({
+      where: { id: normalized },
+      select: { id: true },
+    });
+    return locality?.id ?? null;
   }
 
   async list(filters: {

@@ -320,6 +320,7 @@ export class MeetingsService {
     const result = await this.tasks.generateInstances(
       templateId,
       {
+        scope: meeting.scope,
         localities: payload.localities,
         reportRequired: payload.reportRequired,
         priority: payload.priority,

@@ -171,7 +171,11 @@ function getFileExtension(fileName?: string | null) {
 }
 
 function getLinkedEntityPath(link: DocumentLinkItem) {
-  if (link.entityType === 'TASK_INSTANCE') return `/tasks?taskId=${link.entityId}`;
+  if (link.entityType === 'TASK_INSTANCE') {
+    return `/tasks?scope=${encodeURIComponent(
+      String((link as any).scope ?? 'SMIF'),
+    )}&taskId=${link.entityId}`;
+  }
   if (link.entityType === 'ACTIVITY') return `/activities?activityId=${link.entityId}`;
   if (link.entityType === 'MEETING') return `/meetings?meetingId=${link.entityId}`;
   return null;

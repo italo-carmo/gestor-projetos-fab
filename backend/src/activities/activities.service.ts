@@ -62,10 +62,7 @@ export class ActivitiesService {
       filters.page,
       filters.pageSize,
     );
-    const scopeFilter: ActivityScope =
-      String(filters.scope ?? '').toUpperCase() === 'CIPAVD'
-        ? 'CIPAVD'
-        : 'SMIF';
+    const scopeFilter = this.normalizeActivityScope(filters.scope);
 
     const andClauses: Prisma.ActivityWhereInput[] = [];
     andClauses.push({ scope: scopeFilter });
@@ -300,10 +297,7 @@ export class ActivitiesService {
     },
     user?: RbacUser,
   ) {
-    const scope: ActivityScope =
-      String(payload.scope ?? '').toUpperCase() === 'CIPAVD'
-        ? 'CIPAVD'
-        : 'SMIF';
+    const scope = this.normalizeActivityScope(payload.scope);
     this.assertActivityOperateAccess(
       scope === 'CIPAVD' ? { scope: 'CIPAVD' } : null,
       user,
@@ -353,6 +347,7 @@ export class ActivitiesService {
       createLocalityIds.length === 1 ? createLocalityIds[0] : null;
     const activityTypeId = await this.resolveActivityTypeId(
       payload.activityTypeId,
+      scope,
     );
     const responsibleUserIds = await this.resolveActivityResponsibleIds(
       singleLocalityId,
@@ -515,6 +510,7 @@ export class ActivitiesService {
       payload.activityTypeId === undefined
         ? ((existing as any).activityTypeId ?? null)
         : payload.activityTypeId,
+      this.normalizeActivityScope(existing.scope),
     );
     this.assertScopeConstraint(
       localityId,
@@ -2873,14 +2869,30 @@ export class ActivitiesService {
     return names.join(' / ');
   }
 
-  async listTypes() {
+  async listTypes(scopeRaw?: ActivityScope | string | null) {
+    const scope = this.normalizeActivityScope(scopeRaw);
     const items = await (this.prisma as any).activityType.findMany({
+      where: { scope },
       orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        scope: true,
+        _count: { select: { activities: true } },
+      },
     });
-    return { items };
+    return {
+      items: items.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        scope: item.scope,
+        usageCount: Number(item?._count?.activities ?? 0),
+      })),
+    };
   }
 
-  async createType(name: string) {
+  async createType(name: string, scopeRaw?: ActivityScope | string | null) {
+    const scope = this.normalizeActivityScope(scopeRaw);
     const normalized = sanitizeText(name ?? '');
     if (!normalized.trim()) {
       throwError('VALIDATION_ERROR', {
@@ -2889,15 +2901,69 @@ export class ActivitiesService {
       });
     }
     const existing = await (this.prisma as any).activityType.findFirst({
-      where: { name: { equals: normalized, mode: 'insensitive' } },
-      select: { id: true, name: true },
+      where: {
+        scope,
+        name: { equals: normalized, mode: 'insensitive' },
+      },
+      select: { id: true, name: true, scope: true },
     });
     if (existing) return existing;
 
     return (this.prisma as any).activityType.create({
-      data: { name: normalized },
-      select: { id: true, name: true },
+      data: { name: normalized, scope },
+      select: { id: true, name: true, scope: true },
     });
+  }
+
+  async deleteType(
+    id: string,
+    scopeRaw?: ActivityScope | string | null,
+    user?: RbacUser,
+  ) {
+    this.assertDeleteAccess(user);
+    const scope = this.normalizeActivityScope(scopeRaw);
+    const normalizedId = String(id ?? '').trim();
+    if (!normalizedId) throwError('NOT_FOUND');
+
+    const existing = await (this.prisma as any).activityType.findUnique({
+      where: { id: normalizedId },
+      select: {
+        id: true,
+        name: true,
+        scope: true,
+        _count: { select: { activities: true } },
+      },
+    });
+    if (!existing || this.normalizeActivityScope(existing.scope) !== scope) {
+      throwError('NOT_FOUND');
+    }
+
+    const usageCount = Number(existing?._count?.activities ?? 0);
+    if (usageCount > 0) {
+      throwError('VALIDATION_ERROR', {
+        field: 'id',
+        reason: 'ACTIVITY_TYPE_IN_USE',
+        name: existing.name,
+        count: usageCount,
+      });
+    }
+
+    await (this.prisma as any).activityType.delete({
+      where: { id: normalizedId },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'activities',
+      action: 'delete_type',
+      entityId: normalizedId,
+      diffJson: {
+        name: existing.name,
+        scope: existing.scope,
+      },
+    });
+
+    return { ok: true };
   }
 
   private mapComment(comment: any, executiveHidePii?: boolean) {
@@ -3310,21 +3376,33 @@ export class ActivitiesService {
     return users.map((candidate) => candidate.id);
   }
 
-  private async resolveActivityTypeId(activityTypeId?: string | null) {
+  private async resolveActivityTypeId(
+    activityTypeId?: string | null,
+    scopeRaw?: ActivityScope | string | null,
+  ) {
     const normalized = String(activityTypeId ?? '').trim();
     if (!normalized) return null;
+    const scope = this.normalizeActivityScope(scopeRaw);
 
     const existing = await (this.prisma as any).activityType.findUnique({
       where: { id: normalized },
-      select: { id: true },
+      select: { id: true, scope: true },
     });
-    if (!existing) {
+    if (!existing || this.normalizeActivityScope(existing.scope) !== scope) {
       throwError('VALIDATION_ERROR', {
         field: 'activityTypeId',
         reason: 'NOT_FOUND',
       });
     }
     return existing.id;
+  }
+
+  private normalizeActivityScope(
+    scopeRaw?: ActivityScope | string | null,
+  ): ActivityScope {
+    return String(scopeRaw ?? '').toUpperCase() === 'CIPAVD'
+      ? ActivityScope.CIPAVD
+      : ActivityScope.SMIF;
   }
 
   private async invalidateSignature(reportId: string) {

@@ -19,6 +19,7 @@ export class ExportsController {
   @Get('tasks.csv')
   @RequirePermission('task_instances', 'export')
   async exportTasks(
+    @Query('scope') scope: string | undefined,
     @Query('localityId') localityId: string | undefined,
     @Query('phaseId') phaseId: string | undefined,
     @Query('status') status: string | undefined,
@@ -30,12 +31,22 @@ export class ExportsController {
     @Res() res: Response,
   ) {
     const items = await this.tasks.listTaskInstancesForExport(
-      { localityId, phaseId, status, assigneeId, assigneeIds, dueFrom, dueTo },
+      {
+        scope,
+        localityId,
+        phaseId,
+        status,
+        assigneeId,
+        assigneeIds,
+        dueFrom,
+        dueTo,
+      },
       user,
     );
 
     const headers = [
       'taskId',
+      'scope',
       'title',
       'phase',
       'locality',
@@ -52,6 +63,7 @@ export class ExportsController {
 
     const rows = items.map((item: any) => [
       item.id,
+      item.scope ?? 'SMIF',
       item.taskTemplate?.title ?? '',
       item.taskTemplate?.phase?.name ?? '',
       item.locality?.name ?? item.localityId ?? '',

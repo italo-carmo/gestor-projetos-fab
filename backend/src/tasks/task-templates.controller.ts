@@ -81,6 +81,7 @@ export class TaskTemplatesController {
     return this.tasks.generateInstances(
       id,
       {
+        scope: dto.scope,
         localities: dto.localities,
         priority: dto.priority,
         meetingId: dto.meetingId ?? null,

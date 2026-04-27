@@ -19,6 +19,7 @@ import {
   useDeleteTaskTemplate,
   useEloRoles,
   useGenerateInstances,
+  useCipavdLocalities,
   useLocalities,
   usePhases,
   useTaskTemplates,
@@ -35,12 +36,15 @@ import { can } from "../app/rbac";
 import { TASK_PRIORITY_LABELS } from "../constants/enums";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 
+type TaskScope = "SMIF" | "CIPAVD";
+
 export function TaskTemplatesPage() {
   const { data: me } = useMe();
   const toast = useToast();
   const templatesQuery = useTaskTemplates();
   const phasesQuery = usePhases();
   const localitiesQuery = useLocalities();
+  const cipavdLocalitiesQuery = useCipavdLocalities();
   const eloRolesQuery = useEloRoles();
   const eloRoles = eloRolesQuery.data?.items ?? [];
   const createTemplate = useCreateTaskTemplate();
@@ -70,6 +74,7 @@ export function TaskTemplatesPage() {
     reportRequiredDefault: false,
   });
   const [generateForm, setGenerateForm] = useState({
+    scope: "SMIF" as TaskScope,
     baseDate: "",
     selectedLocalities: [] as string[],
     offsets: {} as Record<string, number>,
@@ -107,6 +112,7 @@ export function TaskTemplatesPage() {
   const openGenerate = (template: any) => {
     setSelectedTemplate(template);
     setGenerateForm({
+      scope: "SMIF",
       baseDate: "",
       selectedLocalities: [],
       offsets: {},
@@ -174,6 +180,7 @@ export function TaskTemplatesPage() {
       await generateInstances.mutateAsync({
         id: selectedTemplate.id,
         payload: {
+          scope: generateForm.scope,
           localities,
           priority: generateForm.priority,
         },
@@ -246,7 +253,10 @@ export function TaskTemplatesPage() {
     templates.length - templatesToRender.length,
   );
   const phases = phasesQuery.data?.items ?? [];
-  const localities = localitiesQuery.data?.items ?? [];
+  const smifLocalities = (localitiesQuery.data?.items ?? []) as any[];
+  const cipavdLocalities = (cipavdLocalitiesQuery.data?.items ?? []) as any[];
+  const generateLocalities =
+    generateForm.scope === "CIPAVD" ? cipavdLocalities : smifLocalities;
   const canEditTemplate = can(me, "task_templates", "update");
   const canDeleteTemplate = canEditTemplate;
 
@@ -496,6 +506,23 @@ export function TaskTemplatesPage() {
         <Box p={3} display="flex" flexDirection="column" gap={2}>
           <Typography variant="h5">Gerar instâncias</Typography>
           <TextField
+            select
+            size="small"
+            label="Escopo"
+            value={generateForm.scope}
+            onChange={(e) =>
+              setGenerateForm({
+                ...generateForm,
+                scope: e.target.value === "CIPAVD" ? "CIPAVD" : "SMIF",
+                selectedLocalities: [],
+                offsets: {},
+              })
+            }
+          >
+            <MenuItem value="SMIF">SMIF</MenuItem>
+            <MenuItem value="CIPAVD">CIPAVD</MenuItem>
+          </TextField>
+          <TextField
             size="small"
             type="date"
             label="Data base"
@@ -525,7 +552,7 @@ export function TaskTemplatesPage() {
               });
             }}
           >
-            {localities.map((loc: any) => (
+            {generateLocalities.map((loc: any) => (
               <MenuItem key={loc.id} value={loc.id}>
                 {loc.name}
               </MenuItem>
@@ -535,7 +562,7 @@ export function TaskTemplatesPage() {
             <Button
               size="small"
               onClick={() => {
-                const allIds = localities.map((loc: any) => loc.id);
+                const allIds = generateLocalities.map((loc: any) => loc.id);
                 const offsets = allIds.reduce(
                   (acc: Record<string, number>, id: string) => {
                     acc[id] = generateForm.offsets[id] ?? 0;
@@ -570,7 +597,7 @@ export function TaskTemplatesPage() {
               key={locId}
               size="small"
               type="number"
-              label={`Deslocamento ${localities.find((l: any) => l.id === locId)?.name ?? ""} (dias)`}
+              label={`Deslocamento ${generateLocalities.find((l: any) => l.id === locId)?.name ?? ""} (dias)`}
               value={generateForm.offsets[locId] ?? 0}
               onChange={(e) =>
                 setGenerateForm({

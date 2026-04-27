@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -321,6 +322,37 @@ const PT_STOPWORDS = new Set([
   'falta',
 ]);
 
+const ENGLISH_OUTPUT_MARKERS = [
+  /\bthe\b/g,
+  /\band\b/g,
+  /\bwith\b/g,
+  /\bfrom\b/g,
+  /\bthis\b/g,
+  /\bthat\b/g,
+  /\bhere(?:\s+is|['’]s)\b/g,
+  /\bbased on\b/g,
+  /\bsummary\b/g,
+  /\bfindings?\b/g,
+  /\bdata\b/g,
+  /\bindicat(?:e|es|ed|ing)\b/g,
+  /\bshould\b/g,
+  /\bmust\b/g,
+] as const;
+
+const PORTUGUESE_OUTPUT_MARKERS = [
+  /\bnao\b/g,
+  /\bpara\b/g,
+  /\bcom\b/g,
+  /\buma\b/g,
+  /\bdados\b/g,
+  /\banalise\b/g,
+  /\bresumo\b/g,
+  /\bcontexto\b/g,
+  /\bsituacao\b/g,
+  /\brisco(?:s)?\b/g,
+  /\bdenuncia(?:s)?\b/g,
+] as const;
+
 function tokenizeAndCount(
   texts: string[],
   minLen = 3,
@@ -427,12 +459,109 @@ type StrategicCoveredOmItem = {
 
 @Injectable()
 export class StrategicService {
+  private readonly logger = new Logger(StrategicService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly litellm: LitellmService,
     private readonly biNormalization: BiNormalizationService,
     private readonly settings: SettingsService,
   ) {}
+
+  private normalizeTextForLanguageCheck(text: string) {
+    return String(text ?? '')
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`[^`]*`/g, ' ')
+      .replace(/!\[[^\]]*\]\([^)]+\)/g, ' ')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/https?:\/\/\S+/gi, ' ')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  private countLanguagePatternMatches(
+    source: string,
+    patterns: readonly RegExp[],
+  ) {
+    return patterns.reduce((total, pattern) => {
+      const matches = source.match(pattern);
+      return total + (matches?.length ?? 0);
+    }, 0);
+  }
+
+  private looksLikeEnglishOutput(text: string) {
+    const sample = this.normalizeTextForLanguageCheck(text);
+    if (!sample || sample.length < 24) return false;
+
+    const englishMatches = this.countLanguagePatternMatches(
+      sample,
+      ENGLISH_OUTPUT_MARKERS,
+    );
+    const portugueseMatches = this.countLanguagePatternMatches(
+      sample,
+      PORTUGUESE_OUTPUT_MARKERS,
+    );
+    const hasEnglishHeading =
+      /^#{1,6}\s*(findings?|summary|overview|recommendations?)\b/im.test(
+        String(text ?? ''),
+      );
+
+    if (hasEnglishHeading && portugueseMatches === 0) {
+      return true;
+    }
+    if (englishMatches >= 3 && portugueseMatches === 0) {
+      return true;
+    }
+    return englishMatches >= 6 && englishMatches >= portugueseMatches * 2 + 2;
+  }
+
+  private async enforcePortugueseNarrative(narrative: string) {
+    const cleaned = String(narrative ?? '').trim();
+    if (!cleaned || !this.looksLikeEnglishOutput(cleaned)) {
+      return cleaned;
+    }
+
+    this.logger.warn(
+      'Saída em idioma divergente detectada no resumo executivo; tentando reescrever para pt-BR.',
+    );
+    try {
+      const response = await this.litellm.chatCompletion({
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'Você é um revisor final de idioma.',
+              'Reescreva exclusivamente em português do Brasil.',
+              'Preserve integralmente fatos, números, datas, links e a estrutura Markdown.',
+              'Não acrescente informação nova.',
+              'Entregue apenas a versão final reescrita.',
+            ].join(' '),
+          },
+          {
+            role: 'user',
+            content: `Reescreva o texto abaixo para pt-BR, preservando o conteúdo:\n\n${cleaned}`,
+          },
+        ],
+        temperature: 0.05,
+        max_tokens: 2200,
+      });
+      const rewritten = String(response.content ?? '').trim();
+      if (rewritten && !this.looksLikeEnglishOutput(rewritten)) {
+        return rewritten;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Falha ao reescrever resumo executivo em português: ${message}`,
+      );
+    }
+
+    return 'Não foi possível garantir a resposta final em português do Brasil nesta execução.';
+  }
 
   private resolveSourceSet(
     sources?: readonly AiKnowledgeSourceId[],
@@ -2790,7 +2919,7 @@ export class StrategicService {
 
       return {
         generatedAt: new Date().toISOString(),
-        narrative: content,
+        narrative: await this.enforcePortugueseNarrative(content),
         model,
       };
     } catch (e) {

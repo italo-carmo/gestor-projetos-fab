@@ -597,7 +597,8 @@
           <p class="lead">
             Passo a passo visual para solicitar a presidência da CPCA,
             acompanhar a homologação, configurar 2FA, operar a comissão e
-            registrar denúncias no sistema.
+            registrar denúncias no sistema e resolver pendências apontadas pela
+            gestão nacional.
           </p>
           <div class="meta-grid">
             <div class="meta-card">
@@ -624,6 +625,7 @@
             <li><a href="#cobertura">Cadastrar OMs gerenciadas</a></li>
             <li><a href="#membros">Cadastrar membros</a></li>
             <li><a href="#denuncia">Cadastrar denúncia</a></li>
+            <li><a href="#pendencia-comgep">Resolver pendência COMGEP</a></li>
           </ol>
         </aside>
 
@@ -825,17 +827,49 @@
               </div>
             </div>
 
-            <p>
-              Cada item do checklist aparece em uma linha. Clique na seta do
-              item que deseja preencher para abrir os campos. Para os itens de
-              resposta direta, como e-mail e página Intraer, selecione
-              <strong>Sim</strong>, informe a data e preencha o campo
-              correspondente. Para ações como palestra, seminário, materiais,
-              mensagens, pop-ups e reunião de apresentação, abra o item e use
-              <strong>Adicionar registro</strong> para informar data e
-              detalhamento.
-            </p>
-            <p>Ao terminar, clique em <strong>Salvar checklist</strong>.</p>
+            <div
+              class="setup-steps"
+              aria-label="Passos para preencher o checklist da comissão"
+            >
+              <div class="setup-step">
+                <div class="setup-step-number">1</div>
+                <div>
+                  <p class="setup-step-title">Abra o item</p>
+                  <p>Clique na seta do item que deseja atualizar.</p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">2</div>
+                <div>
+                  <p class="setup-step-title">Preencha itens diretos</p>
+                  <p>
+                    Em e-mail e página Intraer, selecione <strong>Sim</strong>,
+                    informe a data e preencha o campo solicitado.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">3</div>
+                <div>
+                  <p class="setup-step-title">Registre as ações</p>
+                  <p>
+                    Em palestra, seminário, materiais, mensagens, pop-ups e
+                    apresentação, clique em
+                    <strong>Adicionar registro</strong>.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">4</div>
+                <div>
+                  <p class="setup-step-title">Salve o checklist</p>
+                  <p>
+                    Revise os lançamentos e clique em
+                    <strong>Salvar checklist</strong>.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             <figure class="screen">
               <img
@@ -860,10 +894,22 @@
               </div>
             </div>
 
+            <div class="callout info">
+              <div class="icon-badge">i</div>
+              <p>
+                Use esta tela quando a sua OM for responsável por receber e
+                apurar denúncias de outras OMs.
+              </p>
+            </div>
+
             <p>
-              Selecione as OMs adicionais atendidas por essa CPCA. A própria OM
-              permanece vinculada automaticamente. Depois de selecionar as OMs,
-              clique em <strong>Salvar cobertura</strong>.
+              Selecione as OMs adicionais que serão atendidas pela sua CPCA. A
+              própria OM permanece vinculada automaticamente e não precisa ser
+              cadastrada novamente.
+            </p>
+            <p>
+              Depois de selecionar as OMs, clique em
+              <strong>Salvar cobertura</strong>.
             </p>
 
             <figure class="screen">
@@ -1013,6 +1059,87 @@
                 </figcaption>
               </figure>
             </div>
+          </section>
+
+          <section class="section major" id="pendencia-comgep">
+            <div class="section-header">
+              <div class="step-number">9</div>
+              <div>
+                <h2>Resolver pendência criada pelo COMGEP</h2>
+                <p>
+                  Depois que a denúncia é cadastrada, o COMGEP pode verificar o
+                  registro e analisar se existem inconsistências ou informações
+                  que precisam ser complementadas.
+                </p>
+              </div>
+            </div>
+
+            <div
+              class="setup-steps"
+              aria-label="Passos para resolver pendência do COMGEP"
+            >
+              <div class="setup-step">
+                <div class="setup-step-number">1</div>
+                <div>
+                  <p class="setup-step-title">Identifique a pendência</p>
+                  <p>
+                    A denúncia aparece com o marcador
+                    <strong>Pendência</strong> na lista.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">2</div>
+                <div>
+                  <p class="setup-step-title">Abra o caso</p>
+                  <p>
+                    Clique na denúncia e vá até
+                    <strong>Comentários da CIPAVD</strong>.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">3</div>
+                <div>
+                  <p class="setup-step-title">Responda a orientação</p>
+                  <p>
+                    Em <strong>Resposta da comissão</strong>, descreva o ajuste
+                    realizado ou a justificativa da CPCA.
+                  </p>
+                </div>
+              </div>
+              <div class="setup-step">
+                <div class="setup-step-number">4</div>
+                <div>
+                  <p class="setup-step-title">Envie para validação</p>
+                  <p>
+                    Clique em <strong>Responder e resolver</strong>. A pendência
+                    retorna para validação do COMGEP.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <figure class="screen">
+              <img
+                src="prints/16-denuncia-pendencia-aberta-producao.png"
+                alt="Denúncia CPCA com pendência aberta pelo COMGEP"
+              />
+              <figcaption class="caption">
+                <span>Pendência aberta</span><span>Comentários da CIPAVD</span>
+              </figcaption>
+            </figure>
+
+            <figure class="screen">
+              <img
+                src="prints/17-denuncia-resolver-pendencia-producao.png"
+                alt="Resposta da comissão para resolver pendência da denúncia"
+              />
+              <figcaption class="caption">
+                <span>Resposta da comissão</span
+                ><span>Responder e resolver</span>
+              </figcaption>
+            </figure>
           </section>
         </main>
       </div>

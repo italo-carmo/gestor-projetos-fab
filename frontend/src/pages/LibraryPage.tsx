@@ -571,73 +571,32 @@ export function LibraryPage() {
 
   return (
     <Box sx={{ overflowX: "clip" }}>
-      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} gap={1} mb={1.4}>
+      <Stack
+        direction={{ xs: "column", lg: "row" }}
+        justifyContent="space-between"
+        alignItems={{ xs: "stretch", lg: "center" }}
+        spacing={1.25}
+        mb={2}
+      >
         <Box>
-          <Stack direction="row" alignItems="center" gap={1}>
-            <Typography variant="h4" fontWeight={700}>
-              Biblioteca
-            </Typography>
-          </Stack>
+          <Typography variant="h4">Biblioteca</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {scopeSubtitle}
           </Typography>
         </Box>
       </Stack>
 
-      <Card
-        sx={{
-          mb: 2,
-          borderRadius: 3,
-          border: "1px solid rgba(17,66,89,0.12)",
-          background:
-            "linear-gradient(165deg, rgba(255,255,255,1) 0%, rgba(226,241,248,0.62) 100%)",
+      <Tabs
+        value={activeScope}
+        onChange={(_event, value: LibraryScope) => {
+          setActiveScope(value);
+          setReportPage(1);
         }}
+        sx={{ mb: 2 }}
       >
-        <CardContent sx={{ pb: "12px !important" }}>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", md: "center" }}
-            gap={1}
-          >
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">
-                Escopo da biblioteca
-              </Typography>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Exibindo conteúdo de {scopeLabel}
-              </Typography>
-            </Box>
-            <Tabs
-              value={activeScope}
-              onChange={(_event, value: LibraryScope) => {
-                setActiveScope(value);
-                setReportPage(1);
-              }}
-              sx={{
-                minHeight: 34,
-                "& .MuiTabs-indicator": { display: "none" },
-                "& .MuiTab-root": {
-                  minHeight: 34,
-                  py: 0.6,
-                  px: 1.8,
-                  borderRadius: 999,
-                  textTransform: "none",
-                  fontWeight: 700,
-                  color: "text.secondary",
-                },
-                "& .Mui-selected": {
-                  color: "primary.main !important",
-                  bgcolor: "rgba(25,118,210,0.11)",
-                },
-              }}
-            >
-              <Tab value="SMIF" label="SMIF" />
-              <Tab value="CIPAVD" label="CIPAVD" />
-            </Tabs>
-          </Stack>
-        </CardContent>
-      </Card>
+        <Tab value="SMIF" label="SMIF" />
+        <Tab value="CIPAVD" label="CIPAVD" />
+      </Tabs>
 
       <Card sx={{ mb: 2 }}>
         <CardContent>

@@ -52,9 +52,12 @@ Com o papel `CPCA` ativo, o presidente acessa o bloco **CPCA** no menu lateral. 
 
 Acesse **CPCA > Comissão CPCA** e abra a aba **Checklist**. Nessa aba, acompanhe o progresso geral e registre as ações executadas pela comissão da OM.
 
-Cada item do checklist aparece em uma linha. Clique na seta do item que deseja preencher para abrir os campos. Para os itens de resposta direta, como e-mail e página Intraer, selecione **Sim**, informe a data e preencha o campo correspondente. Para ações como palestra, seminário, materiais, mensagens, pop-ups e reunião de apresentação, abra o item e use **Adicionar registro** para informar data e detalhamento.
+Preencha o checklist por item:
 
-Ao terminar, clique em **Salvar checklist**.
+1. Clique na seta do item que deseja atualizar.
+2. Em itens diretos, como e-mail e página Intraer, selecione **Sim**, informe a data e preencha o campo solicitado.
+3. Em ações como palestra, seminário, materiais, mensagens, pop-ups e reunião de apresentação, clique em **Adicionar registro** e informe data e detalhamento.
+4. Depois de revisar os lançamentos, clique em **Salvar checklist**.
 
 ![Checklist da comissão](prints/08-comissao-checklist-visao-producao.png)
 
@@ -62,7 +65,11 @@ Ao terminar, clique em **Salvar checklist**.
 
 Ainda em **Comissão CPCA**, abra a aba **Cobertura**.
 
-Selecione as OMs adicionais atendidas por essa CPCA. A própria OM permanece vinculada automaticamente. Depois de selecionar as OMs, clique em **Salvar cobertura**.
+Use esta tela quando a sua OM for responsável por receber e apurar denúncias de outras OMs.
+
+Selecione as OMs adicionais que serão atendidas pela sua CPCA. A própria OM permanece vinculada automaticamente e não precisa ser cadastrada novamente.
+
+Depois de selecionar as OMs, clique em **Salvar cobertura**.
 
 ![Cobertura da comissão](prints/09-comissao-cobertura-producao.png)
 
@@ -111,3 +118,17 @@ Registre a situação final ou atual, a medida de separação vítima/acusado, e
 Revise todas as informações. Quando estiver tudo correto, clique em **Criar notificação** para salvar a denúncia.
 
 ![Nova denúncia - etapa 4](prints/15-denuncia-nova-etapa4-preenchida.png)
+
+## 9. Resolver pendência criada pelo COMGEP
+
+Depois que a denúncia é cadastrada, o COMGEP pode verificar o registro e analisar se existem inconsistências ou informações que precisam ser complementadas.
+
+Se houver algo a corrigir, o COMGEP cria uma **Pendência** dentro da própria denúncia. O presidente identifica essa pendência na lista de denúncias, abre o caso e vai até **Comentários da CIPAVD**.
+
+![Denúncia com pendência aberta](prints/16-denuncia-pendencia-aberta-producao.png)
+
+Leia a orientação registrada pelo COMGEP. Em **Resposta da comissão**, descreva o ajuste realizado ou a justificativa da CPCA.
+
+Depois clique em **Responder e resolver**. A pendência fica registrada como resolvida e retorna para validação do COMGEP.
+
+![Responder pendência da denúncia](prints/17-denuncia-resolver-pendencia-producao.png)

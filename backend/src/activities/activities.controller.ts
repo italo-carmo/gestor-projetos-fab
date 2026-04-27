@@ -74,14 +74,24 @@ export class ActivitiesController {
 
   @Get('types')
   @RequirePermission('task_instances', 'view')
-  listTypes() {
-    return this.activities.listTypes();
+  listTypes(@Query('scope') scope: string | undefined) {
+    return this.activities.listTypes(scope);
   }
 
   @Post('types')
   @RequirePermission('task_instances', 'create')
   createType(@Body() dto: CreateActivityTypeDto) {
-    return this.activities.createType(dto.name);
+    return this.activities.createType(dto.name, dto.scope);
+  }
+
+  @Delete('types/:id')
+  @RequirePermission('task_instances', 'delete')
+  deleteType(
+    @Param('id') id: string,
+    @Query('scope') scope: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.activities.deleteType(id, scope, user);
   }
 
   @Get('responsible-users')

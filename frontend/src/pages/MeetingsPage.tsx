@@ -792,7 +792,9 @@ export function MeetingsPage() {
                       </Typography>
                       <Button
                         component={Link}
-                        to={`/tasks?taskId=${task.id}`}
+                        to={`/tasks?scope=${encodeURIComponent(
+                          String(task.scope ?? "SMIF"),
+                        )}&taskId=${task.id}`}
                         size="small"
                         sx={{ mt: 0.5 }}
                       >

@@ -129,7 +129,7 @@ function getTaskAssigneeIds(task: any) {
   );
 }
 
-function taskMatchesFilters(task: any, filters: Record<string, any>) {
+export function taskMatchesFilters(task: any, filters: Record<string, any>) {
   if (!task || typeof task !== "object") return false;
 
   const scopeFilter = String(filters.scope ?? "")

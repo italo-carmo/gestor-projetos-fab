@@ -1,6 +1,11 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import { ActivityScope } from '@prisma/client';
+import { IsArray, IsEnum, IsOptional, IsString } from 'class-validator';
 
 export class GenerateInstancesDto {
+  @IsOptional()
+  @IsEnum(ActivityScope)
+  scope?: ActivityScope;
+
   @IsArray()
   localities: { localityId: string; dueDate: string }[];
 
