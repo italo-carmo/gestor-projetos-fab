@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import {
   AI_SETTING_KEYS,
   DEFAULT_SYSTEM_PROMPT,
+  EMAIL_SETTING_KEYS,
   SettingsService,
 } from './settings.service';
 
@@ -21,6 +22,7 @@ describe('SettingsService AI settings', () => {
   const service = new SettingsService(prismaMock, configMock);
 
   beforeEach(() => {
+    jest.restoreAllMocks();
     jest.clearAllMocks();
     configMock.get = jest.fn(() => undefined) as any;
   });
@@ -135,5 +137,43 @@ describe('SettingsService AI settings', () => {
     });
 
     expect(syncSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns and updates email settings with normalized address', async () => {
+    prismaMock.appSetting.findUnique.mockResolvedValue({
+      key: EMAIL_SETTING_KEYS.cpcaPresidentSelfRegistrationRecipient,
+      value: ' TI.CPCA@FAB.MIL.BR ',
+    });
+
+    await expect(service.getEmailSettings()).resolves.toEqual({
+      cpcaPresidentSelfRegistrationRecipientEmail: 'ti.cpca@fab.mil.br',
+    });
+
+    await service.updateEmailSettings({
+      cpcaPresidentSelfRegistrationRecipientEmail: ' NOVO@FAB.MIL.BR ',
+    });
+
+    expect(prismaMock.appSetting.upsert).toHaveBeenCalledWith({
+      where: {
+        key: EMAIL_SETTING_KEYS.cpcaPresidentSelfRegistrationRecipient,
+      },
+      update: { value: 'novo@fab.mil.br' },
+      create: {
+        key: EMAIL_SETTING_KEYS.cpcaPresidentSelfRegistrationRecipient,
+        value: 'novo@fab.mil.br',
+      },
+    });
+  });
+
+  it('rejects invalid email setting values', async () => {
+    await expect(
+      service.updateEmailSettings({
+        cpcaPresidentSelfRegistrationRecipientEmail: 'email-invalido',
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        details: expect.objectContaining({ reason: 'INVALID_EMAIL' }),
+      }),
+    });
   });
 });

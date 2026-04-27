@@ -54,6 +54,19 @@ function firstConfig(config: ConfigService, key: string): string | undefined {
   );
 }
 
+function resolveDefaultFromName(value: string | undefined): string {
+  const configured = String(value ?? '').trim();
+  if (
+    !configured ||
+    configured.localeCompare('CPCA COMGEP', 'pt-BR', {
+      sensitivity: 'base',
+    }) === 0
+  ) {
+    return 'Gestor CIPAVD';
+  }
+  return configured;
+}
+
 function normalizeAddressList(value: string | string[] | undefined): string[] {
   if (!value) return [];
   const items = Array.isArray(value) ? value : [value];
@@ -135,8 +148,9 @@ export class MailService {
     const portRaw = firstConfig(this.config, 'SMTP_PORT');
     const user = firstConfig(this.config, 'SMTP_USER');
     const pass = firstConfig(this.config, 'SMTP_PASS');
-    const fromName =
-      firstConfig(this.config, 'SMTP_FROM_NAME') ?? 'CPCA COMGEP';
+    const fromName = resolveDefaultFromName(
+      firstConfig(this.config, 'SMTP_FROM_NAME'),
+    );
     const fromEmail =
       firstConfig(this.config, 'SMTP_FROM_EMAIL') ?? user ?? undefined;
 

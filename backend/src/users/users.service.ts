@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { canonicalRoleName } from '../rbac/role-access';
 import { FabLdapService } from '../ldap/fab-ldap.service';
+import { deleteCpcaPresidentBulletinFile } from '../cpca/cpca-president-bulletin-file';
 
 const LOCALITY_REQUIRED_ROLE_NAMES = new Set([
   'admin especialidade local',
@@ -402,5 +403,89 @@ export class UsersService {
         userDeactivated,
       };
     });
+  }
+
+  async deleteUserAccessAndPresidentHistory(userId: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const targetUser = await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true },
+      });
+      if (!targetUser) {
+        throwError('NOT_FOUND');
+      }
+
+      const selfRegistrationRows =
+        await tx.cpcaPresidentSelfRegistration.findMany({
+          where: { applicantUserId: userId },
+          select: { bulletinStorageKey: true },
+        });
+      const bulletinStorageKeys = Array.from(
+        new Set(
+          selfRegistrationRows
+            .map((item) => String(item.bulletinStorageKey ?? '').trim())
+            .filter(Boolean),
+        ),
+      );
+
+      const removedRoles = await tx.userRole.deleteMany({
+        where: { userId },
+      });
+      const removedModuleOverrides =
+        await tx.userModuleAccessOverride.deleteMany({
+          where: { userId },
+        });
+      const removedRefreshTokens = await tx.refreshToken.deleteMany({
+        where: { userId },
+      });
+      const removedSelfRegistrations =
+        await tx.cpcaPresidentSelfRegistration.deleteMany({
+          where: { applicantUserId: userId },
+        });
+      const removedNominationRequests =
+        await tx.cpcaPresidentNominationRequest.deleteMany({
+          where: {
+            OR: [{ requestedByUserId: userId }, { nomineeUserId: userId }],
+          },
+        });
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          isActive: false,
+          omId: null,
+          localityId: null,
+          specialtyId: null,
+          eloRoleId: null,
+          totpSecret: null,
+          totpEnabled: false,
+          totpBackupCodes: [],
+        },
+      });
+
+      return {
+        bulletinStorageKeys,
+        removedRoles: removedRoles.count,
+        removedModuleOverrides: removedModuleOverrides.count,
+        removedRefreshTokens: removedRefreshTokens.count,
+        removedSelfRegistrations: removedSelfRegistrations.count,
+        removedNominationRequests: removedNominationRequests.count,
+      };
+    });
+
+    for (const storageKey of result.bulletinStorageKeys) {
+      deleteCpcaPresidentBulletinFile(storageKey);
+    }
+
+    return {
+      ok: true,
+      userId,
+      removedRoles: result.removedRoles,
+      removedModuleOverrides: result.removedModuleOverrides,
+      removedRefreshTokens: result.removedRefreshTokens,
+      removedPresidentSelfRegistrations: result.removedSelfRegistrations,
+      removedPresidentNominationRequests: result.removedNominationRequests,
+      removedPresidentBulletinFiles: result.bulletinStorageKeys.length,
+    };
   }
 }

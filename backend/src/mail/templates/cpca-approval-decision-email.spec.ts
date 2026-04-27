@@ -14,8 +14,35 @@ describe('buildCpcaApprovalDecisionEmail', () => {
     });
 
     expect(message.subject).toBe(
-      'CPCA COMGEP | Solicitação de presidência CPCA homologada | CCA BR',
+      'Gestor CIPAVD | Solicitação de presidência CPCA homologada | CCA BR',
     );
     expect(message.subject).not.toContain('CCA BR · CCA BR');
+    expect(message.html).toContain('Gestor CIPAVD');
+    expect(message.html).not.toContain('CCA BR · CCA BR');
+    expect(message.text).toContain('OM: CCA BR');
+    expect(message.text).not.toContain('CCA BR · CCA BR');
+  });
+
+  it('usa a nova marca no email de rejeicao', () => {
+    const message = buildCpcaApprovalDecisionEmail({
+      requestTypeLabel: 'Solicitação de presidência CPCA',
+      recipientName: 'Maj Silva',
+      status: 'REJECTED',
+      locality: {
+        code: 'CCA BR',
+        name: 'CCA BR',
+      },
+      decisionReason: 'Ajustar o boletim informado.',
+    });
+
+    expect(message.subject).toBe(
+      'Gestor CIPAVD | Solicitação de presidência CPCA rejeitada | CCA BR',
+    );
+    expect(message.html).toContain('Gestor CIPAVD');
+    expect(message.html).toContain('Ajustar o boletim informado.');
+    expect(message.text).toContain(
+      'Este e-mail foi enviado automaticamente pelo Gestor CIPAVD.',
+    );
+    expect(message.text).not.toContain('CPCA COMGEP');
   });
 });

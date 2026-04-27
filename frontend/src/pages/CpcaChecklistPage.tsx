@@ -36,6 +36,7 @@ import {
   getCpcaChecklistFieldConfig,
   getCpcaChecklistReadOnlyStatusLabel,
   getCpcaChecklistStatusTone,
+  isCpcaChecklistBinaryQuestionItem,
   normalizeCpcaChecklistUrl,
   type CpcaChecklistItem,
   type CpcaChecklistItemKey,
@@ -134,6 +135,7 @@ function SummaryStatCard(props: {
 
 function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
   const isCompleted = Boolean(item.isCompleted);
+  const isBinaryQuestion = isCpcaChecklistBinaryQuestionItem(item.itemKey);
   const fieldConfig = getCpcaChecklistFieldConfig(item.itemKey);
   const statusLabel = getCpcaChecklistReadOnlyStatusLabel(
     item.itemKey,
@@ -191,14 +193,29 @@ function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
         </Stack>
       </Stack>
 
-      <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1 }}>
-        <TodayRoundedIcon sx={{ fontSize: 15, color: "text.secondary" }} />
-        <Typography variant="caption" color="text.secondary">
-          {isCompleted
-            ? formatCpcaChecklistDate(item.completedAt)
-            : statusLabel}
-        </Typography>
-      </Stack>
+      {isBinaryQuestion ? (
+        <Chip
+          size="small"
+          label={statusLabel}
+          color={isCompleted ? "success" : "default"}
+          variant={isCompleted ? "filled" : "outlined"}
+          sx={{ mt: 1, alignSelf: "flex-start", fontWeight: 700 }}
+        />
+      ) : (
+        <Stack
+          direction="row"
+          spacing={0.75}
+          alignItems="center"
+          sx={{ mt: 1 }}
+        >
+          <TodayRoundedIcon sx={{ fontSize: 15, color: "text.secondary" }} />
+          <Typography variant="caption" color="text.secondary">
+            {isCompleted
+              ? formatCpcaChecklistDate(item.completedAt)
+              : statusLabel}
+          </Typography>
+        </Stack>
+      )}
 
       <Typography
         variant="caption"

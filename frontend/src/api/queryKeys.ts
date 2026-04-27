@@ -165,6 +165,7 @@ export const qk = {
   knowledgeBaseDocuments: (knowledgeBaseId: string) =>
     ["admin", "knowledgeBases", knowledgeBaseId, "documents"] as const,
   aiSettings: ["admin", "aiSettings"] as const,
+  emailSettings: ["admin", "emailSettings"] as const,
   comgepSettings: ["admin", "comgepSettings"] as const,
   biNormalizationOverview: ["bi", "normalization", "overview"] as const,
   biNormalizationReview: (sourceType?: string | null) =>

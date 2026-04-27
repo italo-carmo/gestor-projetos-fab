@@ -37,7 +37,7 @@ describe('MailService', () => {
     }
   });
 
-  it('envia email usando a configuracao SMTP e o remetente padrao', async () => {
+  it('envia email usando a configuracao SMTP e normaliza o remetente legado', async () => {
     configMock.get = jest.fn((key: string) => {
       switch (key) {
         case 'SMTP_HOST':
@@ -80,7 +80,7 @@ describe('MailService', () => {
     expect(transporterMock.sendMail).toHaveBeenCalledWith(
       expect.objectContaining({
         from: {
-          name: 'CPCA COMGEP',
+          name: 'Gestor CIPAVD',
           address: 'italoibsc@fab.mil.br',
         },
         to: ['destinatario@fab.mil.br'],

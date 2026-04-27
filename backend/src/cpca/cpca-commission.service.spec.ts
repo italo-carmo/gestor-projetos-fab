@@ -121,6 +121,14 @@ function createMailMock() {
   } as unknown as MailService;
 }
 
+function createSettingsMock() {
+  return {
+    getEmailSettings: jest.fn().mockResolvedValue({
+      cpcaPresidentSelfRegistrationRecipientEmail: 'ti.cpca@fab.mil.br',
+    }),
+  };
+}
+
 function makeUser(args: {
   id?: string;
   omId?: string | null;
@@ -262,6 +270,89 @@ describe('CpcaCommissionService', () => {
       }),
     );
     expect(result.request.locality).toEqual(om);
+  });
+
+  it('notifica o email configurado quando uma autoinscrição de presidente é criada', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const mail = createMailMock();
+    const settings = createSettingsMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+      mail as any,
+      settings as any,
+    );
+
+    (resolveBestOmByFabOm as jest.Mock).mockResolvedValue({
+      ...om,
+      code: 'CCA BR',
+      name: 'CCA BR',
+    });
+    ldap.lookupByEmail.mockResolvedValue({
+      uid: 'uid-pres-1',
+      email: 'presidente@fab.mil.br',
+      name: '1T Denise',
+      fabom: 'CCA BR',
+    });
+    prisma.om.findUnique.mockResolvedValue({
+      ...om,
+      code: 'CCA BR',
+      name: 'CCA BR',
+    });
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.create.mockResolvedValue({
+      id: 'user-pres-1',
+      name: '1T Denise',
+      email: 'presidente@fab.mil.br',
+      ldapUid: 'uid-pres-1',
+      omId: om.id,
+      localityId: om.id,
+    });
+    prisma.cpcaPresidentSelfRegistration.findMany.mockResolvedValue([]);
+    prisma.cpcaPresidentSelfRegistration.create.mockResolvedValue({
+      id: 'req-1',
+      status: 'PENDING',
+      createdAt: new Date('2026-04-19T10:00:00Z'),
+      attemptNumber: 1,
+      om: {
+        ...om,
+        code: 'CCA BR',
+        name: 'CCA BR',
+      },
+    });
+
+    await service.createSelfRegistration(
+      {
+        identifier: 'presidente@fab.mil.br',
+        isSubstitution: true,
+        bulletinNumber: 'BOL 001',
+        bulletinFile: {
+          originalname: 'boletim-publicacao.pdf',
+          mimetype: 'application/pdf',
+          size: 1024,
+          buffer: Buffer.from('%PDF-1.4'),
+        } as any,
+      },
+      '127.0.0.1',
+    );
+
+    expect(settings.getEmailSettings).toHaveBeenCalledTimes(1);
+    expect(mail.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'ti.cpca@fab.mil.br',
+        subject:
+          'Gestor CIPAVD | Novo cadastro de presidente CPCA | CCA BR',
+        html: expect.stringContaining('1T Denise'),
+        text: expect.stringContaining('OM: CCA BR'),
+      }),
+    );
+    expect((mail.sendMail as jest.Mock).mock.calls[0][0].text).not.toContain(
+      'CCA BR · CCA BR',
+    );
   });
 
   it('exige confirmação explícita ao homologar presidente quando a OM já possui outro presidente', async () => {

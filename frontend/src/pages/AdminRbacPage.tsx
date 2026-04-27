@@ -30,9 +30,12 @@ import {
 } from "@mui/material";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import LockResetRoundedIcon from "@mui/icons-material/LockResetRounded";
+import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import { can } from "../app/rbac";
+import { canDeleteUserAccessInUi } from "../features/adminUsers";
 import {
+  useDeleteUserAccess,
   useLocalities,
   useOmsCatalog,
   useLookupLdapUser,
@@ -282,6 +285,8 @@ export function AdminRbacPage() {
   const canEditRolePermissions = can(me, "roles", "permissions");
   const canViewMatrix = canViewRoles || canEditRolePermissions;
   const canAccessRbacPage = canViewUsers || canViewMatrix;
+  const canDeleteUsers = (targetUserId: string) =>
+    canDeleteUserAccessInUi(me, targetUserId, canUpdateUsers);
 
   const rolesQuery = useRoles();
   const permissionsCatalogQuery = usePermissionsCatalog();
@@ -292,6 +297,7 @@ export function AdminRbacPage() {
   const specialtiesQuery = useSpecialties(can(me, "specialties", "view"));
   const updateUser = useUpdateUser();
   const removeUserRole = useRemoveUserRole();
+  const deleteUserAccess = useDeleteUserAccess();
   const resetTwoFactor = useResetTwoFactor();
   const ldapLookup = useLookupLdapUser();
   const upsertLdapUser = useUpsertLdapUser();
@@ -310,6 +316,11 @@ export function AdminRbacPage() {
   const [reset2faTarget, setReset2faTarget] = useState<{
     userId: string;
     userName: string;
+  } | null>(null);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<{
+    userId: string;
+    userName: string;
+    userEmail: string;
   } | null>(null);
 
   const [ldapUid, setLdapUid] = useState("");
@@ -759,6 +770,23 @@ export function AdminRbacPage() {
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? "Erro ao remover permissão",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleDeleteUserAccess = async () => {
+    if (!deleteUserTarget) return;
+    try {
+      await deleteUserAccess.mutateAsync(deleteUserTarget.userId);
+      toast.push({
+        message: "Usuário excluído da gestão de acessos.",
+        severity: "success",
+      });
+      setDeleteUserTarget(null);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Erro ao excluir usuário",
         severity: "error",
       });
     }
@@ -1365,7 +1393,7 @@ export function AdminRbacPage() {
                       <TableCell sx={{ fontWeight: 700 }}>
                         Especialidade
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 700, width: 110 }}>
+                      <TableCell sx={{ fontWeight: 700, width: 150 }}>
                         Ações
                       </TableCell>
                     </TableRow>
@@ -1491,6 +1519,26 @@ export function AdminRbacPage() {
                                   <LockResetRoundedIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
+                              {canDeleteUsers(user.id) && (
+                                <Tooltip
+                                  title="Excluir usuário"
+                                >
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    disabled={deleteUserAccess.isPending}
+                                    onClick={() =>
+                                      setDeleteUserTarget({
+                                        userId: user.id,
+                                        userName: user.name,
+                                        userEmail: user.email,
+                                      })
+                                    }
+                                  >
+                                    <DeleteRoundedIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                             </Stack>
                           </TableCell>
                         </TableRow>
@@ -2087,6 +2135,27 @@ export function AdminRbacPage() {
         confirmLabel={removeUserRole.isPending ? "Removendo..." : "Remover"}
         severity="error"
         confirmLoading={removeUserRole.isPending}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteUserTarget)}
+        onCancel={() => setDeleteUserTarget(null)}
+        onConfirm={() => {
+          void handleDeleteUserAccess();
+        }}
+        title="Excluir usuário"
+        message="Confirma excluir este usuário da gestão de acessos? Todos os papéis, acessos específicos e sessões serão removidos."
+        highlightText={
+          deleteUserTarget
+            ? `${deleteUserTarget.userName} • ${deleteUserTarget.userEmail}`
+            : ""
+        }
+        note="O histórico de solicitações de presidência CPCA deste usuário também será excluído, quando existir."
+        confirmLabel={
+          deleteUserAccess.isPending ? "Excluindo..." : "Excluir usuário"
+        }
+        severity="error"
+        confirmLoading={deleteUserAccess.isPending}
       />
 
       <ConfirmDialog

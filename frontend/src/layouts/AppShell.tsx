@@ -58,6 +58,7 @@ import {
   normalizeRoleName,
   ROLE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
+  ROLE_CPCA,
   ROLE_TI,
 } from "../app/roleAccess";
 import {
@@ -384,6 +385,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const currentRoleLabel = canonicalRoleName(
     me?.activeRole?.name ?? me?.roles?.[0]?.name ?? "Sem papel",
   );
+  const isCpcaNavigationProfile =
+    normalizeRoleName(currentRoleLabel) === normalizeRoleName(ROLE_CPCA);
   const activeRoleId =
     String(me?.activeRole?.id ?? me?.activeRoleId ?? "").trim() ||
     roleOptions[0]?.id ||
@@ -418,22 +421,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         })),
     [localitiesQuery.data?.items],
   );
-  const localityNameById = useMemo(
-    () =>
-      new Map(
-        availableGlobalLocalities.map((locality) => [
-          locality.id,
-          locality.name,
-        ]),
-      ),
-    [availableGlobalLocalities],
-  );
   const globalLocalityId = searchParams.get(GLOBAL_LOCALITY_QUERY_PARAM) ?? "";
-  const contextFromQuery = searchParams.get(GLOBAL_LOCALITY_QUERY_PARAM);
-  const localityFromPath = location.pathname.startsWith("/dashboard/locality/")
-    ? location.pathname.split("/").pop()
-    : null;
-  const contextLocality = contextFromQuery ?? localityFromPath;
   const sidebarCollapsed = !isMobile && desktopSidebarCollapsed;
   const sidebarWidth = sidebarCollapsed
     ? drawerCollapsedWidth
@@ -572,6 +560,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
 
   const visibleNavSections = navSections
+    .filter((section) => !isCpcaNavigationProfile || section.id === "cpca")
     .map((section) => ({
       ...section,
       items: section.items.filter(canSeeNavItem),
@@ -1244,19 +1233,6 @@ export function AppShell({ children }: { children: ReactNode }) {
               ))}
             </TextField>
           )}
-          <Chip
-            label={
-              contextLocality
-                ? `Localidade ${localityNameById.get(contextLocality) ?? contextLocality}`
-                : "Contexto Brasil"
-            }
-            size="small"
-            sx={{
-              display: { xs: "none", xl: "inline-flex" },
-              bgcolor: alpha("#0C657E", 0.08),
-              color: "#0A4A5E",
-            }}
-          />
           <Divider
             orientation="vertical"
             flexItem

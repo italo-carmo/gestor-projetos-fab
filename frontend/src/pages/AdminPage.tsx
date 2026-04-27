@@ -46,11 +46,13 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode, type Synthet
 import {
   useAiSettings,
   useComgepScoringSettings,
+  useEmailSettings,
   useMe,
   usePhases,
   useSelectableKnowledgeBases,
   useUpdateAiSettings,
   useUpdateComgepScoringSettings,
+  useUpdateEmailSettings,
   useUpdatePhase,
   useTestAiConnection,
   type AdminKnowledgeBase,
@@ -93,6 +95,7 @@ import {
 } from '../api/hooks';
 import { can } from '../app/rbac';
 import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from '../app/roleAccess';
+import { normalizeEmailSettingDraft } from '../features/adminUsers';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { SkeletonState } from '../components/states/SkeletonState';
@@ -3573,6 +3576,94 @@ function ComgepSettingsTab() {
   );
 }
 
+function EmailSettingsTab() {
+  const toast = useToast();
+  const settingsQuery = useEmailSettings();
+  const updateSettings = useUpdateEmailSettings();
+  const [loaded, setLoaded] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState('');
+
+  useEffect(() => {
+    if (loaded || !settingsQuery.data) return;
+    setRecipientEmail(
+      settingsQuery.data.cpcaPresidentSelfRegistrationRecipientEmail ?? '',
+    );
+    setLoaded(true);
+  }, [loaded, settingsQuery.data]);
+
+  const baseline =
+    settingsQuery.data?.cpcaPresidentSelfRegistrationRecipientEmail ?? '';
+  const normalizedDraft = normalizeEmailSettingDraft(recipientEmail);
+  const isDirty = normalizedDraft !== baseline;
+
+  const handleSave = async () => {
+    try {
+      await updateSettings.mutateAsync({
+        cpcaPresidentSelfRegistrationRecipientEmail: recipientEmail,
+      });
+      toast.push({
+        message: 'Configuração de e-mail salva com sucesso.',
+        severity: 'success',
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ??
+          'Erro ao salvar configuração de e-mail.',
+        severity: 'error',
+      });
+    }
+  };
+
+  if (settingsQuery.isLoading) return <SkeletonState />;
+  if (settingsQuery.isError) {
+    return (
+      <ErrorState
+        error={settingsQuery.error}
+        onRetry={() => settingsQuery.refetch()}
+      />
+    );
+  }
+
+  return (
+    <Stack spacing={2.5}>
+      <Box>
+        <Typography variant="h6" fontWeight={800}>
+          E-mails do sistema
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Configure destinatários operacionais para notificações automáticas.
+        </Typography>
+      </Box>
+
+      <Alert severity="info">
+        Este endereço receberá um aviso quando um militar enviar cadastro como
+        presidente CPCA pela tela de login.
+      </Alert>
+
+      <TextField
+        label="Destinatário da autoinscrição de presidente CPCA"
+        value={recipientEmail}
+        onChange={(event) => setRecipientEmail(event.target.value)}
+        placeholder="exemplo@fab.mil.br"
+        fullWidth
+      />
+
+      <Stack direction="row" justifyContent="flex-end">
+        <Button
+          variant="contained"
+          onClick={() => {
+            void handleSave();
+          }}
+          disabled={updateSettings.isPending || !isDirty}
+        >
+          {updateSettings.isPending ? 'Salvando...' : 'Salvar e-mail'}
+        </Button>
+      </Stack>
+    </Stack>
+  );
+}
+
 export function AdminPage() {
   const { data: me } = useMe();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -3580,6 +3671,7 @@ export function AdminPage() {
   const [currentTab, setCurrentTab] = useState(tabParam);
   const canViewCipavdLocalities = can(me, 'localities_cipavd', 'view');
   const canViewAiSettings = hasAnyRole(me, [ROLE_TI]);
+  const canViewEmailSettings = hasAnyRole(me, [ROLE_TI]);
   const canViewKnowledgeBases = canViewAiSettings;
   const canViewComgepSettings = canViewAiSettings;
   const canViewBiNormalization = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
@@ -3617,6 +3709,13 @@ export function AdminPage() {
     params.set('tab', 'postos');
     setSearchParams(params, { replace: true });
   }, [canViewComgepSettings, currentTab, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (currentTab !== 'emails' || canViewEmailSettings) return;
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', 'postos');
+    setSearchParams(params, { replace: true });
+  }, [canViewEmailSettings, currentTab, searchParams, setSearchParams]);
 
   const handleTabChange = (_event: SyntheticEvent, newValue: string) => {
     setCurrentTab(newValue);
@@ -3660,6 +3759,7 @@ export function AdminPage() {
             {canViewComgepSettings && (
               <Tab label="Configuração COMGEP" value="comgep-settings" />
             )}
+            {canViewEmailSettings && <Tab label="E-mails" value="emails" />}
             {canViewAiSettings && <Tab label="Configuração IA" value="ai-settings" />}
           </Tabs>
 
@@ -3679,6 +3779,9 @@ export function AdminPage() {
           )}
           {canViewComgepSettings && currentTab === 'comgep-settings' && (
             <ComgepSettingsTab />
+          )}
+          {canViewEmailSettings && currentTab === 'emails' && (
+            <EmailSettingsTab />
           )}
           {canViewAiSettings && currentTab === 'ai-settings' && <AiSettingsTab />}
         </CardContent>

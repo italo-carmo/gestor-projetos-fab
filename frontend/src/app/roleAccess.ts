@@ -85,6 +85,7 @@ export function canEditRecruitsCount(
 }
 
 export function resolveHomePath(user: MePayload | undefined) {
+  const isCpcaProfile = hasRole(user, ROLE_CPCA);
   const canSeeStrategicDashboard = can(user, "strategic_dashboard", "view");
   const canSeeAi = can(user, "ai", "view");
   const canSeeSmifDashboard = can(user, "dashboard", "view", "NATIONAL");
@@ -125,6 +126,20 @@ export function resolveHomePath(user: MePayload | undefined) {
     can(user, "roles", "permissions");
   const canSeeAudit = can(user, "audit_logs", "view");
   const canSeeAdminCatalog = canAccessAdminCatalog(user);
+
+  if (isCpcaProfile) {
+    const cpcaHomeCandidates: Array<[boolean, string]> = [
+      [canSeeCpcaCases, "/cpca-cases"],
+      [canSeeCpcaCases, "/cpca-commission"],
+      [canSeeCpcaCoverage, "/cpca-coverage"],
+      [canSeeCpcaChecklist, "/cpca-checklist"],
+      [canSeeCpcaPresidentApprovals, "/cpca-president-approvals"],
+    ];
+
+    for (const [allowed, path] of cpcaHomeCandidates) {
+      if (allowed) return path;
+    }
+  }
 
   const homeCandidates: Array<[boolean, string]> = [
     [canSeeStrategicDashboard, "/dashboard/estrategico"],

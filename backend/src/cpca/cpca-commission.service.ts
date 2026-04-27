@@ -14,6 +14,7 @@ import { sanitizeText } from '../common/sanitize';
 import { FabLdapProfile, FabLdapService } from '../ldap/fab-ldap.service';
 import { MailService } from '../mail/mail.service';
 import { buildCpcaApprovalDecisionEmail } from '../mail/templates/cpca-approval-decision-email';
+import { buildCpcaSelfRegistrationNotificationEmail } from '../mail/templates/cpca-self-registration-notification-email';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   normalizeRoleName,
@@ -24,6 +25,7 @@ import {
   ROLE_TI,
 } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { SettingsService } from '../settings/settings.service';
 import {
   deleteCpcaPresidentBulletinFile,
   persistCpcaPresidentBulletinFile,
@@ -76,6 +78,7 @@ export class CpcaCommissionService {
     private readonly audit: AuditService,
     private readonly fabLdap: FabLdapService,
     @Optional() private readonly mail?: MailService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   async listSelfRegistrationLocalities() {
@@ -381,6 +384,18 @@ export class CpcaCommissionService {
         previousAttemptId: linkedPreviousAttemptId,
         ip: ip || null,
       },
+    });
+
+    await this.notifySelfRegistrationCreatedByEmail({
+      requestId: created.id,
+      applicantName,
+      applicantEmail: ldapProfile.email,
+      applicantUid: ldapProfile.uid,
+      locality: created.om ?? locality,
+      bulletinNumber,
+      requestedAsSubstitution: Boolean(payload.isSubstitution),
+      attemptNumber: created.attemptNumber,
+      createdAt: created.createdAt,
     });
 
     return {
@@ -2859,6 +2874,54 @@ export class CpcaCommissionService {
         error instanceof Error ? error.message : 'falha desconhecida';
       this.logger.warn(
         `Falha ao enviar e-mail de decisao CPCA para ${to} (${input.requestTypeLabel} ${input.requestId}): ${detail}.`,
+      );
+    }
+  }
+
+  private async notifySelfRegistrationCreatedByEmail(input: {
+    requestId: string;
+    applicantName: string;
+    applicantEmail?: string | null;
+    applicantUid?: string | null;
+    locality?: { code?: string | null; name?: string | null } | null;
+    bulletinNumber?: string | null;
+    requestedAsSubstitution?: boolean;
+    attemptNumber?: number | null;
+    createdAt?: Date | null;
+  }) {
+    if (!this.mail || !this.settings) {
+      return;
+    }
+
+    try {
+      const emailSettings = await this.settings.getEmailSettings();
+      const to = this.normalizeEmail(
+        emailSettings.cpcaPresidentSelfRegistrationRecipientEmail,
+      );
+      if (!to) {
+        return;
+      }
+
+      const message = buildCpcaSelfRegistrationNotificationEmail({
+        applicantName: input.applicantName,
+        applicantEmail: input.applicantEmail,
+        applicantUid: input.applicantUid,
+        locality: input.locality,
+        bulletinNumber: input.bulletinNumber,
+        requestedAsSubstitution: input.requestedAsSubstitution,
+        attemptNumber: input.attemptNumber,
+        createdAt: input.createdAt,
+      });
+
+      await this.mail.sendMail({
+        to,
+        ...message,
+      });
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : 'falha desconhecida';
+      this.logger.warn(
+        `Falha ao enviar e-mail de autoinscricao CPCA (${input.requestId}): ${detail}.`,
       );
     }
   }

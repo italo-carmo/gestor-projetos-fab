@@ -21,6 +21,8 @@ export type CpcaApprovalDecisionEmailInput = {
   }>;
 };
 
+const SYSTEM_NAME = 'Gestor CIPAVD';
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -147,12 +149,12 @@ export function buildCpcaApprovalDecisionEmail(
       </div>`
     : '';
 
-  const subject = `CPCA COMGEP | ${heading}${localityLabel ? ` | ${localityLabel}` : ''}`;
+  const subject = `${SYSTEM_NAME} | ${heading}${localityLabel ? ` | ${localityLabel}` : ''}`;
   const html = `
     <div style="margin: 0; padding: 24px; background: #F5F7FA; font-family: Arial, Helvetica, sans-serif;">
       <div style="max-width: 680px; margin: 0 auto; background: #FFFFFF; border-radius: 20px; overflow: hidden; box-shadow: 0 18px 40px rgba(16, 24, 40, 0.10);">
         <div style="padding: 28px 32px; background: linear-gradient(135deg, ${accentColor} 0%, #0F172A 100%); color: #FFFFFF;">
-          <div style="display: inline-block; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.16); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;">CPCA COMGEP • ${escapeHtml(badgeLabel)}</div>
+          <div style="display: inline-block; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.16); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;">${escapeHtml(SYSTEM_NAME)} • ${escapeHtml(badgeLabel)}</div>
           <h1 style="margin: 16px 0 8px; font-size: 28px; line-height: 1.2;">${escapeHtml(heading)}</h1>
           <p style="margin: 0; font-size: 15px; line-height: 1.6; color: rgba(255,255,255,0.92);">${escapeHtml(intro)}</p>
         </div>
@@ -171,7 +173,7 @@ export function buildCpcaApprovalDecisionEmail(
               ${nextStepsHtml}
             </ol>
           </div>
-          <p style="margin: 28px 0 0; color: #475467; font-size: 13px; line-height: 1.7;">Este e-mail foi enviado automaticamente pela CPCA COMGEP. Caso necessário, mantenha esta mensagem para consulta futura.</p>
+          <p style="margin: 28px 0 0; color: #475467; font-size: 13px; line-height: 1.7;">Este e-mail foi enviado automaticamente pelo ${escapeHtml(SYSTEM_NAME)}. Caso necessário, mantenha esta mensagem para consulta futura.</p>
         </div>
       </div>
     </div>`;
@@ -189,7 +191,7 @@ export function buildCpcaApprovalDecisionEmail(
     'Próximos passos:',
     ...nextSteps.map((step, index) => `${index + 1}. ${step}`),
     '',
-    'Este e-mail foi enviado automaticamente pela CPCA COMGEP.',
+    `Este e-mail foi enviado automaticamente pelo ${SYSTEM_NAME}.`,
   ].filter((line): line is string => line !== null);
 
   return {

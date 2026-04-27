@@ -2086,6 +2086,24 @@ export function useRemoveUserRole() {
   });
 }
 
+export function useDeleteUserAccess() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (userId: string) =>
+      (await api.delete(`/users/${userId}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: qk.me });
+      qc.invalidateQueries({
+        queryKey: ["cpcaCommission", "presidentRequests"],
+      });
+      qc.invalidateQueries({
+        queryKey: qk.cpcaPresidentRequestsPendingCount(),
+      });
+    },
+  });
+}
+
 export function useUserModuleAccess(userId?: string) {
   return useQuery({
     queryKey: qk.userModuleAccess(userId ?? ""),
@@ -5640,6 +5658,14 @@ export type AiSettingsPatch = {
   analysisFeatures?: Partial<Record<AiAnalysisType, AiProfileFeatureId[]>>;
 };
 
+export type EmailSettingsResponse = {
+  cpcaPresidentSelfRegistrationRecipientEmail: string;
+};
+
+export type EmailSettingsPatch = {
+  cpcaPresidentSelfRegistrationRecipientEmail?: string | null;
+};
+
 export type ComgepScoringWeightKey =
   | "riskOpenCases"
   | "riskRetaliationCases"
@@ -5704,6 +5730,14 @@ export function useAiSettings() {
     queryKey: qk.aiSettings,
     queryFn: async () =>
       (await api.get<AiSettingsResponse>("/admin/ai-settings")).data,
+  });
+}
+
+export function useEmailSettings() {
+  return useQuery({
+    queryKey: qk.emailSettings,
+    queryFn: async () =>
+      (await api.get<EmailSettingsResponse>("/admin/email-settings")).data,
   });
 }
 
@@ -5916,6 +5950,17 @@ export function useUpdateAiSettings() {
       (await api.put("/admin/ai-settings", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.aiSettings });
+    },
+  });
+}
+
+export function useUpdateEmailSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: EmailSettingsPatch) =>
+      (await api.put("/admin/email-settings", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.emailSettings });
     },
   });
 }

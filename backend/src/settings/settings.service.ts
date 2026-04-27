@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { throwError } from '../common/http-error';
 import {
   firstConfig,
   LITELLM_API_KEY_ENV_KEYS,
@@ -37,6 +38,11 @@ export const AI_SETTING_KEYS = {
   analysisSources: 'ai.analysisSources',
   analysisKnowledgeBases: 'ai.analysisKnowledgeBases',
   analysisFeatures: 'ai.analysisFeatures',
+} as const;
+
+export const EMAIL_SETTING_KEYS = {
+  cpcaPresidentSelfRegistrationRecipient:
+    'email.cpcaPresidentSelfRegistration.recipient',
 } as const;
 
 export const ANALYSIS_PROMPT_KEYS: Record<string, string> = {
@@ -221,6 +227,20 @@ const pickConfiguredValue = (
   return String(envValue ?? '').trim();
 };
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function normalizeOptionalEmail(value: string | null | undefined): string {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (!EMAIL_PATTERN.test(normalized)) {
+    throwError('VALIDATION_ERROR', {
+      field: 'cpcaPresidentSelfRegistrationRecipientEmail',
+      reason: 'INVALID_EMAIL',
+    });
+  }
+  return normalized;
+}
+
 @Injectable()
 export class SettingsService implements OnModuleInit {
   private readonly logger = new Logger(SettingsService.name);
@@ -387,6 +407,35 @@ export class SettingsService implements OnModuleInit {
   async getComgepScoringSettings() {
     const weights = await this.getComgepScoringWeights();
     return buildComgepScoringSettingsResponse(weights);
+  }
+
+  async getEmailSettings(): Promise<{
+    cpcaPresidentSelfRegistrationRecipientEmail: string;
+  }> {
+    const row = await this.appSetting.findUnique({
+      where: {
+        key: EMAIL_SETTING_KEYS.cpcaPresidentSelfRegistrationRecipient,
+      },
+    });
+
+    return {
+      cpcaPresidentSelfRegistrationRecipientEmail: normalizeOptionalEmail(
+        row?.value,
+      ),
+    };
+  }
+
+  async updateEmailSettings(patch: {
+    cpcaPresidentSelfRegistrationRecipientEmail?: string | null;
+  }): Promise<void> {
+    if (patch.cpcaPresidentSelfRegistrationRecipientEmail !== undefined) {
+      await this.set(
+        EMAIL_SETTING_KEYS.cpcaPresidentSelfRegistrationRecipient,
+        normalizeOptionalEmail(
+          patch.cpcaPresidentSelfRegistrationRecipientEmail,
+        ),
+      );
+    }
   }
 
   async updateComgepScoringSettings(

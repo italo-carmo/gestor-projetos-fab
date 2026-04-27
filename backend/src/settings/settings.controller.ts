@@ -1,10 +1,18 @@
 import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../common/current-user.decorator';
+import { throwError } from '../common/http-error';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
+import { isTiUser } from '../rbac/role-access';
+import type { RbacUser } from '../rbac/rbac.types';
 import { SettingsService } from './settings.service';
 import { LitellmService } from '../llm/litellm.service';
-import { AiKnowledgeSourceId } from '../ai/ai-knowledge-sources';
+import {
+  AiKnowledgeSourceId,
+  type AiAnalysisType,
+  type AiProfileFeatureId,
+} from '../ai/ai-knowledge-sources';
 import type { ComgepScoringWeightKey } from './comgep-scoring';
 
 @Controller('admin')
@@ -30,8 +38,11 @@ export class SettingsController {
       baseUrl?: string;
       apiKey?: string;
       model?: string;
+      embeddingModel?: string;
       analysisPrompts?: Record<string, string>;
       analysisSources?: Partial<Record<string, AiKnowledgeSourceId[]>>;
+      analysisKnowledgeBases?: Partial<Record<AiAnalysisType, string[]>>;
+      analysisFeatures?: Partial<Record<AiAnalysisType, AiProfileFeatureId[]>>;
     },
   ) {
     await this.settings.updateAiSettings(body);
@@ -60,5 +71,32 @@ export class SettingsController {
   ) {
     await this.settings.updateComgepScoringSettings(body.weights ?? {});
     return { ok: true };
+  }
+
+  @Get('email-settings')
+  @RequirePermission('admin_rbac', 'update')
+  async getEmailSettings(@CurrentUser() user: RbacUser) {
+    this.assertTiUser(user);
+    return this.settings.getEmailSettings();
+  }
+
+  @Put('email-settings')
+  @RequirePermission('admin_rbac', 'update')
+  async updateEmailSettings(
+    @CurrentUser() user: RbacUser,
+    @Body()
+    body: {
+      cpcaPresidentSelfRegistrationRecipientEmail?: string | null;
+    },
+  ) {
+    this.assertTiUser(user);
+    await this.settings.updateEmailSettings(body);
+    return { ok: true };
+  }
+
+  private assertTiUser(user: RbacUser | undefined) {
+    if (!isTiUser(user)) {
+      throwError('RBAC_FORBIDDEN');
+    }
   }
 }
