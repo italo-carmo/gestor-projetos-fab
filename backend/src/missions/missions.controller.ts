@@ -28,6 +28,7 @@ import { CreateMissionDto } from './dto/create-mission.dto';
 import { UpdateMissionDto } from './dto/update-mission.dto';
 import { CreateMissionScheduleItemDto } from './dto/create-mission-schedule-item.dto';
 import { UpdateMissionScheduleItemDto } from './dto/update-mission-schedule-item.dto';
+import { UpsertMissionScheduleFieldActivitiesDto } from './dto/upsert-mission-schedule-field-activities.dto';
 import { CreateMissionBannerDto } from './dto/create-mission-banner.dto';
 import { UpdateMissionBannerDto } from './dto/update-mission-banner.dto';
 import { MissionLdapParticipantDto } from './dto/mission-ldap-participant.dto';
@@ -354,6 +355,16 @@ export class MissionsController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.missions.updateScheduleItem(id, itemId, dto, user);
+  }
+
+  @Post(':id/schedule/field-activities')
+  @RequirePermission('missions', 'update')
+  upsertScheduleFieldActivities(
+    @Param('id') id: string,
+    @Body() dto: UpsertMissionScheduleFieldActivitiesDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.upsertScheduleFieldActivities(id, dto, user);
   }
 
   @Delete(':id/schedule/:itemId')

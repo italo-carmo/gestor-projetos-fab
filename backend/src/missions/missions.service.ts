@@ -92,6 +92,18 @@ type ChecklistClassificationRow = {
   createdAt: Date;
 };
 
+type MissionScheduleFieldActivityPayload = {
+  scheduleItemId: string;
+  action: 'CREATE' | 'LINK';
+  activityId?: string | null;
+  title?: string;
+  activityTypeId?: string | null;
+  specialtyIds?: string[];
+  responsibleUserIds?: string[];
+  eventDate?: string | null;
+  reportRequired?: boolean;
+};
+
 @Injectable()
 export class MissionsService {
   private readonly missionPdfTimeZone = 'America/Sao_Paulo';
@@ -860,6 +872,19 @@ export class MissionsService {
         },
         scheduleItems: {
           orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            activity: {
+              select: {
+                id: true,
+                title: true,
+                scope: true,
+                eventDate: true,
+                status: true,
+                localityId: true,
+                activityType: { select: { id: true, name: true } },
+              },
+            },
+          },
         },
         banners: {
           orderBy: [
@@ -1439,6 +1464,19 @@ export class MissionsService {
         locality: { select: { id: true, code: true, name: true } },
         scheduleItems: {
           orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            activity: {
+              select: {
+                id: true,
+                title: true,
+                scope: true,
+                eventDate: true,
+                status: true,
+                localityId: true,
+                activityType: { select: { id: true, name: true } },
+              },
+            },
+          },
         },
       },
     });
@@ -1533,7 +1571,11 @@ export class MissionsService {
       action: 'create_banner',
       entityId: created.id,
       localityId: mission.localityId,
-      diffJson: { missionId, eventDate: created.eventDate, eventTime: created.eventTime },
+      diffJson: {
+        missionId,
+        eventDate: created.eventDate,
+        eventTime: created.eventTime,
+      },
     });
 
     return created;
@@ -1597,7 +1639,7 @@ export class MissionsService {
         layoutOverrides:
           normalizedLayoutOverrides === undefined
             ? undefined
-            : normalizedLayoutOverrides ?? Prisma.JsonNull,
+            : (normalizedLayoutOverrides ?? Prisma.JsonNull),
       },
     });
 
@@ -1657,11 +1699,7 @@ export class MissionsService {
     return { ok: true };
   }
 
-  async buildBannerPng(
-    missionId: string,
-    bannerId: string,
-    user?: RbacUser,
-  ) {
+  async buildBannerPng(missionId: string, bannerId: string, user?: RbacUser) {
     this.assertMissionAccess(user);
     const result = await this.getMissionBannerOrThrow(missionId, bannerId);
     return renderMissionBannerPng(this.serializeBanner(result.banner));
@@ -1836,6 +1874,307 @@ export class MissionsService {
     });
 
     return { ok: true };
+  }
+
+  async upsertScheduleFieldActivities(
+    missionId: string,
+    payload: { items: MissionScheduleFieldActivityPayload[] },
+    user?: RbacUser,
+  ) {
+    this.assertMissionAccess(user);
+    const normalizedItems = this.normalizeScheduleFieldActivityItems(
+      payload.items,
+    );
+    if (normalizedItems.length === 0) {
+      throwError('VALIDATION_ERROR', {
+        field: 'items',
+        reason: 'REQUIRED',
+      });
+    }
+
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      include: {
+        locality: { select: { id: true, code: true, name: true } },
+        scheduleItems: {
+          where: {
+            id: {
+              in: normalizedItems.map((item) => item.scheduleItemId),
+            },
+          },
+          include: {
+            activity: {
+              select: {
+                id: true,
+                title: true,
+                scope: true,
+                eventDate: true,
+                status: true,
+                localityId: true,
+              },
+            },
+          },
+        },
+      } as any,
+    } as any);
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+
+    const scheduleItemById = new Map<string, any>(
+      ((mission as any).scheduleItems ?? []).map(
+        (item: any) => [String(item.id), item] as [string, any],
+      ),
+    );
+    const missingScheduleItemIds = normalizedItems
+      .map((item) => item.scheduleItemId)
+      .filter((itemId) => !scheduleItemById.has(itemId));
+    if (missingScheduleItemIds.length > 0) {
+      throwError('VALIDATION_ERROR', {
+        field: 'scheduleItemId',
+        reason: 'SCHEDULE_ITEM_NOT_FOUND',
+        ids: missingScheduleItemIds,
+      });
+    }
+
+    const existingActivityIds = normalizedItems
+      .filter((item) => item.action === 'LINK')
+      .map((item) => String(item.activityId ?? '').trim())
+      .filter(Boolean);
+    const existingActivities =
+      existingActivityIds.length > 0
+        ? await this.prisma.activity.findMany({
+            where: { id: { in: existingActivityIds } },
+            select: {
+              id: true,
+              title: true,
+              scope: true,
+              localityId: true,
+              eventDate: true,
+              status: true,
+              activityType: { select: { id: true, name: true } },
+            } as any,
+          } as any)
+        : [];
+    const activityById = new Map(
+      existingActivities.map((activity: any) => [
+        String(activity.id),
+        activity,
+      ]),
+    );
+
+    const preparedCreates: Array<{
+      input: MissionScheduleFieldActivityPayload;
+      scheduleItem: any;
+      title: string;
+      eventDate: Date | null;
+      activityTypeId: string | null;
+      specialtyIds: string[];
+      primarySpecialtyId: string | null;
+      responsibleUserIds: string[];
+    }> = [];
+    const preparedLinks: Array<{
+      input: MissionScheduleFieldActivityPayload;
+      scheduleItem: any;
+      activity: any;
+    }> = [];
+
+    for (const input of normalizedItems) {
+      const scheduleItem = scheduleItemById.get(input.scheduleItemId);
+      if (!scheduleItem) continue;
+
+      if (input.action === 'LINK') {
+        this.assertMissionFieldActivityPermission('LINK', user);
+        const activityId = String(input.activityId ?? '').trim();
+        if (!activityId) {
+          throwError('VALIDATION_ERROR', {
+            field: 'activityId',
+            reason: 'REQUIRED',
+            scheduleItemId: input.scheduleItemId,
+          });
+        }
+        const activity = activityById.get(activityId);
+        if (!activity || activity.scope !== mission.scope) {
+          throwError('VALIDATION_ERROR', {
+            field: 'activityId',
+            reason: 'ACTIVITY_NOT_FOUND_FOR_SCOPE',
+            scheduleItemId: input.scheduleItemId,
+          });
+        }
+        if (
+          activity.localityId &&
+          String(activity.localityId) !== String(mission.localityId)
+        ) {
+          throwError('VALIDATION_ERROR', {
+            field: 'activityId',
+            reason: 'ACTIVITY_LOCALITY_MISMATCH',
+            scheduleItemId: input.scheduleItemId,
+          });
+        }
+        preparedLinks.push({ input, scheduleItem, activity });
+        continue;
+      }
+
+      this.assertMissionFieldActivityPermission('CREATE', user);
+      if (scheduleItem.activityId) {
+        throwError('VALIDATION_ERROR', {
+          field: 'scheduleItemId',
+          reason: 'SCHEDULE_ITEM_ALREADY_LINKED',
+          scheduleItemId: input.scheduleItemId,
+          activityId: scheduleItem.activityId,
+        });
+      }
+
+      const specialtyIds = await this.resolveMissionActivitySpecialtyIds(
+        input.specialtyIds,
+      );
+      preparedCreates.push({
+        input,
+        scheduleItem,
+        title: this.sanitizeRequiredText(
+          input.title ?? scheduleItem.title ?? '',
+          'title',
+        ),
+        eventDate: this.normalizeMissionFieldActivityDate(
+          input.eventDate,
+          scheduleItem.startAt,
+        ),
+        activityTypeId: await this.resolveMissionActivityTypeId(
+          input.activityTypeId,
+          mission.scope,
+        ),
+        specialtyIds,
+        primarySpecialtyId: specialtyIds[0] ?? null,
+        responsibleUserIds: await this.resolveMissionActivityResponsibleIds(
+          input.responsibleUserIds ?? [],
+        ),
+      });
+    }
+
+    const results = await this.prisma.$transaction(async (tx) => {
+      const createdResults: Array<{
+        scheduleItemId: string;
+        activityId: string;
+        activityTitle: string;
+        action: 'CREATE';
+      }> = [];
+      const linkedResults: Array<{
+        scheduleItemId: string;
+        activityId: string;
+        activityTitle: string;
+        action: 'LINK';
+      }> = [];
+
+      for (const prepared of preparedCreates) {
+        const activity = await (tx as any).activity.create({
+          data: {
+            title: prepared.title,
+            description: this.buildMissionFieldActivityDescription(
+              mission,
+              prepared.scheduleItem,
+            ),
+            localityId: mission.localityId,
+            activityTypeId: prepared.activityTypeId,
+            specialtyId: prepared.primarySpecialtyId,
+            eventDate: prepared.eventDate,
+            reportRequired: prepared.input.reportRequired ?? true,
+            scope: mission.scope,
+            createdById: user?.id ?? null,
+            specialties:
+              prepared.specialtyIds.length > 0
+                ? {
+                    createMany: {
+                      data: prepared.specialtyIds.map((specialtyId) => ({
+                        specialtyId,
+                      })),
+                      skipDuplicates: true,
+                    },
+                  }
+                : undefined,
+            responsibles:
+              prepared.responsibleUserIds.length > 0
+                ? {
+                    create: prepared.responsibleUserIds.map((userId) => ({
+                      userId,
+                      assignedById: user?.id ?? null,
+                    })),
+                  }
+                : undefined,
+            visitScheduleItems: {
+              create: {
+                title:
+                  String(prepared.scheduleItem.title ?? '').trim() ||
+                  prepared.title,
+                startTime: this.formatMissionScheduleItemTime(
+                  prepared.scheduleItem.startAt,
+                ),
+                durationMinutes: prepared.scheduleItem.durationMinutes,
+                location:
+                  String(prepared.scheduleItem.location ?? '').trim() ||
+                  String((mission as any).locality?.name ?? '').trim() ||
+                  'Local não informado',
+                responsible:
+                  String(prepared.scheduleItem.responsible ?? '').trim() ||
+                  'Responsável não informado',
+                participants:
+                  String(prepared.scheduleItem.participants ?? '').trim() ||
+                  'Participantes não informados',
+              },
+            },
+          } as any,
+          select: { id: true, title: true },
+        });
+
+        await (tx as any).missionScheduleItem.update({
+          where: { id: prepared.scheduleItem.id },
+          data: { activityId: activity.id },
+        });
+        createdResults.push({
+          scheduleItemId: prepared.scheduleItem.id,
+          activityId: activity.id,
+          activityTitle: activity.title,
+          action: 'CREATE',
+        });
+      }
+
+      for (const prepared of preparedLinks) {
+        await (tx as any).missionScheduleItem.update({
+          where: { id: prepared.scheduleItem.id },
+          data: { activityId: prepared.activity.id },
+        });
+        linkedResults.push({
+          scheduleItemId: prepared.scheduleItem.id,
+          activityId: prepared.activity.id,
+          activityTitle: prepared.activity.title,
+          action: 'LINK',
+        });
+      }
+
+      return [...createdResults, ...linkedResults];
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'upsert_schedule_field_activities',
+      entityId: mission.id,
+      localityId: mission.localityId,
+      diffJson: {
+        missionId: mission.id,
+        scope: mission.scope,
+        created: results.filter((item) => item.action === 'CREATE').length,
+        linked: results.filter((item) => item.action === 'LINK').length,
+        scheduleItemIds: results.map((item) => item.scheduleItemId),
+        activityIds: results.map((item) => item.activityId),
+      },
+    });
+
+    return {
+      missionId: mission.id,
+      scope: mission.scope,
+      created: results.filter((item) => item.action === 'CREATE').length,
+      linked: results.filter((item) => item.action === 'LINK').length,
+      items: results,
+    };
   }
 
   async buildSchedulePdf(missionId: string, user?: RbacUser) {
@@ -2478,6 +2817,200 @@ export class MissionsService {
     return { fileName, buffer };
   }
 
+  private normalizeScheduleFieldActivityItems(
+    items: MissionScheduleFieldActivityPayload[] | undefined,
+  ) {
+    const normalized: MissionScheduleFieldActivityPayload[] = [];
+    const seen = new Set<string>();
+    for (const raw of items ?? []) {
+      const scheduleItemId = String(raw?.scheduleItemId ?? '').trim();
+      if (!scheduleItemId || seen.has(scheduleItemId)) continue;
+      seen.add(scheduleItemId);
+      const action =
+        String(raw?.action ?? '').toUpperCase() === 'LINK' ? 'LINK' : 'CREATE';
+      normalized.push({
+        scheduleItemId,
+        action,
+        activityId:
+          raw.activityId === undefined
+            ? undefined
+            : String(raw.activityId ?? '').trim(),
+        title: raw.title,
+        activityTypeId:
+          raw.activityTypeId === undefined
+            ? undefined
+            : String(raw.activityTypeId ?? '').trim(),
+        specialtyIds: Array.isArray(raw.specialtyIds)
+          ? raw.specialtyIds
+              .map((value) => String(value ?? '').trim())
+              .filter(Boolean)
+          : [],
+        responsibleUserIds: Array.isArray(raw.responsibleUserIds)
+          ? raw.responsibleUserIds
+              .map((value) => String(value ?? '').trim())
+              .filter(Boolean)
+          : [],
+        eventDate:
+          raw.eventDate === undefined
+            ? undefined
+            : String(raw.eventDate ?? '').trim(),
+        reportRequired: raw.reportRequired,
+      });
+    }
+    return normalized;
+  }
+
+  private assertMissionFieldActivityPermission(
+    action: 'CREATE' | 'LINK',
+    user?: RbacUser,
+  ) {
+    const requirement =
+      action === 'CREATE'
+        ? { resource: 'task_instances', action: 'create' }
+        : { resource: 'task_instances', action: 'update' };
+    if (hasPermission(user, requirement.resource, requirement.action)) return;
+    throwError('RBAC_FORBIDDEN');
+  }
+
+  private async resolveMissionActivityTypeId(
+    activityTypeId: string | null | undefined,
+    scope: ActivityScope,
+  ) {
+    const normalized = String(activityTypeId ?? '').trim();
+    if (!normalized) return null;
+    const existing = await (this.prisma as any).activityType.findUnique({
+      where: { id: normalized },
+      select: { id: true, scope: true },
+    });
+    if (!existing || existing.scope !== scope) {
+      throwError('VALIDATION_ERROR', {
+        field: 'activityTypeId',
+        reason: 'NOT_FOUND',
+      });
+    }
+    return existing.id as string;
+  }
+
+  private async resolveMissionActivitySpecialtyIds(
+    specialtyIdsRaw: string[] | undefined,
+  ) {
+    const normalized = Array.from(
+      new Set(
+        (specialtyIdsRaw ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+
+    if (normalized.length === 0) {
+      const commission = await this.prisma.specialty.findFirst({
+        where: {
+          OR: [
+            { name: { equals: 'Comissão CIPAVD', mode: 'insensitive' } },
+            { name: { equals: 'Comissao CIPAVD', mode: 'insensitive' } },
+            { name: { contains: 'Comissão CIPAVD', mode: 'insensitive' } },
+            { name: { contains: 'Comissao CIPAVD', mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true },
+      });
+      return commission?.id ? [commission.id] : [];
+    }
+
+    const existing = await this.prisma.specialty.findMany({
+      where: { id: { in: normalized } },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((item) => item.id));
+    const invalid = normalized.filter((id) => !existingIds.has(id));
+    if (invalid.length > 0) {
+      throwError('VALIDATION_ERROR', {
+        field: 'specialtyIds',
+        reason: 'NOT_FOUND',
+        ids: invalid,
+      });
+    }
+    return normalized;
+  }
+
+  private async resolveMissionActivityResponsibleIds(
+    responsibleUserIdsRaw: string[] | undefined,
+  ) {
+    const normalized = Array.from(
+      new Set(
+        (responsibleUserIdsRaw ?? [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (normalized.length === 0) return [];
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { in: normalized },
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    if (users.length !== normalized.length) {
+      throwError('VALIDATION_ERROR', {
+        field: 'responsibleUserIds',
+        reason: 'ACTIVITY_RESPONSIBLE_INVALID',
+      });
+    }
+    return normalized;
+  }
+
+  private normalizeMissionFieldActivityDate(
+    rawDate: string | null | undefined,
+    fallback: Date,
+  ) {
+    const value = String(rawDate ?? '').trim();
+    if (!value) {
+      return this.dateOnlyFromMissionScheduleStart(fallback);
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      if (!Number.isNaN(parsed.getTime())) return parsed;
+    }
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return this.dateOnlyFromMissionScheduleStart(parsed);
+    }
+    throwError('VALIDATION_ERROR', {
+      field: 'eventDate',
+      reason: 'DATE_INVALID',
+    });
+  }
+
+  private dateOnlyFromMissionScheduleStart(value: Date) {
+    const { year, month, day } = this.getDateTimePartsInTimeZone(value);
+    return new Date(`${year}-${month}-${day}T00:00:00.000Z`);
+  }
+
+  private formatMissionScheduleItemTime(value: Date) {
+    return this.formatTime(value);
+  }
+
+  private buildMissionFieldActivityDescription(
+    mission: any,
+    scheduleItem: any,
+  ) {
+    const lines = [
+      `Gerada a partir do cronograma da missão "${mission.title}".`,
+      String(scheduleItem.location ?? '').trim()
+        ? `Local no cronograma: ${String(scheduleItem.location).trim()}`
+        : '',
+      String(scheduleItem.responsible ?? '').trim()
+        ? `Responsável no cronograma: ${String(scheduleItem.responsible).trim()}`
+        : '',
+      String(scheduleItem.participants ?? '').trim()
+        ? `Participantes no cronograma: ${String(scheduleItem.participants).trim()}`
+        : '',
+    ].filter(Boolean);
+    return sanitizeText(lines.join('\n'));
+  }
+
   private buildMissionChecklistSections(
     checklistJson: Prisma.JsonValue | null | undefined,
     checklistConfig: MissionChecklistConfigRuntime,
@@ -3067,7 +3600,9 @@ export class MissionsService {
         typeof block.textOverride === 'string'
           ? block.textOverride
               .split('\n')
-              .map((line) => sanitizeText(line).trim().replace(/\s+/g, ' ').slice(0, 120))
+              .map((line) =>
+                sanitizeText(line).trim().replace(/\s+/g, ' ').slice(0, 120),
+              )
               .join('\n')
               .trim()
           : '';
@@ -3087,11 +3622,7 @@ export class MissionsService {
     return Object.keys(normalized).length > 0 ? normalized : null;
   }
 
-  private normalizeFiniteNumber(
-    value: unknown,
-    min: number,
-    max: number,
-  ) {
+  private normalizeFiniteNumber(value: unknown, min: number, max: number) {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) return null;
     return Math.min(max, Math.max(min, numeric));
@@ -3217,7 +3748,9 @@ export class MissionsService {
       hour12: false,
     }).formatToParts(value);
 
-    const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const byType = Object.fromEntries(
+      parts.map((part) => [part.type, part.value]),
+    );
     const asUtc = Date.UTC(
       Number(byType.year ?? '0'),
       Number(byType.month ?? '1') - 1,

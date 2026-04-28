@@ -35,9 +35,14 @@ import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
+import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  useActivities,
+  useActivityResponsibleUsers,
+  useActivityTypes,
   useAddMissionParticipantFromLdap,
   useAddMissionParticipantFromUser,
   useCreateMission,
@@ -62,9 +67,12 @@ import {
   useUpdateMissionBanner,
   useUpdateMission,
   useUpdateMissionScheduleItem,
+  useSpecialties,
+  useUpsertMissionScheduleFieldActivities,
   useUsers,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
+import { can } from '../app/rbac';
 import {
   loadMissionsPageUiSettings,
   MISSIONS_PAGE_UI_SETTINGS_KEY,
@@ -72,6 +80,7 @@ import {
   persistMissionsPageUiSettings,
 } from '../app/missionsPageUiSettings';
 import { hasAnyRole, ROLE_TI } from '../app/roleAccess';
+import { toMilitaryDisplayName } from '../app/militaryName';
 import { useToast } from '../app/toast';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import {
@@ -81,6 +90,12 @@ import {
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
+import {
+  buildMissionFieldActivityDrafts,
+  buildMissionFieldActivityRequestItems,
+  getMissionFieldActivityValidationMessage,
+  type MissionScheduleFieldActivityDraft,
+} from '../features/missionFieldActivities';
 type MissionScope = 'SMIF' | 'CIPAVD';
 
 function resolveChecklistPhotoUrl(raw: string) {
@@ -619,6 +634,14 @@ export function MissionsPage() {
     scope: missionScope,
   });
   const statisticsQuery = useMissionStatistics(missionScope);
+  const activityTypesQuery = useActivityTypes(missionScope);
+  const activitiesForLinkQuery = useActivities({
+    scope: missionScope,
+    localityId: missionDetailQuery.data?.localityId || undefined,
+    pageSize: 'all',
+  }, Boolean(missionDetailQuery.data?.localityId));
+  const responsibleUsersQuery = useActivityResponsibleUsers({});
+  const specialtiesQuery = useSpecialties();
 
   const createMission = useCreateMission();
   const updateMission = useUpdateMission();
@@ -634,6 +657,7 @@ export function MissionsPage() {
   const createScheduleItem = useCreateMissionScheduleItem();
   const updateScheduleItem = useUpdateMissionScheduleItem();
   const deleteScheduleItem = useDeleteMissionScheduleItem();
+  const upsertScheduleFieldActivities = useUpsertMissionScheduleFieldActivities();
   const exportSchedulePdf = useExportMissionSchedulePdf();
   const updateMissionChecklist = useUpdateMissionChecklist();
   const uploadMissionChecklistPhoto = useUploadMissionChecklistPhoto();
@@ -675,6 +699,14 @@ export function MissionsPage() {
     count: number;
   } | null>(null);
   const [selectedScheduleItemIds, setSelectedScheduleItemIds] = useState<string[]>([]);
+  const [fieldActivityDialogOpen, setFieldActivityDialogOpen] = useState(false);
+  const [fieldActivityDrafts, setFieldActivityDrafts] = useState<MissionScheduleFieldActivityDraft[]>([]);
+  const [fieldActivityDefaults, setFieldActivityDefaults] = useState({
+    activityTypeId: '',
+    specialtyIds: [] as string[],
+    responsibleUserId: '',
+    reportRequired: true,
+  });
   const [expandedStatsCards, setExpandedStatsCards] = useState<
     Record<MissionStatsCardKey, boolean>
   >({
@@ -685,6 +717,9 @@ export function MissionsPage() {
 
   const { data: me } = useMe();
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const canCreateFieldActivities = can(me, 'task_instances', 'create');
+  const canLinkFieldActivities = can(me, 'task_instances', 'update');
+  const canManageScheduleFieldActivities = canCreateFieldActivities || canLinkFieldActivities;
   const [missionsUiSettings, setMissionsUiSettings] = useState(() =>
     loadMissionsPageUiSettings(),
   );
@@ -761,6 +796,31 @@ export function MissionsPage() {
 
   const items = missionsQuery.data?.items ?? [];
   const selectedMission = missionDetailQuery.data ?? null;
+  const activityTypes = activityTypesQuery.data?.items ?? [];
+  const specialties = specialtiesQuery.data?.items ?? [];
+  const existingFieldActivities = useMemo(
+    () =>
+      ((activitiesForLinkQuery.data?.items ?? []) as any[])
+        .filter((activity: any) => String(activity?.id ?? '').trim())
+        .sort((a: any, b: any) => String(a?.title ?? '').localeCompare(String(b?.title ?? ''), 'pt-BR')),
+    [activitiesForLinkQuery.data?.items],
+  );
+  const responsibleOptions = useMemo(
+    () =>
+      ((responsibleUsersQuery.data?.items ?? []) as any[])
+        .filter((user: any) => String(user?.id ?? '').trim() && String(user?.name ?? '').trim())
+        .sort((a: any, b: any) => String(a?.name ?? '').localeCompare(String(b?.name ?? ''), 'pt-BR')),
+    [responsibleUsersQuery.data?.items],
+  );
+  const specialtyNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const specialty of specialties as any[]) {
+      const id = String(specialty?.id ?? '').trim();
+      if (!id) continue;
+      map.set(id, String(specialty?.name ?? '').trim() || 'Especialidade');
+    }
+    return map;
+  }, [specialties]);
   const missionBanners = useMemo(
     () => ((selectedMission?.banners ?? []) as any[]),
     [selectedMission?.banners],
@@ -849,6 +909,21 @@ export function MissionsPage() {
     () => ((selectedMission?.scheduleItems ?? []) as any[]),
     [selectedMission?.scheduleItems],
   );
+  const existingFieldActivityOptions = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const activity of existingFieldActivities) {
+      const id = String(activity?.id ?? '').trim();
+      if (id) map.set(id, activity);
+    }
+    for (const item of missionScheduleItems) {
+      const activity = item?.activity;
+      const id = String(activity?.id ?? '').trim();
+      if (id && !map.has(id)) map.set(id, activity);
+    }
+    return Array.from(map.values()).sort((a: any, b: any) =>
+      String(a?.title ?? '').localeCompare(String(b?.title ?? ''), 'pt-BR'),
+    );
+  }, [existingFieldActivities, missionScheduleItems]);
   const missionBannerPresetOptions = useMemo(
     () =>
       missionScheduleItems
@@ -1411,6 +1486,93 @@ export function MissionsPage() {
       ids: selectedScheduleItemIds,
       count: selectedScheduleItemIds.length,
     });
+  };
+
+  const openFieldActivityDialog = () => {
+    if (!selectedMission || !selectedScheduleItemIds.length) return;
+    const drafts = buildMissionFieldActivityDrafts(
+      missionScheduleItems,
+      selectedScheduleItemIds,
+      fieldActivityDefaults,
+    ).map((draft) => {
+      const item = missionScheduleItems.find((candidate: any) => String(candidate?.id ?? '') === draft.scheduleItemId);
+      const activityId = String(item?.activityId ?? item?.activity?.id ?? '').trim();
+      return activityId ? { ...draft, action: 'LINK' as const, activityId } : draft;
+    });
+    setFieldActivityDrafts(drafts);
+    setFieldActivityDialogOpen(true);
+  };
+
+  const updateFieldActivityDraft = (
+    scheduleItemId: string,
+    patch: Partial<MissionScheduleFieldActivityDraft>,
+  ) => {
+    setFieldActivityDrafts((current) =>
+      current.map((draft) =>
+        draft.scheduleItemId === scheduleItemId
+          ? { ...draft, ...patch, specialtyIds: patch.specialtyIds ?? draft.specialtyIds }
+          : draft,
+      ),
+    );
+  };
+
+  const applyFieldActivityDefaultsToDrafts = () => {
+    setFieldActivityDrafts((current) =>
+      current.map((draft) =>
+        draft.action === 'CREATE'
+          ? {
+              ...draft,
+              activityTypeId: fieldActivityDefaults.activityTypeId,
+              specialtyIds: fieldActivityDefaults.specialtyIds,
+              responsibleUserId: fieldActivityDefaults.responsibleUserId,
+              reportRequired: fieldActivityDefaults.reportRequired,
+            }
+          : draft,
+      ),
+    );
+  };
+
+  const handleSubmitFieldActivities = async () => {
+    if (!selectedMission || !fieldActivityDrafts.length) return;
+    const invalidDraft = fieldActivityDrafts.find((draft) =>
+      getMissionFieldActivityValidationMessage(draft),
+    );
+    if (invalidDraft) {
+      toast.push({
+        message: getMissionFieldActivityValidationMessage(invalidDraft),
+        severity: 'warning',
+      });
+      return;
+    }
+    if (fieldActivityDrafts.some((draft) => draft.action === 'CREATE') && !canCreateFieldActivities) {
+      toast.push({ message: 'Seu perfil não pode criar atividades de campo.', severity: 'warning' });
+      return;
+    }
+    if (fieldActivityDrafts.some((draft) => draft.action === 'LINK') && !canLinkFieldActivities) {
+      toast.push({ message: 'Seu perfil não pode relacionar atividades existentes.', severity: 'warning' });
+      return;
+    }
+
+    try {
+      const result = await upsertScheduleFieldActivities.mutateAsync({
+        id: selectedMission.id,
+        payload: { items: buildMissionFieldActivityRequestItems(fieldActivityDrafts) },
+      });
+      const created = Number(result?.created ?? 0);
+      const linked = Number(result?.linked ?? 0);
+      toast.push({
+        message: `${created} atividade(s) criada(s) e ${linked} vínculo(s) atualizado(s).`,
+        severity: 'success',
+      });
+      setFieldActivityDialogOpen(false);
+      setFieldActivityDrafts([]);
+      setSelectedScheduleItemIds([]);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao gerar ou relacionar atividades de campo.',
+        severity: 'error',
+      });
+    }
   };
 
   const handleConfirmDeleteScheduleItem = async () => {
@@ -2560,7 +2722,7 @@ export function MissionsPage() {
                             alignItems={{ sm: 'center' }}
                           >
                             <Typography variant="body2" color="text.secondary">
-                              Selecione um ou mais itens para exclusão em lote.
+                              Selecione um ou mais itens para gerar atividades de campo, relacionar atividades existentes ou excluir em lote.
                             </Typography>
                             <Stack direction="row" spacing={1} alignItems="center">
                               {selectedScheduleCount > 0 ? (
@@ -2571,6 +2733,15 @@ export function MissionsPage() {
                                   label={`${selectedScheduleCount} selecionado(s)`}
                                 />
                               ) : null}
+                              <Button
+                                variant="contained"
+                                color="success"
+                                startIcon={<LinkRoundedIcon />}
+                                onClick={openFieldActivityDialog}
+                                disabled={selectedScheduleCount === 0 || !canManageScheduleFieldActivities || upsertScheduleFieldActivities.isPending}
+                              >
+                                Gerar/vincular atividades
+                              </Button>
                               <Button
                                 variant="text"
                                 color="inherit"
@@ -2636,6 +2807,7 @@ export function MissionsPage() {
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Local</TableCell>
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Responsável</TableCell>
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Participantes</TableCell>
+                                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Atividade de campo</TableCell>
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Ações</TableCell>
                               </TableRow>
                             </TableHead>
@@ -2667,6 +2839,29 @@ export function MissionsPage() {
                                     <TableCell>{item.location}</TableCell>
                                     <TableCell>{item.responsible}</TableCell>
                                     <TableCell sx={{ maxWidth: 220, whiteSpace: 'pre-wrap' }}>{item.participants}</TableCell>
+                                    <TableCell sx={{ minWidth: 190 }}>
+                                      {item.activity ? (
+                                        <Stack spacing={0.5} alignItems="flex-start">
+                                          <Chip
+                                            size="small"
+                                            color="success"
+                                            variant="outlined"
+                                            label={item.activity.activityType?.name ?? 'Vinculada'}
+                                          />
+                                          <Button
+                                            size="small"
+                                            variant="text"
+                                            endIcon={<OpenInNewRoundedIcon fontSize="small" />}
+                                            href={`${missionScope === 'CIPAVD' ? '/activities-cipavd' : '/activities'}?activityId=${encodeURIComponent(String(item.activity.id))}`}
+                                            sx={{ px: 0, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none' }}
+                                          >
+                                            {item.activity.title ?? 'Abrir atividade'}
+                                          </Button>
+                                        </Stack>
+                                      ) : (
+                                        <Chip size="small" label="Sem vínculo" variant="outlined" />
+                                      )}
+                                    </TableCell>
                                     <TableCell>
                                       <IconButton
                                         size="small"
@@ -3252,6 +3447,311 @@ export function MissionsPage() {
           )}
         </Box>
       </Drawer>
+
+      <Dialog
+        open={fieldActivityDialogOpen}
+        onClose={() => setFieldActivityDialogOpen(false)}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle>Gerar atividades de campo</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', md: 'center' }} justifyContent="space-between">
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Chip color={missionScope === 'CIPAVD' ? 'primary' : 'success'} label={`Destino: Atividades de Campo ${missionScope}`} />
+                <Chip variant="outlined" label={`${fieldActivityDrafts.length} item(ns) selecionado(s)`} />
+                {selectedMission?.locality?.name ? <Chip variant="outlined" label={selectedMission.locality.name} /> : null}
+              </Stack>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={applyFieldActivityDefaultsToDrafts}
+                disabled={!fieldActivityDrafts.some((draft) => draft.action === 'CREATE')}
+              >
+                Aplicar padrões às novas
+              </Button>
+            </Stack>
+
+            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, p: 1.2, bgcolor: '#F8FAFC' }}>
+              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                Padrões para criação
+              </Typography>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                <TextField
+                  select
+                  size="small"
+                  label="Tipo"
+                  value={fieldActivityDefaults.activityTypeId}
+                  onChange={(event) => setFieldActivityDefaults((current) => ({ ...current, activityTypeId: event.target.value }))}
+                  sx={{ minWidth: 190 }}
+                >
+                  <MenuItem value="">Sem tipo</MenuItem>
+                  {activityTypes.map((type: any) => (
+                    <MenuItem key={type.id} value={type.id}>
+                      {type.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Especialidade"
+                  value={fieldActivityDefaults.specialtyIds}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setFieldActivityDefaults((current) => ({
+                      ...current,
+                      specialtyIds: Array.isArray(value) ? value.map((item) => String(item)) : [String(value)],
+                    }));
+                  }}
+                  sx={{ minWidth: 220 }}
+                  SelectProps={{
+                    multiple: true,
+                    renderValue: (value) => {
+                      const selectedValues = Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+                      if (!selectedValues.length) return 'Comissão CIPAVD';
+                      return selectedValues.map((id) => specialtyNameById.get(id) ?? 'Especialidade').join(', ');
+                    },
+                  }}
+                >
+                  {specialties.map((specialty: any) => (
+                    <MenuItem key={specialty.id} value={specialty.id}>
+                      {specialty.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Responsável"
+                  value={fieldActivityDefaults.responsibleUserId}
+                  onChange={(event) => setFieldActivityDefaults((current) => ({ ...current, responsibleUserId: event.target.value }))}
+                  sx={{ minWidth: 220 }}
+                >
+                  <MenuItem value="">Sem responsável</MenuItem>
+                  {responsibleOptions.map((user: any) => (
+                    <MenuItem key={user.id} value={user.id}>
+                      {toMilitaryDisplayName(user.name)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  select
+                  size="small"
+                  label="Relatório obrigatório"
+                  value={fieldActivityDefaults.reportRequired ? 'true' : 'false'}
+                  onChange={(event) => setFieldActivityDefaults((current) => ({ ...current, reportRequired: event.target.value === 'true' }))}
+                  sx={{ minWidth: 190 }}
+                >
+                  <MenuItem value="true">Sim</MenuItem>
+                  <MenuItem value="false">Não</MenuItem>
+                </TextField>
+              </Stack>
+            </Box>
+
+            <Stack spacing={1.2}>
+              {fieldActivityDrafts.map((draft, index) => {
+                const scheduleItem = missionScheduleItems.find((item: any) => String(item?.id ?? '') === draft.scheduleItemId);
+                const linkedActivityId = String(scheduleItem?.activityId ?? scheduleItem?.activity?.id ?? '').trim();
+                const selectedExistingActivity =
+                  existingFieldActivityOptions.find((activity: any) => String(activity?.id ?? '') === draft.activityId) ?? null;
+                const validationMessage = getMissionFieldActivityValidationMessage(draft);
+                return (
+                  <Box
+                    key={draft.scheduleItemId}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: validationMessage ? 'warning.light' : 'divider',
+                      borderRadius: 1,
+                      p: 1.4,
+                    }}
+                  >
+                    <Stack spacing={1}>
+                      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }}>
+                        <Box>
+                          <Typography variant="subtitle2" fontWeight={700}>
+                            {index + 1}. {scheduleItem?.title ?? 'Item de cronograma'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {scheduleItem?.startAt
+                              ? new Date(scheduleItem.startAt).toLocaleString('pt-BR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : 'Sem horário'}{' '}
+                            · {scheduleItem?.location || 'Sem local'} · Responsável no cronograma: {scheduleItem?.responsible || 'não informado'}
+                          </Typography>
+                        </Box>
+                        {linkedActivityId ? <Chip size="small" color="success" variant="outlined" label="Já vinculado" /> : null}
+                      </Stack>
+
+                      <TextField
+                        select
+                        size="small"
+                        label="O que fazer"
+                        value={draft.action}
+                        onChange={(event) => {
+                          const nextAction = event.target.value === 'LINK' ? 'LINK' : 'CREATE';
+                          updateFieldActivityDraft(draft.scheduleItemId, {
+                            action: nextAction,
+                            activityId: nextAction === 'LINK' ? draft.activityId || linkedActivityId : '',
+                          });
+                        }}
+                        sx={{ maxWidth: 280 }}
+                      >
+                        <MenuItem value="CREATE" disabled={!canCreateFieldActivities || Boolean(linkedActivityId)}>
+                          Criar nova atividade
+                        </MenuItem>
+                        <MenuItem value="LINK" disabled={!canLinkFieldActivities}>
+                          Relacionar atividade existente
+                        </MenuItem>
+                      </TextField>
+
+                      {draft.action === 'LINK' ? (
+                        <Autocomplete
+                          options={existingFieldActivityOptions}
+                          value={selectedExistingActivity}
+                          loading={activitiesForLinkQuery.isLoading}
+                          getOptionLabel={(option: any) => {
+                            const type = option?.activityType?.name ? ` · ${option.activityType.name}` : '';
+                            const date = option?.eventDate ? ` · ${String(option.eventDate).slice(0, 10)}` : '';
+                            return `${option?.title ?? 'Atividade'}${type}${date}`;
+                          }}
+                          isOptionEqualToValue={(option: any, value: any) => String(option?.id ?? '') === String(value?.id ?? '')}
+                          onChange={(_, option: any) =>
+                            updateFieldActivityDraft(draft.scheduleItemId, { activityId: String(option?.id ?? '') })
+                          }
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              size="small"
+                              label="Atividade existente"
+                              placeholder="Busque pelo título da atividade"
+                              error={Boolean(validationMessage)}
+                              helperText={validationMessage || ' '}
+                            />
+                          )}
+                        />
+                      ) : (
+                        <Stack spacing={1}>
+                          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                            <TextField
+                              size="small"
+                              label="Título"
+                              value={draft.title}
+                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { title: event.target.value })}
+                              fullWidth
+                              error={Boolean(validationMessage)}
+                            />
+                            <TextField
+                              size="small"
+                              type="date"
+                              label="Data"
+                              value={draft.eventDate}
+                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { eventDate: event.target.value })}
+                              InputLabelProps={{ shrink: true }}
+                              sx={{ minWidth: 170 }}
+                            />
+                          </Stack>
+                          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                            <TextField
+                              select
+                              size="small"
+                              label="Tipo"
+                              value={draft.activityTypeId}
+                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { activityTypeId: event.target.value })}
+                              sx={{ minWidth: 190 }}
+                            >
+                              <MenuItem value="">Sem tipo</MenuItem>
+                              {activityTypes.map((type: any) => (
+                                <MenuItem key={type.id} value={type.id}>
+                                  {type.name}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                            <TextField
+                              select
+                              size="small"
+                              label="Especialidade"
+                              value={draft.specialtyIds}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                updateFieldActivityDraft(draft.scheduleItemId, {
+                                  specialtyIds: Array.isArray(value) ? value.map((item) => String(item)) : [String(value)],
+                                });
+                              }}
+                              sx={{ minWidth: 220 }}
+                              SelectProps={{
+                                multiple: true,
+                                renderValue: (value) => {
+                                  const selectedValues = Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+                                  if (!selectedValues.length) return 'Comissão CIPAVD';
+                                  return selectedValues.map((id) => specialtyNameById.get(id) ?? 'Especialidade').join(', ');
+                                },
+                              }}
+                            >
+                              {specialties.map((specialty: any) => (
+                                <MenuItem key={specialty.id} value={specialty.id}>
+                                  {specialty.name}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                            <TextField
+                              select
+                              size="small"
+                              label="Responsável"
+                              value={draft.responsibleUserId}
+                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { responsibleUserId: event.target.value })}
+                              sx={{ minWidth: 220 }}
+                            >
+                              <MenuItem value="">Sem responsável</MenuItem>
+                              {responsibleOptions.map((user: any) => (
+                                <MenuItem key={user.id} value={user.id}>
+                                  {toMilitaryDisplayName(user.name)}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                            <TextField
+                              select
+                              size="small"
+                              label="Relatório"
+                              value={draft.reportRequired ? 'true' : 'false'}
+                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { reportRequired: event.target.value === 'true' })}
+                              sx={{ minWidth: 160 }}
+                            >
+                              <MenuItem value="true">Obrigatório</MenuItem>
+                              <MenuItem value="false">Opcional</MenuItem>
+                            </TextField>
+                          </Stack>
+                          {validationMessage ? (
+                            <Typography variant="caption" color="warning.main">
+                              {validationMessage}
+                            </Typography>
+                          ) : null}
+                        </Stack>
+                      )}
+                    </Stack>
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFieldActivityDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleSubmitFieldActivities}
+            disabled={!fieldActivityDrafts.length || upsertScheduleFieldActivities.isPending}
+          >
+            Concluir
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={statsSectionEditorOpen}

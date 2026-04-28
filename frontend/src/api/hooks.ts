@@ -366,11 +366,12 @@ export function useTaskInstance(id: string, enabled = true) {
   });
 }
 
-export function useActivities(filters: Record<string, any>) {
+export function useActivities(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.activities(filters),
     queryFn: async () =>
       (await api.get("/activities", { params: filters })).data,
+    enabled,
     staleTime: 15_000,
   });
 }
@@ -819,6 +820,40 @@ export function useDeleteMissionScheduleItem() {
       qc.invalidateQueries({ queryKey: ["missions"] });
       qc.invalidateQueries({ queryKey: ["missions", "statistics"] });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useUpsertMissionScheduleFieldActivities() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        items: Array<{
+          scheduleItemId: string;
+          action: "CREATE" | "LINK";
+          activityId?: string | null;
+          title?: string;
+          activityTypeId?: string | null;
+          specialtyIds?: string[];
+          responsibleUserIds?: string[];
+          eventDate?: string | null;
+          reportRequired?: boolean;
+        }>;
+      };
+    }) =>
+      (
+        await api.post(
+          `/missions/${args.id}/schedule/field-activities`,
+          args.payload,
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: qk.missionSchedule(args.id) });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+      qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: ["activities"] });
     },
   });
 }

@@ -294,17 +294,18 @@ model Activity {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  locality           Locality?                   @relation(fields: [localityId], references: [id])
-  activityType       ActivityType?               @relation(fields: [activityTypeId], references: [id])
-  specialty          Specialty?                  @relation(fields: [specialtyId], references: [id])
-  specialties        ActivitySpecialty[]
-  createdBy          User?                       @relation("ActivityCreator", fields: [createdById], references: [id])
-  report             ActivityReport?
-  documents          DocumentAsset[]
-  visitScheduleItems ActivityVisitScheduleItem[]
-  responsibles       ActivityResponsible[]
-  comments           ActivityComment[]
-  commentReads       ActivityCommentRead[]
+  locality             Locality?                   @relation(fields: [localityId], references: [id])
+  activityType         ActivityType?               @relation(fields: [activityTypeId], references: [id])
+  specialty            Specialty?                  @relation(fields: [specialtyId], references: [id])
+  specialties          ActivitySpecialty[]
+  createdBy            User?                       @relation("ActivityCreator", fields: [createdById], references: [id])
+  report               ActivityReport?
+  documents            DocumentAsset[]
+  visitScheduleItems   ActivityVisitScheduleItem[]
+  responsibles         ActivityResponsible[]
+  missionScheduleItems MissionScheduleItem[]
+  comments             ActivityComment[]
+  commentReads         ActivityCommentRead[]
 
   @@index([localityId])
   @@index([activityTypeId])
@@ -384,6 +385,7 @@ model MissionParticipant {
 model MissionScheduleItem {
   id              String   @id @default(cuid())
   missionId       String
+  activityId      String?
   title           String
   startAt         DateTime
   durationMinutes Int
@@ -393,9 +395,11 @@ model MissionScheduleItem {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  mission Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  mission  Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  activity Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
 
   @@index([missionId, startAt])
+  @@index([activityId])
 }
 
 model MissionBanner {
