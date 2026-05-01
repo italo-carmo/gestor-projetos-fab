@@ -884,6 +884,22 @@ export class MissionsService {
                 activityType: { select: { id: true, name: true } },
               },
             },
+            activityLinks: {
+              orderBy: [{ createdAt: 'asc' }],
+              include: {
+                activity: {
+                  select: {
+                    id: true,
+                    title: true,
+                    scope: true,
+                    eventDate: true,
+                    status: true,
+                    localityId: true,
+                    activityType: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            },
           },
         },
         banners: {
@@ -1476,6 +1492,22 @@ export class MissionsService {
                 activityType: { select: { id: true, name: true } },
               },
             },
+            activityLinks: {
+              orderBy: [{ createdAt: 'asc' }],
+              include: {
+                activity: {
+                  select: {
+                    id: true,
+                    title: true,
+                    scope: true,
+                    eventDate: true,
+                    status: true,
+                    localityId: true,
+                    activityType: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -1913,6 +1945,22 @@ export class MissionsService {
                 localityId: true,
               },
             },
+            activityLinks: {
+              orderBy: [{ createdAt: 'asc' }],
+              include: {
+                activity: {
+                  select: {
+                    id: true,
+                    title: true,
+                    scope: true,
+                    eventDate: true,
+                    status: true,
+                    localityId: true,
+                    activityType: { select: { id: true, name: true } },
+                  },
+                },
+              },
+            },
           },
         },
       } as any,
@@ -2015,14 +2063,6 @@ export class MissionsService {
       }
 
       this.assertMissionFieldActivityPermission('CREATE', user);
-      if (scheduleItem.activityId) {
-        throwError('VALIDATION_ERROR', {
-          field: 'scheduleItemId',
-          reason: 'SCHEDULE_ITEM_ALREADY_LINKED',
-          scheduleItemId: input.scheduleItemId,
-          activityId: scheduleItem.activityId,
-        });
-      }
 
       const specialtyIds = await this.resolveMissionActivitySpecialtyIds(
         input.specialtyIds,
@@ -2049,6 +2089,12 @@ export class MissionsService {
         ),
       });
     }
+
+    const legacyLinkedScheduleItemIds = new Set(
+      Array.from(scheduleItemById.values())
+        .filter((item: any) => String(item?.activityId ?? '').trim())
+        .map((item: any) => String(item.id)),
+    );
 
     const results = await this.prisma.$transaction(async (tx) => {
       const createdResults: Array<{
@@ -2124,10 +2170,26 @@ export class MissionsService {
           select: { id: true, title: true },
         });
 
-        await (tx as any).missionScheduleItem.update({
-          where: { id: prepared.scheduleItem.id },
-          data: { activityId: activity.id },
+        await (tx as any).missionScheduleItemActivity.upsert({
+          where: {
+            scheduleItemId_activityId: {
+              scheduleItemId: prepared.scheduleItem.id,
+              activityId: activity.id,
+            },
+          },
+          update: {},
+          create: {
+            scheduleItemId: prepared.scheduleItem.id,
+            activityId: activity.id,
+          },
         });
+        if (!legacyLinkedScheduleItemIds.has(String(prepared.scheduleItem.id))) {
+          await (tx as any).missionScheduleItem.update({
+            where: { id: prepared.scheduleItem.id },
+            data: { activityId: activity.id },
+          });
+          legacyLinkedScheduleItemIds.add(String(prepared.scheduleItem.id));
+        }
         createdResults.push({
           scheduleItemId: prepared.scheduleItem.id,
           activityId: activity.id,
@@ -2137,10 +2199,26 @@ export class MissionsService {
       }
 
       for (const prepared of preparedLinks) {
-        await (tx as any).missionScheduleItem.update({
-          where: { id: prepared.scheduleItem.id },
-          data: { activityId: prepared.activity.id },
+        await (tx as any).missionScheduleItemActivity.upsert({
+          where: {
+            scheduleItemId_activityId: {
+              scheduleItemId: prepared.scheduleItem.id,
+              activityId: prepared.activity.id,
+            },
+          },
+          update: {},
+          create: {
+            scheduleItemId: prepared.scheduleItem.id,
+            activityId: prepared.activity.id,
+          },
         });
+        if (!legacyLinkedScheduleItemIds.has(String(prepared.scheduleItem.id))) {
+          await (tx as any).missionScheduleItem.update({
+            where: { id: prepared.scheduleItem.id },
+            data: { activityId: prepared.activity.id },
+          });
+          legacyLinkedScheduleItemIds.add(String(prepared.scheduleItem.id));
+        }
         linkedResults.push({
           scheduleItemId: prepared.scheduleItem.id,
           activityId: prepared.activity.id,
@@ -2821,11 +2899,9 @@ export class MissionsService {
     items: MissionScheduleFieldActivityPayload[] | undefined,
   ) {
     const normalized: MissionScheduleFieldActivityPayload[] = [];
-    const seen = new Set<string>();
     for (const raw of items ?? []) {
       const scheduleItemId = String(raw?.scheduleItemId ?? '').trim();
-      if (!scheduleItemId || seen.has(scheduleItemId)) continue;
-      seen.add(scheduleItemId);
+      if (!scheduleItemId) continue;
       const action =
         String(raw?.action ?? '').toUpperCase() === 'LINK' ? 'LINK' : 'CREATE';
       normalized.push({

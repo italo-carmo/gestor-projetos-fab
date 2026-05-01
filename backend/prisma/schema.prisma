@@ -304,6 +304,7 @@ model Activity {
   visitScheduleItems   ActivityVisitScheduleItem[]
   responsibles         ActivityResponsible[]
   missionScheduleItems MissionScheduleItem[]
+  missionScheduleLinks MissionScheduleItemActivity[]
   comments             ActivityComment[]
   commentReads         ActivityCommentRead[]
 
@@ -397,9 +398,24 @@ model MissionScheduleItem {
 
   mission  Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
   activity Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  activityLinks MissionScheduleItemActivity[]
 
   @@index([missionId, startAt])
   @@index([activityId])
+}
+
+model MissionScheduleItemActivity {
+  id             String   @id @default(cuid())
+  scheduleItemId String
+  activityId     String
+  createdAt      DateTime @default(now())
+
+  scheduleItem MissionScheduleItem @relation(fields: [scheduleItemId], references: [id], onDelete: Cascade)
+  activity     Activity            @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleItemId, activityId])
+  @@index([activityId])
+  @@index([scheduleItemId, createdAt])
 }
 
 model MissionBanner {

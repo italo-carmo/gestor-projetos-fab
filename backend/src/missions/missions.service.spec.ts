@@ -29,6 +29,9 @@ function buildPrismaMock() {
     missionScheduleItem: {
       update: jest.fn().mockResolvedValue({}),
     },
+    missionScheduleItemActivity: {
+      upsert: jest.fn().mockResolvedValue({}),
+    },
   };
   return {
     mission: {
@@ -73,6 +76,7 @@ function buildMission(scheduleOverrides: any[] = []) {
         participants: 'Turma A',
         activityId: null,
         activity: null,
+        activityLinks: [],
       },
       {
         id: 'schedule-2',
@@ -84,6 +88,7 @@ function buildMission(scheduleOverrides: any[] = []) {
         participants: 'Equipe',
         activityId: null,
         activity: null,
+        activityLinks: [],
       },
       ...scheduleOverrides,
     ],
@@ -169,10 +174,30 @@ describe('MissionsService schedule field activities', () => {
       where: { id: 'schedule-1' },
       data: { activityId: 'activity-created' },
     });
+    expect(prisma.__tx.missionScheduleItemActivity.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          scheduleItemId_activityId: {
+            scheduleItemId: 'schedule-1',
+            activityId: 'activity-created',
+          },
+        },
+      }),
+    );
     expect(prisma.__tx.missionScheduleItem.update).toHaveBeenCalledWith({
       where: { id: 'schedule-2' },
       data: { activityId: 'activity-existing' },
     });
+    expect(prisma.__tx.missionScheduleItemActivity.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          scheduleItemId_activityId: {
+            scheduleItemId: 'schedule-2',
+            activityId: 'activity-existing',
+          },
+        },
+      }),
+    );
     expect(auditMock.log).toHaveBeenCalledWith(
       expect.objectContaining({
         resource: 'missions',
@@ -182,7 +207,7 @@ describe('MissionsService schedule field activities', () => {
     );
   });
 
-  it('does not create a duplicate activity when the schedule item is already linked', async () => {
+  it('creates an additional field activity when the schedule item is already linked', async () => {
     const prisma = buildPrismaMock();
     prisma.mission.findUnique.mockResolvedValue(
       buildMission([
@@ -196,35 +221,58 @@ describe('MissionsService schedule field activities', () => {
           participants: 'Turma A',
           activityId: 'activity-existing',
           activity: { id: 'activity-existing', title: 'Atividade existente' },
+          activityLinks: [
+            {
+              activity: {
+                id: 'activity-existing',
+                title: 'Atividade existente',
+              },
+            },
+          ],
         },
       ]),
     );
 
     const service = new MissionsService(prisma, auditMock, fabLdapMock);
-    await expect(
-      service.upsertScheduleFieldActivities(
-        'mission-1',
-        {
-          items: [
-            {
-              scheduleItemId: 'schedule-linked',
-              action: 'CREATE',
-              title: 'Duplicada',
-            },
-          ],
-        },
-        user,
-      ),
-    ).rejects.toMatchObject({
-      response: expect.objectContaining({
-        code: 'VALIDATION_ERROR',
-        details: expect.objectContaining({
-          reason: 'SCHEDULE_ITEM_ALREADY_LINKED',
-          activityId: 'activity-existing',
+    const result = await service.upsertScheduleFieldActivities(
+      'mission-1',
+      {
+        items: [
+          {
+            scheduleItemId: 'schedule-linked',
+            action: 'CREATE',
+            title: 'Questionário CPCA',
+          },
+        ],
+      },
+      user,
+    );
+
+    expect(result).toMatchObject({ created: 1, linked: 0 });
+    expect(prisma.__tx.activity.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: 'Questionário CPCA',
         }),
       }),
+    );
+    expect(prisma.__tx.missionScheduleItemActivity.upsert).toHaveBeenCalledWith({
+      where: {
+        scheduleItemId_activityId: {
+          scheduleItemId: 'schedule-linked',
+          activityId: 'activity-created',
+        },
+      },
+      update: {},
+      create: {
+        scheduleItemId: 'schedule-linked',
+        activityId: 'activity-created',
+      },
     });
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.__tx.missionScheduleItem.update).not.toHaveBeenCalledWith({
+      where: { id: 'schedule-linked' },
+      data: { activityId: 'activity-created' },
+    });
   });
 
   it('rejects linking a schedule item to an activity from another scope', async () => {

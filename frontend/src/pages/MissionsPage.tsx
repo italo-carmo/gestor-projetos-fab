@@ -91,9 +91,11 @@ import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
 import { SkeletonState } from '../components/states/SkeletonState';
 import {
+  buildMissionFieldActivityDraft,
   buildMissionFieldActivityDrafts,
   buildMissionFieldActivityRequestItems,
   getMissionFieldActivityValidationMessage,
+  getMissionScheduleItemLinkedActivities,
   type MissionScheduleFieldActivityDraft,
 } from '../features/missionFieldActivities';
 type MissionScope = 'SMIF' | 'CIPAVD';
@@ -429,6 +431,15 @@ function buildBlankScheduleForm(scheduleItems?: any[] | null) {
     ...blankScheduleForm,
     startAt: getNextMissionScheduleStart(scheduleItems),
   };
+}
+
+function buildMissionFieldActivityDraftId(
+  scheduleItemId: string,
+  action: 'CREATE' | 'LINK',
+) {
+  return `${scheduleItemId}:${action.toLowerCase()}:${Date.now().toString(36)}:${Math.random()
+    .toString(36)
+    .slice(2, 8)}`;
 }
 
 function isScheduleFormEmpty(form: typeof blankScheduleForm) {
@@ -916,9 +927,10 @@ export function MissionsPage() {
       if (id) map.set(id, activity);
     }
     for (const item of missionScheduleItems) {
-      const activity = item?.activity;
-      const id = String(activity?.id ?? '').trim();
-      if (id && !map.has(id)) map.set(id, activity);
+      for (const activity of getMissionScheduleItemLinkedActivities(item)) {
+        const id = String(activity?.id ?? '').trim();
+        if (id && !map.has(id)) map.set(id, activity);
+      }
     }
     return Array.from(map.values()).sort((a: any, b: any) =>
       String(a?.title ?? '').localeCompare(String(b?.title ?? ''), 'pt-BR'),
@@ -1494,25 +1506,42 @@ export function MissionsPage() {
       missionScheduleItems,
       selectedScheduleItemIds,
       fieldActivityDefaults,
-    ).map((draft) => {
-      const item = missionScheduleItems.find((candidate: any) => String(candidate?.id ?? '') === draft.scheduleItemId);
-      const activityId = String(item?.activityId ?? item?.activity?.id ?? '').trim();
-      return activityId ? { ...draft, action: 'LINK' as const, activityId } : draft;
-    });
+    );
     setFieldActivityDrafts(drafts);
     setFieldActivityDialogOpen(true);
   };
 
   const updateFieldActivityDraft = (
-    scheduleItemId: string,
+    draftId: string,
     patch: Partial<MissionScheduleFieldActivityDraft>,
   ) => {
     setFieldActivityDrafts((current) =>
       current.map((draft) =>
-        draft.scheduleItemId === scheduleItemId
+        draft.id === draftId
           ? { ...draft, ...patch, specialtyIds: patch.specialtyIds ?? draft.specialtyIds }
           : draft,
       ),
+    );
+  };
+
+  const addFieldActivityDraft = (
+    scheduleItem: any,
+    action: 'CREATE' | 'LINK' = 'CREATE',
+  ) => {
+    const scheduleItemId = String(scheduleItem?.id ?? '').trim();
+    if (!scheduleItemId) return;
+    setFieldActivityDrafts((current) => [
+      ...current,
+      buildMissionFieldActivityDraft(scheduleItem, fieldActivityDefaults, {
+        id: buildMissionFieldActivityDraftId(scheduleItemId, action),
+        action,
+      }),
+    ]);
+  };
+
+  const removeFieldActivityDraft = (draftId: string) => {
+    setFieldActivityDrafts((current) =>
+      current.filter((draft) => draft.id !== draftId),
     );
   };
 
@@ -2815,6 +2844,7 @@ export function MissionsPage() {
                               {missionScheduleItems.map((item: any) => {
                                 const itemId = String(item.id);
                                 const checked = selectedScheduleItemIds.includes(itemId);
+                                const linkedActivities = getMissionScheduleItemLinkedActivities(item);
                                 return (
                                   <TableRow key={item.id} selected={checked}>
                                     <TableCell padding="checkbox">
@@ -2840,23 +2870,26 @@ export function MissionsPage() {
                                     <TableCell>{item.responsible}</TableCell>
                                     <TableCell sx={{ maxWidth: 220, whiteSpace: 'pre-wrap' }}>{item.participants}</TableCell>
                                     <TableCell sx={{ minWidth: 190 }}>
-                                      {item.activity ? (
+                                      {linkedActivities.length > 0 ? (
                                         <Stack spacing={0.5} alignItems="flex-start">
                                           <Chip
                                             size="small"
                                             color="success"
                                             variant="outlined"
-                                            label={item.activity.activityType?.name ?? 'Vinculada'}
+                                            label={`${linkedActivities.length} vinculada(s)`}
                                           />
-                                          <Button
-                                            size="small"
-                                            variant="text"
-                                            endIcon={<OpenInNewRoundedIcon fontSize="small" />}
-                                            href={`${missionScope === 'CIPAVD' ? '/activities-cipavd' : '/activities'}?activityId=${encodeURIComponent(String(item.activity.id))}`}
-                                            sx={{ px: 0, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none' }}
-                                          >
-                                            {item.activity.title ?? 'Abrir atividade'}
-                                          </Button>
+                                          {linkedActivities.map((activity: any) => (
+                                            <Button
+                                              key={String(activity.id)}
+                                              size="small"
+                                              variant="text"
+                                              endIcon={<OpenInNewRoundedIcon fontSize="small" />}
+                                              href={`${missionScope === 'CIPAVD' ? '/activities-cipavd' : '/activities'}?activityId=${encodeURIComponent(String(activity.id))}`}
+                                              sx={{ px: 0, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', lineHeight: 1.2 }}
+                                            >
+                                              {activity.title ?? 'Abrir atividade'}
+                                            </Button>
+                                          ))}
                                         </Stack>
                                       ) : (
                                         <Chip size="small" label="Sem vínculo" variant="outlined" />
@@ -3551,27 +3584,34 @@ export function MissionsPage() {
             </Box>
 
             <Stack spacing={1.2}>
-              {fieldActivityDrafts.map((draft, index) => {
-                const scheduleItem = missionScheduleItems.find((item: any) => String(item?.id ?? '') === draft.scheduleItemId);
-                const linkedActivityId = String(scheduleItem?.activityId ?? scheduleItem?.activity?.id ?? '').trim();
-                const selectedExistingActivity =
-                  existingFieldActivityOptions.find((activity: any) => String(activity?.id ?? '') === draft.activityId) ?? null;
-                const validationMessage = getMissionFieldActivityValidationMessage(draft);
+              {missionScheduleItems
+                .filter((item: any) => selectedScheduleItemIds.includes(String(item?.id ?? '')))
+                .map((scheduleItem: any, itemIndex: number) => {
+                const scheduleItemId = String(scheduleItem?.id ?? '');
+                const draftsForItem = fieldActivityDrafts.filter(
+                  (draft) => draft.scheduleItemId === scheduleItemId,
+                );
+                const linkedActivities = getMissionScheduleItemLinkedActivities(scheduleItem);
+                const linkedActivityIds = new Set(
+                  linkedActivities.map((activity: any) => String(activity?.id ?? '')).filter(Boolean),
+                );
                 return (
                   <Box
-                    key={draft.scheduleItemId}
+                    key={scheduleItemId}
                     sx={{
                       border: '1px solid',
-                      borderColor: validationMessage ? 'warning.light' : 'divider',
+                      borderColor: draftsForItem.some(getMissionFieldActivityValidationMessage)
+                        ? 'warning.light'
+                        : 'divider',
                       borderRadius: 1,
                       p: 1.4,
                     }}
                   >
-                    <Stack spacing={1}>
+                    <Stack spacing={1.2}>
                       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }}>
                         <Box>
                           <Typography variant="subtitle2" fontWeight={700}>
-                            {index + 1}. {scheduleItem?.title ?? 'Item de cronograma'}
+                            {itemIndex + 1}. {scheduleItem?.title ?? 'Item de cronograma'}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {scheduleItem?.startAt
@@ -3585,154 +3625,242 @@ export function MissionsPage() {
                             · {scheduleItem?.location || 'Sem local'} · Responsável no cronograma: {scheduleItem?.responsible || 'não informado'}
                           </Typography>
                         </Box>
-                        {linkedActivityId ? <Chip size="small" color="success" variant="outlined" label="Já vinculado" /> : null}
+                        <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+                          <Chip
+                            size="small"
+                            color={linkedActivities.length ? 'success' : 'default'}
+                            variant="outlined"
+                            label={`${linkedActivities.length} vínculo(s) atual(is)`}
+                          />
+                          <Chip
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                            label={`${draftsForItem.length} nova(s) ação(ões)`}
+                          />
+                        </Stack>
                       </Stack>
 
-                      <TextField
-                        select
-                        size="small"
-                        label="O que fazer"
-                        value={draft.action}
-                        onChange={(event) => {
-                          const nextAction = event.target.value === 'LINK' ? 'LINK' : 'CREATE';
-                          updateFieldActivityDraft(draft.scheduleItemId, {
-                            action: nextAction,
-                            activityId: nextAction === 'LINK' ? draft.activityId || linkedActivityId : '',
-                          });
-                        }}
-                        sx={{ maxWidth: 280 }}
-                      >
-                        <MenuItem value="CREATE" disabled={!canCreateFieldActivities || Boolean(linkedActivityId)}>
-                          Criar nova atividade
-                        </MenuItem>
-                        <MenuItem value="LINK" disabled={!canLinkFieldActivities}>
-                          Relacionar atividade existente
-                        </MenuItem>
-                      </TextField>
-
-                      {draft.action === 'LINK' ? (
-                        <Autocomplete
-                          options={existingFieldActivityOptions}
-                          value={selectedExistingActivity}
-                          loading={activitiesForLinkQuery.isLoading}
-                          getOptionLabel={(option: any) => {
-                            const type = option?.activityType?.name ? ` · ${option.activityType.name}` : '';
-                            const date = option?.eventDate ? ` · ${String(option.eventDate).slice(0, 10)}` : '';
-                            return `${option?.title ?? 'Atividade'}${type}${date}`;
-                          }}
-                          isOptionEqualToValue={(option: any, value: any) => String(option?.id ?? '') === String(value?.id ?? '')}
-                          onChange={(_, option: any) =>
-                            updateFieldActivityDraft(draft.scheduleItemId, { activityId: String(option?.id ?? '') })
-                          }
-                          renderInput={(params) => (
-                            <TextField
-                              {...params}
+                      {linkedActivities.length > 0 ? (
+                        <Stack direction="row" spacing={0.8} flexWrap="wrap" useFlexGap>
+                          {linkedActivities.map((activity: any) => (
+                            <Chip
+                              key={String(activity.id)}
                               size="small"
-                              label="Atividade existente"
-                              placeholder="Busque pelo título da atividade"
-                              error={Boolean(validationMessage)}
-                              helperText={validationMessage || ' '}
+                              variant="outlined"
+                              label={activity.title ?? 'Atividade vinculada'}
                             />
-                          )}
-                        />
-                      ) : (
-                        <Stack spacing={1}>
-                          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                            <TextField
-                              size="small"
-                              label="Título"
-                              value={draft.title}
-                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { title: event.target.value })}
-                              fullWidth
-                              error={Boolean(validationMessage)}
-                            />
-                            <TextField
-                              size="small"
-                              type="date"
-                              label="Data"
-                              value={draft.eventDate}
-                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { eventDate: event.target.value })}
-                              InputLabelProps={{ shrink: true }}
-                              sx={{ minWidth: 170 }}
-                            />
-                          </Stack>
-                          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
-                            <TextField
-                              select
-                              size="small"
-                              label="Tipo"
-                              value={draft.activityTypeId}
-                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { activityTypeId: event.target.value })}
-                              sx={{ minWidth: 190 }}
-                            >
-                              <MenuItem value="">Sem tipo</MenuItem>
-                              {activityTypes.map((type: any) => (
-                                <MenuItem key={type.id} value={type.id}>
-                                  {type.name}
-                                </MenuItem>
-                              ))}
-                            </TextField>
-                            <TextField
-                              select
-                              size="small"
-                              label="Especialidade"
-                              value={draft.specialtyIds}
-                              onChange={(event) => {
-                                const value = event.target.value;
-                                updateFieldActivityDraft(draft.scheduleItemId, {
-                                  specialtyIds: Array.isArray(value) ? value.map((item) => String(item)) : [String(value)],
-                                });
-                              }}
-                              sx={{ minWidth: 220 }}
-                              SelectProps={{
-                                multiple: true,
-                                renderValue: (value) => {
-                                  const selectedValues = Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
-                                  if (!selectedValues.length) return 'Comissão CIPAVD';
-                                  return selectedValues.map((id) => specialtyNameById.get(id) ?? 'Especialidade').join(', ');
-                                },
-                              }}
-                            >
-                              {specialties.map((specialty: any) => (
-                                <MenuItem key={specialty.id} value={specialty.id}>
-                                  {specialty.name}
-                                </MenuItem>
-                              ))}
-                            </TextField>
-                            <TextField
-                              select
-                              size="small"
-                              label="Responsável"
-                              value={draft.responsibleUserId}
-                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { responsibleUserId: event.target.value })}
-                              sx={{ minWidth: 220 }}
-                            >
-                              <MenuItem value="">Sem responsável</MenuItem>
-                              {responsibleOptions.map((user: any) => (
-                                <MenuItem key={user.id} value={user.id}>
-                                  {toMilitaryDisplayName(user.name)}
-                                </MenuItem>
-                              ))}
-                            </TextField>
-                            <TextField
-                              select
-                              size="small"
-                              label="Relatório"
-                              value={draft.reportRequired ? 'true' : 'false'}
-                              onChange={(event) => updateFieldActivityDraft(draft.scheduleItemId, { reportRequired: event.target.value === 'true' })}
-                              sx={{ minWidth: 160 }}
-                            >
-                              <MenuItem value="true">Obrigatório</MenuItem>
-                              <MenuItem value="false">Opcional</MenuItem>
-                            </TextField>
-                          </Stack>
-                          {validationMessage ? (
-                            <Typography variant="caption" color="warning.main">
-                              {validationMessage}
-                            </Typography>
-                          ) : null}
+                          ))}
                         </Stack>
-                      )}
+                      ) : null}
+
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<AddRoundedIcon />}
+                          onClick={() => addFieldActivityDraft(scheduleItem, 'CREATE')}
+                          disabled={!canCreateFieldActivities}
+                        >
+                          Adicionar nova
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<LinkRoundedIcon />}
+                          onClick={() => addFieldActivityDraft(scheduleItem, 'LINK')}
+                          disabled={!canLinkFieldActivities}
+                        >
+                          Vincular existente
+                        </Button>
+                      </Stack>
+
+                      {draftsForItem.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          Nenhuma ação adicionada para este item.
+                        </Typography>
+                      ) : null}
+
+                      {draftsForItem.map((draft, draftIndex) => {
+                        const selectedExistingActivity =
+                          existingFieldActivityOptions.find((activity: any) => String(activity?.id ?? '') === draft.activityId) ?? null;
+                        const availableExistingActivityOptions = existingFieldActivityOptions.filter((activity: any) => {
+                          const activityId = String(activity?.id ?? '').trim();
+                          return activityId === draft.activityId || !linkedActivityIds.has(activityId);
+                        });
+                        const validationMessage = getMissionFieldActivityValidationMessage(draft);
+                        return (
+                          <Box
+                            key={draft.id}
+                            sx={{
+                              border: '1px solid',
+                              borderColor: validationMessage ? 'warning.light' : '#E6ECF5',
+                              borderRadius: 1,
+                              p: 1.2,
+                              bgcolor: '#FFFFFF',
+                            }}
+                          >
+                            <Stack spacing={1}>
+                              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }} justifyContent="space-between">
+                                <TextField
+                                  select
+                                  size="small"
+                                  label={`Ação ${draftIndex + 1}`}
+                                  value={draft.action}
+                                  onChange={(event) => {
+                                    const nextAction = event.target.value === 'LINK' ? 'LINK' : 'CREATE';
+                                    updateFieldActivityDraft(draft.id, {
+                                      action: nextAction,
+                                      activityId: '',
+                                    });
+                                  }}
+                                  sx={{ minWidth: 240 }}
+                                >
+                                  <MenuItem value="CREATE" disabled={!canCreateFieldActivities}>
+                                    Criar nova atividade
+                                  </MenuItem>
+                                  <MenuItem value="LINK" disabled={!canLinkFieldActivities}>
+                                    Relacionar atividade existente
+                                  </MenuItem>
+                                </TextField>
+                                <Tooltip title="Remover esta ação">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => removeFieldActivityDraft(draft.id)}
+                                  >
+                                    <DeleteOutlineIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+
+                              {draft.action === 'LINK' ? (
+                                <Autocomplete
+                                  options={availableExistingActivityOptions}
+                                  value={selectedExistingActivity}
+                                  loading={activitiesForLinkQuery.isLoading}
+                                  getOptionLabel={(option: any) => {
+                                    const type = option?.activityType?.name ? ` · ${option.activityType.name}` : '';
+                                    const date = option?.eventDate ? ` · ${String(option.eventDate).slice(0, 10)}` : '';
+                                    return `${option?.title ?? 'Atividade'}${type}${date}`;
+                                  }}
+                                  isOptionEqualToValue={(option: any, value: any) => String(option?.id ?? '') === String(value?.id ?? '')}
+                                  onChange={(_, option: any) =>
+                                    updateFieldActivityDraft(draft.id, { activityId: String(option?.id ?? '') })
+                                  }
+                                  renderInput={(params) => (
+                                    <TextField
+                                      {...params}
+                                      size="small"
+                                      label="Atividade existente"
+                                      placeholder="Busque pelo título da atividade"
+                                      error={Boolean(validationMessage)}
+                                      helperText={validationMessage || ' '}
+                                    />
+                                  )}
+                                />
+                              ) : (
+                                <Stack spacing={1}>
+                                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                                    <TextField
+                                      size="small"
+                                      label="Título"
+                                      value={draft.title}
+                                      onChange={(event) => updateFieldActivityDraft(draft.id, { title: event.target.value })}
+                                      fullWidth
+                                      error={Boolean(validationMessage)}
+                                    />
+                                    <TextField
+                                      size="small"
+                                      type="date"
+                                      label="Data"
+                                      value={draft.eventDate}
+                                      onChange={(event) => updateFieldActivityDraft(draft.id, { eventDate: event.target.value })}
+                                      InputLabelProps={{ shrink: true }}
+                                      sx={{ minWidth: 170 }}
+                                    />
+                                  </Stack>
+                                  <Stack direction={{ xs: 'column', md: 'row' }} spacing={1}>
+                                    <TextField
+                                      select
+                                      size="small"
+                                      label="Tipo"
+                                      value={draft.activityTypeId}
+                                      onChange={(event) => updateFieldActivityDraft(draft.id, { activityTypeId: event.target.value })}
+                                      sx={{ minWidth: 190 }}
+                                    >
+                                      <MenuItem value="">Sem tipo</MenuItem>
+                                      {activityTypes.map((type: any) => (
+                                        <MenuItem key={type.id} value={type.id}>
+                                          {type.name}
+                                        </MenuItem>
+                                      ))}
+                                    </TextField>
+                                    <TextField
+                                      select
+                                      size="small"
+                                      label="Especialidade"
+                                      value={draft.specialtyIds}
+                                      onChange={(event) => {
+                                        const value = event.target.value;
+                                        updateFieldActivityDraft(draft.id, {
+                                          specialtyIds: Array.isArray(value) ? value.map((item) => String(item)) : [String(value)],
+                                        });
+                                      }}
+                                      sx={{ minWidth: 220 }}
+                                      SelectProps={{
+                                        multiple: true,
+                                        renderValue: (value) => {
+                                          const selectedValues = Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+                                          if (!selectedValues.length) return 'Comissão CIPAVD';
+                                          return selectedValues.map((id) => specialtyNameById.get(id) ?? 'Especialidade').join(', ');
+                                        },
+                                      }}
+                                    >
+                                      {specialties.map((specialty: any) => (
+                                        <MenuItem key={specialty.id} value={specialty.id}>
+                                          {specialty.name}
+                                        </MenuItem>
+                                      ))}
+                                    </TextField>
+                                    <TextField
+                                      select
+                                      size="small"
+                                      label="Responsável"
+                                      value={draft.responsibleUserId}
+                                      onChange={(event) => updateFieldActivityDraft(draft.id, { responsibleUserId: event.target.value })}
+                                      sx={{ minWidth: 220 }}
+                                    >
+                                      <MenuItem value="">Sem responsável</MenuItem>
+                                      {responsibleOptions.map((user: any) => (
+                                        <MenuItem key={user.id} value={user.id}>
+                                          {toMilitaryDisplayName(user.name)}
+                                        </MenuItem>
+                                      ))}
+                                    </TextField>
+                                    <TextField
+                                      select
+                                      size="small"
+                                      label="Relatório"
+                                      value={draft.reportRequired ? 'true' : 'false'}
+                                      onChange={(event) => updateFieldActivityDraft(draft.id, { reportRequired: event.target.value === 'true' })}
+                                      sx={{ minWidth: 160 }}
+                                    >
+                                      <MenuItem value="true">Obrigatório</MenuItem>
+                                      <MenuItem value="false">Opcional</MenuItem>
+                                    </TextField>
+                                  </Stack>
+                                  {validationMessage ? (
+                                    <Typography variant="caption" color="warning.main">
+                                      {validationMessage}
+                                    </Typography>
+                                  ) : null}
+                                </Stack>
+                              )}
+                            </Stack>
+                          </Box>
+                        );
+                      })}
                     </Stack>
                   </Box>
                 );

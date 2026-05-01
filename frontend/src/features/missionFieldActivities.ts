@@ -1,6 +1,7 @@
 export type MissionScope = 'SMIF' | 'CIPAVD';
 
 export type MissionScheduleFieldActivityDraft = {
+  id: string;
   scheduleItemId: string;
   action: 'CREATE' | 'LINK';
   activityId: string;
@@ -46,17 +47,62 @@ export function buildMissionFieldActivityDrafts(
   );
   return (scheduleItems ?? [])
     .filter((item) => selected.has(String(item?.id ?? '')))
-    .map((item) => ({
-      scheduleItemId: String(item.id),
-      action: 'CREATE' as const,
-      activityId: '',
-      title: String(item?.title ?? '').trim() || 'Atividade de campo da missão',
-      eventDate: scheduleStartToDateInput(item?.startAt),
-      activityTypeId: defaults?.activityTypeId ?? '',
-      specialtyIds: defaults?.specialtyIds ?? [],
-      responsibleUserId: defaults?.responsibleUserId ?? '',
-      reportRequired: defaults?.reportRequired ?? true,
-    }));
+    .map((item, index) =>
+      buildMissionFieldActivityDraft(item, defaults, {
+        id: `${String(item.id)}:create:${index}`,
+      }),
+    );
+}
+
+export function buildMissionFieldActivityDraft(
+  scheduleItem: any,
+  defaults?: {
+    activityTypeId?: string;
+    specialtyIds?: string[];
+    responsibleUserId?: string;
+    reportRequired?: boolean;
+  },
+  options?: {
+    id?: string;
+    action?: 'CREATE' | 'LINK';
+  },
+): MissionScheduleFieldActivityDraft {
+  const scheduleItemId = String(scheduleItem?.id ?? '').trim();
+  const action = options?.action ?? 'CREATE';
+  return {
+    id:
+      options?.id ??
+      `${scheduleItemId}:${action.toLowerCase()}:${Date.now().toString(36)}`,
+    scheduleItemId,
+    action,
+    activityId: '',
+    title: String(scheduleItem?.title ?? '').trim() || 'Atividade de campo da missão',
+    eventDate: scheduleStartToDateInput(scheduleItem?.startAt),
+    activityTypeId: defaults?.activityTypeId ?? '',
+    specialtyIds: defaults?.specialtyIds ?? [],
+    responsibleUserId: defaults?.responsibleUserId ?? '',
+    reportRequired: defaults?.reportRequired ?? true,
+  };
+}
+
+export function getMissionScheduleItemLinkedActivities(scheduleItem: any) {
+  const map = new Map<string, any>();
+  const legacyActivity = scheduleItem?.activity;
+  const legacyActivityId = String(
+    scheduleItem?.activityId ?? legacyActivity?.id ?? '',
+  ).trim();
+  if (legacyActivityId && legacyActivity) {
+    map.set(legacyActivityId, legacyActivity);
+  }
+  const links = Array.isArray(scheduleItem?.activityLinks)
+    ? scheduleItem.activityLinks
+    : [];
+  for (const link of links) {
+    const activity = link?.activity ?? link;
+    const id = String(activity?.id ?? '').trim();
+    if (id) map.set(id, activity);
+  }
+  return Array.from(map.values());
 }
 
 export function getMissionFieldActivityValidationMessage(

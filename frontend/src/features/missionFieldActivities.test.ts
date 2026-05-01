@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildMissionFieldActivityDraft,
   buildMissionFieldActivityDrafts,
   buildMissionFieldActivityRequestItems,
   getMissionFieldActivityValidationMessage,
+  getMissionScheduleItemLinkedActivities,
   normalizeMissionScope,
   scheduleStartToDateInput,
 } from './missionFieldActivities';
@@ -48,6 +50,7 @@ describe('mission field activity helpers', () => {
   it('validates create and link drafts before sending', () => {
     expect(
       getMissionFieldActivityValidationMessage({
+        id: 'draft-1',
         scheduleItemId: 'item-1',
         action: 'CREATE',
         activityId: '',
@@ -62,6 +65,7 @@ describe('mission field activity helpers', () => {
 
     expect(
       getMissionFieldActivityValidationMessage({
+        id: 'draft-2',
         scheduleItemId: 'item-1',
         action: 'LINK',
         activityId: '',
@@ -79,6 +83,7 @@ describe('mission field activity helpers', () => {
     expect(
       buildMissionFieldActivityRequestItems([
         {
+          id: 'draft-1',
           scheduleItemId: 'item-1',
           action: 'CREATE',
           activityId: '',
@@ -90,6 +95,7 @@ describe('mission field activity helpers', () => {
           reportRequired: true,
         },
         {
+          id: 'draft-2',
           scheduleItemId: 'item-2',
           action: 'LINK',
           activityId: 'activity-2',
@@ -133,5 +139,36 @@ describe('mission field activity helpers', () => {
     expect(scheduleStartToDateInput('2026-04-28T03:00:00.000Z')).toMatch(
       /^\d{4}-\d{2}-\d{2}$/,
     );
+  });
+
+  it('creates additional drafts for the same schedule item', () => {
+    const first = buildMissionFieldActivityDraft(
+      { id: 'item-1', title: 'Reunião com as CPCAs', startAt: '2026-04-28T12:30:00.000Z' },
+      { activityTypeId: 'type-1' },
+      { id: 'item-1:create:1' },
+    );
+    const second = buildMissionFieldActivityDraft(
+      { id: 'item-1', title: 'Reunião com as CPCAs', startAt: '2026-04-28T12:30:00.000Z' },
+      { activityTypeId: 'type-2' },
+      { id: 'item-1:create:2' },
+    );
+
+    expect(first.scheduleItemId).toBe('item-1');
+    expect(second.scheduleItemId).toBe('item-1');
+    expect(first.id).not.toBe(second.id);
+    expect(first.title).toBe('Reunião com as CPCAs');
+  });
+
+  it('deduplicates legacy and multi-linked activities for a schedule item', () => {
+    expect(
+      getMissionScheduleItemLinkedActivities({
+        activityId: 'activity-1',
+        activity: { id: 'activity-1', title: 'Acompanhamento CPCA' },
+        activityLinks: [
+          { activity: { id: 'activity-1', title: 'Acompanhamento CPCA' } },
+          { activity: { id: 'activity-2', title: 'Questionário CPCA' } },
+        ],
+      }).map((activity) => activity.title),
+    ).toEqual(['Acompanhamento CPCA', 'Questionário CPCA']);
   });
 });
