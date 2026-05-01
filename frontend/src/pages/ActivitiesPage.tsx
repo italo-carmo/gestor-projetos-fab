@@ -1,11 +1,13 @@
 import {
   Autocomplete,
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
   Checkbox,
   Chip,
+  CircularProgress,
   Divider,
   Dialog,
   DialogActions,
@@ -31,7 +33,9 @@ import {
 } from '@mui/material';
 import CheckBoxRoundedIcon from '@mui/icons-material/CheckBoxRounded';
 import CheckBoxOutlineBlankRoundedIcon from '@mui/icons-material/CheckBoxOutlineBlankRounded';
+import CloudDownloadRoundedIcon from '@mui/icons-material/CloudDownloadRounded';
 import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
+import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -133,8 +137,32 @@ const drawerActionButtonSx = {
 type ActivityDrawerTab = 'activity' | 'report';
 type ActivitySortColumn = 'type' | 'activity' | 'locality' | 'specialty' | 'eventDate' | 'status';
 type ActivitySortDirection = 'asc' | 'desc';
+type FormsReportRow = {
+  id_sessao?: string | number | null;
+  atividade?: string | number | null;
+  data?: string | number | null;
+  inicio?: string | number | null;
+  fim?: string | number | null;
+  tipo?: string | number | null;
+  total_registros?: string | number | null;
+  presentes_unicos?: string | number | null;
+  feminino?: string | number | null;
+  masculino?: string | number | null;
+  nao_informado_outro?: string | number | null;
+  postos_graduacoes_distintos?: string | number | null;
+  oms_distintas?: string | number | null;
+  observacao?: string | number | null;
+};
+type FormsReportOption = FormsReportRow & { key: string };
+type FormsReportApiPayload = {
+  ok?: boolean;
+  message?: unknown;
+  dados?: unknown;
+};
 const ACTIVITY_PAGE_SIZE = 15;
 const ACTIVITY_PAGE_SIZE_OPTIONS = [15, 30, 50, 'all'] as const;
+const FORMS_REPORT_ENDPOINT =
+  'https://script.google.com/macros/s/AKfycbwaBPrJOIUo71CYpZHzvQ7GGI3VbLK1IzP1mNBLMccTE-c-JM8L3qxTe7ofpErPhzi2/exec?token=agaghavshab23jjghab';
 
 function normalizeSortText(value: unknown) {
   return String(value ?? '')
@@ -183,6 +211,73 @@ function toOptionalNonNegativeInt(value: unknown) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return undefined;
   return Math.max(0, Math.trunc(parsed));
+}
+
+function toFormsNonNegativeInt(value: unknown) {
+  const raw = String(value ?? '').replace(/\./g, '').replace(',', '.').trim();
+  if (!raw) return 0;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.trunc(parsed));
+}
+
+function toFormsText(value: unknown) {
+  return String(value ?? '').trim();
+}
+
+function toFormsInputDate(value: unknown) {
+  const raw = toFormsText(value);
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const brazilianDate = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (brazilianDate) {
+    const [, day, month, year] = brazilianDate;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+}
+
+function getFormsParticipantsCount(row: FormsReportRow) {
+  const uniqueParticipants = toFormsNonNegativeInt(row.presentes_unicos);
+  if (uniqueParticipants > 0) return uniqueParticipants;
+  return toFormsNonNegativeInt(row.total_registros);
+}
+
+function getFormsTimeRange(row: FormsReportRow) {
+  const start = toFormsText(row.inicio);
+  const end = toFormsText(row.fim);
+  if (start && end) return `${start} - ${end}`;
+  return start || end;
+}
+
+function getFormsReportOptionLabel(row: FormsReportRow) {
+  const date = toFormsText(row.data) || 'Data não informada';
+  const activity = toFormsText(row.atividade) || 'Atividade sem nome';
+  const timeRange = getFormsTimeRange(row);
+  return [date, activity, timeRange].filter(Boolean).join(' - ');
+}
+
+function buildFormsParticipantCharacteristics(row: FormsReportRow) {
+  const parts = [
+    `Dados importados do Forms: ${getFormsParticipantsCount(row)} participante(s) único(s)`,
+    `${toFormsNonNegativeInt(row.total_registros)} registro(s)`,
+    `${toFormsNonNegativeInt(row.feminino)} feminino`,
+    `${toFormsNonNegativeInt(row.masculino)} masculino`,
+    `${toFormsNonNegativeInt(row.nao_informado_outro)} não informado/outro`,
+    `${toFormsNonNegativeInt(row.postos_graduacoes_distintos)} posto(s)/graduação(ões) distinto(s)`,
+    `${toFormsNonNegativeInt(row.oms_distintas)} OM(s) distinta(s)`,
+  ];
+  const sessionId = toFormsText(row.id_sessao);
+  const observation = toFormsText(row.observacao);
+  if (sessionId) parts.push(`sessão ${sessionId}`);
+  if (observation) parts.push(observation);
+  return `${parts.join('; ')}.`;
+}
+
+function isFormsReportRecord(row: unknown): row is Record<string, unknown> {
+  return Boolean(row && typeof row === 'object');
 }
 
 function getReportMissingFields(reportForm: typeof blankReport) {
@@ -718,6 +813,11 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   }, [selected]);
 
   const [reportForm, setReportForm] = useState(blankReport);
+  const [formsImportDialogOpen, setFormsImportDialogOpen] = useState(false);
+  const [formsImportRows, setFormsImportRows] = useState<FormsReportOption[]>([]);
+  const [selectedFormsReportKey, setSelectedFormsReportKey] = useState('');
+  const [formsImportLoading, setFormsImportLoading] = useState(false);
+  const [formsImportError, setFormsImportError] = useState('');
 
   useEffect(() => {
     if (!selected?.report) {
@@ -773,6 +873,10 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   const canManageBatch = can(me, 'task_instances', 'update');
   const canBatchAssignResponsible = selectedLocalityIds.length <= 1;
   const canCreateAssignResponsible = !isCreateMode || activityForm.localityIds.length <= 1;
+  const selectedFormsReport = useMemo(
+    () => formsImportRows.find((row) => row.key === selectedFormsReportKey) ?? null,
+    [formsImportRows, selectedFormsReportKey],
+  );
   const createSelectedLocalities = useMemo(
     () =>
       selectableLocalities.filter((locality: any) =>
@@ -1109,6 +1213,88 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
         severity: 'error',
       });
     }
+  };
+
+  const loadFormsImportRows = async () => {
+    setFormsImportLoading(true);
+    setFormsImportError('');
+    try {
+      const response = await fetch(FORMS_REPORT_ENDPOINT, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        throw new Error(`Não foi possível consultar o Forms (${response.status}).`);
+      }
+      const payload = (await response.json()) as FormsReportApiPayload;
+      if (payload?.ok === false) {
+        throw new Error(String(payload?.message ?? 'O Forms retornou uma resposta inválida.'));
+      }
+      const rows = Array.isArray(payload?.dados) ? payload.dados : [];
+      const options = rows
+        .filter(isFormsReportRecord)
+        .map((row, index) => ({
+          ...row,
+          key: `${toFormsText(row.id_sessao) || 'sessao'}-${index}`,
+        })) as FormsReportOption[];
+      setFormsImportRows(options);
+      setSelectedFormsReportKey('');
+      if (!options.length) {
+        setFormsImportError('Nenhuma atividade foi retornada pelo Forms.');
+      }
+    } catch (error) {
+      setFormsImportRows([]);
+      setSelectedFormsReportKey('');
+      setFormsImportError(
+        error instanceof Error ? error.message : 'Erro ao importar dados do Forms.',
+      );
+    } finally {
+      setFormsImportLoading(false);
+    }
+  };
+
+  const handleOpenFormsImportDialog = () => {
+    if (!canEditReportContent) {
+      toast.push({
+        message: reportIsSigned
+          ? 'Relatório assinado não pode ser alterado. Remova a assinatura para editar.'
+          : 'Você não tem permissão para editar este relatório.',
+        severity: 'warning',
+      });
+      return;
+    }
+    setFormsImportDialogOpen(true);
+    setFormsImportRows([]);
+    setSelectedFormsReportKey('');
+    setFormsImportError('');
+    void loadFormsImportRows();
+  };
+
+  const handleConfirmFormsImport = () => {
+    if (!selectedFormsReport || !canEditReportContent) return;
+    const importedCharacteristics = buildFormsParticipantCharacteristics(selectedFormsReport);
+    const sourceDate = toFormsInputDate(selectedFormsReport.data);
+
+    setReportForm((current) => {
+      const currentCharacteristics = String(current.participantsCharacteristics ?? '').trim();
+      const participantsCharacteristics =
+        currentCharacteristics && !currentCharacteristics.startsWith('Dados importados do Forms:')
+          ? `${currentCharacteristics}\n\n${importedCharacteristics}`
+          : importedCharacteristics;
+
+      return {
+        ...current,
+        date: current.date || sourceDate,
+        closingDate: current.closingDate || sourceDate,
+        participantsCount: getFormsParticipantsCount(selectedFormsReport),
+        participantsMaleCount: toFormsNonNegativeInt(selectedFormsReport.masculino),
+        participantsFemaleCount: toFormsNonNegativeInt(selectedFormsReport.feminino),
+        participantsCharacteristics,
+      };
+    });
+    setFormsImportDialogOpen(false);
+    toast.push({ message: 'Dados do Forms aplicados ao relatório.', severity: 'success' });
   };
 
   const handleSaveReport = async () => {
@@ -2455,9 +2641,37 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
 
           {!isCreateMode && selected && drawerTab === 'report' && (
             <>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Formulário de Relatório da Atividade
-              </Typography>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                alignItems={{ xs: 'stretch', sm: 'center' }}
+                justifyContent="space-between"
+                spacing={1}
+                sx={{ mb: 2 }}
+              >
+                <Typography variant="h6">
+                  Formulário de Relatório da Atividade
+                </Typography>
+                <Tooltip
+                  title={
+                    canEditReportContent
+                      ? 'Importar público participante do Forms'
+                      : 'Relatório sem edição disponível'
+                  }
+                >
+                  <span>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<CloudDownloadRoundedIcon fontSize="small" />}
+                      sx={drawerActionButtonSx}
+                      onClick={handleOpenFormsImportDialog}
+                      disabled={!canEditReportContent || formsImportLoading}
+                    >
+                      Importar do Forms
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Stack>
 
               <Stack spacing={3}>
                 {/* 1. IDENTIFICAÇÃO DA ATIVIDADE */}
@@ -2984,6 +3198,182 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
 
         </Box>
       </Drawer>
+
+      <Dialog
+        open={formsImportDialogOpen}
+        onClose={() => setFormsImportDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Importar do Forms</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            {formsImportLoading ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  p: 1.5,
+                  border: '1px solid #E6ECF5',
+                  borderRadius: 2,
+                  bgcolor: '#F9FCFF',
+                }}
+              >
+                <CircularProgress size={22} />
+                <Typography variant="body2" color="text.secondary">
+                  Carregando dados do Forms...
+                </Typography>
+              </Box>
+            ) : null}
+
+            {formsImportError ? (
+              <Alert severity={formsImportRows.length ? 'warning' : 'error'}>
+                {formsImportError}
+              </Alert>
+            ) : null}
+
+            {formsImportRows.length ? (
+              <Autocomplete
+                size="small"
+                options={formsImportRows}
+                value={selectedFormsReport}
+                onChange={(_event, value) => setSelectedFormsReportKey(value?.key ?? '')}
+                getOptionLabel={getFormsReportOptionLabel}
+                isOptionEqualToValue={(option, value) => option.key === value.key}
+                renderOption={(props, option) => {
+                  const { key, ...optionProps } = props;
+                  return (
+                    <Box component="li" key={key} {...optionProps}>
+                      <Stack spacing={0.25}>
+                        <Typography variant="body2" fontWeight={700}>
+                          {toFormsText(option.atividade) || 'Atividade sem nome'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {[toFormsText(option.data), getFormsTimeRange(option), toFormsText(option.id_sessao)]
+                            .filter(Boolean)
+                            .join(' - ')}
+                        </Typography>
+                      </Stack>
+                    </Box>
+                  );
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Atividade do Forms"
+                    placeholder="Data, atividade ou sessão"
+                  />
+                )}
+              />
+            ) : null}
+
+            {selectedFormsReport ? (
+              <Box
+                sx={{
+                  p: 1.5,
+                  border: '1px solid #DDE7F2',
+                  borderRadius: 2,
+                  bgcolor: '#FBFDFF',
+                }}
+              >
+                <Stack
+                  direction={{ xs: 'column', sm: 'row' }}
+                  alignItems={{ xs: 'flex-start', sm: 'center' }}
+                  justifyContent="space-between"
+                  spacing={1}
+                >
+                  <Box>
+                    <Typography variant="subtitle2">
+                      {toFormsText(selectedFormsReport.atividade) || 'Atividade sem nome'}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {[toFormsText(selectedFormsReport.data), getFormsTimeRange(selectedFormsReport), toFormsText(selectedFormsReport.id_sessao)]
+                        .filter(Boolean)
+                        .join(' - ')}
+                    </Typography>
+                  </Box>
+                  <Chip
+                    size="small"
+                    label={toFormsText(selectedFormsReport.tipo) || 'Forms'}
+                    sx={{ bgcolor: '#E8F5E9', color: '#1B5E20', border: '1px solid #A5D6A7' }}
+                  />
+                </Stack>
+
+                <Divider sx={{ my: 1.5 }} />
+
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      sm: 'repeat(2, minmax(0, 1fr))',
+                      md: 'repeat(4, minmax(0, 1fr))',
+                    },
+                    gap: 1,
+                  }}
+                >
+                  {[
+                    ['Participantes únicos', getFormsParticipantsCount(selectedFormsReport)],
+                    ['Registros', toFormsNonNegativeInt(selectedFormsReport.total_registros)],
+                    ['Feminino', toFormsNonNegativeInt(selectedFormsReport.feminino)],
+                    ['Masculino', toFormsNonNegativeInt(selectedFormsReport.masculino)],
+                    ['Não informado/outro', toFormsNonNegativeInt(selectedFormsReport.nao_informado_outro)],
+                    ['Postos/graduações', toFormsNonNegativeInt(selectedFormsReport.postos_graduacoes_distintos)],
+                    ['OMs distintas', toFormsNonNegativeInt(selectedFormsReport.oms_distintas)],
+                    ['Data aproveitável', toFormsInputDate(selectedFormsReport.data) || '-'],
+                  ].map(([label, value]) => (
+                    <Box
+                      key={String(label)}
+                      sx={{
+                        p: 1,
+                        minHeight: 64,
+                        border: '1px solid #E6ECF5',
+                        borderRadius: 1.5,
+                        bgcolor: '#FFFFFF',
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary">
+                        {label}
+                      </Typography>
+                      <Typography variant="subtitle1" fontWeight={800}>
+                        {value}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+
+                {toFormsText(selectedFormsReport.observacao) ? (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1.5 }}>
+                    {toFormsText(selectedFormsReport.observacao)}
+                  </Typography>
+                ) : null}
+              </Box>
+            ) : null}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFormsImportDialogOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshRoundedIcon fontSize="small" />}
+            onClick={() => void loadFormsImportRows()}
+            disabled={formsImportLoading}
+          >
+            Atualizar
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<CloudDownloadRoundedIcon fontSize="small" />}
+            onClick={handleConfirmFormsImport}
+            disabled={!selectedFormsReport || formsImportLoading || !canEditReportContent}
+          >
+            Confirmar importação
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={replicateDialogOpen}
