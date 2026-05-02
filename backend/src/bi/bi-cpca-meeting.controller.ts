@@ -25,8 +25,37 @@ import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { hasAnyRole, ROLE_TI } from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
+import { type BiImportNormalizationPlan } from './bi-normalization.service';
 import { BiPdfService } from './bi-pdf.service';
 import { BiCpcaMeetingService } from './bi-cpca-meeting.service';
+
+function parseTruthyBodyFlag(value: unknown) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  return typeof value === 'string'
+    ? ['1', 'true', 'sim', 'yes'].includes(value.toLowerCase().trim())
+    : false;
+}
+
+function parseNormalizationPlan(
+  value: unknown,
+): BiImportNormalizationPlan | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as BiImportNormalizationPlan;
+  }
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as BiImportNormalizationPlan;
+  } catch {
+    throwError('VALIDATION_ERROR', {
+      field: 'normalizationPlan',
+      reason: 'INVALID_JSON',
+    });
+  }
+}
 
 @Controller('bi/cpca-meeting')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -149,7 +178,9 @@ export class BiCpcaMeetingController {
   )
   importResponses(
     @UploadedFile() file: Express.Multer.File,
-    @Body('replace') replace: string | undefined,
+    @Body('replace') replace: unknown,
+    @Body('preview') preview: unknown,
+    @Body('normalizationPlan') normalizationPlan: unknown,
     @Req() req: Request & { fileValidationError?: string },
     @CurrentUser() user: RbacUser,
   ) {
@@ -160,13 +191,27 @@ export class BiCpcaMeetingController {
       throwError('VALIDATION_ERROR', { reason: 'FILE_REQUIRED' });
     }
 
-    const replaceAll =
-      typeof replace === 'string'
-        ? ['1', 'true', 'sim', 'yes'].includes(replace.toLowerCase().trim())
-        : false;
-
     return this.biCpcaMeeting.importResponses(file, user, {
-      replaceAll,
+      replaceAll: parseTruthyBodyFlag(replace),
+      previewOnly: parseTruthyBodyFlag(preview),
+      normalizationPlan: parseNormalizationPlan(normalizationPlan),
+    });
+  }
+
+  @Post('import-api')
+  @RequirePermission('bi', 'upload')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  importResponsesFromApi(
+    @Body('replace') replace: unknown,
+    @Body('preview') preview: unknown,
+    @Body('normalizationPlan') normalizationPlan: unknown,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.biCpcaMeeting.importResponsesFromApi(user, {
+      replaceAll: parseTruthyBodyFlag(replace),
+      previewOnly: parseTruthyBodyFlag(preview),
+      normalizationPlan: parseNormalizationPlan(normalizationPlan),
     });
   }
 

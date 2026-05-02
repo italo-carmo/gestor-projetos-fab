@@ -5292,17 +5292,65 @@ export function useBiCpcaMeetingCardSettings(enabled = true) {
 export function useImportBiCpcaMeeting() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (args: { file: File; replace?: boolean }) => {
+    mutationFn: async (args: BiConfirmedImportArgs) => {
       const form = new FormData();
       form.append("file", args.file);
       if (typeof args.replace === "boolean") {
         form.append("replace", String(args.replace));
+      }
+      if (args.normalizationPlan) {
+        form.append(
+          "normalizationPlan",
+          JSON.stringify(args.normalizationPlan),
+        );
       }
       return (await api.post("/bi/cpca-meeting/import", form)).data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["biCpcaMeeting"] });
     },
+  });
+}
+
+export function usePreviewImportBiCpcaMeeting() {
+  return useMutation({
+    mutationFn: async (args: BiImportMutationArgs) => {
+      const form = new FormData();
+      form.append("file", args.file);
+      if (typeof args.replace === "boolean") {
+        form.append("replace", String(args.replace));
+      }
+      form.append("preview", "true");
+      return (await api.post("/bi/cpca-meeting/import", form)).data;
+    },
+  });
+}
+
+export function useImportBiCpcaMeetingApi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: BiConfirmedApiImportArgs) =>
+      (
+        await api.post("/bi/cpca-meeting/import-api", {
+          replace: args.replace,
+          normalizationPlan: args.normalizationPlan ?? null,
+        })
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biCpcaMeeting"] });
+    },
+  });
+}
+
+export function usePreviewImportBiCpcaMeetingApi() {
+  return useMutation({
+    mutationFn: async (args: BiApiImportMutationArgs) =>
+      (
+        await api.post("/bi/cpca-meeting/import-api", {
+          replace: args.replace,
+          preview: true,
+        })
+      ).data,
   });
 }
 

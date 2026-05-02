@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import {
   BI_NORMALIZATION_SOURCE_TYPES,
+  type BiImportNormalizationPlan,
+  type BiImportNormalizationPreview,
   BiNormalizationService,
 } from './bi-normalization.service';
 
@@ -21,7 +23,11 @@ type CpcaMeetingFilters = {
 
 type ImportCpcaMeetingOptions = {
   replaceAll?: boolean;
+  previewOnly?: boolean;
+  normalizationPlan?: BiImportNormalizationPlan | null;
 };
+
+type ImportCpcaMeetingApiOptions = ImportCpcaMeetingOptions;
 
 type HeaderDefinition = {
   index: number;
@@ -30,11 +36,45 @@ type HeaderDefinition = {
 };
 
 type ParsedCpcaMeetingRow = {
+  apiId: number | null;
   submittedAt: Date | null;
   answers: Record<string, string>;
   rawPayload: Record<string, string | null>;
+  organization: string | null;
+  organizationFieldKey: string | null;
+  organizationFieldLabel: string | null;
   sourceRow: number;
   sourceHash: string;
+};
+
+type CpcaMeetingApiPage = {
+  ok?: boolean;
+  recurso?: string;
+  atualizado_em?: string;
+  since_id?: number;
+  count?: number;
+  total_disponivel_no_filtro?: number;
+  limit?: number;
+  has_more?: boolean;
+  next_since_id?: number;
+  last_id_available?: number;
+  sheets?: string[];
+  dados?: unknown[];
+};
+
+type CpcaMeetingApiFetchResult = {
+  pages: CpcaMeetingApiPage[];
+  records: unknown[];
+  sync: {
+    sinceId: number;
+    nextSinceId: number | null;
+    lastIdAvailable: number | null;
+    hasMore: boolean;
+    fetchedRows: number;
+    pageCount: number;
+    updatedAt: string | null;
+    sheets: string[];
+  };
 };
 
 type MeetingRow = {
@@ -104,6 +144,71 @@ const HEADER_MULTI_HINTS = [
   'assinale',
 ];
 
+const CPCA_MEETING_DEFAULT_API_URL =
+  'https://script.google.com/macros/s/AKfycbyAtrbz_hNGcXBfqTOAxF1xewS7j5ZgV4GP_DaogRENDt1SGQ_mNCt1W0kXIbQ5nbYyGA/exec?token=18fcf874f7bd487da53dd30586fc18c1d0ccc43ca02c4cf1bef0a4ab056c72d0&sync=1&since_id=0';
+
+const CPCA_MEETING_API_COLUMNS = [
+  {
+    key: 'carimbo_de_data_hora',
+    label: 'Carimbo de data/hora',
+  },
+  {
+    key: 'q01_qual_a_sua_especialidade',
+    label: '01 - Qual a sua especialidade?',
+  },
+  {
+    key: 'q02_voce_se_sente_confiante_para_aplicar_corretamente_os_procedimentos_administrativos_de_apur',
+    label:
+      '02 - Você se sente confiante para aplicar corretamente os procedimentos administrativos de apuração?',
+  },
+  {
+    key: 'q03_voce_compreende_os_aspectos_juridicos_presentes_na_ica_30_13_2024',
+    label:
+      '03 - Você compreende os aspectos jurídicos presentes na ICA 30-13/2024?',
+  },
+  {
+    key: 'q04_voce_se_sente_preparado_para_aplicar_tecnicas_de_escuta_ativa_e_empatica_ao_receber_um_rel',
+    label:
+      '04 - Você se sente preparado para aplicar técnicas de escuta ativa e empática?',
+  },
+  {
+    key: 'q05_voce_se_sente_confiante_para_lidar_com_o_manejo_imediato_de_crises_emocionais_ex_choro_int',
+    label:
+      '05 - Você se sente confiante para lidar com manejo imediato de crises emocionais?',
+  },
+  {
+    key: 'q06_sua_cpca_possui_conhecimento_detalhado_da_rede_de_protecao_local_para_encaminhamento_de_vi',
+    label:
+      '06 - Sua CPCA possui conhecimento detalhado da rede de proteção local?',
+  },
+  {
+    key: 'q07_voce_considera_que_cpca_dispoe_de_recursos_logisticos_adequados_ex_sala_reservada_material',
+    label: '07 - A CPCA dispõe de recursos logísticos adequados?',
+  },
+  {
+    key: 'q08_em_geral_voce_considera_que_os_militares_da_sua_om_demonstram_confianca_e_seguranca_para_p',
+    label:
+      '08 - Os militares da sua OM demonstram confiança e segurança para procurar a CPCA?',
+  },
+  {
+    key: 'q09_apos_a_palestra_voce_se_sente_mais_preparado_a_para_identificar_e_prevenir_situacoes_de_as',
+    label:
+      '09 - Após a palestra, você se sente mais preparado(a) para identificar e prevenir situações?',
+  },
+  {
+    key: 'q10_qual_e_o_maior_obstaculo_pratico_ex_tempo_sigilo_resistencia_do_efetivo_falta_de_conhecime',
+    label: '10 - Qual é o maior obstáculo prático?',
+  },
+  {
+    key: 'comentarios_e_sugestoes',
+    label: 'Comentários e sugestões',
+  },
+  {
+    key: 'organizacao_militar',
+    label: 'Organização Militar',
+  },
+] as const;
+
 @Injectable()
 export class BiCpcaMeetingService {
   constructor(
@@ -120,6 +225,7 @@ export class BiCpcaMeetingService {
     const format =
       extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
     const replaceAll = options.replaceAll === true;
+    const previewOnly = options.previewOnly === true;
 
     const { sheetName, rows } = this.extractRows(file.buffer, format);
     if (rows.length === 0) {
@@ -134,6 +240,7 @@ export class BiCpcaMeetingService {
 
     const headerDefs = this.buildHeaderDefinitions(headers);
     const submittedAtKey = this.detectSubmittedAtKey(headerDefs);
+    const organizationHeader = this.detectOrganizationHeader(headerDefs);
 
     const parsed: ParsedCpcaMeetingRow[] = [];
     let invalidRows = 0;
@@ -144,6 +251,7 @@ export class BiCpcaMeetingService {
         dataRows[index],
         headerDefs,
         submittedAtKey,
+        organizationHeader,
         sourceRow,
       );
 
@@ -154,6 +262,25 @@ export class BiCpcaMeetingService {
       }
       parsed.push(row.value);
     }
+
+    const normalizationPreview =
+      await this.buildCpcaMeetingNormalizationPreview(parsed);
+
+    if (previewOnly) {
+      return {
+        previewOnly: true,
+        importMode: replaceAll ? 'REPLACE' : 'APPEND',
+        normalization: normalizationPreview,
+        preview: this.previewRows(parsed),
+      };
+    }
+
+    const normalizedImport = this.applyCpcaMeetingImportNormalization(
+      parsed,
+      normalizationPreview,
+      options.normalizationPlan,
+    );
+    const rowsToInsert = normalizedImport.rows;
 
     const responseModel = (this.prisma as any).biCpcaMeetingResponse;
     const importModel = (this.prisma as any).biCpcaMeetingImportBatch;
@@ -181,7 +308,7 @@ export class BiCpcaMeetingService {
         format,
         sheetName,
         columnsJson,
-        totalRows: parsed.length,
+        totalRows: rowsToInsert.length,
         insertedRows: 0,
         duplicateRows: 0,
         invalidRows,
@@ -191,11 +318,12 @@ export class BiCpcaMeetingService {
 
     let insertedRows = 0;
 
-    if (parsed.length > 0) {
+    if (rowsToInsert.length > 0) {
       const created = await responseModel.createMany({
-        data: parsed.map((row) => ({
+        data: rowsToInsert.map((row) => ({
           id: this.makeId('bicmr_'),
           batchId: batch.id,
+          apiId: row.apiId,
           submittedAt: row.submittedAt,
           answersJson: row.answers,
           rawPayload: row.rawPayload,
@@ -207,7 +335,7 @@ export class BiCpcaMeetingService {
       insertedRows = Number(created?.count ?? 0);
     }
 
-    const duplicateRows = parsed.length - insertedRows;
+    const duplicateRows = rowsToInsert.length - insertedRows;
 
     const updatedBatch = await importModel.update({
       where: { id: batch.id },
@@ -228,11 +356,143 @@ export class BiCpcaMeetingService {
 
     return {
       batch: updatedBatch,
-      preview: parsed.slice(0, 5).map((item) => ({
-        submittedAt: item.submittedAt,
-        answers: item.answers,
-      })),
+      preview: this.previewRows(rowsToInsert),
+      normalization: {
+        suggestionsApplied: normalizedImport.appliedSuggestions,
+        updatedFields: normalizedImport.updatedFields,
+        unresolvedCount: normalizationPreview.summary.unresolvedCount,
+      },
       importMode: replaceAll ? 'REPLACE' : 'APPEND',
+    };
+  }
+
+  async importResponsesFromApi(
+    user?: RbacUser,
+    options: ImportCpcaMeetingApiOptions = {},
+  ) {
+    const replaceAll = options.replaceAll === true;
+    const previewOnly = options.previewOnly === true;
+    const sinceId = replaceAll ? 0 : await this.resolveLastImportedApiId();
+    const apiResult = await this.fetchApiRecords(sinceId);
+    const headerDefs = this.buildApiHeaderDefinitions();
+    const submittedAtKey = this.detectSubmittedAtKey(headerDefs);
+    const organizationHeader = this.detectOrganizationHeader(headerDefs);
+    const { parsed, invalidRows } = this.parseApiRecords(
+      apiResult.records,
+      headerDefs,
+      submittedAtKey,
+      organizationHeader,
+    );
+
+    const normalizationPreview =
+      await this.buildCpcaMeetingNormalizationPreview(parsed);
+
+    if (previewOnly) {
+      return {
+        previewOnly: true,
+        importMode: replaceAll ? 'REPLACE' : 'INCREMENTAL',
+        sync: apiResult.sync,
+        normalization: normalizationPreview,
+        preview: this.previewRows(parsed),
+      };
+    }
+
+    const normalizedImport = this.applyCpcaMeetingImportNormalization(
+      parsed,
+      normalizationPreview,
+      options.normalizationPlan,
+    );
+    const rowsToInsert = normalizedImport.rows;
+
+    const responseModel = (this.prisma as any).biCpcaMeetingResponse;
+    const importModel = (this.prisma as any).biCpcaMeetingImportBatch;
+
+    if (replaceAll) {
+      await this.prisma.$transaction([
+        responseModel.deleteMany(),
+        importModel.deleteMany(),
+      ]);
+    }
+
+    const columnsJson: ColumnSettingsJson = {
+      order: headerDefs.map((item) => item.key),
+      labels: headerDefs.reduce<Record<string, string>>((acc, item) => {
+        acc[item.key] = item.label;
+        return acc;
+      }, {}),
+      submittedAtKey,
+    };
+
+    const batch = await importModel.create({
+      data: {
+        id: this.makeId('bicmib_'),
+        fileName: 'Google Sheets API - Encontro CPCA',
+        format: BiImportFormat.API,
+        sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
+        columnsJson,
+        totalRows: rowsToInsert.length,
+        insertedRows: 0,
+        duplicateRows: 0,
+        invalidRows,
+        importedById: user?.id ?? null,
+        apiSinceId: apiResult.sync.sinceId,
+        apiNextSinceId: apiResult.sync.nextSinceId,
+        apiLastIdAvailable: apiResult.sync.lastIdAvailable,
+        apiHasMore: apiResult.sync.hasMore,
+        apiUpdatedAt: apiResult.sync.updatedAt
+          ? new Date(apiResult.sync.updatedAt)
+          : null,
+      },
+    });
+
+    let insertedRows = 0;
+
+    if (rowsToInsert.length > 0) {
+      const created = await responseModel.createMany({
+        data: rowsToInsert.map((row) => ({
+          id: this.makeId('bicmr_'),
+          batchId: batch.id,
+          apiId: row.apiId,
+          submittedAt: row.submittedAt,
+          answersJson: row.answers,
+          rawPayload: row.rawPayload,
+          sourceRow: row.sourceRow,
+          sourceHash: row.sourceHash,
+        })),
+        skipDuplicates: true,
+      });
+      insertedRows = Number(created?.count ?? 0);
+    }
+
+    const duplicateRows = rowsToInsert.length - insertedRows;
+
+    const updatedBatch = await importModel.update({
+      where: { id: batch.id },
+      data: {
+        insertedRows,
+        duplicateRows,
+      },
+      include: {
+        importedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    await this.normalization.rebuild({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.CPCA_MEETING,
+    });
+
+    return {
+      batch: updatedBatch,
+      sync: apiResult.sync,
+      preview: this.previewRows(rowsToInsert),
+      normalization: {
+        suggestionsApplied: normalizedImport.appliedSuggestions,
+        updatedFields: normalizedImport.updatedFields,
+        unresolvedCount: normalizationPreview.summary.unresolvedCount,
+      },
+      importMode: replaceAll ? 'REPLACE' : 'INCREMENTAL',
     };
   }
 
@@ -595,6 +855,131 @@ export class BiCpcaMeetingService {
         questionNumber: column.questionNumber,
       })),
     };
+  }
+
+  private previewRows(rows: ParsedCpcaMeetingRow[]) {
+    return rows.slice(0, 5).map((item) => ({
+      apiId: item.apiId,
+      submittedAt: item.submittedAt,
+      organization: item.organization,
+      answers: item.answers,
+    }));
+  }
+
+  private buildCpcaMeetingNormalizationPreview(rows: ParsedCpcaMeetingRow[]) {
+    return this.normalization.previewImportRows({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.CPCA_MEETING,
+      rows: rows.map((item) => ({
+        rowNumber: item.sourceRow,
+        fields:
+          item.organizationFieldKey && item.organization
+            ? [
+                {
+                  fieldKey: item.organizationFieldKey,
+                  fieldLabel:
+                    item.organizationFieldLabel ?? 'Organização Militar',
+                  kind: 'OM' as const,
+                  value: item.organization,
+                },
+              ]
+            : [],
+      })),
+    });
+  }
+
+  private applyCpcaMeetingImportNormalization(
+    rows: ParsedCpcaMeetingRow[],
+    preview: BiImportNormalizationPreview | null | undefined,
+    plan?: BiImportNormalizationPlan | null,
+  ) {
+    const acceptedIds = new Set(
+      (plan?.decisions ?? [])
+        .filter((item) => item?.apply)
+        .map((item) => String(item.id ?? '').trim())
+        .filter(Boolean),
+    );
+
+    if (!preview || acceptedIds.size === 0) {
+      return {
+        rows,
+        appliedSuggestions: 0,
+        updatedFields: 0,
+      };
+    }
+
+    const suggestionByFieldAndValue = new Map<
+      string,
+      { originalValue: string; suggestedValue: string }
+    >();
+
+    for (const suggestion of preview.suggestions) {
+      if (suggestion.kind !== 'OM') continue;
+      if (!acceptedIds.has(suggestion.id)) continue;
+      const key = this.normalizationSuggestionKey(
+        suggestion.fieldKey,
+        suggestion.originalValue,
+      );
+      suggestionByFieldAndValue.set(key, {
+        originalValue: suggestion.originalValue,
+        suggestedValue: suggestion.suggestedValue,
+      });
+    }
+
+    if (suggestionByFieldAndValue.size === 0) {
+      return {
+        rows,
+        appliedSuggestions: 0,
+        updatedFields: 0,
+      };
+    }
+
+    let updatedFields = 0;
+    const nextRows = rows.map((row) => {
+      const fieldKey = row.organizationFieldKey;
+      if (!fieldKey) return row;
+
+      const currentValue = this.cleanCell(row.answers[fieldKey]);
+      if (!currentValue) return row;
+
+      const suggestion = suggestionByFieldAndValue.get(
+        this.normalizationSuggestionKey(fieldKey, currentValue),
+      );
+      if (!suggestion) return row;
+
+      const suggestedValue = this.cleanCell(suggestion.suggestedValue);
+      if (!suggestedValue || suggestedValue === currentValue) return row;
+
+      updatedFields += 1;
+      const answers = {
+        ...row.answers,
+        [fieldKey]: suggestedValue,
+      };
+      const rawPayload = { ...row.rawPayload };
+      const fieldLabel = row.organizationFieldLabel;
+      if (fieldLabel) {
+        rawPayload[fieldLabel] = suggestedValue;
+      }
+      if (fieldKey in rawPayload) {
+        rawPayload[fieldKey] = suggestedValue;
+      }
+
+      return {
+        ...row,
+        answers,
+        rawPayload,
+        organization: suggestedValue,
+      };
+    });
+
+    return {
+      rows: nextRows,
+      appliedSuggestions: suggestionByFieldAndValue.size,
+      updatedFields,
+    };
+  }
+
+  private normalizationSuggestionKey(fieldKey: string, value: string) {
+    return `${fieldKey}:${this.normalizeForMatch(value)}`;
   }
 
   private fetchRows(): Promise<MeetingRow[]> {
@@ -1039,6 +1424,311 @@ export class BiCpcaMeetingService {
     return parsed;
   }
 
+  private async resolveLastImportedApiId() {
+    const responseModel = (this.prisma as any).biCpcaMeetingResponse;
+    const latest = await responseModel.findFirst({
+      where: { apiId: { not: null } },
+      orderBy: { apiId: 'desc' },
+      select: { apiId: true },
+    });
+
+    return latest?.apiId ?? 0;
+  }
+
+  private async fetchApiRecords(
+    initialSinceId: number,
+  ): Promise<CpcaMeetingApiFetchResult> {
+    const pages: CpcaMeetingApiPage[] = [];
+    const records: unknown[] = [];
+    const seenSinceIds = new Set<number>();
+    const configuredMaxPages =
+      this.parsePositiveInteger(process.env.BI_CPCA_MEETING_API_MAX_PAGES) ??
+      100;
+    const maxPages = configuredMaxPages > 0 ? configuredMaxPages : 100;
+
+    const sinceId = Math.max(0, Math.floor(initialSinceId));
+    let nextSinceId: number | null = sinceId;
+
+    while (nextSinceId !== null) {
+      if (seenSinceIds.has(nextSinceId)) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'cpca_meeting_api_sync_loop_detected',
+          sinceId: nextSinceId,
+        });
+      }
+      if (pages.length >= maxPages) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'cpca_meeting_api_max_pages_exceeded',
+          maxPages,
+        });
+      }
+
+      seenSinceIds.add(nextSinceId);
+      const page = await this.fetchApiPage(nextSinceId);
+      pages.push(page);
+      records.push(...(page.dados ?? []));
+
+      if (!page.has_more) {
+        nextSinceId = null;
+        break;
+      }
+
+      const parsedNext = this.parsePositiveInteger(page.next_since_id);
+      if (parsedNext === null || parsedNext <= nextSinceId) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'cpca_meeting_api_invalid_next_since_id',
+          sinceId: nextSinceId,
+          nextSinceId: page.next_since_id,
+        });
+      }
+      nextSinceId = parsedNext;
+    }
+
+    const lastPage = pages[pages.length - 1] ?? null;
+    const updatedAt = this.parseApiDate(
+      [...pages].reverse().find((page) => page.atualizado_em)?.atualizado_em,
+    );
+    const sheets = [
+      ...new Set(
+        pages.flatMap((page) =>
+          Array.isArray(page.sheets) ? page.sheets.filter(Boolean) : [],
+        ),
+      ),
+    ];
+
+    return {
+      pages,
+      records,
+      sync: {
+        sinceId,
+        nextSinceId:
+          this.parsePositiveInteger(lastPage?.next_since_id) ??
+          this.maxApiIdFromRecords(records),
+        lastIdAvailable:
+          this.parsePositiveInteger(lastPage?.last_id_available) ??
+          this.maxApiIdFromRecords(records),
+        hasMore: Boolean(lastPage?.has_more),
+        fetchedRows: records.length,
+        pageCount: pages.length,
+        updatedAt: updatedAt?.toISOString() ?? null,
+        sheets,
+      },
+    };
+  }
+
+  private async fetchApiPage(sinceId: number): Promise<CpcaMeetingApiPage> {
+    const url = this.buildApiUrl(sinceId);
+    const timeoutMs =
+      this.parsePositiveInteger(process.env.BI_CPCA_MEETING_API_TIMEOUT_MS) ??
+      30_000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } catch (error) {
+      throwError('VALIDATION_ERROR', {
+        reason:
+          error instanceof Error && error.name === 'AbortError'
+            ? 'cpca_meeting_api_timeout'
+            : 'cpca_meeting_api_request_failed',
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'cpca_meeting_api_http_error',
+        status: response.status,
+      });
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throwError('VALIDATION_ERROR', {
+        reason: 'cpca_meeting_api_invalid_json',
+      });
+    }
+
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'cpca_meeting_api_invalid_payload',
+      });
+    }
+
+    const page = payload as CpcaMeetingApiPage;
+    if (page.ok !== true || !Array.isArray(page.dados)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'cpca_meeting_api_unsuccessful_payload',
+      });
+    }
+
+    return page;
+  }
+
+  private buildApiUrl(sinceId: number) {
+    const configuredUrl = String(
+      process.env.BI_CPCA_MEETING_API_URL || CPCA_MEETING_DEFAULT_API_URL,
+    ).trim();
+    if (!configuredUrl) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'cpca_meeting_api_url_not_configured',
+      });
+    }
+
+    let url: URL;
+    try {
+      url = new URL(configuredUrl);
+    } catch {
+      throwError('VALIDATION_ERROR', {
+        reason: 'cpca_meeting_api_url_invalid',
+      });
+    }
+
+    const token = String(process.env.BI_CPCA_MEETING_API_TOKEN ?? '').trim();
+    if (token && !url.searchParams.has('token')) {
+      url.searchParams.set('token', token);
+    }
+    url.searchParams.set('since_id', String(Math.max(0, sinceId)));
+    return url.toString();
+  }
+
+  private parseApiRecords(
+    records: unknown[],
+    headerDefs: HeaderDefinition[],
+    submittedAtKey: string | null,
+    organizationHeader: HeaderDefinition | null,
+  ) {
+    const parsed: ParsedCpcaMeetingRow[] = [];
+    let invalidRows = 0;
+
+    for (const record of records) {
+      const parsedRow = this.parseApiRecord(
+        record,
+        headerDefs,
+        submittedAtKey,
+        organizationHeader,
+      );
+      if (parsedRow?.skip) continue;
+      if (!parsedRow?.value) {
+        invalidRows += 1;
+        continue;
+      }
+      parsed.push(parsedRow.value);
+    }
+
+    return { parsed, invalidRows };
+  }
+
+  private parseApiRecord(
+    record: unknown,
+    headerDefs: HeaderDefinition[],
+    submittedAtKey: string | null,
+    organizationHeader: HeaderDefinition | null,
+  ):
+    | { skip: true; value?: undefined }
+    | { skip: false; value: ParsedCpcaMeetingRow | null } {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return { skip: false, value: null };
+    }
+
+    const row = record as Record<string, unknown>;
+    const apiId = this.parsePositiveInteger(row.api_id ?? row.id);
+    if (apiId === null) {
+      return { skip: false, value: null };
+    }
+
+    const sourceRow =
+      this.parsePositiveInteger(row.linha) ??
+      this.parsePositiveInteger(row.id) ??
+      apiId;
+    const dataRow = CPCA_MEETING_API_COLUMNS.map((column) =>
+      this.cleanApiCell(row[column.key]),
+    );
+
+    const parsed = this.parseDataRow(
+      dataRow,
+      headerDefs,
+      submittedAtKey,
+      organizationHeader,
+      sourceRow,
+    );
+
+    if (parsed.skip || !parsed.value) return parsed;
+
+    return {
+      skip: false,
+      value: {
+        ...parsed.value,
+        apiId,
+        rawPayload: {
+          ...parsed.value.rawPayload,
+          api_id: String(apiId),
+          id: this.cleanApiCell(row.id) || String(apiId),
+          aba: this.cleanApiCell(row.aba) || null,
+          linha: this.cleanApiCell(row.linha) || String(sourceRow),
+        },
+        sourceHash: this.buildApiSourceHash(apiId),
+      },
+    };
+  }
+
+  private buildApiHeaderDefinitions() {
+    return this.buildHeaderDefinitions(
+      CPCA_MEETING_API_COLUMNS.map((column) => column.label),
+    );
+  }
+
+  private buildApiSourceHash(apiId: number) {
+    return crypto
+      .createHash('sha256')
+      .update(JSON.stringify({ source: 'CPCA_MEETING_API', apiId }))
+      .digest('hex');
+  }
+
+  private maxApiIdFromRecords(records: unknown[]) {
+    let max = 0;
+    for (const record of records) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) {
+        continue;
+      }
+      const apiId = this.parsePositiveInteger(
+        (record as Record<string, unknown>).api_id ??
+          (record as Record<string, unknown>).id,
+      );
+      if (apiId !== null && apiId > max) max = apiId;
+    }
+    return max || null;
+  }
+
+  private parseApiDate(value: string | null | undefined) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  }
+
+  private parsePositiveInteger(value: unknown) {
+    if (value === null || value === undefined || value === '') return null;
+    const numeric =
+      typeof value === 'number'
+        ? value
+        : Number.parseInt(String(value).trim(), 10);
+    if (!Number.isFinite(numeric) || numeric < 0) return null;
+    return Math.floor(numeric);
+  }
+
+  private cleanApiCell(value: unknown) {
+    if (value === null || value === undefined) return '';
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'boolean') return value ? 'SIM' : 'NAO';
+    return String(value).trim();
+  }
+
   private extractRows(buffer: Buffer, format: BiImportFormat) {
     const workbook = this.readWorkbook(buffer, format);
     const sheetNames = workbook.SheetNames ?? [];
@@ -1157,10 +1847,33 @@ export class BiCpcaMeetingService {
     return score(sorted[0]) > 0 ? sorted[0].key : null;
   }
 
+  private detectOrganizationHeader(headerDefs: HeaderDefinition[]) {
+    const score = (value: HeaderDefinition) => {
+      const key = this.normalizeForMatch(value.key);
+      const label = this.normalizeForMatch(value.label);
+      if (key === 'ORGANIZACAOMILITAR' || label === 'ORGANIZACAOMILITAR') {
+        return 6;
+      }
+      if (
+        (key.includes('ORGANIZACAO') || label.includes('ORGANIZACAO')) &&
+        (key.includes('MILITAR') || label.includes('MILITAR'))
+      ) {
+        return 5;
+      }
+      if (key === 'OM' || label === 'OM') return 4;
+      if (key.includes('UNIDADE') || label.includes('UNIDADE')) return 2;
+      return 0;
+    };
+
+    const sorted = [...headerDefs].sort((a, b) => score(b) - score(a));
+    return score(sorted[0]) > 0 ? sorted[0] : null;
+  }
+
   private parseDataRow(
     row: string[],
     headers: HeaderDefinition[],
     submittedAtKey: string | null,
+    organizationHeader: HeaderDefinition | null,
     sourceRow: number,
   ):
     | { skip: true; value?: undefined }
@@ -1183,6 +1896,10 @@ export class BiCpcaMeetingService {
 
     const submittedAtRaw = submittedAtKey ? answers[submittedAtKey] : null;
     const submittedAt = this.parseSubmittedAt(submittedAtRaw ?? null);
+    const organization = organizationHeader
+      ? (this.cleanCell(answers[organizationHeader.key]) ??
+        this.cleanCell(rawPayload[organizationHeader.label]))
+      : null;
 
     const hashPayload = {
       submittedAt: submittedAt?.toISOString() ?? null,
@@ -1197,9 +1914,13 @@ export class BiCpcaMeetingService {
     return {
       skip: false,
       value: {
+        apiId: null,
         submittedAt,
         answers,
         rawPayload,
+        organization,
+        organizationFieldKey: organizationHeader?.key ?? null,
+        organizationFieldLabel: organizationHeader?.label ?? null,
         sourceRow,
         sourceHash,
       },

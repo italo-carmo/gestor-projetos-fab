@@ -1977,17 +1977,22 @@ model BiBestPracticeCycleCardSetting {
 }
 
 model BiCpcaMeetingImportBatch {
-  id            String         @id @default(cuid())
-  fileName      String
-  format        BiImportFormat
-  sheetName     String?
-  columnsJson   Json?
-  totalRows     Int
-  insertedRows  Int
-  duplicateRows Int
-  invalidRows   Int
-  importedById  String?
-  importedAt    DateTime       @default(now())
+  id                 String         @id @default(cuid())
+  fileName           String
+  format             BiImportFormat
+  sheetName          String?
+  columnsJson        Json?
+  totalRows          Int
+  insertedRows       Int
+  duplicateRows      Int
+  invalidRows        Int
+  importedById       String?
+  apiSinceId         Int?
+  apiNextSinceId     Int?
+  apiLastIdAvailable Int?
+  apiHasMore         Boolean?
+  apiUpdatedAt       DateTime?
+  importedAt         DateTime       @default(now())
 
   importedBy User?                   @relation(fields: [importedById], references: [id], onDelete: SetNull)
   responses  BiCpcaMeetingResponse[]
@@ -1999,6 +2004,7 @@ model BiCpcaMeetingImportBatch {
 model BiCpcaMeetingResponse {
   id          String    @id @default(cuid())
   batchId     String?
+  apiId       Int?      @unique
   submittedAt DateTime?
   answersJson Json?
   rawPayload  Json?

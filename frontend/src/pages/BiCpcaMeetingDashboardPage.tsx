@@ -17,6 +17,7 @@ import {
   IconButton,
   MenuItem,
   Stack,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -27,9 +28,9 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import SyncRoundedIcon from "@mui/icons-material/SyncRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
@@ -49,6 +50,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  type BiImportNormalizationPreview,
   useBiCpcaMeetingCardSettings,
   useBiCpcaMeetingDashboard,
   useBiCpcaMeetingImports,
@@ -56,8 +58,9 @@ import {
   useDeleteBiCpcaMeetingResponses,
   useExportBiDashboardPdf,
   useExportBiExecutiveNotebookPdf,
-  useImportBiCpcaMeeting,
+  useImportBiCpcaMeetingApi,
   useMe,
+  usePreviewImportBiCpcaMeetingApi,
   useUpdateBiCpcaMeetingCardSetting,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
@@ -69,10 +72,16 @@ import {
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
 import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
+import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
+import {
+  getBiCpcaMeetingImportActionLabel,
+  getBiCpcaMeetingImportModeLabel,
+  resolveBiCpcaMeetingImportMode,
+} from "../features/biCpcaMeetingImport";
 
 type MetricMode = "PERCENT" | "COUNT";
 type CombineMode = "AND" | "OR";
@@ -287,7 +296,8 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
   },
   "list-imports": {
     title: "Histórico de importações",
-    description: "Últimos arquivos importados para a base do Encontro CPCA.",
+    description:
+      "Últimas sincronizações importadas para a base do Encontro CPCA.",
   },
   "list-responses": {
     title: "Registros da pesquisa",
@@ -451,8 +461,12 @@ export function BiCpcaMeetingDashboardPage() {
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
   const [responsesExpanded, setResponsesExpanded] = useState(false);
   const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
-  const [replaceOnImport, setReplaceOnImport] = useState(true);
-  const [file, setFile] = useState<File | null>(null);
+  const [replaceOnImport, setReplaceOnImport] = useState(false);
+  const [importPreview, setImportPreview] =
+    useState<BiImportNormalizationPreview | null>(null);
+  const [selectedNormalizationIds, setSelectedNormalizationIds] = useState<
+    string[]
+  >([]);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
@@ -497,7 +511,8 @@ export function BiCpcaMeetingDashboardPage() {
   const importsQuery = useBiCpcaMeetingImports({ page: 1, pageSize: 8 });
   useBiCpcaMeetingCardSettings(true);
 
-  const importMutation = useImportBiCpcaMeeting();
+  const importMutation = useImportBiCpcaMeetingApi();
+  const previewImportMutation = usePreviewImportBiCpcaMeetingApi();
   const deleteResponsesMutation = useDeleteBiCpcaMeetingResponses();
   const exportPdfMutation = useExportBiDashboardPdf(
     "/bi/cpca-meeting/dashboard/pdf",
@@ -526,6 +541,7 @@ export function BiCpcaMeetingDashboardPage() {
   const canUpload = can(me, "bi", "upload");
   const canDelete = can(me, "bi", "delete");
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const importMode = resolveBiCpcaMeetingImportMode(replaceOnImport);
 
   const getDefaultCardText = (cardId: string): EditableCardText => {
     if (FIXED_CARD_DEFAULTS[cardId]) return FIXED_CARD_DEFAULTS[cardId];
@@ -683,33 +699,59 @@ export function BiCpcaMeetingDashboardPage() {
   };
 
   const handleImport = async () => {
-    if (!file) {
-      toast.push({
-        message: "Selecione um CSV/XLSX para importar.",
-        severity: "warning",
-      });
-      return;
-    }
-
     try {
-      const result = await importMutation.mutateAsync({
-        file,
+      const result = await previewImportMutation.mutateAsync({
         replace: replaceOnImport,
       });
-      setFile(null);
+      const preview = (result?.normalization ??
+        null) as BiImportNormalizationPreview | null;
+      if (!preview) {
+        throw new Error("A prévia de normalização não foi retornada.");
+      }
+      setImportPreview(preview);
+      setSelectedNormalizationIds(
+        (preview.suggestions ?? []).map((item) => item.id),
+      );
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao importar dados da API.",
+        severity: "error",
+      });
+    }
+  };
+
+  const closeImportPreview = () => {
+    setImportPreview(null);
+    setSelectedNormalizationIds([]);
+  };
+
+  const confirmImport = async (applyNormalization: boolean) => {
+    try {
+      const result = await importMutation.mutateAsync({
+        replace: replaceOnImport,
+        normalizationPlan: applyNormalization
+          ? {
+              decisions: selectedNormalizationIds.map((id) => ({
+                id,
+                apply: true,
+              })),
+            }
+          : { decisions: [] },
+      });
+      closeImportPreview();
       toast.push({
         message:
-          `Importação concluída. Inseridos: ${
-            result?.batch?.insertedRows ?? 0
-          }. ` +
+          `Importação concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
           `Duplicados: ${result?.batch?.duplicateRows ?? 0}. ` +
-          `Inválidos: ${result?.batch?.invalidRows ?? 0}.`,
+          `Inválidos: ${result?.batch?.invalidRows ?? 0}. ` +
+          `Campos normalizados: ${Number(result?.normalization?.updatedFields ?? 0)}.`,
         severity: "success",
       });
     } catch (error) {
       const payload = parseApiError(error);
       toast.push({
-        message: payload.message ?? "Falha ao importar arquivo.",
+        message: payload.message ?? "Falha ao importar dados da API.",
         severity: "error",
       });
     }
@@ -963,18 +1005,16 @@ export function BiCpcaMeetingDashboardPage() {
 
       <BiCollapsibleSection
         title="Ingestão de dados"
-        description="Template, upload e estado da base ficam recolhidos por padrão para reduzir ruído visual."
-        icon={<UploadFileRoundedIcon fontSize="small" />}
+        description="Sincronização via API do Google Sheets com modo incremental ou reinício completo da base."
+        icon={<SyncRoundedIcon fontSize="small" />}
         accentColor={CPCA_BI_PALETTE.primary}
         summary={
           <Chip
             size="small"
             label={
-              file
-                ? "Arquivo pronto"
-                : dashboard.latestImport?.fileName
-                  ? "Base carregada"
-                  : "Sem importação"
+              dashboard.latestImport?.fileName
+                ? "Base atual disponível"
+                : "Sem importação"
             }
             variant="outlined"
             sx={{
@@ -986,98 +1026,89 @@ export function BiCpcaMeetingDashboardPage() {
         }
         sx={{ mb: 2, ...cardSx }}
       >
-        <Stack
-          direction={{ xs: "column", lg: "row" }}
-          spacing={1.2}
-          alignItems={{ lg: "center" }}
-          sx={{ flexWrap: { lg: "wrap" }, rowGap: { lg: 1.2 }, pt: 1.2 }}
-        >
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<DownloadRoundedIcon />}
-            component="a"
-            href="/templates/bi-cpca-meeting-template.csv"
-            download
-            sx={{
-              height: 40,
-              px: 1.6,
-              whiteSpace: "nowrap",
-              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.5),
-              color: CPCA_BI_PALETTE.primary,
-              "& .MuiButton-startIcon > *": { fontSize: 18 },
-              "&:hover": {
-                borderColor: CPCA_BI_PALETTE.primary,
-                bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
-              },
-            }}
-          >
-            Baixar template
-          </Button>
-          <Button
-            variant="outlined"
-            component="label"
-            startIcon={<UploadFileRoundedIcon />}
-            disabled={!canUpload}
-            sx={{
-              minWidth: 260,
-              height: 40,
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.5),
-              color: CPCA_BI_PALETTE.primary,
-              "&:hover": {
-                borderColor: CPCA_BI_PALETTE.primary,
-                bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
-              },
-            }}
-          >
-            {file ? file.name : "Selecionar arquivo da pesquisa"}
-            <input
-              hidden
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              onChange={(event) => {
-                const selected = event.target.files?.[0] ?? null;
-                setFile(selected);
-              }}
-            />
-          </Button>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={replaceOnImport}
-                onChange={(event) => setReplaceOnImport(event.target.checked)}
-                disabled={!canUpload}
-              />
-            }
-            label="Substituir base atual"
-          />
-          <Button
-            variant="contained"
-            size="small"
-            onClick={handleImport}
-            disabled={!canUpload || importMutation.isPending}
-            sx={{
-              height: 40,
-              px: 2,
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-              bgcolor: CPCA_BI_PALETTE.primary,
-              "&:hover": { bgcolor: CPCA_BI_PALETTE.primaryDark },
-            }}
-          >
-            {importMutation.isPending ? "Importando..." : "Importar"}
-          </Button>
-          <Box sx={{ ml: { lg: "auto" } }}>
-            <Typography variant="caption" sx={{ color: CPCA_BI_PALETTE.muted }}>
-              Última importação
-            </Typography>
-            <Typography variant="body2" fontWeight={600}>
-              {dashboard.latestImport?.fileName ?? "Nenhuma"}
-            </Typography>
-          </Box>
-        </Stack>
+        <Grid container spacing={2} sx={{ pt: 1.2 }}>
+          <Grid size={{ xs: 12, md: 8 }}>
+            <Stack spacing={1.2}>
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={<SyncRoundedIcon />}
+                  onClick={handleImport}
+                  disabled={
+                    !canUpload ||
+                    importMutation.isPending ||
+                    previewImportMutation.isPending
+                  }
+                  sx={{
+                    height: 40,
+                    px: 2,
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                    bgcolor: CPCA_BI_PALETTE.primary,
+                    "&:hover": { bgcolor: CPCA_BI_PALETTE.primaryDark },
+                  }}
+                >
+                  {previewImportMutation.isPending
+                    ? "Analisando..."
+                    : importMutation.isPending
+                      ? "Importando..."
+                      : getBiCpcaMeetingImportActionLabel(importMode)}
+                </Button>
+              </Stack>
+
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                flexWrap="wrap"
+              >
+                <Chip
+                  size="small"
+                  label={`Modo: ${getBiCpcaMeetingImportModeLabel(importMode)}`}
+                  variant="outlined"
+                  sx={{
+                    borderColor: alpha(CPCA_BI_PALETTE.primary, 0.35),
+                    color: CPCA_BI_PALETTE.primary,
+                  }}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={replaceOnImport}
+                      onChange={(event) =>
+                        setReplaceOnImport(event.target.checked)
+                      }
+                      disabled={!canUpload}
+                    />
+                  }
+                  label="Zerar base antes de importar"
+                  sx={{
+                    m: 0,
+                    ".MuiFormControlLabel-label": {
+                      fontSize: 13,
+                      color: CPCA_BI_PALETTE.muted,
+                    },
+                  }}
+                />
+              </Stack>
+            </Stack>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Box sx={{ ml: { md: "auto" } }}>
+              <Typography
+                variant="caption"
+                sx={{ color: CPCA_BI_PALETTE.muted }}
+              >
+                Última importação
+              </Typography>
+              <Typography variant="body2" fontWeight={600}>
+                {dashboard.latestImport?.fileName ?? "Nenhuma"}
+              </Typography>
+            </Box>
+          </Grid>
+        </Grid>
       </BiCollapsibleSection>
 
       <BiCollapsibleSection
@@ -1904,6 +1935,24 @@ export function BiCpcaMeetingDashboardPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <BiImportNormalizationReviewDialog
+        open={importPreview !== null}
+        title="Revisar normalização de OMs"
+        preview={importPreview}
+        selectedIds={selectedNormalizationIds}
+        onToggle={(id, checked) =>
+          setSelectedNormalizationIds((prev) =>
+            checked
+              ? [...new Set([...prev, id])]
+              : prev.filter((x) => x !== id),
+          )
+        }
+        onClose={closeImportPreview}
+        onConfirm={() => void confirmImport(true)}
+        onImportWithoutNormalization={() => void confirmImport(false)}
+        confirmLoading={importMutation.isPending}
+      />
 
       <BiExecutiveNotebookDialog
         open={notebookDialogOpen}
