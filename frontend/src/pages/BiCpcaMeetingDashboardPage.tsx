@@ -1004,10 +1004,11 @@ export function BiCpcaMeetingDashboardPage() {
       </Stack>
 
       <BiCollapsibleSection
-        title="Ingestão de dados"
+        title="Importar dados pela API"
         description="Sincronização via API do Google Sheets com modo incremental ou reinício completo da base."
         icon={<SyncRoundedIcon fontSize="small" />}
         accentColor={CPCA_BI_PALETTE.primary}
+        defaultExpanded
         summary={
           <Chip
             size="small"
@@ -1023,6 +1024,33 @@ export function BiCpcaMeetingDashboardPage() {
               bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.04),
             }}
           />
+        }
+        headerActions={
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<SyncRoundedIcon />}
+            onClick={handleImport}
+            disabled={
+              !canUpload ||
+              importMutation.isPending ||
+              previewImportMutation.isPending
+            }
+            sx={{
+              height: 34,
+              px: 1.2,
+              whiteSpace: "nowrap",
+              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.45),
+              color: CPCA_BI_PALETTE.primary,
+              "& .MuiButton-startIcon > *": { fontSize: 17 },
+              "&:hover": {
+                borderColor: CPCA_BI_PALETTE.primary,
+                bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            API
+          </Button>
         }
         sx={{ mb: 2, ...cardSx }}
       >
