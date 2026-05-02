@@ -161,7 +161,12 @@ function KpiCard({
         >
           {title}
         </Typography>
-        <Typography variant="h4" fontWeight={700} color={color} sx={{ my: 0.3 }}>
+        <Typography
+          variant="h4"
+          fontWeight={700}
+          color={color}
+          sx={{ my: 0.3 }}
+        >
           {value}
         </Typography>
         {subtitle && (
@@ -170,7 +175,11 @@ function KpiCard({
           </Typography>
         )}
         {onClick && (
-          <Typography variant="caption" color="primary" sx={{ display: "block", mt: 0.3 }}>
+          <Typography
+            variant="caption"
+            color="primary"
+            sx={{ display: "block", mt: 0.3 }}
+          >
             Clique para detalhes →
           </Typography>
         )}
@@ -193,8 +202,20 @@ function KpiDetailModal({
   children: React.ReactNode;
 }) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth scroll="paper">
-      <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={maxWidth}
+      fullWidth
+      scroll="paper"
+    >
+      <DialogTitle
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
         <Typography variant="h6">{title}</Typography>
         <Button onClick={onClose} size="small" sx={{ minWidth: "auto" }}>
           <CloseRoundedIcon />
@@ -224,7 +245,9 @@ function HorizontalBarCard({
   height?: number;
   color?: string;
   valueLabel?: string;
-  onItemClick?: ((item: { label: string; count: number; percent: number }) => void) | null;
+  onItemClick?:
+    | ((item: { label: string; count: number; percent: number }) => void)
+    | null;
 }) {
   const sliced = data.slice(0, maxItems);
   if (sliced.length === 0) return null;
@@ -263,7 +286,11 @@ function HorizontalBarCard({
               barSize={18}
               radius={[0, 4, 4, 0]}
               cursor={onItemClick ? "pointer" : "default"}
-              onClick={onItemClick ? (entry: any) => onItemClick(entry?.payload) : undefined}
+              onClick={
+                onItemClick
+                  ? (entry: any) => onItemClick(entry?.payload)
+                  : undefined
+              }
             >
               {sliced.map((_: any, i: number) => (
                 <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -276,11 +303,30 @@ function HorizontalBarCard({
   );
 }
 
-function DetailRow({ label, value, color }: { label: string; value: string | number; color?: string }) {
+function DetailRow({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string | number;
+  color?: string;
+}) {
   return (
-    <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #f0f0f0" }}>
+    <Box
+      sx={{
+        display: "flex",
+        justifyContent: "space-between",
+        py: 0.5,
+        borderBottom: "1px solid #f0f0f0",
+      }}
+    >
       <Typography variant="body2">{label}</Typography>
-      <Chip label={value} size="small" sx={color ? { bgcolor: color, color: "#fff" } : {}} />
+      <Chip
+        label={value}
+        size="small"
+        sx={color ? { bgcolor: color, color: "#fff" } : {}}
+      />
     </Box>
   );
 }
@@ -329,7 +375,11 @@ function DetailMeaningBlock({
       <Typography variant="body2" sx={{ mt: 0.6, lineHeight: 1.65 }}>
         {meaning}
       </Typography>
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.8 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: "block", mt: 0.8 }}
+      >
         {source}
       </Typography>
     </Box>
@@ -372,7 +422,11 @@ function DetailAccordionSection({
             {title}
           </Typography>
           {subtitle ? (
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.2 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", mt: 0.2 }}
+            >
               {subtitle}
             </Typography>
           ) : null}
@@ -399,7 +453,10 @@ function DetailItemList({
   }
 
   return (
-    <List disablePadding sx={{ border: "1px solid #E6ECF5", borderRadius: 2, overflow: "hidden" }}>
+    <List
+      disablePadding
+      sx={{ border: "1px solid #E6ECF5", borderRadius: 2, overflow: "hidden" }}
+    >
       {items.map((item, index) => (
         <ListItem
           key={item.id}
@@ -481,7 +538,9 @@ type ActivitySpecificKpiDetailItem = ActivityKpiDetailItem & {
 };
 
 function formatActivityStatusLabel(status: string) {
-  const normalized = String(status || "").trim().toUpperCase();
+  const normalized = String(status || "")
+    .trim()
+    .toUpperCase();
   if (normalized === "NOT_STARTED") return "Não iniciada";
   if (normalized === "IN_PROGRESS") return "Em andamento";
   if (normalized === "DONE") return "Concluída";
@@ -490,14 +549,18 @@ function formatActivityStatusLabel(status: string) {
 }
 
 function formatComplaintTypeLabel(type: string) {
-  const normalized = String(type || "").trim().toUpperCase();
+  const normalized = String(type || "")
+    .trim()
+    .toUpperCase();
   if (normalized === "MORAL") return "Assédio Moral";
   if (normalized === "SEXUAL") return "Assédio Sexual";
   return normalized || "—";
 }
 
 function formatComplaintStatusLabel(status: string) {
-  const normalized = String(status || "").trim().toUpperCase();
+  const normalized = String(status || "")
+    .trim()
+    .toUpperCase();
   if (normalized === "RECEIVED") return "Recebida";
   if (normalized === "PROTECTION_MEASURES") return "Medidas protetivas";
   if (normalized === "PRELIMINARY_ANALYSIS") return "Análise preliminar";
@@ -509,14 +572,18 @@ function formatComplaintStatusLabel(status: string) {
 }
 
 function formatWorkflowScopeLabel(scope: string) {
-  const normalized = String(scope || "").trim().toUpperCase();
+  const normalized = String(scope || "")
+    .trim()
+    .toUpperCase();
   if (normalized === "CPCA") return "CPCA";
   if (normalized === "SMIF") return "SMIF";
   return normalized || "—";
 }
 
 function formatActivityScopeLabel(scope: string) {
-  const normalized = String(scope || "").trim().toUpperCase();
+  const normalized = String(scope || "")
+    .trim()
+    .toUpperCase();
   if (normalized === "SMIF") return "SMIF";
   if (normalized === "CIPAVD") return "CIPAVD";
   return normalized || "—";
@@ -594,11 +661,27 @@ function ExpandableActivityMetricRow({
 }) {
   const expanded = expandedKey === metricKey;
   return (
-    <Box sx={{ border: "1px solid #E0E0E0", borderRadius: 1, overflow: "hidden" }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 1.25, py: 0.75 }}>
-        <Typography variant="body2" fontWeight={500}>{label}</Typography>
+    <Box
+      sx={{ border: "1px solid #E0E0E0", borderRadius: 1, overflow: "hidden" }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          px: 1.25,
+          py: 0.75,
+        }}
+      >
+        <Typography variant="body2" fontWeight={500}>
+          {label}
+        </Typography>
         <Stack direction="row" spacing={0.5} alignItems="center">
-          <Chip label={value} size="small" sx={color ? { bgcolor: color, color: "#fff" } : {}} />
+          <Chip
+            label={value}
+            size="small"
+            sx={color ? { bgcolor: color, color: "#fff" } : {}}
+          />
           <IconButton
             size="small"
             onClick={() => onToggle(metricKey)}
@@ -621,12 +704,24 @@ function ExpandableActivityMetricRow({
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>Atividade</strong></TableCell>
-                  <TableCell><strong>Escopo</strong></TableCell>
-                  <TableCell><strong>Status</strong></TableCell>
-                  <TableCell><strong>Data</strong></TableCell>
-                  <TableCell><strong>Localidade</strong></TableCell>
-                  <TableCell align="right"><strong>Ação</strong></TableCell>
+                  <TableCell>
+                    <strong>Atividade</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Escopo</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Status</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Data</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Localidade</strong>
+                  </TableCell>
+                  <TableCell align="right">
+                    <strong>Ação</strong>
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -638,13 +733,20 @@ function ExpandableActivityMetricRow({
                         label={item.scope || "—"}
                         size="small"
                         sx={{
-                          bgcolor: item.scope === "CIPAVD" ? "#F3E5F5" : "#E3F2FD",
+                          bgcolor:
+                            item.scope === "CIPAVD" ? "#F3E5F5" : "#E3F2FD",
                           fontSize: 11,
                         }}
                       />
                     </TableCell>
-                    <TableCell>{formatActivityStatusLabel(item.status)}</TableCell>
-                    <TableCell>{item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}</TableCell>
+                    <TableCell>
+                      {formatActivityStatusLabel(item.status)}
+                    </TableCell>
+                    <TableCell>
+                      {item.date
+                        ? new Date(item.date).toLocaleDateString("pt-BR")
+                        : "—"}
+                    </TableCell>
                     <TableCell>{item.locality || "—"}</TableCell>
                     <TableCell align="right">
                       <Button
@@ -665,7 +767,11 @@ function ExpandableActivityMetricRow({
             </Table>
           </TableContainer>
         ) : (
-          <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ px: 1.5, py: 1 }}
+          >
             Nenhum item encontrado nessa métrica.
           </Typography>
         )}
@@ -693,11 +799,27 @@ function ExpandableKpiMetricRow({
 }) {
   const expanded = expandedKey === metricKey;
   return (
-    <Box sx={{ border: "1px solid #E0E0E0", borderRadius: 1, overflow: "hidden" }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", px: 1.25, py: 0.75 }}>
-        <Typography variant="body2" fontWeight={500}>{label}</Typography>
+    <Box
+      sx={{ border: "1px solid #E0E0E0", borderRadius: 1, overflow: "hidden" }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          px: 1.25,
+          py: 0.75,
+        }}
+      >
+        <Typography variant="body2" fontWeight={500}>
+          {label}
+        </Typography>
         <Stack direction="row" spacing={0.5} alignItems="center">
-          <Chip label={value} size="small" sx={color ? { bgcolor: color, color: "#fff" } : {}} />
+          <Chip
+            label={value}
+            size="small"
+            sx={color ? { bgcolor: color, color: "#fff" } : {}}
+          />
           <IconButton
             size="small"
             onClick={() => onToggle(metricKey)}
@@ -719,11 +841,21 @@ function ExpandableKpiMetricRow({
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell><strong>Item</strong></TableCell>
-                  <TableCell><strong>Detalhes</strong></TableCell>
-                  <TableCell><strong>Data</strong></TableCell>
-                  <TableCell><strong>Indicador</strong></TableCell>
-                  <TableCell align="right"><strong>Ação</strong></TableCell>
+                  <TableCell>
+                    <strong>Item</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Detalhes</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Data</strong>
+                  </TableCell>
+                  <TableCell>
+                    <strong>Indicador</strong>
+                  </TableCell>
+                  <TableCell align="right">
+                    <strong>Ação</strong>
+                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -732,10 +864,16 @@ function ExpandableKpiMetricRow({
                     <TableCell>{item.title || "Item"}</TableCell>
                     <TableCell>{item.subtitle || "—"}</TableCell>
                     <TableCell>
-                      {item.date ? new Date(item.date).toLocaleDateString("pt-BR") : "—"}
+                      {item.date
+                        ? new Date(item.date).toLocaleDateString("pt-BR")
+                        : "—"}
                     </TableCell>
                     <TableCell>
-                      {item.badge ? <Chip label={item.badge} size="small" /> : "—"}
+                      {item.badge ? (
+                        <Chip label={item.badge} size="small" />
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                     <TableCell align="right">
                       {item.link ? (
@@ -762,7 +900,11 @@ function ExpandableKpiMetricRow({
             </Table>
           </TableContainer>
         ) : (
-          <Typography variant="body2" color="text.secondary" sx={{ px: 1.5, py: 1 }}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ px: 1.5, py: 1 }}
+          >
             Nenhum item encontrado nessa métrica.
           </Typography>
         )}
@@ -795,9 +937,27 @@ function SituationalTab() {
     setExpandedMetric(null);
   }, [detailModal]);
 
-  if (isLoading) return <Stack spacing={2}>{guideCard}<SkeletonState /></Stack>;
-  if (error) return <Stack spacing={2}>{guideCard}<ErrorState message="Erro ao carregar visão geral." /></Stack>;
-  if (!data) return <Stack spacing={2}>{guideCard}<EmptyState message="Sem dados." /></Stack>;
+  if (isLoading)
+    return (
+      <Stack spacing={2}>
+        {guideCard}
+        <SkeletonState />
+      </Stack>
+    );
+  if (error)
+    return (
+      <Stack spacing={2}>
+        {guideCard}
+        <ErrorState message="Erro ao carregar visão geral." />
+      </Stack>
+    );
+  if (!data)
+    return (
+      <Stack spacing={2}>
+        {guideCard}
+        <EmptyState message="Sem dados." />
+      </Stack>
+    );
 
   const s = data.surveys ?? {};
   const dv = data.domesticViolence ?? {};
@@ -805,12 +965,33 @@ function SituationalTab() {
   const c = data.complaints ?? {};
   const a = data.activities ?? {};
   const m = data.missions ?? {};
-  const surveyDetails = (s.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
-  const domesticDetails = (dv.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
-  const recruitDetails = (r.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
-  const complaintDetails = (c.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
-  const activityDetails = (a.details ?? {}) as Record<string, ActivitySpecificKpiDetailItem[]>;
-  const missionDetails = (m.details ?? {}) as Record<string, ActivityKpiDetailItem[]>;
+  const cross = data.crossSourceCoverage ?? {};
+  const surveyCoverage = s.coverage ?? {};
+  const domesticCoverage = dv.coverage ?? {};
+  const surveyDetails = (s.details ?? {}) as Record<
+    string,
+    ActivityKpiDetailItem[]
+  >;
+  const domesticDetails = (dv.details ?? {}) as Record<
+    string,
+    ActivityKpiDetailItem[]
+  >;
+  const recruitDetails = (r.details ?? {}) as Record<
+    string,
+    ActivityKpiDetailItem[]
+  >;
+  const complaintDetails = (c.details ?? {}) as Record<
+    string,
+    ActivityKpiDetailItem[]
+  >;
+  const activityDetails = (a.details ?? {}) as Record<
+    string,
+    ActivitySpecificKpiDetailItem[]
+  >;
+  const missionDetails = (m.details ?? {}) as Record<
+    string,
+    ActivityKpiDetailItem[]
+  >;
 
   const surveysMetrics = [
     {
@@ -847,21 +1028,27 @@ function SituationalTab() {
       label: "Sofreram violência doméstica (alguma vez)",
       value: Number(dv.lifetimeYes ?? 0),
       color: "#ED6C02",
-      items: Array.isArray(domesticDetails.lifetimeYes) ? domesticDetails.lifetimeYes : [],
+      items: Array.isArray(domesticDetails.lifetimeYes)
+        ? domesticDetails.lifetimeYes
+        : [],
     },
     {
       key: "last12MonthsYes",
       label: "Sofreram nos últimos 12 meses",
       value: Number(dv.last12MonthsYes ?? 0),
       color: "#C2185B",
-      items: Array.isArray(domesticDetails.last12MonthsYes) ? domesticDetails.last12MonthsYes : [],
+      items: Array.isArray(domesticDetails.last12MonthsYes)
+        ? domesticDetails.last12MonthsYes
+        : [],
     },
     {
       key: "soughtHelp",
       label: "Buscaram ajuda",
       value: Number(dv.soughtHelp ?? 0),
       color: "#F9A825",
-      items: Array.isArray(domesticDetails.soughtHelp) ? domesticDetails.soughtHelp : [],
+      items: Array.isArray(domesticDetails.soughtHelp)
+        ? domesticDetails.soughtHelp
+        : [],
     },
   ];
 
@@ -884,7 +1071,9 @@ function SituationalTab() {
       label: "Conhecem o canal de denúncia",
       value: Number(r.knowProcess ?? 0),
       color: "#0288D1",
-      items: Array.isArray(recruitDetails.knowReportProcess) ? recruitDetails.knowReportProcess : [],
+      items: Array.isArray(recruitDetails.knowReportProcess)
+        ? recruitDetails.knowReportProcess
+        : [],
     },
   ];
 
@@ -893,7 +1082,9 @@ function SituationalTab() {
       key: "total",
       label: "Total de denúncias/casos",
       value: Number(c.totalCases ?? 0),
-      items: Array.isArray(complaintDetails.total) ? complaintDetails.total : [],
+      items: Array.isArray(complaintDetails.total)
+        ? complaintDetails.total
+        : [],
     },
     {
       key: "open",
@@ -907,21 +1098,27 @@ function SituationalTab() {
       label: "Casos concluídos",
       value: Number(c.concludedCases ?? 0),
       color: "#2E7D32",
-      items: Array.isArray(complaintDetails.concluded) ? complaintDetails.concluded : [],
+      items: Array.isArray(complaintDetails.concluded)
+        ? complaintDetails.concluded
+        : [],
     },
     {
       key: "moral",
       label: "Assédio Moral",
       value: Number(c.moral ?? 0),
       color: "#ED6C02",
-      items: Array.isArray(complaintDetails.moral) ? complaintDetails.moral : [],
+      items: Array.isArray(complaintDetails.moral)
+        ? complaintDetails.moral
+        : [],
     },
     {
       key: "sexual",
       label: "Assédio Sexual",
       value: Number(c.sexual ?? 0),
       color: "#D32F2F",
-      items: Array.isArray(complaintDetails.sexual) ? complaintDetails.sexual : [],
+      items: Array.isArray(complaintDetails.sexual)
+        ? complaintDetails.sexual
+        : [],
     },
     {
       key: "cpca",
@@ -931,11 +1128,29 @@ function SituationalTab() {
       items: Array.isArray(complaintDetails.cpca) ? complaintDetails.cpca : [],
     },
     {
+      key: "cpcaOpen",
+      label: "CPCA em tratamento",
+      value: Number(c.openByCpca ?? 0),
+      color: "#D32F2F",
+      items: Array.isArray(complaintDetails.cpcaOpen)
+        ? complaintDetails.cpcaOpen
+        : [],
+    },
+    {
       key: "smif",
       label: "SMIF",
       value: Number(c.bySmif ?? 0),
       color: "#7B1FA2",
       items: Array.isArray(complaintDetails.smif) ? complaintDetails.smif : [],
+    },
+    {
+      key: "smifOpen",
+      label: "SMIF em tratamento",
+      value: Number(c.openBySmif ?? 0),
+      color: "#AD1457",
+      items: Array.isArray(complaintDetails.smifOpen)
+        ? complaintDetails.smifOpen
+        : [],
     },
   ];
 
@@ -959,7 +1174,9 @@ function SituationalTab() {
       label: "CIPAVD",
       value: Number(a.cipavd ?? 0),
       color: "#7B1FA2",
-      items: Array.isArray(activityDetails.cipavd) ? activityDetails.cipavd : [],
+      items: Array.isArray(activityDetails.cipavd)
+        ? activityDetails.cipavd
+        : [],
     },
     {
       key: "done",
@@ -973,14 +1190,18 @@ function SituationalTab() {
       label: "Relatórios preenchidos",
       value: Number(a.withReport ?? 0),
       color: undefined,
-      items: Array.isArray(activityDetails.withReport) ? activityDetails.withReport : [],
+      items: Array.isArray(activityDetails.withReport)
+        ? activityDetails.withReport
+        : [],
     },
     {
       key: "signed",
       label: "Relatórios assinados",
       value: Number(a.signed ?? 0),
       color: "#2E7D32",
-      items: Array.isArray(activityDetails.signed) ? activityDetails.signed : [],
+      items: Array.isArray(activityDetails.signed)
+        ? activityDetails.signed
+        : [],
     },
   ];
 
@@ -1010,28 +1231,32 @@ function SituationalTab() {
       label: "OMs visitadas (distintas)",
       value: Number(m.localitiesCovered ?? 0),
       color: "#0288D1",
-      items: Array.isArray(missionDetails.localitiesCovered) ? missionDetails.localitiesCovered : [],
+      items: Array.isArray(missionDetails.localitiesCovered)
+        ? missionDetails.localitiesCovered
+        : [],
     },
   ];
 
   const reportFillRate = a.totalActivities
-    ? (Number(a.withReport ?? 0) / Math.max(1, Number(a.totalActivities ?? 0))) * 100
+    ? (Number(a.withReport ?? 0) /
+        Math.max(1, Number(a.totalActivities ?? 0))) *
+      100
     : 0;
   const reportSignRate = a.withReport
     ? (Number(a.signed ?? 0) / Math.max(1, Number(a.withReport ?? 0))) * 100
     : 0;
   const researchSignals = [
     {
-      title: "Violência reportada",
+      title: "Escolas de formação: violência reportada",
       value: `${s.violenceRatePercent ?? 0}%`,
-      helper: `${s.yesCount ?? 0} de ${s.totalResponses ?? 0} respondentes relataram violência.`,
+      helper: `${s.yesCount ?? 0} de ${s.totalResponses ?? 0} respondentes. Fonte: pesquisa aplicada em escolas/localidades de formação.`,
       color: "#D32F2F",
       detail: "surveys",
     },
     {
-      title: "Violência doméstica recente",
+      title: "Efetivo feminino FAB: violência doméstica recente",
       value: `${dv.last12MonthsRatePercent ?? 0}%`,
-      helper: `${dv.last12MonthsYes ?? 0} respondentes declararam ocorrência nos últimos 12 meses.`,
+      helper: `${dv.last12MonthsYes ?? 0} de ${dv.totalResponses ?? 0} respondentes declararam ocorrência nos últimos 12 meses.`,
       color: "#C2185B",
       detail: "domesticViolence",
     },
@@ -1045,16 +1270,23 @@ function SituationalTab() {
   ];
   const institutionalResponse = [
     {
-      title: "Casos em tratamento",
-      value: `${c.openCases ?? 0}`,
-      helper: `Total ${c.totalCases ?? 0} • concluídos ${c.concludedCases ?? 0}`,
+      title: "Denúncias CPCA em tratamento",
+      value: `${c.openByCpca ?? 0}`,
+      helper: `CPCA total ${c.byCpca ?? 0} • fonte: denúncias formais CPCA`,
       color: "#1A3C6E",
       detail: "complaints",
     },
     {
-      title: "Resposta em campo",
+      title: "Denúncias SMIF em tratamento",
+      value: `${c.openBySmif ?? 0}`,
+      helper: `SMIF total ${c.bySmif ?? 0} • fluxo separado de CPCA`,
+      color: "#7B1FA2",
+      detail: "complaints",
+    },
+    {
+      title: "Presença em campo registrada",
       value: `${a.done ?? 0}`,
-      helper: `Atividades concluídas ${a.done ?? 0} • missões ${m.totalMissions ?? 0}`,
+      helper: `Atividades concluídas ${a.done ?? 0} • missões ${m.totalMissions ?? 0}. Missões indicam cobertura, não projeção.`,
       color: "#4E342E",
       detail: "activities",
     },
@@ -1070,8 +1302,8 @@ function SituationalTab() {
     Number(s.violenceRatePercent ?? 0) >= 20
       ? {
           id: "survey-risk",
-          title: "Violência reportada acima do limite",
-          description: `${s.violenceRatePercent ?? 0}% relataram violência. Vale priorizar leitura de perfil e território.`,
+          title: "Escolas: violência reportada acima do limite",
+          description: `${s.violenceRatePercent ?? 0}% relataram violência na pesquisa de escolas. Interprete como sinal da população pesquisada, não como prevalência geral da FAB.`,
           detail: "surveys",
         }
       : null,
@@ -1097,7 +1329,15 @@ function SituationalTab() {
       ? {
           id: "open-complaints",
           title: "Passivo de casos em tratamento",
-          description: `${c.openCases ?? 0} casos seguem abertos e exigem monitoramento gerencial.`,
+          description: `${c.openCases ?? 0} casos seguem abertos: CPCA ${c.openByCpca ?? 0}, SMIF ${c.openBySmif ?? 0}.`,
+          detail: "complaints",
+        }
+      : null,
+    Number(cross.complaintOmsWithoutResearch ?? 0) > 0
+      ? {
+          id: "cross-source-gap",
+          title: "Há denúncias sem pesquisa comparável",
+          description: `${cross.complaintOmsWithoutResearch ?? 0} OM(s) têm denúncia formal, mas não têm pesquisa normalizada na mesma OM. O cruzamento deve usar UF ou ficar marcado como lacuna.`,
           detail: "complaints",
         }
       : null,
@@ -1125,14 +1365,14 @@ function SituationalTab() {
               title="Levar este indicador para a IA"
               subtitle="Use a IA para explicar a taxa, gerar um briefing executivo ou transformar o sinal em proposta de atuação."
               {...buildStrategicCopilotLinks({
-                label: "Violência reportada",
-                description: `${s.violenceRatePercent ?? 0}% dos respondentes declararam violência na pesquisa institucional.`,
+                label: "Violência reportada nas escolas de formação",
+                description: `${s.violenceRatePercent ?? 0}% dos respondentes declararam violência na pesquisa de escolas de formação.`,
               })}
             />
             <DetailMeaningBlock
               title="O que este número significa"
-              meaning="A Taxa de violência mostra o percentual de respondentes da Pesquisa de Violência que declararam já ter sofrido algum tipo de violência. Os demais números do modal mostram a base total de respondentes e como essa base se divide entre respostas SIM e NÃO."
-              source="Fonte: módulo BI > Pesquisas. Base: respostas da Pesquisa de Violência aplicadas nas localidades visitadas pela comissão."
+              meaning="Este percentual pertence somente à pesquisa aplicada nas escolas/localidades de formação. Ele mede a proporção de respondentes desse universo que declarou ter sofrido violência; não deve ser somado nem comparado diretamente com a pesquisa de violência doméstica sem observar cobertura por OM/UF."
+              source={`Fonte: BI > Pesquisas de escolas. Base: ${s.totalResponses ?? 0} respostas; cobertura normalizada: ${surveyCoverage.matchedOms ?? 0} OM(s), ${surveyCoverage.supportedUfs ?? 0} UF(s).`}
             />
             <DetailAccordionSection
               title="Leitura executiva"
@@ -1140,10 +1380,30 @@ function SituationalTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="Taxa de violência" value={`${s.violenceRatePercent ?? 0}%`} color="#D32F2F" />
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  Este KPI é lido diretamente da Pesquisa de Violência. Se a taxa subir, isso indica maior proporção de respondentes que reportaram experiência de violência dentro do universo pesquisado, o que tende a pressionar prevenção, acolhimento e capacidade institucional de resposta.
+                <DetailRow
+                  label="Taxa de violência"
+                  value={`${s.violenceRatePercent ?? 0}%`}
+                  color="#D32F2F"
+                />
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  Este KPI é lido diretamente da Pesquisa de Violência. Se a
+                  taxa subir, isso indica maior proporção de respondentes que
+                  reportaram experiência de violência dentro do universo
+                  pesquisado, o que tende a pressionar prevenção, acolhimento e
+                  capacidade institucional de resposta.
                 </Typography>
+                <DetailRow
+                  label="Cobertura por OM"
+                  value={surveyCoverage.matchedOms ?? 0}
+                />
+                <DetailRow
+                  label="Cobertura por UF"
+                  value={surveyCoverage.supportedUfs ?? 0}
+                />
               </Stack>
             </DetailAccordionSection>
             <DetailAccordionSection
@@ -1185,8 +1445,8 @@ function SituationalTab() {
             />
             <DetailMeaningBlock
               title="O que este número significa"
-              meaning="Os indicadores deste bloco medem a violência doméstica autorreferida na pesquisa específica de violência doméstica. 'Alguma vez' captura histórico de vida; 'últimos 12 meses' mostra recorrência recente; 'buscaram ajuda' mede reação institucional e rede de apoio."
-              source="Fonte: módulo BI > Violência Doméstica. Base: respostas da pesquisa específica de violência doméstica aplicada nas localidades visitadas."
+              meaning="Os indicadores deste bloco medem violência doméstica autorreferida no efetivo feminino geral da FAB respondente. 'Alguma vez' captura histórico de vida; 'últimos 12 meses' mostra recorrência recente; 'buscaram ajuda' mede reação institucional e rede de apoio."
+              source={`Fonte: BI > Violência Doméstica. Base: ${dv.totalResponses ?? 0} respostas; cobertura normalizada: ${domesticCoverage.matchedOms ?? 0} OM(s), ${domesticCoverage.supportedUfs ?? 0} UF(s).`}
             />
             <DetailAccordionSection
               title="Leitura executiva"
@@ -1194,11 +1454,37 @@ function SituationalTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="Taxa — alguma vez na vida" value={`${dv.lifetimeRatePercent ?? 0}%`} color="#ED6C02" />
-                <DetailRow label="Taxa — últimos 12 meses" value={`${dv.last12MonthsRatePercent ?? 0}%`} color="#C2185B" />
-                <DetailRow label="Taxa de busca de ajuda" value={`${dv.soughtHelpPercent ?? 0}%`} />
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  A taxa de busca de ajuda é calculada sobre o subconjunto que declarou ter sofrido violência em algum momento. Isso ajuda a distinguir ocorrência de violência da capacidade de reação e acolhimento.
+                <DetailRow
+                  label="Taxa — alguma vez na vida"
+                  value={`${dv.lifetimeRatePercent ?? 0}%`}
+                  color="#ED6C02"
+                />
+                <DetailRow
+                  label="Taxa — últimos 12 meses"
+                  value={`${dv.last12MonthsRatePercent ?? 0}%`}
+                  color="#C2185B"
+                />
+                <DetailRow
+                  label="Taxa de busca de ajuda"
+                  value={`${dv.soughtHelpPercent ?? 0}%`}
+                />
+                <DetailRow
+                  label="Cobertura por OM"
+                  value={domesticCoverage.matchedOms ?? 0}
+                />
+                <DetailRow
+                  label="Cobertura por UF"
+                  value={domesticCoverage.supportedUfs ?? 0}
+                />
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  A taxa de busca de ajuda é calculada sobre o subconjunto que
+                  declarou ter sofrido violência em algum momento. Isso ajuda a
+                  distinguir ocorrência de violência da capacidade de reação e
+                  acolhimento.
                 </Typography>
               </Stack>
             </DetailAccordionSection>
@@ -1250,10 +1536,24 @@ function SituationalTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="Taxa de segurança para denúncia" value={`${r.safeToReportPercent ?? 0}%`} color="#2E7D32" />
-                <DetailRow label="Taxa de conhecimento do canal" value={`${r.knowReportProcessPercent ?? 0}%`} color="#0288D1" />
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  Esses números não medem ocorrência de caso, mas prontidão do ambiente para denúncia e acolhimento. Queda nesses indicadores tende a sinalizar risco de subnotificação.
+                <DetailRow
+                  label="Taxa de segurança para denúncia"
+                  value={`${r.safeToReportPercent ?? 0}%`}
+                  color="#2E7D32"
+                />
+                <DetailRow
+                  label="Taxa de conhecimento do canal"
+                  value={`${r.knowReportProcessPercent ?? 0}%`}
+                  color="#0288D1"
+                />
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  Esses números não medem ocorrência de caso, mas prontidão do
+                  ambiente para denúncia e acolhimento. Queda nesses indicadores
+                  tende a sinalizar risco de subnotificação.
                 </Typography>
               </Stack>
             </DetailAccordionSection>
@@ -1296,7 +1596,7 @@ function SituationalTab() {
             />
             <DetailMeaningBlock
               title="O que este número significa"
-              meaning="Este bloco consolida os casos e denúncias efetivamente registrados no sistema, somando fluxos CPCA e SMIF. Ele mostra carga real de tratamento institucional, status atual e distribuição por tipo e fluxo."
+              meaning="Este bloco consolida denúncias formais registradas no sistema, separando CPCA e SMIF. Ele mede carga real de tratamento institucional; é diferente das pesquisas autorreferidas, que medem prevalência percebida nos públicos pesquisados."
               source="Fonte: registros de denúncias do sistema, com origem nos módulos CPCA e SMIF."
             />
             <DetailAccordionSection
@@ -1321,6 +1621,21 @@ function SituationalTab() {
                     }
                   />
                 ))}
+                <DetailRow
+                  label="OMs com denúncia sem pesquisa na mesma OM"
+                  value={cross.complaintOmsWithoutResearch ?? 0}
+                  color="#4E342E"
+                />
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  Quando não há pesquisa na mesma OM, o painel evita inferir
+                  subnotificação local. A comparação pode ser feita em nível de
+                  UF se houver base suficiente, ou fica marcada como lacuna de
+                  evidência.
+                </Typography>
               </Stack>
             </DetailAccordionSection>
             <DetailAccordionSection
@@ -1328,8 +1643,16 @@ function SituationalTab() {
               subtitle="Leitura rápida do peso relativo entre assédio moral e sexual"
             >
               <Stack spacing={1}>
-                <DetailRow label="Assédio Moral (%)" value={`${c.moralPercent ?? 0}%`} color="#ED6C02" />
-                <DetailRow label="Assédio Sexual (%)" value={`${c.sexualPercent ?? 0}%`} color="#D32F2F" />
+                <DetailRow
+                  label="Assédio Moral (%)"
+                  value={`${c.moralPercent ?? 0}%`}
+                  color="#ED6C02"
+                />
+                <DetailRow
+                  label="Assédio Sexual (%)"
+                  value={`${c.sexualPercent ?? 0}%`}
+                  color="#D32F2F"
+                />
               </Stack>
             </DetailAccordionSection>
             <DetailAccordionSection
@@ -1337,8 +1660,16 @@ function SituationalTab() {
               subtitle="Participação relativa entre CPCA e SMIF no total registrado"
             >
               <Stack spacing={1}>
-                <DetailRow label="CPCA (%)" value={`${c.totalCases ? ((Number(c.byCpca ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`} color="#1A3C6E" />
-                <DetailRow label="SMIF (%)" value={`${c.totalCases ? ((Number(c.bySmif ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`} color="#7B1FA2" />
+                <DetailRow
+                  label="CPCA (%)"
+                  value={`${c.totalCases ? ((Number(c.byCpca ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`}
+                  color="#1A3C6E"
+                />
+                <DetailRow
+                  label="SMIF (%)"
+                  value={`${c.totalCases ? ((Number(c.bySmif ?? 0) / Number(c.totalCases ?? 1)) * 100).toFixed(1) : "0.0"}%`}
+                  color="#7B1FA2"
+                />
               </Stack>
             </DetailAccordionSection>
           </Stack>
@@ -1367,14 +1698,23 @@ function SituationalTab() {
               <Stack spacing={1}>
                 <DetailRow
                   label="Taxa de preenchimento"
-                  value={a.totalActivities ? `${((a.withReport / a.totalActivities) * 100).toFixed(1)}%` : "0%"}
+                  value={
+                    a.totalActivities
+                      ? `${((a.withReport / a.totalActivities) * 100).toFixed(1)}%`
+                      : "0%"
+                  }
                 />
                 <DetailRow
                   label="Taxa de assinatura"
-                  value={a.withReport ? `${((a.signed / a.withReport) * 100).toFixed(1)}%` : "0%"}
+                  value={
+                    a.withReport
+                      ? `${((a.signed / a.withReport) * 100).toFixed(1)}%`
+                      : "0%"
+                  }
                 />
                 <Typography variant="caption" color="text.secondary">
-                  Clique na seta ao lado de cada número para ver a lista exata de atividades e abrir cada item.
+                  Clique na seta ao lado de cada número para ver a lista exata
+                  de atividades e abrir cada item.
                 </Typography>
               </Stack>
             </DetailAccordionSection>
@@ -1417,7 +1757,7 @@ function SituationalTab() {
             />
             <DetailMeaningBlock
               title="O que este número significa"
-              meaning="As missões representam deslocamentos e frentes operacionais cadastradas no sistema. O detalhamento mostra volume por escopo e quantas OMs distintas já foram efetivamente alcançadas pelas missões lançadas."
+              meaning="As missões representam deslocamentos e frentes operacionais cadastradas no sistema. Como a série histórica ainda está começando, este número é tratado como cobertura/presença institucional, não como variável determinística para projeção de risco."
               source="Fonte: módulo Missões, considerando registros ativos de SMIF e CIPAVD."
             />
             <DetailAccordionSection
@@ -1425,8 +1765,15 @@ function SituationalTab() {
               subtitle="Volume de frentes operacionais e alcance territorial"
               defaultExpanded
             >
-              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                Missões realizadas pela comissão itinerante em todo o território nacional. O foco aqui é entender quantas frentes foram abertas, por qual escopo e quantas OMs distintas já receberam atuação registrada.
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ lineHeight: 1.7 }}
+              >
+                Missões realizadas pela comissão itinerante em todo o território
+                nacional. O foco aqui é entender quantas frentes foram abertas,
+                por qual escopo e quantas OMs distintas já receberam atuação
+                registrada.
               </Typography>
             </DetailAccordionSection>
             <DetailAccordionSection
@@ -1461,8 +1808,8 @@ function SituationalTab() {
   };
 
   const modalTitles: Record<string, string> = {
-    surveys: "Detalhamento — Pesquisas de Violência",
-    domesticViolence: "Detalhamento — Violência Doméstica",
+    surveys: "Detalhamento — Pesquisa de Escolas",
+    domesticViolence: "Detalhamento — Violência Doméstica no Efetivo Feminino",
     recruits: "Detalhamento — Pesquisa com Recrutas",
     complaints: "Detalhamento — Denúncias/Casos",
     activities: "Detalhamento — Atividades de Campo",
@@ -1475,38 +1822,38 @@ function SituationalTab() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Violência reportada"
-            value={`${s.violenceRatePercent ?? 0}%`}
-            subtitle={`${s.yesCount ?? 0} de ${s.totalResponses ?? 0} respondentes`}
-            color="#D32F2F"
-            onClick={() => setDetailModal("surveys")}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Violência doméstica recente"
-            value={`${dv.last12MonthsRatePercent ?? 0}%`}
-            subtitle={`${dv.last12MonthsYes ?? 0} de ${dv.totalResponses ?? 0}`}
-            color="#C2185B"
-            onClick={() => setDetailModal("domesticViolence")}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <KpiCard
-            title="Casos em tratamento"
-            value={c.openCases ?? 0}
-            subtitle={`Total ${c.totalCases ?? 0} | CPCA ${c.byCpca ?? 0} | SMIF ${c.bySmif ?? 0}`}
+            title="Denúncias CPCA abertas"
+            value={c.openByCpca ?? 0}
+            subtitle={`CPCA total ${c.byCpca ?? 0} • SMIF abertos ${c.openBySmif ?? 0}`}
             color="#1A3C6E"
             onClick={() => setDetailModal("complaints")}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Resposta em campo"
-            value={a.totalActivities ?? 0}
-            subtitle={`Concluídas: ${a.done ?? 0} | Missões: ${m.totalMissions ?? 0}`}
+            title="Escolas: violência reportada"
+            value={`${s.violenceRatePercent ?? 0}%`}
+            subtitle={`${s.yesCount ?? 0}/${s.totalResponses ?? 0} • ${surveyCoverage.supportedUfs ?? 0} UF(s)`}
+            color="#D32F2F"
+            onClick={() => setDetailModal("surveys")}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <KpiCard
+            title="VD recente: efetivo feminino"
+            value={`${dv.last12MonthsRatePercent ?? 0}%`}
+            subtitle={`${dv.last12MonthsYes ?? 0}/${dv.totalResponses ?? 0} • ${domesticCoverage.supportedUfs ?? 0} UF(s)`}
+            color="#C2185B"
+            onClick={() => setDetailModal("domesticViolence")}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <KpiCard
+            title="Lacuna de cruzamento"
+            value={cross.complaintOmsWithoutResearch ?? 0}
+            subtitle="OMs com denúncia formal sem pesquisa na mesma OM"
             color="#4E342E"
-            onClick={() => setDetailModal("activities")}
+            onClick={() => setDetailModal("complaints")}
           />
         </Grid>
       </Grid>
@@ -1518,8 +1865,14 @@ function SituationalTab() {
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
                 Sinais de risco
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                O que as pesquisas estão sinalizando agora. O detalhe analítico permanece nos modais e na IA.
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 1.5 }}
+              >
+                Pesquisas separadas por público. Escolas de formação e violência
+                doméstica usam bases diferentes e não são somadas como uma taxa
+                única.
               </Typography>
               <Stack spacing={1.2}>
                 {researchSignals.map((signal) => (
@@ -1531,31 +1884,61 @@ function SituationalTab() {
                       p: 1.2,
                     }}
                   >
-                    <Stack direction="row" justifyContent="space-between" spacing={1}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      spacing={1}
+                    >
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="subtitle2" fontWeight={700}>
                           {signal.title}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 0.4 }}
+                        >
                           {signal.helper}
                         </Typography>
                       </Box>
                       <Chip
                         label={signal.value}
-                        sx={{ bgcolor: signal.color, color: "#fff", fontWeight: 700 }}
+                        sx={{
+                          bgcolor: signal.color,
+                          color: "#fff",
+                          fontWeight: 700,
+                        }}
                       />
                     </Stack>
                   </Box>
                 ))}
               </Stack>
-              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
-                <Button size="small" variant="outlined" onClick={() => setDetailModal("surveys")}>
+              <Stack
+                direction="row"
+                spacing={1}
+                useFlexGap
+                flexWrap="wrap"
+                sx={{ mt: 1.5 }}
+              >
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setDetailModal("surveys")}
+                >
                   Violência
                 </Button>
-                <Button size="small" variant="outlined" onClick={() => setDetailModal("domesticViolence")}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setDetailModal("domesticViolence")}
+                >
                   Violência doméstica
                 </Button>
-                <Button size="small" variant="outlined" onClick={() => setDetailModal("recruits")}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setDetailModal("recruits")}
+                >
                   Recrutas
                 </Button>
               </Stack>
@@ -1568,8 +1951,13 @@ function SituationalTab() {
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
                 Capacidade de resposta
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                O que o sistema já transformou em resposta: tratamento, presença em campo e qualidade de registro.
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 1.5 }}
+              >
+                Denúncias formais e atuação registrada. Missões aparecem como
+                cobertura inicial, não como projeção estatística.
               </Typography>
               <Stack spacing={1.2}>
                 {institutionalResponse.map((item) => (
@@ -1581,31 +1969,61 @@ function SituationalTab() {
                       p: 1.2,
                     }}
                   >
-                    <Stack direction="row" justifyContent="space-between" spacing={1}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      spacing={1}
+                    >
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="subtitle2" fontWeight={700}>
                           {item.title}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4 }}>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 0.4 }}
+                        >
                           {item.helper}
                         </Typography>
                       </Box>
                       <Chip
                         label={item.value}
-                        sx={{ bgcolor: item.color, color: "#fff", fontWeight: 700 }}
+                        sx={{
+                          bgcolor: item.color,
+                          color: "#fff",
+                          fontWeight: 700,
+                        }}
                       />
                     </Stack>
                   </Box>
                 ))}
               </Stack>
-              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
-                <Button size="small" variant="outlined" onClick={() => setDetailModal("complaints")}>
+              <Stack
+                direction="row"
+                spacing={1}
+                useFlexGap
+                flexWrap="wrap"
+                sx={{ mt: 1.5 }}
+              >
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setDetailModal("complaints")}
+                >
                   Denúncias
                 </Button>
-                <Button size="small" variant="outlined" onClick={() => setDetailModal("activities")}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setDetailModal("activities")}
+                >
                   Atividades
                 </Button>
-                <Button size="small" variant="outlined" onClick={() => setDetailModal("missions")}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setDetailModal("missions")}
+                >
                   Missões
                 </Button>
               </Stack>
@@ -1618,8 +2036,13 @@ function SituationalTab() {
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
                 O que exige atenção agora
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-                Leitura rápida dos sinais que merecem acompanhamento imediato da gestão.
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 1.5 }}
+              >
+                Leitura rápida dos sinais que merecem acompanhamento imediato da
+                gestão.
               </Typography>
               {executiveAlerts.length ? (
                 <List disablePadding>
@@ -1633,11 +2056,24 @@ function SituationalTab() {
                         primary={item.title}
                         secondary={
                           <Stack spacing={1.2} sx={{ mt: 0.3 }}>
-                            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ lineHeight: 1.55 }}
+                            >
                               {item.description}
                             </Typography>
-                            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
-                              <Button size="small" variant="outlined" onClick={() => setDetailModal(item.detail)}>
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              useFlexGap
+                              flexWrap="wrap"
+                            >
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                onClick={() => setDetailModal(item.detail)}
+                              >
                                 Ver detalhe
                               </Button>
                             </Stack>
@@ -1698,9 +2134,20 @@ function AggressorProfileTab() {
     />
   );
 
-  if (isLoading) return <Stack spacing={2}>{guideCard}<SkeletonState /></Stack>;
+  if (isLoading)
+    return (
+      <Stack spacing={2}>
+        {guideCard}
+        <SkeletonState />
+      </Stack>
+    );
   if (error)
-    return <Stack spacing={2}>{guideCard}<ErrorState message="Erro ao carregar perfil dos casos." /></Stack>;
+    return (
+      <Stack spacing={2}>
+        {guideCard}
+        <ErrorState message="Erro ao carregar perfil dos casos." />
+      </Stack>
+    );
   if (!data || data.totalCases === 0)
     return (
       <Stack spacing={2}>
@@ -1759,10 +2206,13 @@ function AggressorProfileTab() {
       <KpiDetailModal
         open={!!detailModal}
         title={
-          detailModal === "total" ? "Visão Geral dos Casos" :
-          detailModal === "moral" ? "Detalhes — Assédio Moral" :
-          detailModal === "sexual" ? "Detalhes — Assédio Sexual" :
-          "Detalhes — Relação Hierárquica"
+          detailModal === "total"
+            ? "Visão Geral dos Casos"
+            : detailModal === "moral"
+              ? "Detalhes — Assédio Moral"
+              : detailModal === "sexual"
+                ? "Detalhes — Assédio Sexual"
+                : "Detalhes — Relação Hierárquica"
         }
         onClose={() => setDetailModal(null)}
         maxWidth="lg"
@@ -1780,9 +2230,20 @@ function AggressorProfileTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="Total de casos registrados" value={data.totalCases} />
-                <DetailRow label="Assédio Moral" value={`${data.byComplaintType.moral.count} (${data.byComplaintType.moral.percent}%)`} color="#ED6C02" />
-                <DetailRow label="Assédio Sexual" value={`${data.byComplaintType.sexual.count} (${data.byComplaintType.sexual.percent}%)`} color="#D32F2F" />
+                <DetailRow
+                  label="Total de casos registrados"
+                  value={data.totalCases}
+                />
+                <DetailRow
+                  label="Assédio Moral"
+                  value={`${data.byComplaintType.moral.count} (${data.byComplaintType.moral.percent}%)`}
+                  color="#ED6C02"
+                />
+                <DetailRow
+                  label="Assédio Sexual"
+                  value={`${data.byComplaintType.sexual.count} (${data.byComplaintType.sexual.percent}%)`}
+                  color="#D32F2F"
+                />
               </Stack>
             </DetailAccordionSection>
             <DetailAccordionSection
@@ -1791,7 +2252,11 @@ function AggressorProfileTab() {
             >
               <Stack spacing={1}>
                 {(data.byScope ?? []).map((s: any) => (
-                  <DetailRow key={s.label} label={s.label} value={`${s.count} (${s.percent}%)`} />
+                  <DetailRow
+                    key={s.label}
+                    label={s.label}
+                    value={`${s.count} (${s.percent}%)`}
+                  />
                 ))}
               </Stack>
             </DetailAccordionSection>
@@ -1800,7 +2265,9 @@ function AggressorProfileTab() {
               subtitle="Lista operacional para chegar do KPI ao registro real"
             >
               <DetailItemList
-                items={Array.isArray(detailItems.total) ? detailItems.total : []}
+                items={
+                  Array.isArray(detailItems.total) ? detailItems.total : []
+                }
                 emptyMessage="Nenhum caso disponível para detalhamento."
               />
             </DetailAccordionSection>
@@ -1819,10 +2286,23 @@ function AggressorProfileTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="Total de casos de assédio moral" value={data.byComplaintType.moral.count} color="#ED6C02" />
-                <DetailRow label="Percentual do total" value={`${data.byComplaintType.moral.percent}%`} />
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  O assédio moral inclui humilhações, exclusão, ameaças, intimidações, críticas excessivas, injustiças e outras formas de violência psicológica no ambiente de trabalho.
+                <DetailRow
+                  label="Total de casos de assédio moral"
+                  value={data.byComplaintType.moral.count}
+                  color="#ED6C02"
+                />
+                <DetailRow
+                  label="Percentual do total"
+                  value={`${data.byComplaintType.moral.percent}%`}
+                />
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  O assédio moral inclui humilhações, exclusão, ameaças,
+                  intimidações, críticas excessivas, injustiças e outras formas
+                  de violência psicológica no ambiente de trabalho.
                 </Typography>
               </Stack>
             </DetailAccordionSection>
@@ -1831,7 +2311,9 @@ function AggressorProfileTab() {
               subtitle="Registros usados para compor este KPI"
             >
               <DetailItemList
-                items={Array.isArray(detailItems.moral) ? detailItems.moral : []}
+                items={
+                  Array.isArray(detailItems.moral) ? detailItems.moral : []
+                }
                 emptyMessage="Nenhum item classificado como assédio moral."
               />
             </DetailAccordionSection>
@@ -1850,10 +2332,23 @@ function AggressorProfileTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="Total de casos de assédio sexual" value={data.byComplaintType.sexual.count} color="#D32F2F" />
-                <DetailRow label="Percentual do total" value={`${data.byComplaintType.sexual.percent}%`} />
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  O assédio sexual inclui comentários sexistas, contato físico indesejado, chantagem por favores sexuais, exibição de material pornográfico e outras formas de violência sexual.
+                <DetailRow
+                  label="Total de casos de assédio sexual"
+                  value={data.byComplaintType.sexual.count}
+                  color="#D32F2F"
+                />
+                <DetailRow
+                  label="Percentual do total"
+                  value={`${data.byComplaintType.sexual.percent}%`}
+                />
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  O assédio sexual inclui comentários sexistas, contato físico
+                  indesejado, chantagem por favores sexuais, exibição de
+                  material pornográfico e outras formas de violência sexual.
                 </Typography>
               </Stack>
             </DetailAccordionSection>
@@ -1862,7 +2357,9 @@ function AggressorProfileTab() {
               subtitle="Registros usados para compor este KPI"
             >
               <DetailItemList
-                items={Array.isArray(detailItems.sexual) ? detailItems.sexual : []}
+                items={
+                  Array.isArray(detailItems.sexual) ? detailItems.sexual : []
+                }
                 emptyMessage="Nenhum item classificado como assédio sexual."
               />
             </DetailAccordionSection>
@@ -1881,11 +2378,24 @@ function AggressorProfileTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="Casos com relação hierárquica" value={data.hierarchicalRelation.count} color="#7B1FA2" />
-                <DetailRow label="Percentual do total" value={`${data.hierarchicalRelation.percent}%`} />
+                <DetailRow
+                  label="Casos com relação hierárquica"
+                  value={data.hierarchicalRelation.count}
+                  color="#7B1FA2"
+                />
+                <DetailRow
+                  label="Percentual do total"
+                  value={`${data.hierarchicalRelation.percent}%`}
+                />
                 <DetailRow label="Total de casos" value={data.totalCases} />
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  {data.hierarchicalRelation.description}. Inclui relações de superior hierárquico, chefe imediato ou instrutor/professor com subordinado.
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  {data.hierarchicalRelation.description}. Inclui relações de
+                  superior hierárquico, chefe imediato ou instrutor/professor
+                  com subordinado.
                 </Typography>
               </Stack>
             </DetailAccordionSection>
@@ -1894,7 +2404,11 @@ function AggressorProfileTab() {
               subtitle="Registros usados para compor este KPI"
             >
               <DetailItemList
-                items={Array.isArray(detailItems.hierarchical) ? detailItems.hierarchical : []}
+                items={
+                  Array.isArray(detailItems.hierarchical)
+                    ? detailItems.hierarchical
+                    : []
+                }
                 emptyMessage="Nenhum item com relação hierárquica identificado."
               />
             </DetailAccordionSection>
@@ -2006,75 +2520,198 @@ function AggressorProfileTab() {
   );
 }
 
-const BR_STATES: Record<string, { name: string; path: string; labelX: number; labelY: number }> = {
-  AC: { name: "Acre", labelX: 92, labelY: 331,
-    path: "M50,291L119,313L194,348L154,373L113,371L116,339L100,350L82,350L80,341L62,338L67,330L46,300L52,295L50,291Z" },
-  AL: { name: "Alagoas", labelX: 799, labelY: 338,
-    path: "M766,336L776,327L792,337L811,327L828,328L817,343L812,342L815,344L803,360L766,336Z" },
-  AM: { name: "Amazonas", labelX: 230, labelY: 198,
-    path: "M260,103L274,109L272,115L279,131L276,148L281,160L277,164L290,176L296,176L297,162L303,158L313,165L321,162L327,143L351,143L351,155L360,169L393,192L402,193L359,283L365,296L358,324L293,323L289,327L273,310L256,309L247,318L245,329L232,329L226,338L223,335L212,341L199,338L190,347L119,312L50,291L63,278L61,270L68,251L111,231L127,234L139,171L134,158L125,151L125,136L144,135L140,126L129,126L129,113L163,113L163,107L168,113L178,105L185,124L201,133L215,128L217,135L224,125L239,117L240,120L247,109L260,103Z" },
-  AP: { name: "Amapá", labelX: 500, labelY: 112,
-    path: "M433,98L446,105L453,100L470,104L497,62L500,69L499,58L505,65L506,74L507,69L514,106L530,113L532,121L526,123L531,124L513,144L502,149L495,168L487,172L470,152L460,123L434,112L433,98Z" },
-  BA: { name: "Bahia", labelX: 705, labelY: 408,
-    path: "M615,357L624,366L633,368L652,359L657,347L654,338L661,336L678,341L693,335L703,324L713,327L718,340L743,320L765,330L775,352L775,364L766,369L775,381L784,380L764,410L757,403L755,408L756,409L749,420L751,429L748,427L750,436L752,430L749,447L754,471L748,510L737,523L718,504L720,493L726,492L733,477L726,470L704,469L694,455L688,457L667,446L656,448L654,440L646,437L608,458L611,440L605,430L609,411L603,398L608,383L598,377L604,366L615,357Z" },
-  CE: { name: "Ceará", labelX: 735, labelY: 258,
-    path: "M720,297L722,285L715,278L706,243L709,233L701,216L704,206L721,204L731,205L761,222L786,245L776,250L759,274L756,288L760,295L751,306L737,297L720,297Z" },
-  DF: { name: "Distrito Federal", labelX: 576, labelY: 470,
-    path: "M584,475L564,475L566,464L581,464L584,475Z" },
-  ES: { name: "Espírito Santo", labelX: 720, labelY: 548,
-    path: "M726,516L737,523L735,550L711,586L696,583L693,566L703,563L712,545L706,534L712,533L708,522L715,519L712,515L726,516Z" },
-  GO: { name: "Goiás", labelX: 553, labelY: 469,
-    path: "M510,548L471,530L473,525L468,523L464,507L475,480L491,470L496,457L507,451L522,402L527,400L524,410L541,417L549,405L554,420L566,413L576,419L576,414L579,418L605,407L609,411L605,430L612,447L608,452L599,447L599,454L592,454L593,471L584,475L580,485L587,495L579,505L584,507L584,518L571,526L550,523L542,530L539,527L523,531L510,548ZM584,475L581,464L566,464L564,475L584,475Z" },
-  MA: { name: "Maranhão", labelX: 633, labelY: 231,
-    path: "M555,256L578,239L588,226L610,169L614,174L615,171L616,175L622,174L621,179L624,174L623,183L633,176L634,184L639,185L633,194L637,197L641,191L643,195L637,200L634,214L649,196L643,205L656,198L661,199L662,195L685,205L694,203L691,212L680,217L670,233L674,252L668,267L673,274L672,282L651,284L636,297L620,303L610,328L614,339L611,357L603,354L596,345L599,340L588,330L593,319L600,317L600,309L589,310L575,293L581,278L580,259L563,252L555,256Z" },
-  MG: { name: "Minas Gerais", labelX: 622, labelY: 524,
-    path: "M509,561L510,548L523,531L539,527L542,530L550,523L571,526L584,517L584,507L579,504L587,494L580,484L584,475L593,471L592,454L599,454L599,447L609,450L608,458L639,440L650,438L654,440L654,447L671,447L688,457L694,455L704,469L726,470L733,476L719,498L726,516L712,515L715,519L708,523L712,533L706,534L712,541L711,548L703,563L693,566L685,596L669,604L654,603L622,616L615,615L614,621L603,621L596,609L600,590L590,589L580,558L553,562L551,568L549,562L545,565L543,558L519,554L509,561Z" },
-  MS: { name: "Mato Grosso do Sul", labelX: 426, labelY: 555,
-    path: "M374,511L379,515L393,502L406,499L425,510L436,506L446,508L455,500L449,515L468,517L468,524L473,525L471,530L510,548L508,563L497,572L488,595L457,622L445,647L436,642L420,645L411,608L400,604L391,608L368,604L372,580L365,562L371,559L365,553L379,521L374,511Z" },
-  MT: { name: "Mato Grosso", labelX: 390, labelY: 431,
-    path: "M365,296L376,324L393,338L524,347L514,380L519,409L509,444L468,492L464,507L468,517L449,515L455,500L446,508L436,506L425,510L406,499L393,502L379,515L360,500L361,480L324,480L323,463L316,455L322,455L320,432L313,426L331,400L326,386L330,379L319,371L297,370L295,325L357,325L365,296Z" },
-  PA: { name: "Pará", labelX: 460, labelY: 173,
-    path: "M433,98L434,112L460,122L479,165L491,171L489,176L475,180L483,178L485,182L512,166L510,170L516,183L512,187L517,184L521,189L530,184L533,190L537,188L541,183L536,202L550,180L549,185L556,175L561,181L560,173L573,159L582,164L581,159L588,161L588,165L590,162L591,166L593,162L595,167L598,165L595,168L601,165L605,170L604,171L608,170L604,191L588,226L578,239L555,255L566,260L565,267L556,282L545,287L543,317L524,347L393,338L376,324L375,314L359,287L402,193L375,180L353,161L349,121L357,122L362,115L368,117L386,107L409,110L405,102L409,97L433,98Z" },
-  PB: { name: "Paraíba", labelX: 791, labelY: 292,
-    path: "M757,302L760,276L768,279L786,269L780,282L786,285L800,287L805,275L832,279L835,293L835,300L821,298L792,315L784,309L791,299L786,295L769,306L757,302Z" },
-  PE: { name: "Pernambuco", labelX: 772, labelY: 314,
-    path: "M703,324L719,312L717,297L738,297L749,306L757,302L766,306L786,294L791,299L784,309L792,315L803,306L813,306L825,297L835,302L828,328L811,327L792,337L776,327L766,336L761,326L758,329L743,320L718,340L713,327L703,324Z" },
-  PI: { name: "Piauí", labelX: 668, labelY: 293,
-    path: "M611,357L614,339L610,328L620,303L636,297L651,284L672,283L674,276L668,261L674,252L670,233L680,217L691,212L693,203L704,206L701,217L709,235L707,247L716,282L722,285L717,299L719,312L693,335L678,341L661,336L653,339L656,351L647,363L628,368L618,357L611,357Z" },
-  PR: { name: "Paraná", labelX: 524, labelY: 666,
-    path: "M444,647L457,622L470,614L488,613L514,623L529,622L536,630L537,643L545,653L543,661L558,661L558,669L565,668L569,673L565,678L563,673L560,679L555,676L562,681L554,687L558,690L539,695L517,690L514,696L505,697L501,706L455,696L450,682L436,681L444,647Z" },
-  RJ: { name: "Rio de Janeiro", labelX: 666, labelY: 612,
-    path: "M693,576L696,583L711,586L711,601L691,614L690,623L670,623L669,617L666,624L650,626L658,624L643,622L636,626L640,630L633,630L634,624L647,617L633,611L684,596L687,580L693,576Z" },
-  RN: { name: "Rio Grande do Norte", labelX: 805, labelY: 254,
-    path: "M760,277L776,250L786,245L800,251L821,251L832,279L803,275L797,288L795,284L781,282L787,269L768,279L760,277Z" },
-  RO: { name: "Rondônia", labelX: 256, labelY: 362,
-    path: "M194,348L190,347L199,338L212,341L223,335L225,339L231,329L245,329L247,318L256,309L271,310L285,325L293,323L298,327L297,370L328,374L330,404L313,426L307,421L291,423L285,415L272,412L266,405L241,401L227,391L219,376L219,344L194,348Z" },
-  RR: { name: "Roraima", labelX: 296, labelY: 90,
-    path: "M349,121L351,143L327,143L321,162L313,165L303,158L297,162L295,176L290,176L277,164L281,160L276,148L278,131L272,115L273,108L261,104L260,99L246,98L243,76L231,61L244,65L247,70L260,68L270,76L272,66L296,62L315,50L313,43L325,42L328,46L324,56L334,59L337,68L331,75L329,100L334,112L348,121Z" },
-  RS: { name: "Rio Grande do Sul", labelX: 474, labelY: 780,
-    path: "M452,716L485,719L502,727L517,744L535,749L526,763L535,766L517,802L487,833L487,824L504,816L506,806L510,808L515,798L515,790L518,792L517,786L511,792L503,782L502,787L507,790L504,800L501,797L500,807L490,813L485,822L487,832L476,856L461,870L458,857L467,846L454,830L424,811L417,801L408,807L408,800L392,784L383,788L376,786L410,744L415,745L413,741L432,725L452,716Z" },
-  SC: { name: "Santa Catarina", labelX: 531, labelY: 722,
-    path: "M535,766L526,765L534,746L517,744L502,727L468,715L452,716L455,696L501,706L505,697L514,695L517,690L539,695L558,690L556,695L553,692L560,716L557,741L535,766Z" },
-  SE: { name: "Sergipe", labelX: 782, labelY: 362,
-    path: "M771,340L792,350L803,360L788,373L785,371L788,374L777,382L766,368L775,363L771,340Z" },
-  SP: { name: "São Paulo", labelX: 573, labelY: 614,
-    path: "M465,617L488,595L497,572L519,554L544,558L545,565L549,562L551,568L553,562L580,558L590,589L600,590L596,609L602,614L603,621L614,621L615,615L633,611L647,617L634,623L635,632L622,637L621,642L612,640L604,646L602,643L568,669L572,669L568,675L565,668L558,669L558,661L543,661L545,653L537,643L536,630L530,622L514,623L488,613L465,617Z" },
-  TO: { name: "Tocantins", labelX: 572, labelY: 349,
-    path: "M524,347L543,317L545,288L556,282L564,271L566,261L555,256L561,252L572,254L580,259L582,274L575,293L589,310L600,309L600,317L593,319L588,330L599,340L596,345L603,354L615,357L604,366L598,377L608,383L604,387L608,390L603,394L605,408L579,418L576,414L576,419L566,413L556,415L555,420L549,405L542,417L524,410L526,399L517,408L514,380L524,347Z" },
+const BR_STATES: Record<
+  string,
+  { name: string; path: string; labelX: number; labelY: number }
+> = {
+  AC: {
+    name: "Acre",
+    labelX: 92,
+    labelY: 331,
+    path: "M50,291L119,313L194,348L154,373L113,371L116,339L100,350L82,350L80,341L62,338L67,330L46,300L52,295L50,291Z",
+  },
+  AL: {
+    name: "Alagoas",
+    labelX: 799,
+    labelY: 338,
+    path: "M766,336L776,327L792,337L811,327L828,328L817,343L812,342L815,344L803,360L766,336Z",
+  },
+  AM: {
+    name: "Amazonas",
+    labelX: 230,
+    labelY: 198,
+    path: "M260,103L274,109L272,115L279,131L276,148L281,160L277,164L290,176L296,176L297,162L303,158L313,165L321,162L327,143L351,143L351,155L360,169L393,192L402,193L359,283L365,296L358,324L293,323L289,327L273,310L256,309L247,318L245,329L232,329L226,338L223,335L212,341L199,338L190,347L119,312L50,291L63,278L61,270L68,251L111,231L127,234L139,171L134,158L125,151L125,136L144,135L140,126L129,126L129,113L163,113L163,107L168,113L178,105L185,124L201,133L215,128L217,135L224,125L239,117L240,120L247,109L260,103Z",
+  },
+  AP: {
+    name: "Amapá",
+    labelX: 500,
+    labelY: 112,
+    path: "M433,98L446,105L453,100L470,104L497,62L500,69L499,58L505,65L506,74L507,69L514,106L530,113L532,121L526,123L531,124L513,144L502,149L495,168L487,172L470,152L460,123L434,112L433,98Z",
+  },
+  BA: {
+    name: "Bahia",
+    labelX: 705,
+    labelY: 408,
+    path: "M615,357L624,366L633,368L652,359L657,347L654,338L661,336L678,341L693,335L703,324L713,327L718,340L743,320L765,330L775,352L775,364L766,369L775,381L784,380L764,410L757,403L755,408L756,409L749,420L751,429L748,427L750,436L752,430L749,447L754,471L748,510L737,523L718,504L720,493L726,492L733,477L726,470L704,469L694,455L688,457L667,446L656,448L654,440L646,437L608,458L611,440L605,430L609,411L603,398L608,383L598,377L604,366L615,357Z",
+  },
+  CE: {
+    name: "Ceará",
+    labelX: 735,
+    labelY: 258,
+    path: "M720,297L722,285L715,278L706,243L709,233L701,216L704,206L721,204L731,205L761,222L786,245L776,250L759,274L756,288L760,295L751,306L737,297L720,297Z",
+  },
+  DF: {
+    name: "Distrito Federal",
+    labelX: 576,
+    labelY: 470,
+    path: "M584,475L564,475L566,464L581,464L584,475Z",
+  },
+  ES: {
+    name: "Espírito Santo",
+    labelX: 720,
+    labelY: 548,
+    path: "M726,516L737,523L735,550L711,586L696,583L693,566L703,563L712,545L706,534L712,533L708,522L715,519L712,515L726,516Z",
+  },
+  GO: {
+    name: "Goiás",
+    labelX: 553,
+    labelY: 469,
+    path: "M510,548L471,530L473,525L468,523L464,507L475,480L491,470L496,457L507,451L522,402L527,400L524,410L541,417L549,405L554,420L566,413L576,419L576,414L579,418L605,407L609,411L605,430L612,447L608,452L599,447L599,454L592,454L593,471L584,475L580,485L587,495L579,505L584,507L584,518L571,526L550,523L542,530L539,527L523,531L510,548ZM584,475L581,464L566,464L564,475L584,475Z",
+  },
+  MA: {
+    name: "Maranhão",
+    labelX: 633,
+    labelY: 231,
+    path: "M555,256L578,239L588,226L610,169L614,174L615,171L616,175L622,174L621,179L624,174L623,183L633,176L634,184L639,185L633,194L637,197L641,191L643,195L637,200L634,214L649,196L643,205L656,198L661,199L662,195L685,205L694,203L691,212L680,217L670,233L674,252L668,267L673,274L672,282L651,284L636,297L620,303L610,328L614,339L611,357L603,354L596,345L599,340L588,330L593,319L600,317L600,309L589,310L575,293L581,278L580,259L563,252L555,256Z",
+  },
+  MG: {
+    name: "Minas Gerais",
+    labelX: 622,
+    labelY: 524,
+    path: "M509,561L510,548L523,531L539,527L542,530L550,523L571,526L584,517L584,507L579,504L587,494L580,484L584,475L593,471L592,454L599,454L599,447L609,450L608,458L639,440L650,438L654,440L654,447L671,447L688,457L694,455L704,469L726,470L733,476L719,498L726,516L712,515L715,519L708,523L712,533L706,534L712,541L711,548L703,563L693,566L685,596L669,604L654,603L622,616L615,615L614,621L603,621L596,609L600,590L590,589L580,558L553,562L551,568L549,562L545,565L543,558L519,554L509,561Z",
+  },
+  MS: {
+    name: "Mato Grosso do Sul",
+    labelX: 426,
+    labelY: 555,
+    path: "M374,511L379,515L393,502L406,499L425,510L436,506L446,508L455,500L449,515L468,517L468,524L473,525L471,530L510,548L508,563L497,572L488,595L457,622L445,647L436,642L420,645L411,608L400,604L391,608L368,604L372,580L365,562L371,559L365,553L379,521L374,511Z",
+  },
+  MT: {
+    name: "Mato Grosso",
+    labelX: 390,
+    labelY: 431,
+    path: "M365,296L376,324L393,338L524,347L514,380L519,409L509,444L468,492L464,507L468,517L449,515L455,500L446,508L436,506L425,510L406,499L393,502L379,515L360,500L361,480L324,480L323,463L316,455L322,455L320,432L313,426L331,400L326,386L330,379L319,371L297,370L295,325L357,325L365,296Z",
+  },
+  PA: {
+    name: "Pará",
+    labelX: 460,
+    labelY: 173,
+    path: "M433,98L434,112L460,122L479,165L491,171L489,176L475,180L483,178L485,182L512,166L510,170L516,183L512,187L517,184L521,189L530,184L533,190L537,188L541,183L536,202L550,180L549,185L556,175L561,181L560,173L573,159L582,164L581,159L588,161L588,165L590,162L591,166L593,162L595,167L598,165L595,168L601,165L605,170L604,171L608,170L604,191L588,226L578,239L555,255L566,260L565,267L556,282L545,287L543,317L524,347L393,338L376,324L375,314L359,287L402,193L375,180L353,161L349,121L357,122L362,115L368,117L386,107L409,110L405,102L409,97L433,98Z",
+  },
+  PB: {
+    name: "Paraíba",
+    labelX: 791,
+    labelY: 292,
+    path: "M757,302L760,276L768,279L786,269L780,282L786,285L800,287L805,275L832,279L835,293L835,300L821,298L792,315L784,309L791,299L786,295L769,306L757,302Z",
+  },
+  PE: {
+    name: "Pernambuco",
+    labelX: 772,
+    labelY: 314,
+    path: "M703,324L719,312L717,297L738,297L749,306L757,302L766,306L786,294L791,299L784,309L792,315L803,306L813,306L825,297L835,302L828,328L811,327L792,337L776,327L766,336L761,326L758,329L743,320L718,340L713,327L703,324Z",
+  },
+  PI: {
+    name: "Piauí",
+    labelX: 668,
+    labelY: 293,
+    path: "M611,357L614,339L610,328L620,303L636,297L651,284L672,283L674,276L668,261L674,252L670,233L680,217L691,212L693,203L704,206L701,217L709,235L707,247L716,282L722,285L717,299L719,312L693,335L678,341L661,336L653,339L656,351L647,363L628,368L618,357L611,357Z",
+  },
+  PR: {
+    name: "Paraná",
+    labelX: 524,
+    labelY: 666,
+    path: "M444,647L457,622L470,614L488,613L514,623L529,622L536,630L537,643L545,653L543,661L558,661L558,669L565,668L569,673L565,678L563,673L560,679L555,676L562,681L554,687L558,690L539,695L517,690L514,696L505,697L501,706L455,696L450,682L436,681L444,647Z",
+  },
+  RJ: {
+    name: "Rio de Janeiro",
+    labelX: 666,
+    labelY: 612,
+    path: "M693,576L696,583L711,586L711,601L691,614L690,623L670,623L669,617L666,624L650,626L658,624L643,622L636,626L640,630L633,630L634,624L647,617L633,611L684,596L687,580L693,576Z",
+  },
+  RN: {
+    name: "Rio Grande do Norte",
+    labelX: 805,
+    labelY: 254,
+    path: "M760,277L776,250L786,245L800,251L821,251L832,279L803,275L797,288L795,284L781,282L787,269L768,279L760,277Z",
+  },
+  RO: {
+    name: "Rondônia",
+    labelX: 256,
+    labelY: 362,
+    path: "M194,348L190,347L199,338L212,341L223,335L225,339L231,329L245,329L247,318L256,309L271,310L285,325L293,323L298,327L297,370L328,374L330,404L313,426L307,421L291,423L285,415L272,412L266,405L241,401L227,391L219,376L219,344L194,348Z",
+  },
+  RR: {
+    name: "Roraima",
+    labelX: 296,
+    labelY: 90,
+    path: "M349,121L351,143L327,143L321,162L313,165L303,158L297,162L295,176L290,176L277,164L281,160L276,148L278,131L272,115L273,108L261,104L260,99L246,98L243,76L231,61L244,65L247,70L260,68L270,76L272,66L296,62L315,50L313,43L325,42L328,46L324,56L334,59L337,68L331,75L329,100L334,112L348,121Z",
+  },
+  RS: {
+    name: "Rio Grande do Sul",
+    labelX: 474,
+    labelY: 780,
+    path: "M452,716L485,719L502,727L517,744L535,749L526,763L535,766L517,802L487,833L487,824L504,816L506,806L510,808L515,798L515,790L518,792L517,786L511,792L503,782L502,787L507,790L504,800L501,797L500,807L490,813L485,822L487,832L476,856L461,870L458,857L467,846L454,830L424,811L417,801L408,807L408,800L392,784L383,788L376,786L410,744L415,745L413,741L432,725L452,716Z",
+  },
+  SC: {
+    name: "Santa Catarina",
+    labelX: 531,
+    labelY: 722,
+    path: "M535,766L526,765L534,746L517,744L502,727L468,715L452,716L455,696L501,706L505,697L514,695L517,690L539,695L558,690L556,695L553,692L560,716L557,741L535,766Z",
+  },
+  SE: {
+    name: "Sergipe",
+    labelX: 782,
+    labelY: 362,
+    path: "M771,340L792,350L803,360L788,373L785,371L788,374L777,382L766,368L775,363L771,340Z",
+  },
+  SP: {
+    name: "São Paulo",
+    labelX: 573,
+    labelY: 614,
+    path: "M465,617L488,595L497,572L519,554L544,558L545,565L549,562L551,568L553,562L580,558L590,589L600,590L596,609L602,614L603,621L614,621L615,615L633,611L647,617L634,623L635,632L622,637L621,642L612,640L604,646L602,643L568,669L572,669L568,675L565,668L558,669L558,661L543,661L545,653L537,643L536,630L530,622L514,623L488,613L465,617Z",
+  },
+  TO: {
+    name: "Tocantins",
+    labelX: 572,
+    labelY: 349,
+    path: "M524,347L543,317L545,288L556,282L564,271L566,261L555,256L561,252L572,254L580,259L582,274L575,293L589,310L600,309L600,317L593,319L588,330L599,340L596,345L603,354L615,357L604,366L598,377L608,383L604,387L608,390L603,394L605,408L579,418L576,414L576,419L566,413L556,415L555,420L549,405L542,417L524,410L526,399L517,408L514,380L524,347Z",
+  },
 };
 
 function BrazilMap({
   stateData,
   onStateClick,
 }: {
-  stateData: Record<string, { total: number; complaints: number; activities: number; missions: number; localities: string[] }>;
+  stateData: Record<
+    string,
+    {
+      pressureScore: number;
+      complaints: number;
+      cpcaComplaints: number;
+      smifComplaints: number;
+      researchSignals: number;
+      activities: number;
+      missions: number;
+      localities: string[];
+    }
+  >;
   onStateClick?: (uf: string, data: any) => void;
 }) {
   const [hoveredState, setHoveredState] = useState<string | null>(null);
   const maxTotal = useMemo(() => {
     let max = 1;
     for (const v of Object.values(stateData)) {
-      const t = v.total;
+      const t = v.pressureScore;
       if (t > max) max = t;
     }
     return max;
@@ -2082,8 +2719,8 @@ function BrazilMap({
 
   const getColor = (uf: string) => {
     const d = stateData[uf];
-    if (!d || d.total === 0) return "#E8EAF0";
-    const intensity = Math.max(0.15, d.total / maxTotal);
+    if (!d || d.pressureScore === 0) return "#E8EAF0";
+    const intensity = Math.max(0.15, d.pressureScore / maxTotal);
     const r = Math.round(26 + (210 - 26) * (1 - intensity));
     const g = Math.round(60 + (230 - 60) * (1 - intensity));
     const b = Math.round(110 + (240 - 110) * (1 - intensity));
@@ -2091,7 +2728,9 @@ function BrazilMap({
   };
 
   return (
-    <Box sx={{ position: "relative", display: "flex", justifyContent: "center" }}>
+    <Box
+      sx={{ position: "relative", display: "flex", justifyContent: "center" }}
+    >
       <svg viewBox="20 20 860 880" style={{ width: "100%", maxHeight: 620 }}>
         <defs>
           <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
@@ -2103,7 +2742,7 @@ function BrazilMap({
             key={uf}
             title={
               stateData[uf]
-                ? `${BR_STATES[uf].name} (${uf}): ${stateData[uf].total} registros — ${stateData[uf].complaints} denúncias, ${stateData[uf].activities} atividades, ${stateData[uf].missions} missões`
+                ? `${BR_STATES[uf].name} (${uf}): pressão ${stateData[uf].pressureScore} — CPCA ${stateData[uf].cpcaComplaints}, SMIF ${stateData[uf].smifComplaints}, pesquisas ${stateData[uf].researchSignals}, atividades ${stateData[uf].activities}, missões ${stateData[uf].missions}`
                 : `${BR_STATES[uf].name} (${uf}): sem dados`
             }
             arrow
@@ -2132,9 +2771,13 @@ function BrazilMap({
             dominantBaseline="central"
             fontSize={14}
             fontWeight={700}
-            fill={stateData[uf]?.total ? "#fff" : "#888"}
+            fill={stateData[uf]?.pressureScore ? "#fff" : "#888"}
             pointerEvents="none"
-            style={{ textShadow: stateData[uf]?.total ? "0 1px 3px rgba(0,0,0,0.5)" : "none" }}
+            style={{
+              textShadow: stateData[uf]?.pressureScore
+                ? "0 1px 3px rgba(0,0,0,0.5)"
+                : "none",
+            }}
           >
             {uf}
           </text>
@@ -2147,8 +2790,13 @@ function BrazilMap({
 function GeoMapTab() {
   const aggressorProfileQuery = useAggressorProfile();
   const { data, isLoading, error } = useGeoMap();
-  const [selectedState, setSelectedState] = useState<{ uf: string; data: any } | null>(null);
-  const [selectedLocalityBar, setSelectedLocalityBar] = useState<any | null>(null);
+  const [selectedState, setSelectedState] = useState<{
+    uf: string;
+    data: any;
+  } | null>(null);
+  const [selectedLocalityBar, setSelectedLocalityBar] = useState<any | null>(
+    null,
+  );
   const [geoKpiModal, setGeoKpiModal] = useState<
     "mappedOms" | "cpca" | "statesWithData" | null
   >(null);
@@ -2168,25 +2816,49 @@ function GeoMapTab() {
     />
   );
 
-  if (isLoading) return <Stack spacing={2}>{guideCard}<SkeletonState /></Stack>;
-  if (error) return <Stack spacing={2}>{guideCard}<ErrorState message="Erro ao carregar mapa geográfico." /></Stack>;
-  if (!data) return <Stack spacing={2}>{guideCard}<EmptyState message="Sem dados geográficos." /></Stack>;
+  if (isLoading)
+    return (
+      <Stack spacing={2}>
+        {guideCard}
+        <SkeletonState />
+      </Stack>
+    );
+  if (error)
+    return (
+      <Stack spacing={2}>
+        {guideCard}
+        <ErrorState message="Erro ao carregar mapa geográfico." />
+      </Stack>
+    );
+  if (!data)
+    return (
+      <Stack spacing={2}>
+        {guideCard}
+        <EmptyState message="Sem dados geográficos." />
+      </Stack>
+    );
 
   const omsCatalog = Array.isArray(data.omsCatalog) ? data.omsCatalog : [];
   const coveredOmsCatalog = Array.isArray(data.cpcaCoveredOmsCatalog)
     ? data.cpcaCoveredOmsCatalog
     : [];
-  const omsCoveredByCpca = coveredOmsCatalog.length > 0
-    ? coveredOmsCatalog
-    : omsCatalog.filter((loc: any) => Boolean(loc?.hasCpca));
+  const omsCoveredByCpca =
+    coveredOmsCatalog.length > 0
+      ? coveredOmsCatalog
+      : omsCatalog.filter((loc: any) => Boolean(loc?.hasCpca));
   const totalOmsCoveredByCpca = Number(
     data.totalOmsCoveredByCpca ?? omsCoveredByCpca.length,
   );
   const totalOms = omsCatalog.length;
-  const statesWithData = (data.states ?? []).filter(
-    (s: any) => s.complaints + s.activities + s.missions > 0,
+  const statesWithPressure = (data.states ?? []).filter(
+    (s: any) => Number(s.pressureScore ?? 0) > 0,
   );
-  const localityDistribution = Array.isArray(aggressorProfileQuery.data?.byLocality)
+  const statesWithComplaintsWithoutResearch = (data.states ?? []).filter(
+    (s: any) => Number(s.complaints ?? 0) > 0 && !s.hasResearch,
+  );
+  const localityDistribution = Array.isArray(
+    aggressorProfileQuery.data?.byLocality,
+  )
     ? aggressorProfileQuery.data.byLocality
         .map((item: any) => ({
           label:
@@ -2209,12 +2881,23 @@ function GeoMapTab() {
     : [];
 
   const stateDataMap: Record<string, any> = {};
-  for (const s of (data.states ?? [])) {
+  for (const s of data.states ?? []) {
     stateDataMap[s.uf] = {
-      total: s.complaints + s.activities + s.missions,
-      complaints: s.complaints,
-      activities: s.activities,
-      missions: s.missions,
+      pressureScore: Number(s.pressureScore ?? 0),
+      responseScore: Number(s.responseScore ?? 0),
+      complaints: Number(s.complaints ?? 0),
+      cpcaComplaints: Number(s.cpcaComplaints ?? s.complaints ?? 0),
+      smifComplaints: Number(s.smifComplaints ?? 0),
+      cpcaOpenComplaints: Number(s.cpcaOpenComplaints ?? 0),
+      smifOpenComplaints: Number(s.smifOpenComplaints ?? 0),
+      activities: Number(s.activities ?? 0),
+      missions: Number(s.missions ?? 0),
+      schoolSurveyTotal: Number(s.schoolSurveyTotal ?? 0),
+      schoolSurveyYes: Number(s.schoolSurveyYes ?? 0),
+      domesticSurveyTotal: Number(s.domesticSurveyTotal ?? 0),
+      domesticLast12MonthsYes: Number(s.domesticLast12MonthsYes ?? 0),
+      researchSignals: Number(s.researchSignals ?? 0),
+      hasResearch: Boolean(s.hasResearch),
       localities: s.localities ?? [],
       oms: s.oms ?? [],
       complaintDetails: s.complaintDetails ?? [],
@@ -2224,17 +2907,20 @@ function GeoMapTab() {
   }
 
   const chartData = (data.states ?? [])
-    .filter((s: any) => s.complaints + s.activities + s.missions > 0)
+    .filter((s: any) => Number(s.pressureScore ?? 0) > 0)
     .slice(0, 15)
     .map((s: any) => ({
       uf: s.uf,
-      Denúncias: s.complaints,
-      Atividades: s.activities,
-      Missões: s.missions,
+      "Denúncias CPCA": Number(s.cpcaComplaints ?? s.complaints ?? 0),
+      "Denúncias SMIF": Number(s.smifComplaints ?? 0),
+      "Pesq. escolas": Number(s.schoolSurveyYes ?? 0),
+      "VD 12m": Number(s.domesticLast12MonthsYes ?? 0),
     }));
 
   const openStateDetail = (ufRaw: string | null | undefined) => {
-    const uf = String(ufRaw ?? "").trim().toUpperCase();
+    const uf = String(ufRaw ?? "")
+      .trim()
+      .toUpperCase();
     if (!uf || !stateDataMap[uf]) return;
     setSelectedState({ uf, data: stateDataMap[uf] });
   };
@@ -2245,29 +2931,31 @@ function GeoMapTab() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
-            title="OMs no mapa"
-            value={omsCatalog.length}
-            subtitle="Base territorial pronta para cruzamento"
+            title="UFs com denúncia CPCA"
+            value={data.summary?.statesWithCpcaComplaints ?? 0}
+            subtitle="Demanda formal CPCA localizada por UF"
             color="#1A3C6E"
-            onClick={() => setGeoKpiModal("mappedOms")}
+            onClick={() => setGeoKpiModal("statesWithData")}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
             title="Cobertura CPCA"
             value={totalOmsCoveredByCpca}
-            subtitle={totalOms
-              ? `${((totalOmsCoveredByCpca / totalOms) * 100).toFixed(0)}% das OMs`
-              : ""}
+            subtitle={
+              totalOms
+                ? `${((totalOmsCoveredByCpca / totalOms) * 100).toFixed(0)}% das OMs`
+                : ""
+            }
             color="#2E7D32"
             onClick={() => setGeoKpiModal("cpca")}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
-            title="Estados com pressão"
-            value={statesWithData.length}
-            subtitle="Com denúncia, atividade ou missão"
+            title="Lacuna territorial"
+            value={statesWithComplaintsWithoutResearch.length}
+            subtitle="UFs com denúncia formal e sem pesquisa normalizada"
             color="#ED6C02"
             onClick={() => setGeoKpiModal("statesWithData")}
           />
@@ -2275,14 +2963,18 @@ function GeoMapTab() {
       </Grid>
 
       {data.totalLocalitiesWithUf === 0 && (
-        <Card variant="outlined" sx={{ mb: 3, bgcolor: "#FFF8E1", borderColor: "#FFE082" }}>
+        <Card
+          variant="outlined"
+          sx={{ mb: 3, bgcolor: "#FFF8E1", borderColor: "#FFE082" }}
+        >
           <CardContent>
             <Typography variant="subtitle2" color="#F57F17">
               Atenção: Nenhuma localidade possui o campo UF preenchido.
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Para visualizar o mapa geográfico, preencha o campo "UF" (sigla do estado, ex: SP, RJ, DF)
-              no cadastro de cada localidade/OM na área de administração.
+              Para visualizar o mapa geográfico, preencha o campo "UF" (sigla do
+              estado, ex: SP, RJ, DF) no cadastro de cada localidade/OM na área
+              de administração.
             </Typography>
           </CardContent>
         </Card>
@@ -2295,8 +2987,14 @@ function GeoMapTab() {
               <Typography variant="subtitle2" gutterBottom>
                 Pressão por estado
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-                Clique em um estado para abrir o resumo territorial. A intensidade do azul indica volume combinado.
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mb: 1, display: "block" }}
+              >
+                Clique em um estado para abrir o resumo territorial. A
+                intensidade do azul usa denúncias e sinais de pesquisa; missões
+                entram como resposta, não como pressão.
               </Typography>
               <BrazilMap
                 stateData={stateDataMap}
@@ -2309,17 +3007,32 @@ function GeoMapTab() {
           <Card variant="outlined" sx={{ height: "100%" }}>
             <CardContent>
               <Typography variant="subtitle2" gutterBottom>
-                Estados com maior pressão
+                Estados com maior pressão formal e amostral
               </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: "block" }}>
-                Cada barra soma denúncias, atividades e missões. Clique para abrir o estado.
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mb: 1, display: "block" }}
+              >
+                Barras separam denúncias CPCA/SMIF e sinais positivos das
+                pesquisas. Clique para abrir o estado.
               </Typography>
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={chartData} layout="vertical" margin={{ left: 5, right: 20, top: 5, bottom: 5 }}>
+                  <BarChart
+                    data={chartData}
+                    layout="vertical"
+                    margin={{ left: 5, right: 20, top: 5, bottom: 5 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" />
-                    <YAxis dataKey="uf" type="category" width={35} tick={{ fontSize: 11 }} interval={0} />
+                    <YAxis
+                      dataKey="uf"
+                      type="category"
+                      width={35}
+                      tick={{ fontSize: 11 }}
+                      interval={0}
+                    />
                     <RechartsTooltip
                       labelFormatter={(label: string) =>
                         `${BR_STATES[label]?.name ?? label} (${label})`
@@ -2327,23 +3040,30 @@ function GeoMapTab() {
                     />
                     <Legend />
                     <Bar
-                      dataKey="Denúncias"
+                      dataKey="Denúncias CPCA"
                       stackId="a"
                       fill="#D32F2F"
                       barSize={16}
                       onClick={(entry: any) => openStateDetail(entry?.uf)}
                     />
                     <Bar
-                      dataKey="Atividades"
+                      dataKey="Denúncias SMIF"
                       stackId="a"
-                      fill="#1A3C6E"
+                      fill="#7B1FA2"
                       barSize={16}
                       onClick={(entry: any) => openStateDetail(entry?.uf)}
                     />
                     <Bar
-                      dataKey="Missões"
+                      dataKey="Pesq. escolas"
                       stackId="a"
-                      fill="#2E7D32"
+                      fill="#ED6C02"
+                      barSize={16}
+                      onClick={(entry: any) => openStateDetail(entry?.uf)}
+                    />
+                    <Bar
+                      dataKey="VD 12m"
+                      stackId="a"
+                      fill="#C2185B"
                       barSize={16}
                       radius={[0, 4, 4, 0]}
                       onClick={(entry: any) => openStateDetail(entry?.uf)}
@@ -2351,7 +3071,11 @@ function GeoMapTab() {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <Typography color="text.secondary" variant="body2" sx={{ mt: 4, textAlign: "center" }}>
+                <Typography
+                  color="text.secondary"
+                  variant="body2"
+                  sx={{ mt: 4, textAlign: "center" }}
+                >
                   Preencha o campo UF nas localidades para visualizar o ranking.
                 </Typography>
               )}
@@ -2370,13 +3094,36 @@ function GeoMapTab() {
               <Table size="small">
                 <TableHead>
                   <TableRow>
-                    <TableCell><strong>UF</strong></TableCell>
-                    <TableCell><strong>Estado</strong></TableCell>
-                    <TableCell align="right"><strong>Denúncias</strong></TableCell>
-                    <TableCell align="right"><strong>Atividades</strong></TableCell>
-                    <TableCell align="right"><strong>Missões</strong></TableCell>
-                    <TableCell align="right"><strong>Total</strong></TableCell>
-                    <TableCell><strong>OMs</strong></TableCell>
+                    <TableCell>
+                      <strong>UF</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>Estado</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>CPCA</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>SMIF</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>Escolas</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>VD 12m</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>Atividades</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>Missões</strong>
+                    </TableCell>
+                    <TableCell align="right">
+                      <strong>Pressão</strong>
+                    </TableCell>
+                    <TableCell>
+                      <strong>OMs</strong>
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -2385,16 +3132,44 @@ function GeoMapTab() {
                       key={s.uf}
                       hover
                       sx={{ cursor: "pointer" }}
-                      onClick={() => setSelectedState({ uf: s.uf, data: stateDataMap[s.uf] })}
+                      onClick={() =>
+                        setSelectedState({ uf: s.uf, data: stateDataMap[s.uf] })
+                      }
                     >
-                      <TableCell><Chip label={s.uf} size="small" sx={{ bgcolor: "#1A3C6E", color: "#fff" }} /></TableCell>
+                      <TableCell>
+                        <Chip
+                          label={s.uf}
+                          size="small"
+                          sx={{ bgcolor: "#1A3C6E", color: "#fff" }}
+                        />
+                      </TableCell>
                       <TableCell>{BR_STATES[s.uf]?.name ?? s.uf}</TableCell>
-                      <TableCell align="right">{s.complaints}</TableCell>
+                      <TableCell align="right">
+                        {s.cpcaComplaints ?? s.complaints}
+                      </TableCell>
+                      <TableCell align="right">
+                        {s.smifComplaints ?? 0}
+                      </TableCell>
+                      <TableCell align="right">
+                        {s.schoolSurveyYes ?? 0}/{s.schoolSurveyTotal ?? 0}
+                      </TableCell>
+                      <TableCell align="right">
+                        {s.domesticLast12MonthsYes ?? 0}/
+                        {s.domesticSurveyTotal ?? 0}
+                      </TableCell>
                       <TableCell align="right">{s.activities}</TableCell>
                       <TableCell align="right">{s.missions}</TableCell>
-                      <TableCell align="right"><strong>{s.complaints + s.activities + s.missions}</strong></TableCell>
+                      <TableCell align="right">
+                        <strong>
+                          {Number(s.pressureScore ?? 0).toFixed(1)}
+                        </strong>
+                      </TableCell>
                       <TableCell>
-                        <Typography variant="caption" sx={{ maxWidth: 250, display: "inline-block" }} noWrap>
+                        <Typography
+                          variant="caption"
+                          sx={{ maxWidth: 250, display: "inline-block" }}
+                          noWrap
+                        >
                           {s.oms?.join(", ")}
                         </Typography>
                       </TableCell>
@@ -2413,7 +3188,9 @@ function GeoMapTab() {
             OMs com maior concentração
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            A leitura territorial dos casos fica concentrada nesta aba. Assim, o Perfil de Assédio passa a focar pessoas e contexto, sem duplicar a visão de território.
+            A leitura territorial dos casos fica concentrada nesta aba. Assim, o
+            Perfil de Assédio passa a focar pessoas e contexto, sem duplicar a
+            visão de território.
           </Typography>
           <HorizontalBarCard
             title="Casos por OM / localidade"
@@ -2435,8 +3212,8 @@ function GeoMapTab() {
             : geoKpiModal === "cpca"
               ? "Detalhamento — OMs cobertas pela CPCA"
               : geoKpiModal === "statesWithData"
-                ? "Detalhamento — Estados com Dados"
-                  : ""
+                ? "Detalhamento — Estados com Pressão"
+                : ""
         }
         onClose={() => setGeoKpiModal(null)}
         maxWidth="lg"
@@ -2454,9 +3231,19 @@ function GeoMapTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="OMs mapeadas" value={omsCatalog.length} color="#1A3C6E" />
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  Quanto maior esse número, maior a capacidade do painel de distribuir denúncias, atividades e missões por estado e OM de forma confiável.
+                <DetailRow
+                  label="OMs mapeadas"
+                  value={omsCatalog.length}
+                  color="#1A3C6E"
+                />
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  Quanto maior esse número, maior a capacidade do painel de
+                  distribuir denúncias, atividades e missões por estado e OM de
+                  forma confiável.
                 </Typography>
               </Stack>
             </DetailAccordionSection>
@@ -2468,9 +3255,15 @@ function GeoMapTab() {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell><strong>OM</strong></TableCell>
-                      <TableCell><strong>Descrição</strong></TableCell>
-                      <TableCell><strong>UF</strong></TableCell>
+                      <TableCell>
+                        <strong>OM</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Descrição</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>UF</strong>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2501,10 +3294,18 @@ function GeoMapTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="OMs cobertas pela CPCA" value={totalOmsCoveredByCpca} color="#2E7D32" />
+                <DetailRow
+                  label="OMs cobertas pela CPCA"
+                  value={totalOmsCoveredByCpca}
+                  color="#2E7D32"
+                />
                 <DetailRow
                   label="Cobertura relativa"
-                  value={totalOms ? `${((totalOmsCoveredByCpca / totalOms) * 100).toFixed(1)}%` : "0%"}
+                  value={
+                    totalOms
+                      ? `${((totalOmsCoveredByCpca / totalOms) * 100).toFixed(1)}%`
+                      : "0%"
+                  }
                 />
               </Stack>
             </DetailAccordionSection>
@@ -2516,11 +3317,21 @@ function GeoMapTab() {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell><strong>OM</strong></TableCell>
-                      <TableCell><strong>Descrição</strong></TableCell>
-                      <TableCell><strong>UF</strong></TableCell>
-                      <TableCell><strong>Cobertura</strong></TableCell>
-                      <TableCell><strong>Comissão responsável</strong></TableCell>
+                      <TableCell>
+                        <strong>OM</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Descrição</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>UF</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Cobertura</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Comissão responsável</strong>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2532,7 +3343,9 @@ function GeoMapTab() {
                         <TableCell>
                           <CoveredOmCoverageChip item={loc} />
                         </TableCell>
-                        <TableCell>{formatCoveredOmResponsibility(loc)}</TableCell>
+                        <TableCell>
+                          {formatCoveredOmResponsibility(loc)}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {omsCoveredByCpca.length === 0 && (
@@ -2555,8 +3368,8 @@ function GeoMapTab() {
           <Stack spacing={1.25}>
             <DetailMeaningBlock
               title="O que este número significa"
-              meaning="Este KPI mostra em quantos estados já existe pelo menos um sinal territorial relevante: denúncia, atividade ou missão. Ele ajuda a entender abrangência territorial da atuação, não gravidade isolada."
-              source="Fonte: consolidação por UF de denúncias, atividades de campo e missões cadastradas."
+              meaning="Este KPI mostra em quantos estados existe pressão territorial mensurável: denúncia formal CPCA/SMIF ou sinal positivo em pesquisa normalizada por UF. Atividades e missões aparecem como resposta institucional, não como pressão."
+              source="Fonte: consolidação por UF de denúncias CPCA/SMIF, pesquisas de escolas e pesquisa de violência doméstica."
             />
             <DetailAccordionSection
               title="Resumo executivo"
@@ -2564,9 +3377,24 @@ function GeoMapTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="Estados com sinal relevante" value={statesWithData.length} color="#ED6C02" />
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                  Cada estado listado abaixo tem pelo menos um registro territorial relevante no recorte atual. O botão de ação leva direto ao modal completo daquele estado.
+                <DetailRow
+                  label="Estados com pressão territorial"
+                  value={statesWithPressure.length}
+                  color="#ED6C02"
+                />
+                <DetailRow
+                  label="Estados com denúncia sem pesquisa"
+                  value={statesWithComplaintsWithoutResearch.length}
+                  color="#4E342E"
+                />
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ lineHeight: 1.7 }}
+                >
+                  A tabela separa origem formal, origem amostral e resposta.
+                  Estados com denúncia e sem pesquisa não são tratados como
+                  ausência de problema; ficam marcados como lacuna de evidência.
                 </Typography>
               </Stack>
             </DetailAccordionSection>
@@ -2578,25 +3406,62 @@ function GeoMapTab() {
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell><strong>UF</strong></TableCell>
-                      <TableCell><strong>Estado</strong></TableCell>
-                      <TableCell align="right"><strong>Denúncias</strong></TableCell>
-                      <TableCell align="right"><strong>Atividades</strong></TableCell>
-                      <TableCell align="right"><strong>Missões</strong></TableCell>
-                      <TableCell align="right"><strong>Total</strong></TableCell>
-                      <TableCell align="right"><strong>Ação</strong></TableCell>
+                      <TableCell>
+                        <strong>UF</strong>
+                      </TableCell>
+                      <TableCell>
+                        <strong>Estado</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>CPCA</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>SMIF</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>Escolas</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>VD 12m</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>Atividades</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>Missões</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>Pressão</strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>Ação</strong>
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {statesWithData.map((s: any) => (
+                    {statesWithPressure.map((s: any) => (
                       <TableRow key={s.uf}>
                         <TableCell>{s.uf}</TableCell>
                         <TableCell>{BR_STATES[s.uf]?.name ?? s.uf}</TableCell>
-                        <TableCell align="right">{s.complaints}</TableCell>
+                        <TableCell align="right">
+                          {s.cpcaComplaints ?? s.complaints}
+                        </TableCell>
+                        <TableCell align="right">
+                          {s.smifComplaints ?? 0}
+                        </TableCell>
+                        <TableCell align="right">
+                          {s.schoolSurveyYes ?? 0}/{s.schoolSurveyTotal ?? 0}
+                        </TableCell>
+                        <TableCell align="right">
+                          {s.domesticLast12MonthsYes ?? 0}/
+                          {s.domesticSurveyTotal ?? 0}
+                        </TableCell>
                         <TableCell align="right">{s.activities}</TableCell>
                         <TableCell align="right">{s.missions}</TableCell>
                         <TableCell align="right">
-                          <strong>{s.complaints + s.activities + s.missions}</strong>
+                          <strong>
+                            {Number(s.pressureScore ?? 0).toFixed(1)}
+                          </strong>
                         </TableCell>
                         <TableCell align="right">
                           <Button
@@ -2604,7 +3469,10 @@ function GeoMapTab() {
                             variant="outlined"
                             onClick={() => {
                               setGeoKpiModal(null);
-                              setSelectedState({ uf: s.uf, data: stateDataMap[s.uf] });
+                              setSelectedState({
+                                uf: s.uf,
+                                data: stateDataMap[s.uf],
+                              });
                             }}
                           >
                             Abrir Estado
@@ -2618,7 +3486,6 @@ function GeoMapTab() {
             </DetailAccordionSection>
           </Stack>
         )}
-
       </KpiDetailModal>
 
       <Dialog
@@ -2628,11 +3495,24 @@ function GeoMapTab() {
         fullWidth
         PaperProps={{ sx: { borderRadius: 2 } }}
       >
-        <DialogTitle sx={{ bgcolor: "#1A3C6E", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <DialogTitle
+          sx={{
+            bgcolor: "#1A3C6E",
+            color: "#fff",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
           <Typography variant="h6" fontWeight={700}>
-            {selectedState ? `${BR_STATES[selectedState.uf]?.name ?? selectedState.uf} (${selectedState.uf})` : ""}
+            {selectedState
+              ? `${BR_STATES[selectedState.uf]?.name ?? selectedState.uf} (${selectedState.uf})`
+              : ""}
           </Typography>
-          <Button onClick={() => setSelectedState(null)} sx={{ color: "#fff", minWidth: "auto" }}>
+          <Button
+            onClick={() => setSelectedState(null)}
+            sx={{ color: "#fff", minWidth: "auto" }}
+          >
             <CloseRoundedIcon />
           </Button>
         </DialogTitle>
@@ -2641,8 +3521,8 @@ function GeoMapTab() {
             <Stack spacing={1.5} sx={{ mt: 1 }}>
               <DetailMeaningBlock
                 title="O que este detalhamento mostra"
-                meaning="Este modal concentra toda a leitura territorial do estado selecionado. O resumo executivo mostra o volume agregado; os blocos expansíveis separam denúncias, atividades, missões e OMs vinculadas ao estado."
-                source="Fonte: consolidação territorial por UF do Painel Estratégico."
+                meaning="Este modal concentra a leitura territorial do estado selecionado. A pressão é formada por denúncias formais e sinais de pesquisa; atividades e missões aparecem como resposta/cobertura para evitar inferência causal indevida."
+                source="Fonte: consolidação territorial por UF do Painel Estratégico, separando CPCA, SMIF, pesquisas, atividades e missões."
               />
               <AiCopilotCtaRow
                 title="Levar este estado para a IA"
@@ -2652,7 +3532,7 @@ function GeoMapTab() {
                     ? `${BR_STATES[selectedState.uf]?.name ?? selectedState.uf} (${selectedState.uf})`
                     : "Estado selecionado",
                   description: selectedState?.data
-                    ? `${selectedState.data.complaints ?? 0} denúncias, ${selectedState.data.activities ?? 0} atividades e ${selectedState.data.missions ?? 0} missões no recorte atual.`
+                    ? `Pressão ${selectedState.data.pressureScore ?? 0}: CPCA ${selectedState.data.cpcaComplaints ?? 0}, SMIF ${selectedState.data.smifComplaints ?? 0}, pesquisas ${selectedState.data.researchSignals ?? 0}, atividades ${selectedState.data.activities ?? 0}, missões ${selectedState.data.missions ?? 0}.`
                     : "Leitura territorial do estado selecionado.",
                   focus: selectedState
                     ? {
@@ -2667,33 +3547,65 @@ function GeoMapTab() {
               <Grid container spacing={2}>
                 <Grid size={{ xs: 6, sm: 3 }}>
                   <Card variant="outlined" sx={{ textAlign: "center", p: 1 }}>
-                    <Typography variant="h5" fontWeight={700}>{selectedState.data.total ?? 0}</Typography>
-                    <Typography variant="caption" color="text.secondary">Total</Typography>
+                    <Typography variant="h5" fontWeight={700}>
+                      {selectedState.data.pressureScore ?? 0}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Pressão
+                    </Typography>
                   </Card>
                 </Grid>
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <Card variant="outlined" sx={{ textAlign: "center", p: 1, borderColor: "#D32F2F" }}>
-                    <Typography variant="h5" fontWeight={700} color="#D32F2F">{selectedState.data.complaints ?? 0}</Typography>
-                    <Typography variant="caption" color="text.secondary">Denúncias</Typography>
+                  <Card
+                    variant="outlined"
+                    sx={{ textAlign: "center", p: 1, borderColor: "#D32F2F" }}
+                  >
+                    <Typography variant="h5" fontWeight={700} color="#D32F2F">
+                      {selectedState.data.cpcaComplaints ?? 0}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Denúncias CPCA
+                    </Typography>
                   </Card>
                 </Grid>
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <Card variant="outlined" sx={{ textAlign: "center", p: 1, borderColor: "#1A3C6E" }}>
-                    <Typography variant="h5" fontWeight={700} color="#1A3C6E">{selectedState.data.activities ?? 0}</Typography>
-                    <Typography variant="caption" color="text.secondary">Atividades</Typography>
+                  <Card
+                    variant="outlined"
+                    sx={{ textAlign: "center", p: 1, borderColor: "#1A3C6E" }}
+                  >
+                    <Typography variant="h5" fontWeight={700} color="#1A3C6E">
+                      {selectedState.data.schoolSurveyYes ?? 0}/
+                      {selectedState.data.schoolSurveyTotal ?? 0}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Pesquisa escolas
+                    </Typography>
                   </Card>
                 </Grid>
                 <Grid size={{ xs: 6, sm: 3 }}>
-                  <Card variant="outlined" sx={{ textAlign: "center", p: 1, borderColor: "#2E7D32" }}>
-                    <Typography variant="h5" fontWeight={700} color="#2E7D32">{selectedState.data.missions ?? 0}</Typography>
-                    <Typography variant="caption" color="text.secondary">Missões</Typography>
+                  <Card
+                    variant="outlined"
+                    sx={{ textAlign: "center", p: 1, borderColor: "#2E7D32" }}
+                  >
+                    <Typography variant="h5" fontWeight={700} color="#2E7D32">
+                      {selectedState.data.domesticLast12MonthsYes ?? 0}/
+                      {selectedState.data.domesticSurveyTotal ?? 0}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      VD 12m
+                    </Typography>
                   </Card>
                 </Grid>
               </Grid>
 
               {(selectedState.data.complaintDetails ?? []).length > 0 && (
-                <Accordion defaultExpanded={selectedState.data.complaints <= 10}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: "#FFF5F5" }}>
+                <Accordion
+                  defaultExpanded={selectedState.data.complaints <= 10}
+                >
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    sx={{ bgcolor: "#FFF5F5" }}
+                  >
                     <Typography fontWeight={600} color="#D32F2F">
                       Denúncias / Casos ({selectedState.data.complaints})
                     </Typography>
@@ -2703,34 +3615,62 @@ function GeoMapTab() {
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell><strong>Caso</strong></TableCell>
-                            <TableCell><strong>Tipo</strong></TableCell>
-                            <TableCell><strong>Status</strong></TableCell>
-                            <TableCell><strong>Escopo</strong></TableCell>
-                            <TableCell><strong>Data</strong></TableCell>
-                            <TableCell><strong>Localidade</strong></TableCell>
+                            <TableCell>
+                              <strong>Caso</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Tipo</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Status</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Escopo</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Data</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Localidade</strong>
+                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {selectedState.data.complaintDetails.map((c: any, i: number) => (
-                            <TableRow key={i} hover>
-                              <TableCell>{c.caseNumber}</TableCell>
-                              <TableCell>
-                                <Chip
-                                  label={formatComplaintTypeLabel(c.type)}
-                                  size="small"
-                                  sx={{
-                                    bgcolor: String(c.type || "").toUpperCase() === "SEXUAL" ? "#FFCDD2" : "#FFF9C4",
-                                    fontSize: 11,
-                                  }}
-                                />
-                              </TableCell>
-                              <TableCell>{formatComplaintStatusLabel(c.status)}</TableCell>
-                              <TableCell>{formatWorkflowScopeLabel(c.scope)}</TableCell>
-                              <TableCell>{c.date ? new Date(c.date).toLocaleDateString("pt-BR") : "—"}</TableCell>
-                              <TableCell>{c.locality || "—"}</TableCell>
-                            </TableRow>
-                          ))}
+                          {selectedState.data.complaintDetails.map(
+                            (c: any, i: number) => (
+                              <TableRow key={i} hover>
+                                <TableCell>{c.caseNumber}</TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={formatComplaintTypeLabel(c.type)}
+                                    size="small"
+                                    sx={{
+                                      bgcolor:
+                                        String(c.type || "").toUpperCase() ===
+                                        "SEXUAL"
+                                          ? "#FFCDD2"
+                                          : "#FFF9C4",
+                                      fontSize: 11,
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  {formatComplaintStatusLabel(c.status)}
+                                </TableCell>
+                                <TableCell>
+                                  {formatWorkflowScopeLabel(c.scope)}
+                                </TableCell>
+                                <TableCell>
+                                  {c.date
+                                    ? new Date(c.date).toLocaleDateString(
+                                        "pt-BR",
+                                      )
+                                    : "—"}
+                                </TableCell>
+                                <TableCell>{c.locality || "—"}</TableCell>
+                              </TableRow>
+                            ),
+                          )}
                         </TableBody>
                       </Table>
                     </TableContainer>
@@ -2739,8 +3679,13 @@ function GeoMapTab() {
               )}
 
               {(selectedState.data.activityDetails ?? []).length > 0 && (
-                <Accordion defaultExpanded={selectedState.data.activities <= 10}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: "#EEF2F8" }}>
+                <Accordion
+                  defaultExpanded={selectedState.data.activities <= 10}
+                >
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    sx={{ bgcolor: "#EEF2F8" }}
+                  >
                     <Typography fontWeight={600} color="#1A3C6E">
                       Atividades de Campo ({selectedState.data.activities})
                     </Typography>
@@ -2750,32 +3695,56 @@ function GeoMapTab() {
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell><strong>Título</strong></TableCell>
-                            <TableCell><strong>Escopo</strong></TableCell>
-                            <TableCell><strong>Status</strong></TableCell>
-                            <TableCell><strong>Data</strong></TableCell>
-                            <TableCell><strong>Localidade</strong></TableCell>
+                            <TableCell>
+                              <strong>Título</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Escopo</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Status</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Data</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Localidade</strong>
+                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {selectedState.data.activityDetails.map((a: any, i: number) => (
-                            <TableRow key={i} hover>
-                              <TableCell>{a.title}</TableCell>
-                              <TableCell>
-                                <Chip
-                                  label={formatActivityScopeLabel(a.scope)}
-                                  size="small"
-                                  sx={{
-                                    bgcolor: String(a.scope || "").toUpperCase() === "SMIF" ? "#E3F2FD" : "#F3E5F5",
-                                    fontSize: 11,
-                                  }}
-                                />
-                              </TableCell>
-                              <TableCell>{formatActivityStatusLabel(a.status)}</TableCell>
-                              <TableCell>{a.date ? new Date(a.date).toLocaleDateString("pt-BR") : "—"}</TableCell>
-                              <TableCell>{a.locality || "—"}</TableCell>
-                            </TableRow>
-                          ))}
+                          {selectedState.data.activityDetails.map(
+                            (a: any, i: number) => (
+                              <TableRow key={i} hover>
+                                <TableCell>{a.title}</TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={formatActivityScopeLabel(a.scope)}
+                                    size="small"
+                                    sx={{
+                                      bgcolor:
+                                        String(a.scope || "").toUpperCase() ===
+                                        "SMIF"
+                                          ? "#E3F2FD"
+                                          : "#F3E5F5",
+                                      fontSize: 11,
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  {formatActivityStatusLabel(a.status)}
+                                </TableCell>
+                                <TableCell>
+                                  {a.date
+                                    ? new Date(a.date).toLocaleDateString(
+                                        "pt-BR",
+                                      )
+                                    : "—"}
+                                </TableCell>
+                                <TableCell>{a.locality || "—"}</TableCell>
+                              </TableRow>
+                            ),
+                          )}
                         </TableBody>
                       </Table>
                     </TableContainer>
@@ -2785,7 +3754,10 @@ function GeoMapTab() {
 
               {(selectedState.data.missionDetails ?? []).length > 0 && (
                 <Accordion defaultExpanded={selectedState.data.missions <= 10}>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: "#E8F5E9" }}>
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    sx={{ bgcolor: "#E8F5E9" }}
+                  >
                     <Typography fontWeight={600} color="#2E7D32">
                       Missões ({selectedState.data.missions})
                     </Typography>
@@ -2795,32 +3767,60 @@ function GeoMapTab() {
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell><strong>Título</strong></TableCell>
-                            <TableCell><strong>Escopo</strong></TableCell>
-                            <TableCell><strong>Início</strong></TableCell>
-                            <TableCell><strong>Fim</strong></TableCell>
-                            <TableCell><strong>Localidade</strong></TableCell>
+                            <TableCell>
+                              <strong>Título</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Escopo</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Início</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Fim</strong>
+                            </TableCell>
+                            <TableCell>
+                              <strong>Localidade</strong>
+                            </TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {selectedState.data.missionDetails.map((m: any, i: number) => (
-                            <TableRow key={i} hover>
-                              <TableCell>{m.title}</TableCell>
-                              <TableCell>
-                                <Chip
-                                  label={formatActivityScopeLabel(m.scope)}
-                                  size="small"
-                                  sx={{
-                                    bgcolor: String(m.scope || "").toUpperCase() === "SMIF" ? "#E3F2FD" : "#F3E5F5",
-                                    fontSize: 11,
-                                  }}
-                                />
-                              </TableCell>
-                              <TableCell>{m.startDate ? new Date(m.startDate).toLocaleDateString("pt-BR") : "—"}</TableCell>
-                              <TableCell>{m.endDate ? new Date(m.endDate).toLocaleDateString("pt-BR") : "—"}</TableCell>
-                              <TableCell>{m.locality || "—"}</TableCell>
-                            </TableRow>
-                          ))}
+                          {selectedState.data.missionDetails.map(
+                            (m: any, i: number) => (
+                              <TableRow key={i} hover>
+                                <TableCell>{m.title}</TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={formatActivityScopeLabel(m.scope)}
+                                    size="small"
+                                    sx={{
+                                      bgcolor:
+                                        String(m.scope || "").toUpperCase() ===
+                                        "SMIF"
+                                          ? "#E3F2FD"
+                                          : "#F3E5F5",
+                                      fontSize: 11,
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell>
+                                  {m.startDate
+                                    ? new Date(m.startDate).toLocaleDateString(
+                                        "pt-BR",
+                                      )
+                                    : "—"}
+                                </TableCell>
+                                <TableCell>
+                                  {m.endDate
+                                    ? new Date(m.endDate).toLocaleDateString(
+                                        "pt-BR",
+                                      )
+                                    : "—"}
+                                </TableCell>
+                                <TableCell>{m.locality || "—"}</TableCell>
+                              </TableRow>
+                            ),
+                          )}
                         </TableBody>
                       </Table>
                     </TableContainer>
@@ -2829,7 +3829,10 @@ function GeoMapTab() {
               )}
 
               <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ bgcolor: "#F5F5F5" }}>
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  sx={{ bgcolor: "#F5F5F5" }}
+                >
                   <Typography fontWeight={600} color="text.secondary">
                     OMs neste estado ({(selectedState.data.oms ?? []).length})
                   </Typography>
@@ -2838,17 +3841,26 @@ function GeoMapTab() {
                   {(selectedState.data.oms ?? []).length > 0 ? (
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
                       {selectedState.data.oms.map((loc: string, i: number) => (
-                        <Chip key={i} label={loc} size="small" variant="outlined" />
+                        <Chip
+                          key={i}
+                          label={loc}
+                          size="small"
+                          variant="outlined"
+                        />
                       ))}
                     </Box>
                   ) : (
-                    <Typography variant="body2" color="text.secondary">Nenhuma OM encontrada.</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhuma OM encontrada.
+                    </Typography>
                   )}
                 </AccordionDetails>
               </Accordion>
             </Stack>
           ) : (
-            <Typography color="text.secondary">Sem dados para este estado.</Typography>
+            <Typography color="text.secondary">
+              Sem dados para este estado.
+            </Typography>
           )}
         </DialogContent>
       </Dialog>
@@ -2872,12 +3884,30 @@ function GeoMapTab() {
               defaultExpanded
             >
               <Stack spacing={1}>
-                <DetailRow label="OM / localidade" value={selectedLocalityBar.localityName ?? selectedLocalityBar.label ?? "—"} />
+                <DetailRow
+                  label="OM / localidade"
+                  value={
+                    selectedLocalityBar.localityName ??
+                    selectedLocalityBar.label ??
+                    "—"
+                  }
+                />
                 {selectedLocalityBar.localityCode ? (
-                  <DetailRow label="Sigla" value={selectedLocalityBar.localityCode} color="#1A3C6E" />
+                  <DetailRow
+                    label="Sigla"
+                    value={selectedLocalityBar.localityCode}
+                    color="#1A3C6E"
+                  />
                 ) : null}
-                <DetailRow label="Casos" value={selectedLocalityBar.count ?? 0} color="#546E7A" />
-                <DetailRow label="Participação no recorte" value={`${Number(selectedLocalityBar.percent ?? 0).toFixed(1)}%`} />
+                <DetailRow
+                  label="Casos"
+                  value={selectedLocalityBar.count ?? 0}
+                  color="#546E7A"
+                />
+                <DetailRow
+                  label="Participação no recorte"
+                  value={`${Number(selectedLocalityBar.percent ?? 0).toFixed(1)}%`}
+                />
               </Stack>
             </DetailAccordionSection>
             <DetailAccordionSection
@@ -2886,7 +3916,11 @@ function GeoMapTab() {
               defaultExpanded
             >
               <DetailItemList
-                items={Array.isArray(selectedLocalityBar.detailItems) ? selectedLocalityBar.detailItems : []}
+                items={
+                  Array.isArray(selectedLocalityBar.detailItems)
+                    ? selectedLocalityBar.detailItems
+                    : []
+                }
                 emptyMessage="Nenhum caso detalhado disponível para esta OM/localidade."
               />
             </DetailAccordionSection>
@@ -2902,12 +3936,7 @@ export function StrategicDashboardPage() {
   const currentTabParam = String(searchParams.get("tab") ?? "situational");
   const normalizedTabParam =
     currentTabParam === "text" ? "situational" : currentTabParam;
-  const tabKeyByIndex = [
-    "situational",
-    "aggressor",
-    "geo",
-    "comgep",
-  ];
+  const tabKeyByIndex = ["situational", "aggressor", "geo", "comgep"];
   const initialIndex = Math.max(0, tabKeyByIndex.indexOf(normalizedTabParam));
   const [tab, setTab] = useState(initialIndex);
   const exportPdf = useExportExecutiveReportPdf();
@@ -2949,13 +3978,17 @@ export function StrategicDashboardPage() {
             Painel Estratégico
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Leitura executiva para decidir onde agir, por quê e com qual capacidade de resposta.
+            Leitura executiva para decidir onde agir, por quê e com qual
+            capacidade de resposta.
           </Typography>
         </Box>
         <Stack
           direction={{ xs: "column", sm: "row" }}
           spacing={1}
-          sx={{ mt: { xs: 1, sm: 0 }, alignSelf: { xs: "stretch", sm: "auto" } }}
+          sx={{
+            mt: { xs: 1, sm: 0 },
+            alignSelf: { xs: "stretch", sm: "auto" },
+          }}
         >
           <Button
             variant="outlined"

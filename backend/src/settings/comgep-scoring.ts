@@ -86,8 +86,7 @@ export const COMGEP_SCORING_DEFINITIONS: ComgepScoringDefinition[] = [
     label: 'Casos formais de assédio sexual',
     description:
       'Peso específico para casos formais classificados como assédio sexual. Serve para destacar gravidade e sensibilidade do tema no ranking.',
-    impact:
-      'Destaca OMs e UFs onde há formalização de casos sexuais.',
+    impact: 'Destaca OMs e UFs onde há formalização de casos sexuais.',
     appliesTo: 'OM e UF',
     unitLabel: 'pontos por caso',
     defaultValue: 4,
@@ -205,12 +204,12 @@ export const COMGEP_SCORING_DEFINITIONS: ComgepScoringDefinition[] = [
     group: 'presence',
     label: 'Missões realizadas',
     description:
-      'Peso aplicado a cada missão executada na UF. É a principal medida de presença operacional do comando.',
+      'Peso aplicado a cada missão executada na UF. Como o histórico ainda é inicial, o painel também aplica amortecimento estatístico antes de usar esse sinal no score.',
     impact:
-      'Aumenta o score de presença e reduz a pressão operacional percebida na UF.',
+      'Aumenta o score de presença, mas não deve ser interpretado como projeção determinística de risco ou resolução do problema.',
     appliesTo: 'UF',
     unitLabel: 'pontos por missão',
-    defaultValue: 5,
+    defaultValue: 1.5,
     min: 0,
     max: 20,
     step: 0.5,
@@ -219,8 +218,7 @@ export const COMGEP_SCORING_DEFINITIONS: ComgepScoringDefinition[] = [
     key: 'presenceCompletedActivities',
     group: 'presence',
     label: 'Atividades de campo concluídas',
-    description:
-      'Peso aplicado a cada atividade de campo concluída na UF.',
+    description: 'Peso aplicado a cada atividade de campo concluída na UF.',
     impact:
       'Mostra presença tática de campo e ajuda a equilibrar risco com execução operacional.',
     appliesTo: 'UF',
@@ -248,13 +246,10 @@ export const COMGEP_SCORING_DEFINITIONS: ComgepScoringDefinition[] = [
 ];
 
 export const DEFAULT_COMGEP_SCORING_WEIGHTS: ComgepScoringWeights =
-  COMGEP_SCORING_DEFINITIONS.reduce(
-    (acc, item) => {
-      acc[item.key] = item.defaultValue;
-      return acc;
-    },
-    {} as ComgepScoringWeights,
-  );
+  COMGEP_SCORING_DEFINITIONS.reduce((acc, item) => {
+    acc[item.key] = item.defaultValue;
+    return acc;
+  }, {} as ComgepScoringWeights);
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -297,12 +292,12 @@ export const buildComgepScoringSettingsResponse = (
     },
   ].map((group) => ({
     ...group,
-    items: COMGEP_SCORING_DEFINITIONS.filter((item) => item.group === group.id).map(
-      (item) => ({
-        ...item,
-        value: weights[item.key],
-      }),
-    ),
+    items: COMGEP_SCORING_DEFINITIONS.filter(
+      (item) => item.group === group.id,
+    ).map((item) => ({
+      ...item,
+      value: weights[item.key],
+    })),
   }));
 
   return {

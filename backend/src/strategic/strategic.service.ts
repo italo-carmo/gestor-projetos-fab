@@ -388,9 +388,7 @@ function countByField(
   for (const item of items) {
     const rawValue = item[field];
     const values = Array.isArray(rawValue)
-      ? rawValue
-          .map((value) => String(value ?? '').trim())
-          .filter(Boolean)
+      ? rawValue.map((value) => String(value ?? '').trim()).filter(Boolean)
       : [String(rawValue ?? 'Não informado').trim() || 'Não informado'];
     const uniqueValues = values.length
       ? Array.from(new Set(values))
@@ -705,6 +703,246 @@ export class StrategicService {
     return codeValue || nameValue;
   }
 
+  private summarizeBiNormalizationCoverage(args: {
+    sourceLabel: string;
+    populationLabel: string;
+    totalRecords: number;
+    links: Array<{
+      sourceRecordId?: string | null;
+      omId?: string | null;
+      uf?: string | null;
+      status?: string | null;
+    }>;
+  }) {
+    const linkedRecordIds = new Set(
+      args.links
+        .map((item) => String(item.sourceRecordId ?? '').trim())
+        .filter(Boolean),
+    );
+    const matchedLinks = args.links.filter(
+      (item) =>
+        String(item.status ?? '')
+          .trim()
+          .toUpperCase() === 'MATCHED',
+    );
+    const ufOnlyLinks = args.links.filter(
+      (item) =>
+        String(item.status ?? '')
+          .trim()
+          .toUpperCase() === 'UF_ONLY',
+    );
+    const supportedLinks = [...matchedLinks, ...ufOnlyLinks];
+    const matchedOms = new Set(
+      matchedLinks
+        .map((item) => String(item.omId ?? '').trim())
+        .filter(Boolean),
+    );
+    const supportedUfs = new Set(
+      supportedLinks
+        .map((item) =>
+          String(item.uf ?? '')
+            .trim()
+            .toUpperCase(),
+        )
+        .filter(Boolean),
+    );
+
+    return {
+      sourceLabel: args.sourceLabel,
+      populationLabel: args.populationLabel,
+      totalRecords: args.totalRecords,
+      matchedRecords: matchedLinks.length,
+      ufOnlyRecords: ufOnlyLinks.length,
+      notFoundRecords: args.links.filter(
+        (item) =>
+          String(item.status ?? '')
+            .trim()
+            .toUpperCase() === 'NOT_FOUND',
+      ).length,
+      notApplicableRecords: args.links.filter(
+        (item) =>
+          String(item.status ?? '')
+            .trim()
+            .toUpperCase() === 'NOT_APPLICABLE',
+      ).length,
+      notLinkedRecords: Math.max(args.totalRecords - linkedRecordIds.size, 0),
+      matchedOms: matchedOms.size,
+      supportedUfs: supportedUfs.size,
+      supportedCoveragePercent: pct(supportedLinks.length, args.totalRecords),
+    };
+  }
+
+  private buildEvidenceSummary(total: number, positive: number) {
+    const safeTotal = Math.max(Number(total) || 0, 0);
+    const safePositive = Math.max(Number(positive) || 0, 0);
+    const rate = safeTotal > 0 ? (safePositive / safeTotal) * 100 : 0;
+    const credibility = safeTotal > 0 ? safeTotal / (safeTotal + 20) : 0;
+    let evidenceLevel = 'SEM_BASE';
+    if (safeTotal >= 30) evidenceLevel = 'ALTA';
+    else if (safeTotal >= 10) evidenceLevel = 'MODERADA';
+    else if (safeTotal > 0) evidenceLevel = 'BAIXA';
+
+    return {
+      total: safeTotal,
+      positive: safePositive,
+      rate: Number(rate.toFixed(1)),
+      adjustedRate: Number((rate * credibility).toFixed(1)),
+      credibility: Number(credibility.toFixed(3)),
+      evidenceLevel,
+    };
+  }
+
+  private buildUnderreportEstimate(args: {
+    signalCount: number;
+    formalCases: number;
+    researchTotal: number;
+    basis: 'OM' | 'UF';
+  }) {
+    const signalCount = Math.max(Number(args.signalCount) || 0, 0);
+    const formalCases = Math.max(Number(args.formalCases) || 0, 0);
+    const researchTotal = Math.max(Number(args.researchTotal) || 0, 0);
+    const missingCases = Math.max(signalCount - formalCases, 0);
+    const eligible = researchTotal >= 10 && signalCount >= 3;
+    const status =
+      researchTotal === 0
+        ? 'NO_RESEARCH'
+        : eligible
+          ? 'ESTIMATED'
+          : 'INSUFFICIENT_RESEARCH';
+
+    return {
+      signalCount,
+      formalCases,
+      missingCases: eligible ? missingCases : 0,
+      percent:
+        eligible && signalCount > 0
+          ? Number(((missingCases / signalCount) * 100).toFixed(1))
+          : 0,
+      eligible,
+      status,
+      basis: args.basis,
+      researchTotal,
+      confidence:
+        researchTotal >= 30
+          ? 'ALTA'
+          : researchTotal >= 10
+            ? 'MODERADA'
+            : 'BAIXA',
+    };
+  }
+
+  private async getCrossSourceCoverage() {
+    const [complaints, links] = await Promise.all([
+      (this.prisma as any).cpcComplaintCase.findMany({
+        select: {
+          omId: true,
+          workflowScope: true,
+          om: {
+            select: {
+              uf: true,
+            },
+          },
+        },
+      }),
+      this.prisma.biNormalizationLink.findMany({
+        where: {
+          sourceType: { in: ['SURVEY_SCHOOLS', 'DOMESTIC_VIOLENCE'] },
+          status: { in: ['MATCHED', 'UF_ONLY'] },
+        },
+        select: {
+          sourceType: true,
+          omId: true,
+          uf: true,
+          status: true,
+        },
+      }),
+    ]);
+
+    const complaintOms = new Set<string>();
+    const complaintUfs = new Set<string>();
+    const cpcaComplaintOms = new Set<string>();
+    const smifComplaintOms = new Set<string>();
+    for (const item of complaints as any[]) {
+      const omId = String(item?.omId ?? '').trim();
+      const uf = String(item?.om?.uf ?? '')
+        .trim()
+        .toUpperCase();
+      const scope = String(item?.workflowScope ?? 'CPCA')
+        .trim()
+        .toUpperCase();
+      if (omId) {
+        complaintOms.add(omId);
+        if (scope === 'SMIF') smifComplaintOms.add(omId);
+        else cpcaComplaintOms.add(omId);
+      }
+      if (uf) complaintUfs.add(uf);
+    }
+
+    const schoolOms = new Set<string>();
+    const schoolUfs = new Set<string>();
+    const domesticOms = new Set<string>();
+    const domesticUfs = new Set<string>();
+    for (const link of links as any[]) {
+      const sourceType = String(link?.sourceType ?? '')
+        .trim()
+        .toUpperCase();
+      const omId = String(link?.omId ?? '').trim();
+      const uf = String(link?.uf ?? '')
+        .trim()
+        .toUpperCase();
+      if (sourceType === 'SURVEY_SCHOOLS') {
+        if (omId) schoolOms.add(omId);
+        if (uf) schoolUfs.add(uf);
+      }
+      if (sourceType === 'DOMESTIC_VIOLENCE') {
+        if (omId) domesticOms.add(omId);
+        if (uf) domesticUfs.add(uf);
+      }
+    }
+
+    const anyResearchOms = new Set([...schoolOms, ...domesticOms]);
+    const anyResearchUfs = new Set([...schoolUfs, ...domesticUfs]);
+    const countIntersection = (a: Set<string>, b: Set<string>) =>
+      Array.from(a).filter((item) => b.has(item)).length;
+    const countDifference = (a: Set<string>, b: Set<string>) =>
+      Array.from(a).filter((item) => !b.has(item)).length;
+
+    return {
+      complaintOms: complaintOms.size,
+      cpcaComplaintOms: cpcaComplaintOms.size,
+      smifComplaintOms: smifComplaintOms.size,
+      complaintUfs: complaintUfs.size,
+      schoolSurveyOms: schoolOms.size,
+      schoolSurveyUfs: schoolUfs.size,
+      domesticSurveyOms: domesticOms.size,
+      domesticSurveyUfs: domesticUfs.size,
+      complaintOmsWithAnyResearch: countIntersection(
+        complaintOms,
+        anyResearchOms,
+      ),
+      complaintUfsWithAnyResearch: countIntersection(
+        complaintUfs,
+        anyResearchUfs,
+      ),
+      complaintOmsWithoutResearch: countDifference(
+        complaintOms,
+        anyResearchOms,
+      ),
+      complaintUfsWithoutResearch: countDifference(
+        complaintUfs,
+        anyResearchUfs,
+      ),
+      cpcaComplaintOmsWithoutResearch: countDifference(
+        cpcaComplaintOms,
+        anyResearchOms,
+      ),
+      researchOmsWithoutComplaints: countDifference(
+        anyResearchOms,
+        complaintOms,
+      ),
+    };
+  }
+
   private async listOmsForGeoMap(): Promise<StrategicGeoOmRow[]> {
     return this.prisma.om.findMany({
       select: {
@@ -733,10 +971,13 @@ export class StrategicService {
     });
   }
 
-  private buildCoveredOmsCatalog(oms: StrategicGeoOmRow[]): StrategicCoveredOmItem[] {
+  private buildCoveredOmsCatalog(
+    oms: StrategicGeoOmRow[],
+  ): StrategicCoveredOmItem[] {
     return oms
       .filter(
-        (om) => Boolean(om.hasCpca) || (om.cpcaCoverageAsManaged?.length ?? 0) > 0,
+        (om) =>
+          Boolean(om.hasCpca) || (om.cpcaCoverageAsManaged?.length ?? 0) > 0,
       )
       .map((om) => ({
         id: om.id,
@@ -762,6 +1003,7 @@ export class StrategicService {
     const now = new Date();
     const lookbackStart = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
     const comgepWeights = await this.settings.getComgepScoringWeights();
+    const missionMaturityFactor = 0.25;
     const openStatuses = new Set([
       'RECEIVED',
       'PROTECTION_MEASURES',
@@ -818,21 +1060,6 @@ export class StrategicService {
       sexualCases: 0,
       moralCases: 0,
     });
-    const buildUnderreport = (
-      signalCount: number,
-      formalCases: number,
-    ) => {
-      const missingCases = Math.max(signalCount - formalCases, 0);
-      return {
-        signalCount,
-        formalCases,
-        missingCases,
-        percent:
-          signalCount > 0
-            ? Number(((missingCases / signalCount) * 100).toFixed(1))
-            : 0,
-      };
-    };
 
     const [
       oms,
@@ -959,7 +1186,9 @@ export class StrategicService {
     const ufSet = new Set<string>();
 
     const ensureUf = (uf: string | null | undefined) => {
-      const value = String(uf ?? '').trim().toUpperCase();
+      const value = String(uf ?? '')
+        .trim()
+        .toUpperCase();
       if (value) ufSet.add(value);
       return value;
     };
@@ -1118,10 +1347,16 @@ export class StrategicService {
           if (openDays > 30) current.stalledCases += 1;
           if (item?.retaliationRisk) current.retaliationCases += 1;
         }
-        if (String(item?.complaintType ?? '').trim().toUpperCase() === 'SEXUAL') {
+        if (
+          String(item?.complaintType ?? '')
+            .trim()
+            .toUpperCase() === 'SEXUAL'
+        ) {
           current.sexualCases += 1;
         } else if (
-          String(item?.complaintType ?? '').trim().toUpperCase() === 'MORAL'
+          String(item?.complaintType ?? '')
+            .trim()
+            .toUpperCase() === 'MORAL'
         ) {
           current.moralCases += 1;
         }
@@ -1149,7 +1384,11 @@ export class StrategicService {
         completedActivities: 0,
         signedReports: 0,
       };
-      if (String(activity.status ?? '').trim().toUpperCase() === 'DONE') {
+      if (
+        String(activity.status ?? '')
+          .trim()
+          .toUpperCase() === 'DONE'
+      ) {
         current.completedActivities += 1;
       }
       if (activity.report?.signedAt) {
@@ -1182,45 +1421,72 @@ export class StrategicService {
     const omRiskRows = oms
       .map((om: StrategicGeoOmRow) => {
         const survey = surveySignalsByOm.get(om.id) ?? createSurveyStats();
-        const domestic = domesticSignalsByOm.get(om.id) ?? createDomesticStats();
-        const complaintsStats = complaintsByOm.get(om.id) ?? createComplaintStats();
+        const domestic =
+          domesticSignalsByOm.get(om.id) ?? createDomesticStats();
+        const complaintsStats =
+          complaintsByOm.get(om.id) ?? createComplaintStats();
         const ufPresence = presenceByUf.get(ensureUf(om.uf)) ?? {
           missions: 0,
           completedActivities: 0,
           signedReports: 0,
         };
-        const surveyRate = survey.total > 0 ? (survey.yes / survey.total) * 100 : 0;
+        const surveyRate =
+          survey.total > 0 ? (survey.yes / survey.total) * 100 : 0;
         const domesticRate =
           domestic.total > 0 ? (domestic.yes12m / domestic.total) * 100 : 0;
+        const surveyEvidence = this.buildEvidenceSummary(
+          survey.total,
+          survey.yes,
+        );
+        const domesticEvidence = this.buildEvidenceSummary(
+          domestic.total,
+          domestic.yes12m,
+        );
         const sexualSignals = survey.sexual + domestic.sexual;
         const moralSignals = survey.moral + domestic.moral;
         const researchSignals = survey.yes + domestic.yes12m;
-        const underreport = buildUnderreport(
-          researchSignals,
-          complaintsStats.totalCases,
-        );
+        const researchTotal = survey.total + domestic.total;
+        const underreport = this.buildUnderreportEstimate({
+          basis: 'OM',
+          researchTotal,
+          signalCount: researchSignals,
+          formalCases: complaintsStats.totalCases,
+        });
         const covered = coveredOmIds.has(om.id);
         const rawRisk =
           complaintsStats.openCases * comgepWeights.riskOpenCases +
-          complaintsStats.retaliationCases * comgepWeights.riskRetaliationCases +
+          complaintsStats.retaliationCases *
+            comgepWeights.riskRetaliationCases +
           complaintsStats.stalledCases * comgepWeights.riskStalledCases +
           complaintsStats.sexualCases * comgepWeights.riskSexualFormalCases +
-          surveyRate * comgepWeights.riskSurveyRate +
-          domesticRate * comgepWeights.riskDomesticRate +
+          surveyEvidence.adjustedRate * comgepWeights.riskSurveyRate +
+          domesticEvidence.adjustedRate * comgepWeights.riskDomesticRate +
           sexualSignals * comgepWeights.riskSexualSignals +
           moralSignals * comgepWeights.riskMoralSignals +
           domestic.militaryAuthor * comgepWeights.riskMilitaryAuthor +
-          underreport.percent * comgepWeights.riskUnderreportPercent +
+          (underreport.eligible
+            ? underreport.percent * comgepWeights.riskUnderreportPercent
+            : 0) +
           (covered ? 0 : comgepWeights.riskUncoveredOmPenalty);
         const rankingReasons: string[] = [];
-        if (sexualSignals > 0) {
+        if (survey.sexual > 0) {
           rankingReasons.push(
-            `${sexualSignals} relato(s) de assédio/violência sexual em pesquisas`,
+            `${survey.sexual} relato(s) sexual(is) na pesquisa de escolas`,
           );
         }
-        if (moralSignals > 0) {
+        if (domestic.sexual > 0) {
           rankingReasons.push(
-            `${moralSignals} relato(s) de assédio/violência moral em pesquisas`,
+            `${domestic.sexual} relato(s) sexual(is) na pesquisa de violência doméstica`,
+          );
+        }
+        if (survey.moral > 0) {
+          rankingReasons.push(
+            `${survey.moral} relato(s) moral(is) na pesquisa de escolas`,
+          );
+        }
+        if (domestic.moral > 0) {
+          rankingReasons.push(
+            `${domestic.moral} relato(s) moral(is) na pesquisa de violência doméstica`,
           );
         }
         if (domestic.yes12m > 0) {
@@ -1234,7 +1500,9 @@ export class StrategicService {
           );
         }
         if (complaintsStats.openCases > 0) {
-          rankingReasons.push(`${complaintsStats.openCases} denúncia(s) formal(is) aberta(s)`);
+          rankingReasons.push(
+            `${complaintsStats.openCases} denúncia(s) formal(is) aberta(s)`,
+          );
         }
         if (complaintsStats.retaliationCases > 0) {
           rankingReasons.push(
@@ -1242,11 +1510,21 @@ export class StrategicService {
           );
         }
         if (complaintsStats.stalledCases > 0) {
-          rankingReasons.push(`${complaintsStats.stalledCases} caso(s) além do prazo`);
+          rankingReasons.push(
+            `${complaintsStats.stalledCases} caso(s) além do prazo`,
+          );
         }
-        if (underreport.percent >= 40) {
+        if (underreport.eligible && underreport.percent >= 40) {
           rankingReasons.push(
             `subnotificação estimada em ${underreport.percent.toFixed(1)}%`,
+          );
+        } else if (researchTotal === 0 && complaintsStats.totalCases > 0) {
+          rankingReasons.push(
+            'há denúncia formal, mas não há pesquisa normalizada para comparação nesta OM',
+          );
+        } else if (researchTotal > 0 && researchTotal < 10) {
+          rankingReasons.push(
+            'base de pesquisa pequena; usada apenas como sinal auxiliar',
           );
         }
         if (!covered) {
@@ -1262,15 +1540,26 @@ export class StrategicService {
         }
         let recommendedAction =
           'Monitorar a OM e manter presença institucional na UF.';
-        if (domestic.militaryAuthor > 0 || sexualSignals > 0 || moralSignals > 0) {
+        if (
+          domestic.militaryAuthor > 0 ||
+          sexualSignals > 0 ||
+          moralSignals > 0
+        ) {
           recommendedAction =
-            'Priorizar missão com palestras, escuta qualificada e atividades de campo voltadas à prevenção.';
+            'Priorizar escuta qualificada, palestras e atividades de campo voltadas à prevenção.';
         }
-        if (complaintsStats.openCases > 0 || complaintsStats.retaliationCases > 0) {
+        if (
+          complaintsStats.openCases > 0 ||
+          complaintsStats.retaliationCases > 0
+        ) {
           recommendedAction =
             'Atuação imediata da comissão, com acompanhamento do passivo formal e reforço de presença institucional.';
         }
-        if (underreport.percent >= 60 && complaintsStats.totalCases === 0) {
+        if (
+          underreport.eligible &&
+          underreport.percent >= 60 &&
+          complaintsStats.totalCases === 0
+        ) {
           recommendedAction =
             'Alta chance de subnotificação: priorizar escuta protegida, divulgação de canais e ações presenciais na OM.';
         }
@@ -1288,8 +1577,27 @@ export class StrategicService {
             : 'Sem cobertura',
           surveyRate: Number(surveyRate.toFixed(1)),
           domesticRate: Number(domesticRate.toFixed(1)),
+          surveyAdjustedRate: surveyEvidence.adjustedRate,
+          domesticAdjustedRate: domesticEvidence.adjustedRate,
+          surveyEvidence,
+          domesticEvidence,
           surveySignals: survey,
           domesticSignals: domestic,
+          signalsBySource: {
+            schools: {
+              total: survey.total,
+              yes: survey.yes,
+              sexual: survey.sexual,
+              moral: survey.moral,
+            },
+            domestic: {
+              total: domestic.total,
+              last12Months: domestic.yes12m,
+              sexual: domestic.sexual,
+              moral: domestic.moral,
+              militaryAuthor: domestic.militaryAuthor,
+            },
+          },
           researchSignals,
           sexualSignals,
           moralSignals,
@@ -1304,7 +1612,10 @@ export class StrategicService {
       })
       .sort((a: any, b: any) => b.rawRisk - a.rawRisk);
 
-    const maxOmRisk = Math.max(...omRiskRows.map((item: any) => item.rawRisk), 1);
+    const maxOmRisk = Math.max(
+      ...omRiskRows.map((item: any) => item.rawRisk),
+      1,
+    );
     const omRiskRowsWithScore = omRiskRows.map((item: any) => ({
       ...item,
       riskScore: Math.round((item.rawRisk / maxOmRisk) * 100),
@@ -1315,7 +1626,8 @@ export class StrategicService {
         const ufOms = omsByUf.get(uf) ?? [];
         const totalOms = ufOms.length;
         const coveredOms = ufOms.filter((om) => coveredOmIds.has(om.id)).length;
-        const complaintsStats = complaintsByUf.get(uf) ?? createComplaintStats();
+        const complaintsStats =
+          complaintsByUf.get(uf) ?? createComplaintStats();
         const survey = surveySignalsByUf.get(uf) ?? createSurveyStats();
         const domestic = domesticSignalsByUf.get(uf) ?? createDomesticStats();
         const presence = presenceByUf.get(uf) ?? {
@@ -1324,33 +1636,51 @@ export class StrategicService {
           signedReports: 0,
         };
 
-        const surveyRate = survey.total > 0 ? (survey.yes / survey.total) * 100 : 0;
+        const surveyRate =
+          survey.total > 0 ? (survey.yes / survey.total) * 100 : 0;
         const domesticRate =
           domestic.total > 0 ? (domestic.yes12m / domestic.total) * 100 : 0;
+        const surveyEvidence = this.buildEvidenceSummary(
+          survey.total,
+          survey.yes,
+        );
+        const domesticEvidence = this.buildEvidenceSummary(
+          domestic.total,
+          domestic.yes12m,
+        );
         const sexualSignals = survey.sexual + domestic.sexual;
         const moralSignals = survey.moral + domestic.moral;
         const researchSignals = survey.yes + domestic.yes12m;
-        const underreport = buildUnderreport(
-          researchSignals,
-          complaintsStats.totalCases,
-        );
+        const researchTotal = survey.total + domestic.total;
+        const underreport = this.buildUnderreportEstimate({
+          basis: 'UF',
+          researchTotal,
+          signalCount: researchSignals,
+          formalCases: complaintsStats.totalCases,
+        });
         const coveragePercent =
           totalOms > 0 ? Number(((coveredOms / totalOms) * 100).toFixed(1)) : 0;
 
         const rawRisk =
           complaintsStats.openCases * comgepWeights.riskOpenCases +
-          complaintsStats.retaliationCases * comgepWeights.riskRetaliationCases +
+          complaintsStats.retaliationCases *
+            comgepWeights.riskRetaliationCases +
           complaintsStats.stalledCases * comgepWeights.riskStalledCases +
           complaintsStats.sexualCases * comgepWeights.riskSexualFormalCases +
-          surveyRate * comgepWeights.riskSurveyRate +
-          domesticRate * comgepWeights.riskDomesticRate +
+          surveyEvidence.adjustedRate * comgepWeights.riskSurveyRate +
+          domesticEvidence.adjustedRate * comgepWeights.riskDomesticRate +
           sexualSignals * comgepWeights.riskSexualSignals +
           moralSignals * comgepWeights.riskMoralSignals +
           domestic.militaryAuthor * comgepWeights.riskMilitaryAuthor +
-          underreport.percent * comgepWeights.riskUnderreportPercent;
+          (underreport.eligible
+            ? underreport.percent * comgepWeights.riskUnderreportPercent
+            : 0);
         const rawPresence =
-          presence.missions * comgepWeights.presenceMissions +
-          presence.completedActivities * comgepWeights.presenceCompletedActivities +
+          presence.missions *
+            comgepWeights.presenceMissions *
+            missionMaturityFactor +
+          presence.completedActivities *
+            comgepWeights.presenceCompletedActivities +
           presence.signedReports * comgepWeights.presenceSignedReports;
 
         return {
@@ -1361,25 +1691,56 @@ export class StrategicService {
           coveragePercent,
           surveyRate: Number(surveyRate.toFixed(1)),
           domesticRate: Number(domesticRate.toFixed(1)),
+          surveyAdjustedRate: surveyEvidence.adjustedRate,
+          domesticAdjustedRate: domesticEvidence.adjustedRate,
+          surveyEvidence,
+          domesticEvidence,
           surveySignals: survey,
           domesticSignals: domestic,
+          signalsBySource: {
+            schools: {
+              total: survey.total,
+              yes: survey.yes,
+              sexual: survey.sexual,
+              moral: survey.moral,
+            },
+            domestic: {
+              total: domestic.total,
+              last12Months: domestic.yes12m,
+              sexual: domestic.sexual,
+              moral: domestic.moral,
+              militaryAuthor: domestic.militaryAuthor,
+            },
+          },
           researchSignals,
           sexualSignals,
           moralSignals,
           underreport,
           complaints: complaintsStats,
           presence,
+          presenceMaturity: {
+            missionMaturityFactor,
+            note: 'Missões contam como presença inicial e são amortecidas no score para não virarem projeção determinística.',
+          },
           rawRisk,
           rawPresence,
           oms: omRiskRowsWithScore
-            .filter((item: any) => String(item.uf ?? '').trim().toUpperCase() === uf)
+            .filter(
+              (item: any) =>
+                String(item.uf ?? '')
+                  .trim()
+                  .toUpperCase() === uf,
+            )
             .slice(0, 12),
         };
       })
       .filter((row: any) => row.totalOms > 0)
       .sort((a: any, b: any) => b.rawRisk - a.rawRisk);
 
-    const maxUfRisk = Math.max(...ufRowsRaw.map((item: any) => item.rawRisk), 1);
+    const maxUfRisk = Math.max(
+      ...ufRowsRaw.map((item: any) => item.rawRisk),
+      1,
+    );
     const maxUfPresence = Math.max(
       ...ufRowsRaw.map((item: any) => item.rawPresence),
       1,
@@ -1387,9 +1748,14 @@ export class StrategicService {
 
     const ufRows = ufRowsRaw.map((item: any) => {
       const riskScore = Math.round((item.rawRisk / maxUfRisk) * 100);
-      const presenceScore = Math.round((item.rawPresence / maxUfPresence) * 100);
+      const presenceScore = Math.round(
+        (item.rawPresence / maxUfPresence) * 100,
+      );
       let priorityBand = 'ESTÁVEL';
-      if (riskScore >= 70 && (item.coveragePercent < 80 || presenceScore < 45)) {
+      if (
+        riskScore >= 70 &&
+        (item.coveragePercent < 80 || presenceScore < 45)
+      ) {
         priorityBand = 'CRÍTICA';
       } else if (riskScore >= 60) {
         priorityBand = 'ALTA';
@@ -1399,13 +1765,15 @@ export class StrategicService {
 
       let recommendedFocus = 'Monitorar cenário e manter rotina de presença.';
       if (item.coveragePercent < 70) {
-        recommendedFocus = 'Expandir cobertura CPCA e revisar governança local.';
+        recommendedFocus =
+          'Expandir cobertura CPCA e revisar governança local.';
       } else if (presenceScore < 40) {
         recommendedFocus = 'Reforçar presença operacional na UF.';
       } else if (riskScore >= 70) {
         recommendedFocus = 'Priorizar intervenção imediata de comando.';
       }
       if (
+        item.underreport?.eligible &&
         item.underreport?.percent >= 50 &&
         Number(item.complaints?.totalCases ?? 0) === 0
       ) {
@@ -1417,17 +1785,27 @@ export class StrategicService {
         Number(item.moralSignals ?? 0) > 0
       ) {
         recommendedFocus =
-          'Priorizar missões com palestras e atividades de campo focadas em prevenção e canais de denúncia.';
+          'Priorizar presença qualificada com palestras e atividades de campo focadas em prevenção e canais de denúncia.';
       }
       const rankingReasons: string[] = [];
-      if (item.sexualSignals > 0) {
+      if (item.signalsBySource?.schools?.sexual > 0) {
         rankingReasons.push(
-          `${item.sexualSignals} relato(s) de assédio/violência sexual nas pesquisas`,
+          `${item.signalsBySource.schools.sexual} relato(s) sexual(is) na pesquisa de escolas`,
         );
       }
-      if (item.moralSignals > 0) {
+      if (item.signalsBySource?.domestic?.sexual > 0) {
         rankingReasons.push(
-          `${item.moralSignals} relato(s) de assédio/violência moral nas pesquisas`,
+          `${item.signalsBySource.domestic.sexual} relato(s) sexual(is) na pesquisa de violência doméstica`,
+        );
+      }
+      if (item.signalsBySource?.schools?.moral > 0) {
+        rankingReasons.push(
+          `${item.signalsBySource.schools.moral} relato(s) moral(is) na pesquisa de escolas`,
+        );
+      }
+      if (item.signalsBySource?.domestic?.moral > 0) {
+        rankingReasons.push(
+          `${item.signalsBySource.domestic.moral} relato(s) moral(is) na pesquisa de violência doméstica`,
         );
       }
       if (item.domesticSignals?.yes12m > 0) {
@@ -1441,14 +1819,34 @@ export class StrategicService {
         );
       }
       if (item.complaints?.openCases > 0) {
-        rankingReasons.push(`${item.complaints.openCases} denúncia(s) formal(is) aberta(s)`);
+        rankingReasons.push(
+          `${item.complaints.openCases} denúncia(s) formal(is) aberta(s)`,
+        );
       }
-      if (item.underreport?.percent >= 40) {
+      if (item.underreport?.eligible && item.underreport?.percent >= 40) {
         rankingReasons.push(
           `subnotificação estimada em ${Number(item.underreport.percent).toFixed(1)}%`,
         );
+      } else if (
+        Number(item.complaints?.totalCases ?? 0) > 0 &&
+        Number(item.underreport?.researchTotal ?? 0) === 0
+      ) {
+        rankingReasons.push(
+          'há denúncia formal na UF, mas não há pesquisa normalizada para comparação',
+        );
+      } else if (
+        Number(item.underreport?.researchTotal ?? 0) > 0 &&
+        Number(item.underreport?.researchTotal ?? 0) < 10
+      ) {
+        rankingReasons.push(
+          'base de pesquisa pequena; usada apenas como sinal auxiliar',
+        );
       }
-      if ((item.presence?.missions ?? 0) + (item.presence?.completedActivities ?? 0) === 0) {
+      if (
+        (item.presence?.missions ?? 0) +
+          (item.presence?.completedActivities ?? 0) ===
+        0
+      ) {
         rankingReasons.push('presença operacional baixa ou ausente');
       }
 
@@ -1488,10 +1886,12 @@ export class StrategicService {
           oms.length > 0
             ? Number(((coveredOmIds.size / oms.length) * 100).toFixed(1))
             : 0,
-        criticalUfCount: ufRows.filter((item: any) => item.priorityBand === 'CRÍTICA')
-          .length,
-        highRiskOmCount: omRiskRowsWithScore.filter((item: any) => item.riskScore >= 70)
-          .length,
+        criticalUfCount: ufRows.filter(
+          (item: any) => item.priorityBand === 'CRÍTICA',
+        ).length,
+        highRiskOmCount: omRiskRowsWithScore.filter(
+          (item: any) => item.riskScore >= 70,
+        ).length,
         openComplaintCases: Array.from(complaintsByUf.values()).reduce(
           (acc: number, item: any) => acc + item.openCases,
           0,
@@ -1501,6 +1901,15 @@ export class StrategicService {
             acc + item.missions + item.completedActivities + item.signedReports,
           0,
         ),
+        researchComparableOmCount: omRiskRowsWithScore.filter(
+          (item: any) => Number(item?.underreport?.researchTotal ?? 0) >= 10,
+        ).length,
+        complaintOmsWithoutResearchCount: omRiskRowsWithScore.filter(
+          (item: any) =>
+            Number(item?.complaints?.totalCases ?? 0) > 0 &&
+            String(item?.underreport?.status ?? '') === 'NO_RESEARCH',
+        ).length,
+        missionMaturityFactor,
       },
       dataConfidence: {
         supportedCoveragePercent:
@@ -1520,14 +1929,20 @@ export class StrategicService {
           .filter((item: any) => item.covered)
           .sort((a: any, b: any) => {
             if (b.riskScore !== a.riskScore) return b.riskScore - a.riskScore;
-            return String(a.code ?? '').localeCompare(String(b.code ?? ''), 'pt-BR', {
-              sensitivity: 'base',
-            });
+            return String(a.code ?? '').localeCompare(
+              String(b.code ?? ''),
+              'pt-BR',
+              {
+                sensitivity: 'base',
+              },
+            );
           }),
         criticalUfs: ufRows
           .filter((item: any) => item.priorityBand !== 'ESTÁVEL')
           .sort((a: any, b: any) => b.riskScore - a.riskScore),
-        highRiskOms: omRiskRowsWithScore.filter((item: any) => item.riskScore >= 70),
+        highRiskOms: omRiskRowsWithScore.filter(
+          (item: any) => item.riskScore >= 70,
+        ),
         operationalPresenceByUf: ufRows
           .map((item: any) => ({
             uf: item.uf,
@@ -1648,7 +2063,10 @@ export class StrategicService {
         mode: String(payload.mode ?? '').trim() || 'executive',
         focusType: String(payload.focusType ?? '').trim() || null,
         focusLabel: String(payload.focusLabel ?? '').trim() || null,
-        uf: String(payload.uf ?? '').trim().toUpperCase() || null,
+        uf:
+          String(payload.uf ?? '')
+            .trim()
+            .toUpperCase() || null,
         omId,
         evidenceJson:
           payload.evidence && typeof payload.evidence === 'object'
@@ -1700,6 +2118,7 @@ export class StrategicService {
       activitiesData,
       missionsData,
       tasksData,
+      crossSourceCoverage,
       localities,
     ] = await Promise.all([
       this.getSurveyKpis({ sources: Array.from(sourceSet) }),
@@ -1709,6 +2128,7 @@ export class StrategicService {
       this.getActivitiesKpis({ sources: Array.from(sourceSet) }),
       this.getMissionsKpis({ sources: Array.from(sourceSet) }),
       this.getTaskKpis({ sources: Array.from(sourceSet) }),
+      this.getCrossSourceCoverage(),
       this.prisma.locality.findMany({
         select: { id: true, code: true, name: true },
       }),
@@ -1723,6 +2143,7 @@ export class StrategicService {
       activities: activitiesData,
       missions: missionsData,
       tasks: tasksData,
+      crossSourceCoverage,
       localityCount: localities.length,
     };
   }
@@ -1732,7 +2153,15 @@ export class StrategicService {
     const includeComplaints = this.hasComplaintSources(sourceSet);
     const includeActivities = this.hasActivitySource(sourceSet);
     const includeMissions = this.hasMissionSource(sourceSet);
-    if (!includeComplaints && !includeActivities && !includeMissions) {
+    const includeSurveySchools = this.hasSurveySources(sourceSet);
+    const includeDomesticViolence = this.hasDomesticViolenceSources(sourceSet);
+    if (
+      !includeComplaints &&
+      !includeActivities &&
+      !includeMissions &&
+      !includeSurveySchools &&
+      !includeDomesticViolence
+    ) {
       const [localities, oms] = await Promise.all([
         this.prisma.locality.findMany({
           select: {
@@ -1795,7 +2224,15 @@ export class StrategicService {
     );
     const coveredOmsCatalog = this.buildCoveredOmsCatalog(oms);
 
-    const [complaints, activities, missions] = await Promise.all([
+    const [
+      complaints,
+      activities,
+      missions,
+      surveyLinks,
+      surveyRows,
+      domesticLinks,
+      domesticRows,
+    ] = await Promise.all([
       includeComplaints
         ? (this.prisma as any).cpcComplaintCase.findMany({
             where:
@@ -1838,13 +2275,66 @@ export class StrategicService {
             },
           })
         : Promise.resolve([]),
+      includeSurveySchools
+        ? this.prisma.biNormalizationLink.findMany({
+            where: {
+              sourceType: 'SURVEY_SCHOOLS',
+              status: { in: ['MATCHED', 'UF_ONLY'] },
+            },
+            select: {
+              sourceRecordId: true,
+              uf: true,
+            },
+          })
+        : Promise.resolve([]),
+      includeSurveySchools
+        ? (this.prisma as any).biSurveyResponse.findMany({
+            select: {
+              id: true,
+              sufferedViolence: true,
+            },
+          })
+        : Promise.resolve([]),
+      includeDomesticViolence
+        ? this.prisma.biNormalizationLink.findMany({
+            where: {
+              sourceType: 'DOMESTIC_VIOLENCE',
+              status: { in: ['MATCHED', 'UF_ONLY'] },
+            },
+            select: {
+              sourceRecordId: true,
+              uf: true,
+            },
+          })
+        : Promise.resolve([]),
+      includeDomesticViolence
+        ? (this.prisma as any).biDomesticViolenceResponse.findMany({
+            select: {
+              id: true,
+              sufferedLast12Months: true,
+            },
+          })
+        : Promise.resolve([]),
     ]);
 
     type StateEntry = {
       uf: string;
       complaints: number;
+      cpcaComplaints: number;
+      smifComplaints: number;
+      openComplaints: number;
+      cpcaOpenComplaints: number;
+      smifOpenComplaints: number;
       activities: number;
       missions: number;
+      schoolSurveyTotal: number;
+      schoolSurveyYes: number;
+      domesticSurveyTotal: number;
+      domesticLast12MonthsYes: number;
+      researchSignals: number;
+      pressureScore: number;
+      responseScore: number;
+      hasResearch: boolean;
       localities: string[];
       oms: string[];
       smifLocalities: string[];
@@ -1890,8 +2380,21 @@ export class StrategicService {
         ufMap.set(uf, {
           uf,
           complaints: 0,
+          cpcaComplaints: 0,
+          smifComplaints: 0,
+          openComplaints: 0,
+          cpcaOpenComplaints: 0,
+          smifOpenComplaints: 0,
           activities: 0,
           missions: 0,
+          schoolSurveyTotal: 0,
+          schoolSurveyYes: 0,
+          domesticSurveyTotal: 0,
+          domesticLast12MonthsYes: 0,
+          researchSignals: 0,
+          pressureScore: 0,
+          responseScore: 0,
+          hasResearch: false,
           localities: [],
           oms: [],
           smifLocalities: [],
@@ -1944,11 +2447,67 @@ export class StrategicService {
       entry.localities = [...entry.localitiesCombined];
     }
 
+    const surveyById = new Map(
+      (surveyRows as any[]).map((row: any) => [
+        String(row?.id ?? ''),
+        row?.sufferedViolence === true,
+      ]),
+    );
+    for (const link of surveyLinks as any[]) {
+      const uf = String(link?.uf ?? '')
+        .trim()
+        .toUpperCase();
+      if (!uf) continue;
+      const entry = ensureUf(uf);
+      entry.schoolSurveyTotal += 1;
+      if (surveyById.get(String(link?.sourceRecordId ?? '')) === true) {
+        entry.schoolSurveyYes += 1;
+      }
+    }
+
+    const domesticById = new Map(
+      (domesticRows as any[]).map((row: any) => [
+        String(row?.id ?? ''),
+        row?.sufferedLast12Months === true,
+      ]),
+    );
+    for (const link of domesticLinks as any[]) {
+      const uf = String(link?.uf ?? '')
+        .trim()
+        .toUpperCase();
+      if (!uf) continue;
+      const entry = ensureUf(uf);
+      entry.domesticSurveyTotal += 1;
+      if (domesticById.get(String(link?.sourceRecordId ?? '')) === true) {
+        entry.domesticLast12MonthsYes += 1;
+      }
+    }
+
+    const openStatuses = new Set([
+      'RECEIVED',
+      'PROTECTION_MEASURES',
+      'PRELIMINARY_ANALYSIS',
+      'PROCEDURE_DEFINED',
+      'INVESTIGATION',
+    ]);
+
     for (const c of complaints) {
       const uf = c.omId ? omUfMap.get(c.omId) : null;
       if (uf) {
         const entry = ensureUf(uf);
+        const scope = String(c.workflowScope ?? 'CPCA')
+          .trim()
+          .toUpperCase();
+        const isOpen = openStatuses.has(String(c.status ?? '').trim());
         entry.complaints++;
+        if (scope === 'SMIF') {
+          entry.smifComplaints++;
+          if (isOpen) entry.smifOpenComplaints++;
+        } else {
+          entry.cpcaComplaints++;
+          if (isOpen) entry.cpcaOpenComplaints++;
+        }
+        if (isOpen) entry.openComplaints++;
         entry.complaintDetails.push({
           caseNumber: c.caseNumber,
           type: c.complaintType,
@@ -1988,13 +2547,62 @@ export class StrategicService {
       }
     }
 
+    for (const entry of ufMap.values()) {
+      entry.researchSignals =
+        entry.schoolSurveyYes + entry.domesticLast12MonthsYes;
+      entry.hasResearch =
+        entry.schoolSurveyTotal + entry.domesticSurveyTotal > 0;
+      const schoolEvidence = this.buildEvidenceSummary(
+        entry.schoolSurveyTotal,
+        entry.schoolSurveyYes,
+      );
+      const domesticEvidence = this.buildEvidenceSummary(
+        entry.domesticSurveyTotal,
+        entry.domesticLast12MonthsYes,
+      );
+      const complaintPressure =
+        entry.cpcaOpenComplaints * 5 +
+        entry.smifOpenComplaints * 3 +
+        Math.max(entry.complaints - entry.openComplaints, 0) * 0.75;
+      const researchPressure =
+        schoolEvidence.adjustedRate * 0.35 +
+        domesticEvidence.adjustedRate * 0.45 +
+        entry.researchSignals * 0.8;
+      entry.pressureScore = Number(
+        (complaintPressure + researchPressure).toFixed(1),
+      );
+      entry.responseScore = Number(
+        (entry.activities + entry.missions * 0.25).toFixed(1),
+      );
+    }
+
+    const states = Array.from(ufMap.values()).sort((a, b) => {
+      if (b.pressureScore !== a.pressureScore) {
+        return b.pressureScore - a.pressureScore;
+      }
+      return b.complaints - a.complaints;
+    });
+
     return {
       generatedAt: new Date().toISOString(),
-      states: Array.from(ufMap.values()).sort((a, b) => {
-        const totalA = a.complaints + a.activities + a.missions;
-        const totalB = b.complaints + b.activities + b.missions;
-        return totalB - totalA;
-      }),
+      states,
+      summary: {
+        statesWithCpcaComplaints: states.filter(
+          (item) => item.cpcaComplaints > 0,
+        ).length,
+        statesWithFormalComplaints: states.filter((item) => item.complaints > 0)
+          .length,
+        statesWithResearch: states.filter((item) => item.hasResearch).length,
+        statesWithComplaintsWithoutResearch: states.filter(
+          (item) => item.complaints > 0 && !item.hasResearch,
+        ).length,
+        statesWithResponseOnly: states.filter(
+          (item) =>
+            item.complaints === 0 &&
+            item.researchSignals === 0 &&
+            (item.activities > 0 || item.missions > 0),
+        ).length,
+      },
       totalLocalitiesWithUf: localities.filter((l) => l.uf).length,
       totalLocalitiesWithCpca: oms.filter((om) => om.hasCpca).length,
       totalOmsCoveredByCpca: coveredOmsCatalog.length,
@@ -2092,7 +2700,9 @@ export class StrategicService {
     const toCaseDetail = (row: any): StrategicKpiDetailItem => {
       const id = String(row?.id ?? '').trim();
       const caseNumber = String(row?.caseNumber ?? '').trim();
-      const scope = String(row?.workflowScope ?? 'CPCA').trim().toUpperCase();
+      const scope = String(row?.workflowScope ?? 'CPCA')
+        .trim()
+        .toUpperCase();
       const localityLabel = this.formatOmDisplayLabel(
         row?.resolvedLocality?.code,
         row?.resolvedLocality?.name,
@@ -2103,7 +2713,13 @@ export class StrategicService {
         subtitle: [
           scope,
           String(row?.complaintType ?? '').trim()
-            ? `Tipo: ${String(row?.complaintType ?? '').trim().toUpperCase() === 'SEXUAL' ? 'Assédio Sexual' : 'Assédio Moral'}`
+            ? `Tipo: ${
+                String(row?.complaintType ?? '')
+                  .trim()
+                  .toUpperCase() === 'SEXUAL'
+                  ? 'Assédio Sexual'
+                  : 'Assédio Moral'
+              }`
             : '',
           localityLabel,
         ]
@@ -2170,7 +2786,10 @@ export class StrategicService {
       aggressorProfile: {
         byRank: countByField(casesWithResolvedLocality, 'aggressorRank'),
         byGender: countByField(casesWithResolvedLocality, 'aggressorGender'),
-        byAgeRange: countByField(casesWithResolvedLocality, 'aggressorAgeRange'),
+        byAgeRange: countByField(
+          casesWithResolvedLocality,
+          'aggressorAgeRange',
+        ),
       },
       victimProfile: {
         byRank: countByField(casesWithResolvedLocality, 'victimRank'),
@@ -2186,12 +2805,18 @@ export class StrategicService {
           casesWithResolvedLocality,
           'harassmentContext',
         ),
-        byLocation: countByField(casesWithResolvedLocality, 'occurrenceLocation'),
+        byLocation: countByField(
+          casesWithResolvedLocality,
+          'occurrenceLocation',
+        ),
         byFrequency: countByField(
           casesWithResolvedLocality,
           'incidentFrequency',
         ),
-        byForm: countByField(casesWithResolvedLocality, 'resolvedOccurrenceForms'),
+        byForm: countByField(
+          casesWithResolvedLocality,
+          'resolvedOccurrenceForms',
+        ),
       },
       crossTabulation: crossTab,
       byScope,
@@ -2208,65 +2833,69 @@ export class StrategicService {
         localityName: string;
         detailItems: StrategicKpiDetailItem[];
       }>(
-        casesWithResolvedLocality.reduce(
-          (
-            acc: Map<
+        casesWithResolvedLocality
+          .reduce(
+            (
+              acc: Map<
+                string,
+                {
+                  label: string;
+                  count: number;
+                  localityCode: string;
+                  localityName: string;
+                  detailItems: StrategicKpiDetailItem[];
+                }
+              >,
+              row: any,
+            ) => {
+              const key =
+                String(row?.resolvedLocalityId ?? '').trim() || 'NAO_INFORMADO';
+              const displayLabel =
+                this.formatOmDisplayLabel(
+                  row?.resolvedLocality?.code,
+                  row?.resolvedLocality?.name,
+                ) || (key === 'NAO_INFORMADO' ? 'Não informado' : key);
+              const current = acc.get(key) ?? {
+                label: displayLabel,
+                count: 0,
+                localityCode: String(row?.resolvedLocality?.code ?? '').trim(),
+                localityName: displayLabel,
+                detailItems: [],
+              };
+              current.count += 1;
+              current.detailItems.push(toCaseDetail(row));
+              if (!current.localityCode) {
+                current.localityCode = String(
+                  row?.resolvedLocality?.code ?? '',
+                ).trim();
+              }
+              if (
+                !current.localityName ||
+                current.localityName === 'Não informado'
+              ) {
+                current.localityName =
+                  this.formatOmDisplayLabel(
+                    row?.resolvedLocality?.code,
+                    row?.resolvedLocality?.name,
+                  ) || current.localityName;
+              }
+              if (!current.label || current.label === key) {
+                current.label = current.localityName || displayLabel;
+              }
+              acc.set(key, current);
+              return acc;
+            },
+            new Map<
               string,
               {
                 label: string;
                 count: number;
                 localityCode: string;
                 localityName: string;
-                detailItems: StrategicKpiDetailItem[];
               }
-            >,
-            row: any,
-          ) => {
-            const key = String(row?.resolvedLocalityId ?? '').trim() || 'NAO_INFORMADO';
-            const displayLabel =
-              this.formatOmDisplayLabel(
-                row?.resolvedLocality?.code,
-                row?.resolvedLocality?.name,
-              ) || (key === 'NAO_INFORMADO' ? 'Não informado' : key);
-            const current = acc.get(key) ?? {
-              label: displayLabel,
-              count: 0,
-              localityCode: String(row?.resolvedLocality?.code ?? '').trim(),
-              localityName: displayLabel,
-              detailItems: [],
-            };
-            current.count += 1;
-            current.detailItems.push(toCaseDetail(row));
-            if (!current.localityCode) {
-              current.localityCode = String(row?.resolvedLocality?.code ?? '').trim();
-            }
-            if (
-              !current.localityName ||
-              current.localityName === 'Não informado'
-            ) {
-              current.localityName =
-                this.formatOmDisplayLabel(
-                  row?.resolvedLocality?.code,
-                  row?.resolvedLocality?.name,
-                ) ||
-                current.localityName;
-            }
-            if (!current.label || current.label === key) {
-              current.label = current.localityName || displayLabel;
-            }
-            acc.set(key, current);
-            return acc;
-          },
-          new Map<
-            string,
-            {
-              label: string;
-              count: number;
-              localityCode: string;
-              localityName: string;
-            }
-          >(),
-        ).values(),
+            >(),
+          )
+          .values(),
       )
         .map((item) => ({
           ...item,
@@ -2528,7 +3157,7 @@ export class StrategicService {
       if (shouldIncludeSurveys) {
         pushRef(
           'bi-survey-dashboard',
-          'Pesquisa institucional (BI Survey)',
+          'Pesquisa de escolas de formação',
           '/dashboard/bi',
         );
       }
@@ -3662,7 +4291,7 @@ export class StrategicService {
 
       // ======================== 7. MAPA GEOGRÁFICO ========================
       const statesWithData = (geoData.states ?? []).filter(
-        (s: any) => s.complaints + s.activities + s.missions > 0,
+        (s: any) => Number(s.pressureScore ?? 0) > 0,
       );
       if (statesWithData.length > 0) {
         ensureSpace(120);
@@ -3672,18 +4301,22 @@ export class StrategicService {
         doc
           .fontSize(8)
           .fillColor(GRAY)
-          .text(`${statesWithData.length} estado(s) com registros no período.`);
+          .text(
+            `${statesWithData.length} estado(s) com pressão formal ou amostral no período.`,
+          );
         doc.moveDown(0.3);
 
         // Table header
-        const cols = [40, 60, 60, 60, 50, PAGE_W - 270];
+        const cols = [35, 50, 50, 55, 55, 45, PAGE_W - 290];
         const headers = [
           'UF',
-          'Denúncias',
+          'CPCA',
+          'SMIF',
+          'Escolas',
+          'VD 12m',
           'Atividades',
           'Missões',
-          'Total',
-          'Localidades (SMIF/CIPAVD)',
+          'Pressão',
         ];
         let tx = LEFT;
         const thY = doc.y;
@@ -3702,14 +4335,15 @@ export class StrategicService {
           const rowY = doc.y;
           if (ri % 2 === 0) doc.rect(LEFT, rowY, PAGE_W, 13).fill(BG_LIGHT);
           let rx = LEFT;
-          const total = s.complaints + s.activities + s.missions;
           const vals = [
             s.uf,
-            String(s.complaints),
+            String(s.cpcaComplaints ?? s.complaints ?? 0),
+            String(s.smifComplaints ?? 0),
+            `${s.schoolSurveyYes ?? 0}/${s.schoolSurveyTotal ?? 0}`,
+            `${s.domesticLast12MonthsYes ?? 0}/${s.domesticSurveyTotal ?? 0}`,
             String(s.activities),
             String(s.missions),
-            String(total),
-            (s.localitiesCombined ?? s.localities ?? []).slice(0, 4).join(', '),
+            Number(s.pressureScore ?? 0).toFixed(1),
           ];
           for (const [ci, val] of vals.entries()) {
             doc
@@ -3736,9 +4370,14 @@ export class StrategicService {
         const topByMissions = [...statesWithData].sort(
           (a: any, b: any) => b.missions - a.missions,
         )[0];
+        const topByPressure = [...statesWithData].sort(
+          (a: any, b: any) =>
+            Number(b.pressureScore ?? 0) - Number(a.pressureScore ?? 0),
+        )[0];
 
         if (
           (topByComplaints?.complaints ?? 0) > 0 ||
+          Number(topByPressure?.pressureScore ?? 0) > 0 ||
           (topByActivities?.activities ?? 0) > 0 ||
           (topByMissions?.missions ?? 0) > 0
         ) {
@@ -3748,8 +4387,9 @@ export class StrategicService {
             .fillColor(GRAY)
             .text(
               `Destaques por UF — Denúncias: ${topByComplaints?.uf ?? '-'} (${topByComplaints?.complaints ?? 0}) | ` +
+                `Pressão: ${topByPressure?.uf ?? '-'} (${Number(topByPressure?.pressureScore ?? 0).toFixed(1)}) | ` +
                 `Atividades: ${topByActivities?.uf ?? '-'} (${topByActivities?.activities ?? 0}) | ` +
-                `Missões: ${topByMissions?.uf ?? '-'} (${topByMissions?.missions ?? 0}).`,
+                `Missões: ${topByMissions?.uf ?? '-'} (${topByMissions?.missions ?? 0}) como cobertura inicial.`,
             );
         }
       }
@@ -3790,12 +4430,20 @@ export class StrategicService {
       yes: [] as StrategicKpiDetailItem[],
       no: [] as StrategicKpiDetailItem[],
     };
+    const emptyCoverage = this.summarizeBiNormalizationCoverage({
+      sourceLabel: 'Pesquisa de escolas de formação',
+      populationLabel:
+        'Alunos e efetivo vinculado às escolas/localidades de formação visitadas',
+      totalRecords: 0,
+      links: [],
+    });
     if (!this.hasSurveySources(sourceSet)) {
       return {
         totalResponses: 0,
         violenceRatePercent: 0,
         yesCount: 0,
         noCount: 0,
+        coverage: emptyCoverage,
         details: emptyDetails,
       };
     }
@@ -3803,18 +4451,36 @@ export class StrategicService {
     const where = {};
     try {
       const model = (this.prisma as any).biSurveyResponse;
-      const rows = await model.findMany({
-        where,
-        orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
-        select: {
-          id: true,
-          sourceRow: true,
-          submittedAt: true,
-          om: true,
-          postoGraduacao: true,
-          posto: true,
-          sufferedViolence: true,
-        },
+      const [rows, links] = await Promise.all([
+        model.findMany({
+          where,
+          orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+          select: {
+            id: true,
+            sourceRow: true,
+            submittedAt: true,
+            om: true,
+            postoGraduacao: true,
+            posto: true,
+            sufferedViolence: true,
+          },
+        }),
+        this.prisma.biNormalizationLink.findMany({
+          where: { sourceType: 'SURVEY_SCHOOLS' },
+          select: {
+            sourceRecordId: true,
+            omId: true,
+            uf: true,
+            status: true,
+          },
+        }),
+      ]);
+      const coverage = this.summarizeBiNormalizationCoverage({
+        sourceLabel: 'Pesquisa de escolas de formação',
+        populationLabel:
+          'Alunos e efetivo vinculado às escolas/localidades de formação visitadas',
+        totalRecords: rows.length,
+        links,
       });
       if (rows.length === 0)
         return {
@@ -3822,6 +4488,7 @@ export class StrategicService {
           violenceRatePercent: 0,
           yesCount: 0,
           noCount: 0,
+          coverage,
           details: emptyDetails,
         };
 
@@ -3869,6 +4536,7 @@ export class StrategicService {
         yesCount,
         noCount: total - yesCount,
         violenceRatePercent: pct(yesCount, total),
+        coverage,
         details: {
           total: totalDetails,
           yes: yesDetails,
@@ -3881,6 +4549,7 @@ export class StrategicService {
         violenceRatePercent: 0,
         yesCount: 0,
         noCount: 0,
+        coverage: emptyCoverage,
         details: emptyDetails,
       };
     }
@@ -3894,12 +4563,19 @@ export class StrategicService {
       last12MonthsYes: [] as StrategicKpiDetailItem[],
       soughtHelp: [] as StrategicKpiDetailItem[],
     };
+    const emptyCoverage = this.summarizeBiNormalizationCoverage({
+      sourceLabel: 'Pesquisa de violência doméstica',
+      populationLabel: 'Efetivo feminino geral da FAB respondente',
+      totalRecords: 0,
+      links: [],
+    });
     if (!this.hasDomesticViolenceSources(sourceSet)) {
       return {
         totalResponses: 0,
         lifetimeRatePercent: 0,
         last12MonthsRatePercent: 0,
         soughtHelpPercent: 0,
+        coverage: emptyCoverage,
         details: emptyDetails,
       };
     }
@@ -3907,19 +4583,36 @@ export class StrategicService {
     const where = {};
     try {
       const model = (this.prisma as any).biDomesticViolenceResponse;
-      const rows = await model.findMany({
-        where,
-        orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
-        select: {
-          id: true,
-          sourceRow: true,
-          submittedAt: true,
-          organization: true,
-          rank: true,
-          sufferedLifetime: true,
-          sufferedLast12Months: true,
-          soughtHelp: true,
-        },
+      const [rows, links] = await Promise.all([
+        model.findMany({
+          where,
+          orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+          select: {
+            id: true,
+            sourceRow: true,
+            submittedAt: true,
+            organization: true,
+            rank: true,
+            sufferedLifetime: true,
+            sufferedLast12Months: true,
+            soughtHelp: true,
+          },
+        }),
+        this.prisma.biNormalizationLink.findMany({
+          where: { sourceType: 'DOMESTIC_VIOLENCE' },
+          select: {
+            sourceRecordId: true,
+            omId: true,
+            uf: true,
+            status: true,
+          },
+        }),
+      ]);
+      const coverage = this.summarizeBiNormalizationCoverage({
+        sourceLabel: 'Pesquisa de violência doméstica',
+        populationLabel: 'Efetivo feminino geral da FAB respondente',
+        totalRecords: rows.length,
+        links,
       });
       if (rows.length === 0)
         return {
@@ -3927,6 +4620,7 @@ export class StrategicService {
           lifetimeRatePercent: 0,
           last12MonthsRatePercent: 0,
           soughtHelpPercent: 0,
+          coverage,
           details: emptyDetails,
         };
 
@@ -3974,6 +4668,7 @@ export class StrategicService {
           soughtHelp,
           lifetimeYes > 0 ? lifetimeYes : total,
         ),
+        coverage,
         details: {
           total: totalDetails,
           lifetimeYes: lifetimeYesDetails,
@@ -3987,6 +4682,7 @@ export class StrategicService {
         lifetimeRatePercent: 0,
         last12MonthsRatePercent: 0,
         soughtHelpPercent: 0,
+        coverage: emptyCoverage,
         details: emptyDetails,
       };
     }
@@ -4103,6 +4799,8 @@ export class StrategicService {
       concluded: [] as StrategicKpiDetailItem[],
       cpca: [] as StrategicKpiDetailItem[],
       smif: [] as StrategicKpiDetailItem[],
+      cpcaOpen: [] as StrategicKpiDetailItem[],
+      smifOpen: [] as StrategicKpiDetailItem[],
       moral: [] as StrategicKpiDetailItem[],
       sexual: [] as StrategicKpiDetailItem[],
     };
@@ -4113,6 +4811,8 @@ export class StrategicService {
         concludedCases: 0,
         byCpca: 0,
         bySmif: 0,
+        openByCpca: 0,
+        openBySmif: 0,
         moral: 0,
         sexual: 0,
         moralPercent: 0,
@@ -4151,7 +4851,9 @@ export class StrategicService {
       const toDetail = (row: any): StrategicKpiDetailItem => {
         const id = String(row?.id ?? '').trim();
         const caseNumber = String(row?.caseNumber ?? '').trim();
-        const scope = String(row?.workflowScope ?? 'CPCA').trim().toUpperCase();
+        const scope = String(row?.workflowScope ?? 'CPCA')
+          .trim()
+          .toUpperCase();
         const link =
           scope === 'SMIF'
             ? `/smif-complaints?q=${encodeURIComponent(caseNumber)}`
@@ -4170,22 +4872,64 @@ export class StrategicService {
 
       const totalDetails = rows.map((row: any) => toDetail(row));
       const openDetails = rows
-        .filter((row: any) => openStatuses.has(String(row?.status ?? '').trim()))
+        .filter((row: any) =>
+          openStatuses.has(String(row?.status ?? '').trim()),
+        )
         .map((row: any) => toDetail(row));
       const concludedDetails = rows
-        .filter((row: any) => !openStatuses.has(String(row?.status ?? '').trim()))
+        .filter(
+          (row: any) => !openStatuses.has(String(row?.status ?? '').trim()),
+        )
         .map((row: any) => toDetail(row));
       const cpcaDetails = rows
-        .filter((row: any) => String(row?.workflowScope ?? '').trim().toUpperCase() === 'CPCA')
+        .filter(
+          (row: any) =>
+            String(row?.workflowScope ?? '')
+              .trim()
+              .toUpperCase() === 'CPCA',
+        )
         .map((row: any) => toDetail(row));
       const smifDetails = rows
-        .filter((row: any) => String(row?.workflowScope ?? '').trim().toUpperCase() === 'SMIF')
+        .filter(
+          (row: any) =>
+            String(row?.workflowScope ?? '')
+              .trim()
+              .toUpperCase() === 'SMIF',
+        )
+        .map((row: any) => toDetail(row));
+      const cpcaOpenDetails = rows
+        .filter(
+          (row: any) =>
+            String(row?.workflowScope ?? '')
+              .trim()
+              .toUpperCase() === 'CPCA' &&
+            openStatuses.has(String(row?.status ?? '').trim()),
+        )
+        .map((row: any) => toDetail(row));
+      const smifOpenDetails = rows
+        .filter(
+          (row: any) =>
+            String(row?.workflowScope ?? '')
+              .trim()
+              .toUpperCase() === 'SMIF' &&
+            openStatuses.has(String(row?.status ?? '').trim()),
+        )
         .map((row: any) => toDetail(row));
       const moralDetails = rows
-        .filter((row: any) => String(row?.complaintType ?? '').trim().toUpperCase() === 'MORAL')
+        .filter(
+          (row: any) =>
+            String(row?.complaintType ?? '')
+              .trim()
+              .toUpperCase() === 'MORAL',
+        )
         .map((row: any) => toDetail(row));
       const sexualDetails = rows
-        .filter((row: any) => String(row?.complaintType ?? '').trim().toUpperCase() === 'SEXUAL')
+        .filter(
+          (row: any) =>
+            String(row?.complaintType ?? '')
+              .trim()
+              .toUpperCase() === 'SEXUAL',
+        )
         .map((row: any) => toDetail(row));
 
       const total = totalDetails.length;
@@ -4201,6 +4945,8 @@ export class StrategicService {
         concludedCases: total - openCases,
         byCpca,
         bySmif,
+        openByCpca: cpcaOpenDetails.length,
+        openBySmif: smifOpenDetails.length,
         moral,
         sexual,
         moralPercent: pct(moral, total),
@@ -4211,6 +4957,8 @@ export class StrategicService {
           concluded: concludedDetails,
           cpca: cpcaDetails,
           smif: smifDetails,
+          cpcaOpen: cpcaOpenDetails,
+          smifOpen: smifOpenDetails,
           moral: moralDetails,
           sexual: sexualDetails,
         },
@@ -4222,6 +4970,8 @@ export class StrategicService {
         concludedCases: 0,
         byCpca: 0,
         bySmif: 0,
+        openByCpca: 0,
+        openBySmif: 0,
         moral: 0,
         sexual: 0,
         moralPercent: 0,
@@ -4270,11 +5020,15 @@ export class StrategicService {
         },
       });
 
-      const toLink = (activity: {
-        id: string;
-        scope: ActivityScope;
-      }, tab?: 'report') => {
-        const route = activity.scope === 'CIPAVD' ? '/activities-cipavd' : '/activities';
+      const toLink = (
+        activity: {
+          id: string;
+          scope: ActivityScope;
+        },
+        tab?: 'report',
+      ) => {
+        const route =
+          activity.scope === 'CIPAVD' ? '/activities-cipavd' : '/activities';
         const qs = new URLSearchParams({ activityId: activity.id });
         if (tab === 'report') qs.set('tab', 'report');
         return `${route}?${qs.toString()}`;
@@ -4292,7 +5046,8 @@ export class StrategicService {
         tab?: 'report',
       ) => ({
         id: activity.id,
-        title: String(activity.title ?? '').trim() || `Atividade ${activity.id}`,
+        title:
+          String(activity.title ?? '').trim() || `Atividade ${activity.id}`,
         scope: activity.scope,
         status: activity.status,
         date: activity.eventDate?.toISOString() ?? '',
@@ -4383,11 +5138,14 @@ export class StrategicService {
 
       const toDetail = (row: any): StrategicKpiDetailItem => {
         const missionId = String(row?.id ?? '').trim();
-        const scope = String(row?.scope ?? 'SMIF').trim().toUpperCase();
+        const scope = String(row?.scope ?? 'SMIF')
+          .trim()
+          .toUpperCase();
         return {
           id: missionId || `mission-${row?.title ?? ''}`,
           title:
-            String(row?.title ?? '').trim() || `Missão ${missionId || 'sem-id'}`,
+            String(row?.title ?? '').trim() ||
+            `Missão ${missionId || 'sem-id'}`,
           subtitle: [scope, String(row?.locality?.name ?? '').trim()]
             .filter(Boolean)
             .join(' • '),
@@ -4398,10 +5156,20 @@ export class StrategicService {
 
       const totalDetails = rows.map((row: any) => toDetail(row));
       const smifDetails = rows
-        .filter((row: any) => String(row?.scope ?? '').trim().toUpperCase() === 'SMIF')
+        .filter(
+          (row: any) =>
+            String(row?.scope ?? '')
+              .trim()
+              .toUpperCase() === 'SMIF',
+        )
         .map((row: any) => toDetail(row));
       const cipavdDetails = rows
-        .filter((row: any) => String(row?.scope ?? '').trim().toUpperCase() === 'CIPAVD')
+        .filter(
+          (row: any) =>
+            String(row?.scope ?? '')
+              .trim()
+              .toUpperCase() === 'CIPAVD',
+        )
         .map((row: any) => toDetail(row));
 
       const localities = new Map<
@@ -4428,7 +5196,9 @@ export class StrategicService {
         }
         const entry = localities.get(localityId)!;
         entry.total += 1;
-        const scope = String(row?.scope ?? '').trim().toUpperCase();
+        const scope = String(row?.scope ?? '')
+          .trim()
+          .toUpperCase();
         if (scope === 'CIPAVD') entry.cipavd += 1;
         else entry.smif += 1;
       }
