@@ -38,6 +38,7 @@ import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownR
 import KeyboardArrowUpRoundedIcon from "@mui/icons-material/KeyboardArrowUpRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
+import SyncRoundedIcon from "@mui/icons-material/SyncRounded";
 import {
   Bar,
   BarChart,
@@ -58,7 +59,9 @@ import {
   useExportBiDashboardPdf,
   useExportBiExecutiveNotebookPdf,
   useImportBiBestPracticesCycle,
+  useImportBiBestPracticesCycleApi,
   usePreviewImportBiBestPracticesCycle,
+  usePreviewImportBiBestPracticesCycleApi,
   useMe,
   useUpdateBiBestPracticesCycleCardSetting,
 } from "../api/hooks";
@@ -82,6 +85,7 @@ import { BI_BEST_PRACTICES_CYCLE_QUESTIONS } from "../features/biSurveyQuestions
 type MetricMode = "PERCENT" | "COUNT";
 type CombineMode = "AND" | "OR";
 type DeleteConfirmMode = "SELECTED" | "FILTERED";
+type ImportSource = "FILE" | "FORMS";
 
 type DistributionDatum = {
   label: string;
@@ -539,6 +543,7 @@ export function BiBestPracticesCycleDashboardPage() {
   const [file, setFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] =
     useState<BiImportNormalizationPreview | null>(null);
+  const [importSource, setImportSource] = useState<ImportSource | null>(null);
   const [selectedNormalizationIds, setSelectedNormalizationIds] = useState<
     string[]
   >([]);
@@ -597,6 +602,8 @@ export function BiBestPracticesCycleDashboardPage() {
 
   const importMutation = useImportBiBestPracticesCycle();
   const previewImportMutation = usePreviewImportBiBestPracticesCycle();
+  const importApiMutation = useImportBiBestPracticesCycleApi();
+  const previewImportApiMutation = usePreviewImportBiBestPracticesCycleApi();
   const deleteResponsesMutation = useDeleteBiBestPracticesCycleResponses();
   const exportPdfMutation = useExportBiDashboardPdf(
     "/bi/best-practices-cycle/dashboard/pdf",
@@ -763,6 +770,7 @@ export function BiBestPracticesCycleDashboardPage() {
         throw new Error("A prévia de normalização não foi retornada.");
       }
       setImportPreview(preview);
+      setImportSource("FILE");
       setSelectedNormalizationIds(
         (preview.suggestions ?? []).map((item) => item.id),
       );
@@ -775,12 +783,69 @@ export function BiBestPracticesCycleDashboardPage() {
     }
   };
 
+  const handleFormsImport = async () => {
+    try {
+      const result = await previewImportApiMutation.mutateAsync({
+        replace: replaceOnImport,
+      });
+      const preview = (result?.normalization ??
+        null) as BiImportNormalizationPreview | null;
+      if (!preview) {
+        throw new Error("A prévia de normalização não foi retornada.");
+      }
+      setImportPreview(preview);
+      setImportSource("FORMS");
+      setSelectedNormalizationIds(
+        (preview.suggestions ?? []).map((item) => item.id),
+      );
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({
+        message: payload.message ?? "Falha ao importar dados do Forms.",
+        severity: "error",
+      });
+    }
+  };
+
   const closeImportPreview = () => {
     setImportPreview(null);
+    setImportSource(null);
     setSelectedNormalizationIds([]);
   };
 
   const confirmImport = async (applyNormalization: boolean) => {
+    if (importSource === "FORMS") {
+      try {
+        const result = await importApiMutation.mutateAsync({
+          replace: replaceOnImport,
+          normalizationPlan: applyNormalization
+            ? {
+                decisions: selectedNormalizationIds.map((id) => ({
+                  id,
+                  apply: true,
+                })),
+              }
+            : { decisions: [] },
+        });
+        closeImportPreview();
+        toast.push({
+          message:
+            `Importação do Forms concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
+            `Duplicados: ${result?.batch?.duplicateRows ?? 0}. ` +
+            `Inválidos: ${result?.batch?.invalidRows ?? 0}. ` +
+            `Campos normalizados: ${Number(result?.normalization?.updatedFields ?? 0)}.`,
+          severity: "success",
+        });
+      } catch (error) {
+        const payload = parseApiError(error);
+        toast.push({
+          message: payload.message ?? "Falha ao importar dados do Forms.",
+          severity: "error",
+        });
+      }
+      return;
+    }
+
     if (!file) {
       closeImportPreview();
       return;
@@ -985,6 +1050,11 @@ export function BiBestPracticesCycleDashboardPage() {
       longLabels: true,
     },
   ];
+  const fileImportPending =
+    importMutation.isPending || previewImportMutation.isPending;
+  const formsImportPending =
+    importApiMutation.isPending || previewImportApiMutation.isPending;
+  const anyImportPending = fileImportPending || formsImportPending;
 
   return (
     <Box
@@ -1154,7 +1224,7 @@ export function BiBestPracticesCycleDashboardPage() {
             variant="outlined"
             component="label"
             startIcon={<UploadFileRoundedIcon />}
-            disabled={!canUpload}
+            disabled={!canUpload || anyImportPending}
             sx={{
               minWidth: 260,
               height: 40,
@@ -1184,20 +1254,52 @@ export function BiBestPracticesCycleDashboardPage() {
               <Checkbox
                 checked={replaceOnImport}
                 onChange={(event) => setReplaceOnImport(event.target.checked)}
-                disabled={!canUpload}
+                disabled={!canUpload || anyImportPending}
               />
             }
-            label="Substituir base atual"
+            label="Zerar base antes de importar"
           />
+          <Chip
+            size="small"
+            label={replaceOnImport ? "Modo: substituição" : "Modo: incremental"}
+            variant="outlined"
+            sx={{
+              height: 28,
+              borderColor: alpha(BPC_PALETTE.primary, 0.3),
+              color: BPC_PALETTE.primary,
+              bgcolor: alpha(BPC_PALETTE.primary, 0.04),
+            }}
+          />
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleImport}
+            disabled={!canUpload || !file || anyImportPending}
+            sx={{
+              height: 40,
+              px: 2,
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              borderColor: alpha(BPC_PALETTE.primary, 0.5),
+              color: BPC_PALETTE.primary,
+              "&:hover": {
+                borderColor: BPC_PALETTE.primary,
+                bgcolor: alpha(BPC_PALETTE.primary, 0.06),
+              },
+            }}
+          >
+            {previewImportMutation.isPending
+              ? "Analisando..."
+              : importMutation.isPending
+                ? "Importando..."
+                : "Importar arquivo"}
+          </Button>
           <Button
             variant="contained"
             size="small"
-            onClick={handleImport}
-            disabled={
-              !canUpload ||
-              importMutation.isPending ||
-              previewImportMutation.isPending
-            }
+            startIcon={<SyncRoundedIcon />}
+            onClick={handleFormsImport}
+            disabled={!canUpload || anyImportPending}
             sx={{
               height: 40,
               px: 2,
@@ -1207,11 +1309,11 @@ export function BiBestPracticesCycleDashboardPage() {
               "&:hover": { bgcolor: BPC_PALETTE.primaryDark },
             }}
           >
-            {previewImportMutation.isPending
-              ? "Analisando..."
-              : importMutation.isPending
-                ? "Importando..."
-                : "Importar"}
+            {previewImportApiMutation.isPending
+              ? "Analisando Forms..."
+              : importApiMutation.isPending
+                ? "Importando Forms..."
+                : "Importar do Forms"}
           </Button>
           <Box sx={{ ml: { lg: "auto" } }}>
             <Typography variant="caption" sx={{ color: BPC_PALETTE.muted }}>
@@ -1221,6 +1323,11 @@ export function BiBestPracticesCycleDashboardPage() {
               {dashboard.latestImport?.fileName ?? "Nenhuma"}
             </Typography>
           </Box>
+          {anyImportPending ? (
+            <Box sx={{ width: "100%", flexBasis: "100%" }}>
+              <LinearProgress />
+            </Box>
+          ) : null}
         </Stack>
       </BiCollapsibleSection>
 
@@ -2135,7 +2242,11 @@ export function BiBestPracticesCycleDashboardPage() {
 
       <BiImportNormalizationReviewDialog
         open={Boolean(importPreview)}
-        title="Revisar normalização antes da importação"
+        title={
+          importSource === "FORMS"
+            ? "Revisar normalização do Forms"
+            : "Revisar normalização antes da importação"
+        }
         preview={importPreview}
         selectedIds={selectedNormalizationIds}
         onToggle={(id, checked) =>
@@ -2148,7 +2259,7 @@ export function BiBestPracticesCycleDashboardPage() {
         onClose={closeImportPreview}
         onConfirm={() => void confirmImport(true)}
         onImportWithoutNormalization={() => void confirmImport(false)}
-        confirmLoading={importMutation.isPending}
+        confirmLoading={importMutation.isPending || importApiMutation.isPending}
       />
 
       <Card sx={{ mt: 1.2, ...cardSx }}>

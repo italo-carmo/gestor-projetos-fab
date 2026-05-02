@@ -27,13 +27,30 @@ type BestPracticeCycleFilters = {
   combineMode?: string;
 };
 
+type BestPracticeCycleApiPage = {
+  ok?: boolean;
+  atualizado_em?: string;
+  since_id?: number | string;
+  count?: number | string;
+  total_disponivel_no_filtro?: number | string;
+  limit?: number | string;
+  has_more?: boolean;
+  next_since_id?: number | string;
+  last_id_available?: number | string;
+  sheets?: string[];
+  dados?: unknown[];
+};
+
 type ImportBestPracticeCycleOptions = {
   replaceAll?: boolean;
   previewOnly?: boolean;
   normalizationPlan?: BiImportNormalizationPlan | null;
 };
 
+type ImportBestPracticeCycleApiOptions = ImportBestPracticeCycleOptions;
+
 type ParsedBestPracticeCycleRow = {
+  apiId: number | null;
   submittedAt: Date | null;
   technicalRigorPerception: string | null;
   preparednessToLeadMixedClass: string | null;
@@ -80,6 +97,35 @@ const DEFAULT_MAIN_CHALLENGE_OPTIONS = [
   'Identificar situações que demandam apoio especializado (Assistente Social/Psicólogo)',
   'Não percebo desafios específicos',
 ] as const;
+
+const BEST_PRACTICE_CYCLE_DEFAULT_API_URL =
+  'https://script.google.com/macros/s/AKfycbwujWBQXWVogQXAPL7x194stdrNl0Db7IcBtTz1doctHta_PQpEHP0f3zsKiCZYSXRc/exec?token=768c44348d3e4b239de4f086b947210d5e6ed3ef1093416ebf22b935824e820e&since_id=0';
+
+const BEST_PRACTICE_CYCLE_API_COLUMNS = [
+  'carimbo_de_data_hora',
+  'pergunta_01_e_possivel_manter_o_rigor_tecnico_militar_na_formacao_de_turmas_mistas_compostas',
+  'pergunta_02_sinto_me_preparado_para_conduzir_a_formacao_de_turmas_mistas_compostas_por_recru',
+  'pergunta_03_vieses_de_genero_diferencas_de_tratamento_entre_homens_e_mulheres_podem_influenc',
+  'pergunta_04_na_sua_avaliacao_ha_diferenca_na_forma_como_os_recrutas_interagem_entre_si_quand',
+  'pergunta_05_caso_tenha_assinalado_sim_na_pergunta_anterior_descreva_brevemente_essa_diferenc',
+  'pergunta_06_consigo_identificar_situacoes_no_contexto_da_instrucao_que_demandam_o_apoio_do_a',
+  'pergunta_07_na_sua_avaliacao_qual_e_o_principal_desafio_na_conducao_da_primeira_turma_femini',
+  'identificacao',
+  'especialidade',
+] as const;
+
+const BEST_PRACTICE_CYCLE_API_HEADER_MAP = {
+  submittedAt: 0,
+  technicalRigorPerception: 1,
+  preparednessToLeadMixedClass: 2,
+  genderBiasImpact: 3,
+  interactionDifference: 4,
+  interactionDifferenceComment: 5,
+  supportNeedRecognition: 6,
+  mainChallengeOptions: 7,
+  identification: 8,
+  specialty: 9,
+};
 
 const BEST_PRACTICE_CARD_IDS = new Set([
   'page-header',
@@ -216,6 +262,7 @@ export class BiBestPracticesCycleService {
         data: rowsToInsert.map((item) => ({
           id: this.makeId('bibpcr_'),
           batchId: batch.id,
+          apiId: item.apiId ?? null,
           submittedAt: item.submittedAt,
           technicalRigorPerception: item.technicalRigorPerception,
           preparednessToLeadMixedClass: item.preparednessToLeadMixedClass,
@@ -272,6 +319,144 @@ export class BiBestPracticesCycleService {
         unresolvedCount: normalizationPreview.summary.unresolvedCount,
       },
       importMode: replaceAll ? 'REPLACE' : 'APPEND',
+    };
+  }
+
+  async importResponsesFromApi(
+    user?: RbacUser,
+    options: ImportBestPracticeCycleApiOptions = {},
+  ) {
+    const replaceAll = options.replaceAll === true;
+    const previewOnly = options.previewOnly === true;
+    const sinceId = replaceAll ? 0 : await this.resolveLastImportedApiId();
+    const apiResult = await this.fetchApiRecords(sinceId);
+    const { parsed, invalidRows } = this.parseApiRecords(apiResult.records);
+
+    const normalizationPreview = await this.normalization.previewImportRows({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.BEST_PRACTICE_CYCLE,
+      rows: parsed.map((item) => ({
+        rowNumber: item.sourceRow,
+        fields: [
+          {
+            fieldKey: 'identification',
+            fieldLabel: 'Identificação / OM',
+            kind: 'OM',
+            value: item.identification,
+          },
+          {
+            fieldKey: 'specialty',
+            fieldLabel: 'Especialidade',
+            kind: 'SPECIALTY',
+            value: item.specialty,
+          },
+        ],
+      })),
+    });
+
+    if (previewOnly) {
+      return {
+        previewOnly: true,
+        importMode: replaceAll ? 'REPLACE' : 'INCREMENTAL',
+        sync: apiResult.sync,
+        normalization: normalizationPreview,
+        preview: this.previewRows(parsed),
+      };
+    }
+
+    const normalizedImport = this.normalization.applyImportNormalization(
+      parsed,
+      normalizationPreview,
+      options.normalizationPlan,
+    );
+    const rowsToInsert = normalizedImport.rows;
+
+    const responseModel = (this.prisma as any).biBestPracticeCycleResponse;
+    const importModel = (this.prisma as any).biBestPracticeCycleImportBatch;
+
+    if (replaceAll) {
+      await this.prisma.$transaction([
+        responseModel.deleteMany(),
+        importModel.deleteMany(),
+      ]);
+    }
+
+    const batch = await importModel.create({
+      data: {
+        id: this.makeId('bibpcib_'),
+        fileName: 'Google Forms API - Ciclo de Boas Práticas',
+        format: BiImportFormat.API,
+        sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
+        totalRows: rowsToInsert.length,
+        insertedRows: 0,
+        duplicateRows: 0,
+        invalidRows,
+        importedById: user?.id ?? null,
+        apiSinceId: apiResult.sync.sinceId,
+        apiNextSinceId: apiResult.sync.nextSinceId,
+        apiLastIdAvailable: apiResult.sync.lastIdAvailable,
+        apiHasMore: apiResult.sync.hasMore,
+        apiUpdatedAt: apiResult.sync.updatedAt
+          ? new Date(apiResult.sync.updatedAt)
+          : null,
+      },
+    });
+
+    let insertedRows = 0;
+
+    if (rowsToInsert.length > 0) {
+      const created = await responseModel.createMany({
+        data: rowsToInsert.map((item) => ({
+          id: this.makeId('bibpcr_'),
+          batchId: batch.id,
+          apiId: item.apiId ?? null,
+          submittedAt: item.submittedAt,
+          technicalRigorPerception: item.technicalRigorPerception,
+          preparednessToLeadMixedClass: item.preparednessToLeadMixedClass,
+          genderBiasImpact: item.genderBiasImpact,
+          interactionDifference: item.interactionDifference,
+          interactionDifferenceComment: item.interactionDifferenceComment,
+          supportNeedRecognition: item.supportNeedRecognition,
+          mainChallengeOptions: item.mainChallengeOptions,
+          identification: item.identification,
+          specialty: item.specialty,
+          rawPayload: item.rawPayload,
+          sourceRow: item.sourceRow,
+          sourceHash: item.sourceHash,
+        })),
+        skipDuplicates: true,
+      });
+      insertedRows = Number(created?.count ?? 0);
+    }
+
+    const duplicateRows = rowsToInsert.length - insertedRows;
+
+    const updatedBatch = await importModel.update({
+      where: { id: batch.id },
+      data: {
+        insertedRows,
+        duplicateRows,
+      },
+      include: {
+        importedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    await this.normalization.rebuild({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.BEST_PRACTICE_CYCLE,
+    });
+
+    return {
+      batch: updatedBatch,
+      sync: apiResult.sync,
+      preview: this.previewRows(rowsToInsert),
+      normalization: {
+        suggestionsApplied: normalizedImport.appliedSuggestions,
+        updatedFields: normalizedImport.updatedFields,
+        unresolvedCount: normalizationPreview.summary.unresolvedCount,
+      },
+      importMode: replaceAll ? 'REPLACE' : 'INCREMENTAL',
     };
   }
 
@@ -1020,6 +1205,165 @@ export class BiBestPracticesCycleService {
     return date;
   }
 
+  private async resolveLastImportedApiId() {
+    const responseModel = (this.prisma as any).biBestPracticeCycleResponse;
+    const latest = await responseModel.findFirst({
+      where: { apiId: { not: null } },
+      orderBy: { apiId: 'desc' },
+      select: { apiId: true },
+    });
+
+    return this.parsePositiveInteger(latest?.apiId) ?? 0;
+  }
+
+  private async fetchApiRecords(sinceId: number) {
+    const pages: BestPracticeCycleApiPage[] = [];
+    const records: unknown[] = [];
+    const configuredMaxPages = this.parsePositiveInteger(
+      process.env.BI_BEST_PRACTICES_CYCLE_API_MAX_PAGES,
+    );
+    const maxPages =
+      configuredMaxPages && configuredMaxPages > 0 ? configuredMaxPages : 25;
+    let nextSinceId = Math.max(0, sinceId);
+
+    for (let pageIndex = 0; pageIndex < maxPages; pageIndex += 1) {
+      const page = await this.fetchApiPage(nextSinceId);
+      pages.push(page);
+      records.push(...(page.dados ?? []));
+
+      if (!page.has_more) break;
+
+      const parsedNext = this.parsePositiveInteger(page.next_since_id);
+      if (parsedNext === null || parsedNext <= nextSinceId) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'best_practices_cycle_api_invalid_next_since_id',
+          sinceId: nextSinceId,
+          nextSinceId: page.next_since_id,
+        });
+      }
+      nextSinceId = parsedNext;
+    }
+
+    const lastPage = pages[pages.length - 1] ?? null;
+    const updatedAt = this.parseApiDate(
+      [...pages].reverse().find((page) => page.atualizado_em)?.atualizado_em,
+    );
+    const sheets = [
+      ...new Set(
+        pages.flatMap((page) =>
+          Array.isArray(page.sheets) ? page.sheets.filter(Boolean) : [],
+        ),
+      ),
+    ];
+
+    return {
+      pages,
+      records,
+      sync: {
+        sinceId,
+        nextSinceId:
+          this.parsePositiveInteger(lastPage?.next_since_id) ??
+          this.maxApiIdFromRecords(records),
+        lastIdAvailable:
+          this.parsePositiveInteger(lastPage?.last_id_available) ??
+          this.maxApiIdFromRecords(records),
+        hasMore: Boolean(lastPage?.has_more),
+        fetchedRows: records.length,
+        pageCount: pages.length,
+        updatedAt: updatedAt?.toISOString() ?? null,
+        sheets,
+      },
+    };
+  }
+
+  private async fetchApiPage(
+    sinceId: number,
+  ): Promise<BestPracticeCycleApiPage> {
+    const url = this.buildApiUrl(sinceId);
+    const timeoutMs =
+      this.parsePositiveInteger(
+        process.env.BI_BEST_PRACTICES_CYCLE_API_TIMEOUT_MS,
+      ) ?? 30_000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } catch (error) {
+      throwError('VALIDATION_ERROR', {
+        reason:
+          error instanceof Error && error.name === 'AbortError'
+            ? 'best_practices_cycle_api_timeout'
+            : 'best_practices_cycle_api_request_failed',
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'best_practices_cycle_api_http_error',
+        status: response.status,
+      });
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throwError('VALIDATION_ERROR', {
+        reason: 'best_practices_cycle_api_invalid_json',
+      });
+    }
+
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'best_practices_cycle_api_invalid_payload',
+      });
+    }
+
+    const page = payload as BestPracticeCycleApiPage;
+    if (page.ok !== true || !Array.isArray(page.dados)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'best_practices_cycle_api_unsuccessful_payload',
+      });
+    }
+
+    return page;
+  }
+
+  private buildApiUrl(sinceId: number) {
+    const configuredUrl = String(
+      process.env.BI_BEST_PRACTICES_CYCLE_API_URL ||
+        BEST_PRACTICE_CYCLE_DEFAULT_API_URL,
+    ).trim();
+    if (!configuredUrl) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'best_practices_cycle_api_url_not_configured',
+      });
+    }
+
+    let url: URL;
+    try {
+      url = new URL(configuredUrl);
+    } catch {
+      throwError('VALIDATION_ERROR', {
+        reason: 'best_practices_cycle_api_url_invalid',
+      });
+    }
+
+    const token = String(
+      process.env.BI_BEST_PRACTICES_CYCLE_API_TOKEN ?? '',
+    ).trim();
+    if (token) {
+      url.searchParams.set('token', token);
+    }
+    url.searchParams.set('since_id', String(Math.max(0, sinceId)));
+
+    return url;
+  }
+
   private extractRows(buffer: Buffer, format: BiImportFormat) {
     const workbook = this.readWorkbook(buffer, format);
     const sheetNames = workbook.SheetNames ?? [];
@@ -1289,6 +1633,7 @@ export class BiBestPracticesCycleService {
     return {
       skip: false,
       value: {
+        apiId: null,
         submittedAt,
         technicalRigorPerception,
         preparednessToLeadMixedClass,
@@ -1302,6 +1647,71 @@ export class BiBestPracticesCycleService {
         rawPayload,
         sourceRow,
         sourceHash,
+      },
+    };
+  }
+
+  private parseApiRecords(records: unknown[]) {
+    const parsed: ParsedBestPracticeCycleRow[] = [];
+    let invalidRows = 0;
+
+    for (const record of records) {
+      const parsedRow = this.parseApiRecord(record);
+      if (parsedRow?.skip) continue;
+      if (!parsedRow?.value) {
+        invalidRows += 1;
+        continue;
+      }
+      parsed.push(parsedRow.value);
+    }
+
+    return { parsed, invalidRows };
+  }
+
+  private parseApiRecord(
+    record: unknown,
+  ):
+    | { skip: true; value?: undefined }
+    | { skip: false; value: ParsedBestPracticeCycleRow | null } {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return { skip: false, value: null };
+    }
+
+    const raw = record as Record<string, unknown>;
+    const apiId = this.parsePositiveInteger(raw.api_id ?? raw.id);
+    if (apiId === null) {
+      return { skip: false, value: null };
+    }
+
+    const sourceRow =
+      this.parsePositiveInteger(raw._linha) ??
+      this.parsePositiveInteger(raw.linha) ??
+      this.parsePositiveInteger(raw.id) ??
+      apiId;
+    const dataRow = BEST_PRACTICE_CYCLE_API_COLUMNS.map((column) =>
+      this.cleanApiCell(raw[column]) ?? '',
+    );
+
+    const parsed = this.parseDataRow(
+      dataRow,
+      BEST_PRACTICE_CYCLE_API_HEADER_MAP,
+      sourceRow,
+    );
+
+    if (parsed.skip || !parsed.value) return parsed;
+
+    return {
+      skip: false,
+      value: {
+        ...parsed.value,
+        apiId,
+        rawPayload: {
+          ...parsed.value.rawPayload,
+          api_id: String(apiId),
+          id: this.cleanApiCell(raw.id),
+          _aba: this.cleanApiCell(raw._aba ?? raw.aba),
+          _linha: String(sourceRow),
+        },
       },
     };
   }
@@ -1499,6 +1909,60 @@ export class BiBestPracticesCycleService {
 
   private isSupportFrequent(value: string | null | undefined) {
     return value === 'Sempre' || value === 'Frequentemente';
+  }
+
+  private previewRows(rows: ParsedBestPracticeCycleRow[]) {
+    return rows.slice(0, 5).map((item) => ({
+      submittedAt: item.submittedAt,
+      technicalRigorPerception: item.technicalRigorPerception,
+      preparednessToLeadMixedClass: item.preparednessToLeadMixedClass,
+      interactionDifference: item.interactionDifference,
+      supportNeedRecognition: item.supportNeedRecognition,
+      mainChallengeOptions: item.mainChallengeOptions,
+      identification: item.identification,
+      specialty: item.specialty,
+    }));
+  }
+
+  private parsePositiveInteger(value: unknown) {
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+      return value;
+    }
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 0) return null;
+    return parsed;
+  }
+
+  private cleanApiCell(value: unknown) {
+    if (value === null || value === undefined) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'boolean') return value ? 'SIM' : 'NAO';
+    return String(value).trim() || null;
+  }
+
+  private parseApiDate(value: unknown) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return null;
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  }
+
+  private maxApiIdFromRecords(records: unknown[]) {
+    let max = 0;
+    for (const record of records) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) {
+        continue;
+      }
+      const value = this.parsePositiveInteger(
+        (record as Record<string, unknown>).api_id ??
+          (record as Record<string, unknown>).id,
+      );
+      if (value !== null && value > max) max = value;
+    }
+    return max;
   }
 
   private fileExtension(fileName: string) {

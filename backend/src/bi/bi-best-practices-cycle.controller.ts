@@ -29,15 +29,20 @@ import { type BiImportNormalizationPlan } from './bi-normalization.service';
 import { BiPdfService } from './bi-pdf.service';
 import { BiBestPracticesCycleService } from './bi-best-practices-cycle.service';
 
-function parseTruthyBodyFlag(value: string | undefined) {
+function parseTruthyBodyFlag(value: unknown) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
   return typeof value === 'string'
     ? ['1', 'true', 'sim', 'yes'].includes(value.toLowerCase().trim())
     : false;
 }
 
 function parseNormalizationPlan(
-  value: string | undefined,
+  value: unknown,
 ): BiImportNormalizationPlan | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as BiImportNormalizationPlan;
+  }
   const raw = String(value ?? '').trim();
   if (!raw) return null;
   try {
@@ -221,9 +226,9 @@ export class BiBestPracticesCycleController {
   )
   importResponses(
     @UploadedFile() file: Express.Multer.File,
-    @Body('replace') replace: string | undefined,
-    @Body('preview') preview: string | undefined,
-    @Body('normalizationPlan') normalizationPlan: string | undefined,
+    @Body('replace') replace: unknown,
+    @Body('preview') preview: unknown,
+    @Body('normalizationPlan') normalizationPlan: unknown,
     @Req() req: Request & { fileValidationError?: string },
     @CurrentUser() user: RbacUser,
   ) {
@@ -235,6 +240,23 @@ export class BiBestPracticesCycleController {
     }
 
     return this.biBestPracticesCycle.importResponses(file, user, {
+      replaceAll: parseTruthyBodyFlag(replace),
+      previewOnly: parseTruthyBodyFlag(preview),
+      normalizationPlan: parseNormalizationPlan(normalizationPlan),
+    });
+  }
+
+  @Post('import-api')
+  @RequirePermission('bi', 'upload')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  importResponsesFromApi(
+    @Body('replace') replace: unknown,
+    @Body('preview') preview: unknown,
+    @Body('normalizationPlan') normalizationPlan: unknown,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.biBestPracticesCycle.importResponsesFromApi(user, {
       replaceAll: parseTruthyBodyFlag(replace),
       previewOnly: parseTruthyBodyFlag(preview),
       normalizationPlan: parseNormalizationPlan(normalizationPlan),

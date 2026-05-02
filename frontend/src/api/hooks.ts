@@ -5205,6 +5205,34 @@ export function usePreviewImportBiBestPracticesCycle() {
   });
 }
 
+export function useImportBiBestPracticesCycleApi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: BiConfirmedApiImportArgs) =>
+      (
+        await api.post("/bi/best-practices-cycle/import-api", {
+          replace: args.replace,
+          normalizationPlan: args.normalizationPlan ?? null,
+        })
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biBestPracticesCycle"] });
+    },
+  });
+}
+
+export function usePreviewImportBiBestPracticesCycleApi() {
+  return useMutation({
+    mutationFn: async (args: BiApiImportMutationArgs) =>
+      (
+        await api.post("/bi/best-practices-cycle/import-api", {
+          replace: args.replace,
+          preview: true,
+        })
+      ).data,
+  });
+}
+
 export function useDeleteBiBestPracticesCycleResponses() {
   const qc = useQueryClient();
   return useMutation({

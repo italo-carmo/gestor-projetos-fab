@@ -181,7 +181,7 @@ export function BiImportNormalizationReviewDialog({
 
           {suggestions.length === 0 ? (
             <Alert severity="success" variant="outlined">
-              Nenhuma normalização automática foi necessária neste arquivo.
+              Nenhuma normalização automática foi necessária nesta importação.
             </Alert>
           ) : null}
 
