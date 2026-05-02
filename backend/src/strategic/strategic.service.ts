@@ -712,6 +712,7 @@ export class StrategicService {
       omId?: string | null;
       uf?: string | null;
       status?: string | null;
+      om?: { uf?: string | null } | null;
     }>;
   }) {
     const linkedRecordIds = new Set(
@@ -740,7 +741,7 @@ export class StrategicService {
     const supportedUfs = new Set(
       supportedLinks
         .map((item) =>
-          String(item.uf ?? '')
+          String(item.uf ?? item.om?.uf ?? '')
             .trim()
             .toUpperCase(),
         )
@@ -854,6 +855,11 @@ export class StrategicService {
           omId: true,
           uf: true,
           status: true,
+          om: {
+            select: {
+              uf: true,
+            },
+          },
         },
       }),
     ]);
@@ -1148,6 +1154,11 @@ export class StrategicService {
           omId: true,
           uf: true,
           status: true,
+          om: {
+            select: {
+              uf: true,
+            },
+          },
         },
       }),
       this.prisma.biSurveyResponse.findMany({
@@ -1192,6 +1203,7 @@ export class StrategicService {
       if (value) ufSet.add(value);
       return value;
     };
+    const linkUf = (link: any) => ensureUf(link?.uf ?? link?.om?.uf);
 
     const surveyById = new Map<
       string,
@@ -1241,7 +1253,7 @@ export class StrategicService {
     for (const link of surveyLinks) {
       const response = surveyById.get(String(link.sourceRecordId));
       if (!response) continue;
-      const uf = ensureUf(link.uf);
+      const uf = linkUf(link);
       if (uf) {
         const current = surveySignalsByUf.get(uf) ?? createSurveyStats();
         current.total += 1;
@@ -1276,7 +1288,7 @@ export class StrategicService {
     for (const link of domesticLinks) {
       const response = domesticById.get(String(link.sourceRecordId));
       if (!response) continue;
-      const uf = ensureUf(link.uf);
+      const uf = linkUf(link);
       if (uf) {
         const current = domesticSignalsByUf.get(uf) ?? createDomesticStats();
         current.total += 1;
@@ -2284,6 +2296,11 @@ export class StrategicService {
             select: {
               sourceRecordId: true,
               uf: true,
+              om: {
+                select: {
+                  uf: true,
+                },
+              },
             },
           })
         : Promise.resolve([]),
@@ -2304,6 +2321,11 @@ export class StrategicService {
             select: {
               sourceRecordId: true,
               uf: true,
+              om: {
+                select: {
+                  uf: true,
+                },
+              },
             },
           })
         : Promise.resolve([]),
@@ -2454,7 +2476,7 @@ export class StrategicService {
       ]),
     );
     for (const link of surveyLinks as any[]) {
-      const uf = String(link?.uf ?? '')
+      const uf = String(link?.uf ?? link?.om?.uf ?? '')
         .trim()
         .toUpperCase();
       if (!uf) continue;
@@ -2472,7 +2494,7 @@ export class StrategicService {
       ]),
     );
     for (const link of domesticLinks as any[]) {
-      const uf = String(link?.uf ?? '')
+      const uf = String(link?.uf ?? link?.om?.uf ?? '')
         .trim()
         .toUpperCase();
       if (!uf) continue;
@@ -4472,6 +4494,11 @@ export class StrategicService {
             omId: true,
             uf: true,
             status: true,
+            om: {
+              select: {
+                uf: true,
+              },
+            },
           },
         }),
       ]);
@@ -4605,6 +4632,11 @@ export class StrategicService {
             omId: true,
             uf: true,
             status: true,
+            om: {
+              select: {
+                uf: true,
+              },
+            },
           },
         }),
       ]);

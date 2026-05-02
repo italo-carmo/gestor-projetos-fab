@@ -209,10 +209,10 @@ function underreportTooltip(item: any) {
   return "Sem estimativa disponível.";
 }
 
-function formatEvidence(value: any) {
+function formatEvidence(value: any, emptyLabel = "sem base") {
   const total = Number(value?.total ?? 0);
   const positive = Number(value?.positive ?? 0);
-  if (total <= 0) return "sem base";
+  if (total <= 0) return emptyLabel;
   return `${positive}/${total} • ${String(value?.evidenceLevel ?? "BAIXA").toLowerCase()}`;
 }
 
@@ -658,7 +658,14 @@ export function ComgepStrategicTab() {
                   <strong>Pesquisa escolas</strong>
                 </TableCell>
                 <TableCell align="right">
-                  <strong>VD feminina</strong>
+                  <Tooltip
+                    title="Base da pesquisa de violência doméstica no efetivo feminino. 'Sem base VD' significa que não há respostas de VD normalizadas para esta UF no recorte."
+                    arrow
+                  >
+                    <Box component="span">
+                      <strong>VD feminina</strong>
+                    </Box>
+                  </Tooltip>
                 </TableCell>
                 <TableCell align="right">
                   <strong>Subnotificação</strong>
@@ -704,7 +711,7 @@ export function ComgepStrategicTab() {
                     {formatEvidence(item.surveyEvidence)}
                   </TableCell>
                   <TableCell align="right">
-                    {formatEvidence(item.domesticEvidence)}
+                    {formatEvidence(item.domesticEvidence, "sem base VD")}
                   </TableCell>
                   <TableCell align="right">
                     <Tooltip title={underreportTooltip(item)} arrow>
@@ -774,7 +781,14 @@ export function ComgepStrategicTab() {
                   <strong>Escolas</strong>
                 </TableCell>
                 <TableCell align="right">
-                  <strong>VD</strong>
+                  <Tooltip
+                    title="Base da pesquisa de violência doméstica normalizada para esta OM. 'Sem base VD' significa que não há respostas de VD neste recorte."
+                    arrow
+                  >
+                    <Box component="span">
+                      <strong>VD</strong>
+                    </Box>
+                  </Tooltip>
                 </TableCell>
                 <TableCell align="right">
                   <strong>Subnotificação</strong>
@@ -812,7 +826,7 @@ export function ComgepStrategicTab() {
                     {formatEvidence(item.surveyEvidence)}
                   </TableCell>
                   <TableCell align="right">
-                    {formatEvidence(item.domesticEvidence)}
+                    {formatEvidence(item.domesticEvidence, "sem base VD")}
                   </TableCell>
                   <TableCell align="right">
                     <Tooltip title={underreportTooltip(item)} arrow>
@@ -1334,7 +1348,7 @@ export function ComgepStrategicTab() {
               />
               <ModalRow
                 label="VD efetivo feminino 12 meses"
-                value={`${formatPercent(selectedPriorityUf?.domesticRate)} • ${formatEvidence(selectedPriorityUf?.domesticEvidence)}`}
+                value={`${formatPercent(selectedPriorityUf?.domesticRate)} • ${formatEvidence(selectedPriorityUf?.domesticEvidence, "sem base VD")}`}
               />
               <ModalRow
                 label="Assédio/violência sexual"
@@ -1541,7 +1555,7 @@ export function ComgepStrategicTab() {
               />
               <ModalRow
                 label="VD efetivo feminino 12 meses"
-                value={`${formatPercent(selectedRiskOm?.domesticRate)} • ${formatEvidence(selectedRiskOm?.domesticEvidence)}`}
+                value={`${formatPercent(selectedRiskOm?.domesticRate)} • ${formatEvidence(selectedRiskOm?.domesticEvidence, "sem base VD")}`}
               />
               <ModalRow
                 label="Assédio/violência sexual"

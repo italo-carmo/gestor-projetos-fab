@@ -45,6 +45,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
@@ -1859,9 +1860,11 @@ function SituationalTab() {
       </Grid>
 
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, lg: 6 }}>
-          <Card variant="outlined">
-            <CardContent>
+        <Grid size={{ xs: 12, lg: 6 }} sx={{ display: "flex" }}>
+          <Card variant="outlined" sx={{ width: "100%", height: "100%" }}>
+            <CardContent
+              sx={{ height: "100%", display: "flex", flexDirection: "column" }}
+            >
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
                 Sinais de risco
               </Typography>
@@ -1918,14 +1921,14 @@ function SituationalTab() {
                 spacing={1}
                 useFlexGap
                 flexWrap="wrap"
-                sx={{ mt: 1.5 }}
+                sx={{ mt: "auto", pt: 1.5 }}
               >
                 <Button
                   size="small"
                   variant="outlined"
                   onClick={() => setDetailModal("surveys")}
                 >
-                  Violência
+                  Escolas
                 </Button>
                 <Button
                   size="small"
@@ -1945,9 +1948,11 @@ function SituationalTab() {
             </CardContent>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, lg: 6 }}>
-          <Card variant="outlined">
-            <CardContent>
+        <Grid size={{ xs: 12, lg: 6 }} sx={{ display: "flex" }}>
+          <Card variant="outlined" sx={{ width: "100%", height: "100%" }}>
+            <CardContent
+              sx={{ height: "100%", display: "flex", flexDirection: "column" }}
+            >
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>
                 Capacidade de resposta
               </Typography>
@@ -2003,7 +2008,7 @@ function SituationalTab() {
                 spacing={1}
                 useFlexGap
                 flexWrap="wrap"
-                sx={{ mt: 1.5 }}
+                sx={{ mt: "auto", pt: 1.5 }}
               >
                 <Button
                   size="small"
@@ -2077,15 +2082,6 @@ function SituationalTab() {
                                 Ver detalhe
                               </Button>
                             </Stack>
-                            <AiCopilotCtaRow
-                              compact
-                              title="Levar este alerta para a IA"
-                              subtitle="Explique o sinal, gere um briefing executivo ou converta o recorte em ação."
-                              {...buildStrategicCopilotLinks({
-                                label: item.title,
-                                description: item.description,
-                              })}
-                            />
                           </Stack>
                         }
                         primaryTypographyProps={{ fontWeight: 700 }}
@@ -2915,6 +2911,7 @@ function GeoMapTab() {
       "Denúncias SMIF": Number(s.smifComplaints ?? 0),
       "Pesq. escolas": Number(s.schoolSurveyYes ?? 0),
       "VD 12m": Number(s.domesticLast12MonthsYes ?? 0),
+      "Missões CIPAVD": Number(s.missions ?? 0),
     }));
 
   const openStateDetail = (ufRaw: string | null | undefined) => {
@@ -3015,14 +3012,17 @@ function GeoMapTab() {
                 sx={{ mb: 1, display: "block" }}
               >
                 Barras separam denúncias CPCA/SMIF e sinais positivos das
-                pesquisas. Clique para abrir o estado.
+                pesquisas. Missões aparecem como resposta separada e não entram
+                no cálculo da pressão.
               </Typography>
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={400}>
                   <BarChart
                     data={chartData}
                     layout="vertical"
-                    margin={{ left: 5, right: 20, top: 5, bottom: 5 }}
+                    barCategoryGap="18%"
+                    barGap={2}
+                    margin={{ left: 5, right: 36, top: 5, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" />
@@ -3068,6 +3068,22 @@ function GeoMapTab() {
                       radius={[0, 4, 4, 0]}
                       onClick={(entry: any) => openStateDetail(entry?.uf)}
                     />
+                    <Bar
+                      dataKey="Missões CIPAVD"
+                      fill="#2E7D32"
+                      barSize={8}
+                      radius={[0, 4, 4, 0]}
+                      onClick={(entry: any) => openStateDetail(entry?.uf)}
+                    >
+                      <LabelList
+                        dataKey="Missões CIPAVD"
+                        position="right"
+                        formatter={(value: any) =>
+                          Number(value ?? 0) > 0 ? String(value) : ""
+                        }
+                        style={{ fontSize: 11, fill: "#2E7D32" }}
+                      />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
