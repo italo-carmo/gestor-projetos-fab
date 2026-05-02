@@ -116,6 +116,11 @@ describe('CpcaService AI context', () => {
   it('resume casos CPCA, casos críticos e inconsistências para a IA', async () => {
     const prisma = createPrismaMock();
     const service = new CpcaService(prisma, createAuditMock() as any);
+    const futureReportedAt = new Date();
+    futureReportedAt.setUTCDate(futureReportedAt.getUTCDate() + 2);
+    futureReportedAt.setUTCHours(12, 0, 0, 0);
+    const futureIncidentDate = new Date(futureReportedAt);
+    futureIncidentDate.setUTCDate(futureIncidentDate.getUTCDate() + 1);
 
     prisma.cpcComplaintCase.findMany.mockResolvedValue([
       {
@@ -149,11 +154,15 @@ describe('CpcaService AI context', () => {
         status: 'ARCHIVED',
         procedureType: 'IPM',
         procedureCurrentSituation: 'ARQUIVADO_PELA_JUSTICA',
-        reportedAt: new Date('2026-03-20T12:00:00.000Z'),
-        incidentDate: new Date('2026-05-01T12:00:00.000Z'),
+        reportedAt: futureReportedAt,
+        incidentDate: futureIncidentDate,
         updatedAt: new Date('2026-04-20T12:00:00.000Z'),
         retaliationRisk: false,
-        om: { id: 'om-2', code: 'DCTA', name: 'Departamento de Ciência e Tecnologia Aeroespacial' },
+        om: {
+          id: 'om-2',
+          code: 'DCTA',
+          name: 'Departamento de Ciência e Tecnologia Aeroespacial',
+        },
         locality: null,
       },
     ]);
@@ -177,7 +186,9 @@ describe('CpcaService AI context', () => {
       ]),
     );
     expect(result.matchedCases[0]?.caseNumber).toBe('CPCA-2026-BACG-00001');
-    expect(result.references[0]?.href).toContain('/cpca-cases?q=CPCA-2026-BACG-00001');
+    expect(result.references[0]?.href).toContain(
+      '/cpca-cases?q=CPCA-2026-BACG-00001',
+    );
     expect(result.normativeReferences.map((item) => item.code)).toContain(
       'ICA_25_26',
     );

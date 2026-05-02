@@ -47,12 +47,15 @@ type ImportDomesticViolenceOptions = {
   normalizationPlan?: BiImportNormalizationPlan | null;
 };
 
+type ImportDomesticViolenceApiOptions = ImportDomesticViolenceOptions;
+
 type DomesticViolenceCardSettingInput = {
   title?: string;
   description?: string | null;
 };
 
 type ParsedDomesticViolenceRow = {
+  apiId: number | null;
   submittedAt: Date | null;
   age: number | null;
   organization: string | null;
@@ -84,6 +87,79 @@ type ParsedDomesticViolenceRow = {
   sourceRow: number;
   sourceHash: string;
 };
+
+type DomesticViolenceApiSchemaEntry = {
+  sheet?: string;
+  index?: number;
+  key?: string;
+  header?: string;
+};
+
+type DomesticViolenceApiPage = {
+  ok?: boolean;
+  api_version?: string;
+  recurso?: string;
+  atualizado_em?: string;
+  since_id?: number;
+  limit?: number;
+  count?: number;
+  total_disponivel_no_filtro?: number;
+  has_more?: boolean;
+  next_since_id?: number;
+  last_id_available?: number;
+  sheets?: string[];
+  schema?: DomesticViolenceApiSchemaEntry[];
+  dados?: unknown[];
+};
+
+type DomesticViolenceApiFetchResult = {
+  pages: DomesticViolenceApiPage[];
+  records: unknown[];
+  sync: {
+    sinceId: number;
+    nextSinceId: number | null;
+    lastIdAvailable: number | null;
+    hasMore: boolean;
+    fetchedRows: number;
+    pageCount: number;
+    updatedAt: string | null;
+    sheets: string[];
+  };
+};
+
+const DOMESTIC_VIOLENCE_API_KEYS = {
+  submittedAt: 'carimbo_de_data_hora',
+  age: 'idade',
+  organization: 'organizacao_militar',
+  maritalStatus: 'estado_civil',
+  education: 'escolaridade',
+  naturality: 'naturalidade',
+  fabBond: 'vinculo_institucional_com_a_fab',
+  rank: 'caso_seja_militar_indique_o_posto_ou_graduacao_se_nao_for_militar_selecione_a_op',
+  sufferedLifetime:
+    'voce_sofreu_algum_tipo_de_violencia_domestica_no_decorrer_de_sua_vida',
+  sufferedLast12Months:
+    'nos_ultimos_12_meses_voce_sofreu_algum_tipo_de_violencia_domestica',
+  situationScope:
+    'as_proximas_perguntas_tratam_da_violencia_sofrida_indique_qual_situacao_voce_des',
+  frequency: 'frequencia_da_ocorrencia',
+  affectiveBond: 'tipo_de_vinculo_afetivo_com_o_autor',
+  violenceTypes:
+    'se_sofreu_violencia_qual_is_tipo_s_selecione_uma_ou_mais_respostas',
+  authorRelation: 'qual_e_o_tipo_de_vinculo_com_o_autor_do_fato',
+  authorMilitaryLink:
+    'o_autor_da_violencia_possui_vinculo_com_instituicao_militar',
+  occurrencePlace: 'onde_ocorreu_o_fato',
+  witnesses: 'houve_testemunhas',
+  impactIntensity:
+    'em_que_intensidade_voce_percebe_o_impacto_da_violencia_na_sua_vida',
+  impactAreas:
+    'em_quais_areas_voce_percebe_maior_impacto_marque_uma_opcao_ou_mais',
+  soughtHelp: 'voce_procurou_algum_canal_de_denuncia',
+  complaintChannels: 'se_sim_qual_marque_uma_alternativa_ou_mais',
+  noComplaintReasons:
+    'se_nao_procurou_quais_foram_os_principais_motivos_para_nao_registrar_a_ocorrenci',
+} as const;
 
 const DOMESTIC_VIOLENCE_TYPE_OPTIONS = [
   'Psicológica',
@@ -280,6 +356,7 @@ export class BiDomesticViolenceService {
       const created = await this.prisma.biDomesticViolenceResponse.createMany({
         data: rowsToInsert.map((item) => ({
           batchId: batch.id,
+          apiId: item.apiId,
           submittedAt: item.submittedAt,
           age: item.age,
           organization: item.organization,
@@ -361,6 +438,183 @@ export class BiDomesticViolenceService {
         unresolvedCount: normalizationPreview.summary.unresolvedCount,
       },
       importMode: replaceAll ? 'REPLACE' : 'APPEND',
+    };
+  }
+
+  async importResponsesFromApi(
+    user?: RbacUser,
+    options: ImportDomesticViolenceApiOptions = {},
+  ) {
+    const replaceAll = options.replaceAll === true;
+    const previewOnly = options.previewOnly === true;
+    const sinceId = replaceAll ? 0 : await this.resolveLastImportedApiId();
+    const apiResult = await this.fetchApiRecords(sinceId);
+    const { parsed, invalidRows } = this.parseApiRecords(apiResult.records);
+
+    const normalizationPreview = await this.normalization.previewImportRows({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.DOMESTIC_VIOLENCE,
+      rows: parsed.map((item) => ({
+        rowNumber: item.sourceRow,
+        fields: [
+          {
+            fieldKey: 'organization',
+            fieldLabel: 'Organização / OM',
+            kind: 'OM',
+            value: item.organization,
+          },
+        ],
+      })),
+    });
+
+    if (previewOnly) {
+      return {
+        previewOnly: true,
+        importMode: replaceAll ? 'REPLACE' : 'INCREMENTAL',
+        sync: apiResult.sync,
+        normalization: normalizationPreview,
+        preview: parsed.slice(0, 5).map((item) => ({
+          apiId: item.apiId,
+          submittedAt: item.submittedAt,
+          age: item.age,
+          organization: item.organization,
+          rank: item.rank,
+          naturality: item.naturality,
+          situationScope: item.situationScope,
+          sufferedLifetimeRaw: item.sufferedLifetimeRaw,
+          sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
+          affectiveBond: item.affectiveBond,
+          violenceTypes: item.violenceTypes,
+          authorRelation: item.authorRelation,
+          impactIntensity: item.impactIntensity,
+          soughtHelpRaw: item.soughtHelpRaw,
+        })),
+      };
+    }
+
+    const normalizedImport = this.normalization.applyImportNormalization(
+      parsed,
+      normalizationPreview,
+      options.normalizationPlan,
+    );
+    const rowsToInsert = normalizedImport.rows;
+
+    if (replaceAll) {
+      await this.prisma.$transaction([
+        this.prisma.biDomesticViolenceResponse.deleteMany(),
+        this.prisma.biDomesticViolenceImportBatch.deleteMany(),
+      ]);
+    }
+
+    const batch = await this.prisma.biDomesticViolenceImportBatch.create({
+      data: {
+        fileName: 'Google Sheets API - Violência Doméstica',
+        format: BiImportFormat.API,
+        sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
+        totalRows: rowsToInsert.length,
+        insertedRows: 0,
+        duplicateRows: 0,
+        invalidRows,
+        importedById: user?.id ?? null,
+        apiSinceId: apiResult.sync.sinceId,
+        apiNextSinceId: apiResult.sync.nextSinceId,
+        apiLastIdAvailable: apiResult.sync.lastIdAvailable,
+        apiHasMore: apiResult.sync.hasMore,
+        apiUpdatedAt: apiResult.sync.updatedAt
+          ? new Date(apiResult.sync.updatedAt)
+          : null,
+      },
+    });
+
+    let insertedRows = 0;
+
+    if (rowsToInsert.length > 0) {
+      const created = await this.prisma.biDomesticViolenceResponse.createMany({
+        data: rowsToInsert.map((item) => ({
+          batchId: batch.id,
+          apiId: item.apiId,
+          submittedAt: item.submittedAt,
+          age: item.age,
+          organization: item.organization,
+          maritalStatus: item.maritalStatus,
+          education: item.education,
+          naturality: item.naturality,
+          fabBond: item.fabBond,
+          rank: item.rank,
+          situationScope: item.situationScope,
+          sufferedLifetimeRaw: item.sufferedLifetimeRaw,
+          sufferedLifetime: item.sufferedLifetime,
+          sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
+          sufferedLast12Months: item.sufferedLast12Months,
+          frequency: item.frequency,
+          affectiveBond: item.affectiveBond,
+          violenceTypes: item.violenceTypes,
+          authorRelation: item.authorRelation,
+          authorMilitaryLink: item.authorMilitaryLink,
+          occurrencePlace: item.occurrencePlace,
+          witnessesRaw: item.witnessesRaw,
+          witnesses: item.witnesses,
+          impactIntensity: item.impactIntensity,
+          impactAreas: item.impactAreas,
+          soughtHelpRaw: item.soughtHelpRaw,
+          soughtHelp: item.soughtHelp,
+          complaintChannels: item.complaintChannels,
+          noComplaintReasons: item.noComplaintReasons,
+          rawPayload: item.rawPayload,
+          sourceRow: item.sourceRow,
+          sourceHash: item.sourceHash,
+        })),
+        skipDuplicates: true,
+      });
+
+      insertedRows = created.count;
+    }
+
+    const duplicateRows = rowsToInsert.length - insertedRows;
+
+    const updatedBatch = await this.prisma.biDomesticViolenceImportBatch.update(
+      {
+        where: { id: batch.id },
+        data: {
+          insertedRows,
+          duplicateRows,
+        },
+        include: {
+          importedBy: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+      },
+    );
+
+    await this.normalization.rebuild({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.DOMESTIC_VIOLENCE,
+    });
+
+    return {
+      batch: updatedBatch,
+      sync: apiResult.sync,
+      preview: rowsToInsert.slice(0, 5).map((item) => ({
+        apiId: item.apiId,
+        submittedAt: item.submittedAt,
+        age: item.age,
+        organization: item.organization,
+        rank: item.rank,
+        naturality: item.naturality,
+        situationScope: item.situationScope,
+        sufferedLifetimeRaw: item.sufferedLifetimeRaw,
+        sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
+        affectiveBond: item.affectiveBond,
+        violenceTypes: item.violenceTypes,
+        authorRelation: item.authorRelation,
+        impactIntensity: item.impactIntensity,
+        soughtHelpRaw: item.soughtHelpRaw,
+      })),
+      normalization: {
+        suggestionsApplied: normalizedImport.appliedSuggestions,
+        updatedFields: normalizedImport.updatedFields,
+        unresolvedCount: normalizationPreview.summary.unresolvedCount,
+      },
+      importMode: replaceAll ? 'REPLACE' : 'INCREMENTAL',
     };
   }
 
@@ -1436,6 +1690,336 @@ export class BiDomesticViolenceService {
     return date;
   }
 
+  private async resolveLastImportedApiId() {
+    const latest = await this.prisma.biDomesticViolenceResponse.findFirst({
+      where: { apiId: { not: null } },
+      orderBy: { apiId: 'desc' },
+      select: { apiId: true },
+    });
+
+    return latest?.apiId ?? 0;
+  }
+
+  private async fetchApiRecords(
+    initialSinceId: number,
+  ): Promise<DomesticViolenceApiFetchResult> {
+    const pages: DomesticViolenceApiPage[] = [];
+    const records: unknown[] = [];
+    const seenSinceIds = new Set<number>();
+    const configuredMaxPages =
+      this.parsePositiveInteger(
+        process.env.BI_DOMESTIC_VIOLENCE_API_MAX_PAGES,
+      ) ?? 100;
+    const maxPages = configuredMaxPages > 0 ? configuredMaxPages : 100;
+
+    let sinceId = Math.max(0, Math.floor(initialSinceId));
+    let nextSinceId: number | null = sinceId;
+
+    while (nextSinceId !== null) {
+      if (seenSinceIds.has(nextSinceId)) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'domestic_violence_api_sync_loop_detected',
+          sinceId: nextSinceId,
+        });
+      }
+      if (pages.length >= maxPages) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'domestic_violence_api_max_pages_exceeded',
+          maxPages,
+        });
+      }
+
+      seenSinceIds.add(nextSinceId);
+      const page = await this.fetchApiPage(nextSinceId);
+      pages.push(page);
+      records.push(...(page.dados ?? []));
+
+      if (!page.has_more) {
+        nextSinceId = null;
+        break;
+      }
+
+      const parsedNext = this.parsePositiveInteger(page.next_since_id);
+      if (parsedNext === null || parsedNext <= nextSinceId) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'domestic_violence_api_invalid_next_since_id',
+          sinceId: nextSinceId,
+          nextSinceId: page.next_since_id,
+        });
+      }
+      nextSinceId = parsedNext;
+    }
+
+    const lastPage = pages[pages.length - 1] ?? null;
+    const updatedAt = this.parseApiDate(
+      [...pages].reverse().find((page) => page.atualizado_em)?.atualizado_em,
+    );
+    const sheets = [
+      ...new Set(
+        pages.flatMap((page) =>
+          Array.isArray(page.sheets) ? page.sheets.filter(Boolean) : [],
+        ),
+      ),
+    ];
+
+    return {
+      pages,
+      records,
+      sync: {
+        sinceId,
+        nextSinceId:
+          this.parsePositiveInteger(lastPage?.next_since_id) ??
+          this.maxApiIdFromRecords(records),
+        lastIdAvailable:
+          this.parsePositiveInteger(lastPage?.last_id_available) ??
+          this.maxApiIdFromRecords(records),
+        hasMore: Boolean(lastPage?.has_more),
+        fetchedRows: records.length,
+        pageCount: pages.length,
+        updatedAt: updatedAt?.toISOString() ?? null,
+        sheets,
+      },
+    };
+  }
+
+  private async fetchApiPage(
+    sinceId: number,
+  ): Promise<DomesticViolenceApiPage> {
+    const url = this.buildApiUrl(sinceId);
+    const timeoutMs =
+      this.parsePositiveInteger(
+        process.env.BI_DOMESTIC_VIOLENCE_API_TIMEOUT_MS,
+      ) ?? 30_000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } catch (error) {
+      throwError('VALIDATION_ERROR', {
+        reason:
+          error instanceof Error && error.name === 'AbortError'
+            ? 'domestic_violence_api_timeout'
+            : 'domestic_violence_api_request_failed',
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'domestic_violence_api_http_error',
+        status: response.status,
+      });
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throwError('VALIDATION_ERROR', {
+        reason: 'domestic_violence_api_invalid_json',
+      });
+    }
+
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'domestic_violence_api_invalid_payload',
+      });
+    }
+
+    const page = payload as DomesticViolenceApiPage;
+    if (page.ok !== true || !Array.isArray(page.dados)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'domestic_violence_api_unsuccessful_payload',
+      });
+    }
+
+    return page;
+  }
+
+  private buildApiUrl(sinceId: number) {
+    const configuredUrl = String(
+      process.env.BI_DOMESTIC_VIOLENCE_API_URL ?? '',
+    ).trim();
+    if (!configuredUrl) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'domestic_violence_api_url_not_configured',
+      });
+    }
+
+    let url: URL;
+    try {
+      url = new URL(configuredUrl);
+    } catch {
+      throwError('VALIDATION_ERROR', {
+        reason: 'domestic_violence_api_url_invalid',
+      });
+    }
+
+    const token = String(
+      process.env.BI_DOMESTIC_VIOLENCE_API_TOKEN ?? '',
+    ).trim();
+    if (token && !url.searchParams.has('token')) {
+      url.searchParams.set('token', token);
+    }
+    url.searchParams.set('since_id', String(Math.max(0, sinceId)));
+    return url.toString();
+  }
+
+  private parseApiRecords(records: unknown[]) {
+    const parsed: ParsedDomesticViolenceRow[] = [];
+    let invalidRows = 0;
+
+    for (const record of records) {
+      const parsedRow = this.parseApiRecord(record);
+      if (parsedRow?.skip) continue;
+      if (!parsedRow?.value) {
+        invalidRows += 1;
+        continue;
+      }
+      parsed.push(parsedRow.value);
+    }
+
+    return { parsed, invalidRows };
+  }
+
+  private parseApiRecord(
+    record: unknown,
+  ):
+    | { skip: true; value?: undefined }
+    | { skip: false; value: ParsedDomesticViolenceRow | null } {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return { skip: false, value: null };
+    }
+
+    const row = record as Record<string, unknown>;
+    const apiId = this.parsePositiveInteger(row.api_id ?? row.id);
+    if (apiId === null) {
+      return { skip: false, value: null };
+    }
+
+    const sourceRow =
+      this.parsePositiveInteger(row.linha) ??
+      this.parsePositiveInteger(row.id) ??
+      apiId;
+
+    const dataRow = [
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.submittedAt]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.age]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.organization]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.maritalStatus]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.education]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.naturality]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.fabBond]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.rank]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.sufferedLifetime]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.sufferedLast12Months]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.situationScope]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.frequency]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.affectiveBond]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.violenceTypes]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.authorRelation]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.authorMilitaryLink]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.occurrencePlace]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.witnesses]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.impactIntensity]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.impactAreas]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.soughtHelp]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.complaintChannels]),
+      this.cleanApiCell(row[DOMESTIC_VIOLENCE_API_KEYS.noComplaintReasons]),
+    ];
+
+    const parsed = this.parseDataRow(
+      dataRow,
+      {
+        submittedAt: 0,
+        age: 1,
+        organization: 2,
+        maritalStatus: 3,
+        education: 4,
+        naturality: 5,
+        fabBond: 6,
+        rank: 7,
+        sufferedLifetime: 8,
+        sufferedLast12Months: 9,
+        situationScope: 10,
+        frequency: 11,
+        affectiveBond: 12,
+        violenceTypes: 13,
+        authorRelation: 14,
+        authorMilitaryLink: 15,
+        occurrencePlace: 16,
+        witnesses: 17,
+        impactIntensity: 18,
+        impactAreas: 19,
+        soughtHelp: 20,
+        complaintChannels: 21,
+        noComplaintReasons: 22,
+      },
+      sourceRow,
+    );
+
+    if (parsed.skip || !parsed.value) return parsed;
+
+    return {
+      skip: false,
+      value: {
+        ...parsed.value,
+        apiId,
+        rawPayload: row as Prisma.InputJsonValue,
+        sourceHash: this.buildApiSourceHash(apiId),
+      },
+    };
+  }
+
+  private buildApiSourceHash(apiId: number) {
+    return crypto
+      .createHash('sha256')
+      .update(JSON.stringify({ source: 'DOMESTIC_VIOLENCE_API', apiId }))
+      .digest('hex');
+  }
+
+  private maxApiIdFromRecords(records: unknown[]) {
+    let max = 0;
+    for (const record of records) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) {
+        continue;
+      }
+      const apiId = this.parsePositiveInteger(
+        (record as Record<string, unknown>).api_id ??
+          (record as Record<string, unknown>).id,
+      );
+      if (apiId !== null && apiId > max) max = apiId;
+    }
+    return max || null;
+  }
+
+  private parseApiDate(value: string | null | undefined) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  }
+
+  private parsePositiveInteger(value: unknown) {
+    if (value === null || value === undefined || value === '') return null;
+    const numeric =
+      typeof value === 'number'
+        ? value
+        : Number.parseInt(String(value).trim(), 10);
+    if (!Number.isFinite(numeric) || numeric < 0) return null;
+    return Math.floor(numeric);
+  }
+
+  private cleanApiCell(value: unknown) {
+    if (value === null || value === undefined) return '';
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'boolean') return value ? 'SIM' : 'NAO';
+    return String(value).trim();
+  }
+
   private extractRows(buffer: Buffer, format: BiImportFormat) {
     const workbook = this.readWorkbook(buffer, format);
     const sheetNames = workbook.SheetNames ?? [];
@@ -1825,6 +2409,7 @@ export class BiDomesticViolenceService {
     return {
       skip: false,
       value: {
+        apiId: null,
         submittedAt,
         age,
         organization,

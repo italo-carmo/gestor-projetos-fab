@@ -29,9 +29,9 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import SyncRoundedIcon from "@mui/icons-material/SyncRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
@@ -57,8 +57,8 @@ import {
   useBiDomesticViolenceDashboard,
   useBiDomesticViolenceResponses,
   useBiDomesticViolenceImports,
-  useImportBiDomesticViolence,
-  usePreviewImportBiDomesticViolence,
+  useImportBiDomesticViolenceApi,
+  usePreviewImportBiDomesticViolenceApi,
   useDeleteBiDomesticViolenceResponses,
   useExportBiDashboardPdf,
   useExportBiExecutiveNotebookPdf,
@@ -79,6 +79,11 @@ import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
+import {
+  getBiDomesticViolenceImportActionLabel,
+  getBiDomesticViolenceImportModeLabel,
+  resolveBiDomesticViolenceImportMode,
+} from "../features/biDomesticViolenceImport";
 import { useSearchParams } from "react-router-dom";
 
 type MetricMode = "PERCENT" | "COUNT";
@@ -326,9 +331,9 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
       "Painel estratégico com leitura de prevalência, padrões de impacto e barreiras de denúncia.",
   },
   "panel-ingestion": {
-    title: "Ingestão de base CSV/XLSX",
+    title: "Sincronização via API",
     description:
-      "Atualize o BI a partir do formulário oficial, com opção de substituir toda a base.",
+      "Atualize o BI a partir da API do formulário oficial, em modo incremental ou com base zerada.",
   },
   "panel-filters": {
     title: "Filtros analíticos",
@@ -578,13 +583,12 @@ export function BiDomesticViolenceDashboardPage() {
     Boolean(responseIdFromUrl),
   );
   const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] =
     useState<BiImportNormalizationPreview | null>(null);
   const [selectedNormalizationIds, setSelectedNormalizationIds] = useState<
     string[]
   >([]);
-  const [replaceOnImport, setReplaceOnImport] = useState(true);
+  const [replaceOnImport, setReplaceOnImport] = useState(false);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
@@ -671,8 +675,8 @@ export function BiDomesticViolenceDashboardPage() {
     pageSize: 25,
   });
   const importsQuery = useBiDomesticViolenceImports({ page: 1, pageSize: 8 });
-  const importMutation = useImportBiDomesticViolence();
-  const previewImportMutation = usePreviewImportBiDomesticViolence();
+  const importMutation = useImportBiDomesticViolenceApi();
+  const previewImportMutation = usePreviewImportBiDomesticViolenceApi();
   const deleteResponsesMutation = useDeleteBiDomesticViolenceResponses();
   const exportPdfMutation = useExportBiDashboardPdf(
     "/bi/domestic-violence/dashboard/pdf",
@@ -700,6 +704,7 @@ export function BiDomesticViolenceDashboardPage() {
 
   const canUpload = can(me, "bi", "upload");
   const canDelete = can(me, "bi", "delete");
+  const importMode = resolveBiDomesticViolenceImportMode(replaceOnImport);
 
   const getDefaultCardText = (cardId: string): EditableCardText => {
     return (
@@ -946,17 +951,8 @@ export function BiDomesticViolenceDashboardPage() {
   };
 
   const handleImport = async () => {
-    if (!file) {
-      toast.push({
-        message: "Selecione um CSV/XLSX para importar.",
-        severity: "warning",
-      });
-      return;
-    }
-
     try {
       const result = await previewImportMutation.mutateAsync({
-        file,
         replace: replaceOnImport,
       });
       const preview = (result?.normalization ??
@@ -983,14 +979,8 @@ export function BiDomesticViolenceDashboardPage() {
   };
 
   const confirmImport = async (applyNormalization: boolean) => {
-    if (!file) {
-      closeImportPreview();
-      return;
-    }
-
     try {
       const result = await importMutation.mutateAsync({
-        file,
         replace: replaceOnImport,
         normalizationPlan: applyNormalization
           ? {
@@ -1001,7 +991,6 @@ export function BiDomesticViolenceDashboardPage() {
             }
           : { decisions: [] },
       });
-      setFile(null);
       closeImportPreview();
       toast.push({
         message:
@@ -1289,17 +1278,15 @@ export function BiDomesticViolenceDashboardPage() {
       <BiCollapsibleSection
         title={ingestionPanelText.title}
         description={ingestionPanelText.description}
-        icon={<UploadFileRoundedIcon fontSize="small" />}
+        icon={<SyncRoundedIcon fontSize="small" />}
         accentColor={DV_PALETTE.primary}
         summary={
           <Chip
             size="small"
             label={
-              file
-                ? "Arquivo pronto"
-                : dashboard.latestImport?.fileName
-                  ? "Base atual disponível"
-                  : "Sem importação"
+              dashboard.latestImport?.fileName
+                ? "Base atual disponível"
+                : "Sem importação"
             }
             variant="outlined"
             sx={{
@@ -1329,56 +1316,11 @@ export function BiDomesticViolenceDashboardPage() {
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 <Button
                   size="small"
-                  variant="outlined"
-                  startIcon={<DownloadRoundedIcon />}
-                  component="a"
-                  href="/templates/bi-domestic-violence-template.csv"
-                  download
-                  sx={{
-                    borderColor: alpha(DV_PALETTE.primary, 0.45),
-                    color: DV_PALETTE.primary,
-                    "&:hover": {
-                      borderColor: DV_PALETTE.primary,
-                      bgcolor: alpha(DV_PALETTE.primary, 0.08),
-                    },
-                  }}
-                >
-                  Baixar template
-                </Button>
-                <Button
-                  component="label"
-                  size="small"
-                  variant="outlined"
-                  startIcon={<UploadFileRoundedIcon />}
-                  disabled={!canUpload}
-                  sx={{
-                    borderColor: alpha(DV_PALETTE.primary, 0.45),
-                    color: DV_PALETTE.primary,
-                    "&:hover": {
-                      borderColor: DV_PALETTE.primary,
-                      bgcolor: alpha(DV_PALETTE.primary, 0.08),
-                    },
-                  }}
-                >
-                  Selecionar arquivo
-                  <input
-                    hidden
-                    type="file"
-                    accept=".csv,.xlsx,.xls"
-                    onChange={(event) => {
-                      const selected = event.target.files?.[0] ?? null;
-                      setFile(selected);
-                    }}
-                  />
-                </Button>
-
-                <Button
-                  size="small"
                   variant="contained"
+                  startIcon={<SyncRoundedIcon />}
                   onClick={handleImport}
                   disabled={
                     !canUpload ||
-                    !file ||
                     importMutation.isPending ||
                     previewImportMutation.isPending
                   }
@@ -1391,7 +1333,7 @@ export function BiDomesticViolenceDashboardPage() {
                     ? "Analisando..."
                     : importMutation.isPending
                       ? "Importando..."
-                      : "Importar"}
+                      : getBiDomesticViolenceImportActionLabel(importMode)}
                 </Button>
               </Stack>
 
@@ -1409,7 +1351,7 @@ export function BiDomesticViolenceDashboardPage() {
                 >
                   <Chip
                     size="small"
-                    label={`Arquivo: ${file?.name ?? "Nenhum"}`}
+                    label={`Modo: ${getBiDomesticViolenceImportModeLabel(importMode)}`}
                     variant="outlined"
                     sx={{
                       borderColor: alpha(DV_PALETTE.primary, 0.35),
@@ -1426,7 +1368,7 @@ export function BiDomesticViolenceDashboardPage() {
                         disabled={!canUpload}
                       />
                     }
-                    label="Substituir base atual"
+                    label="Zerar base antes de importar"
                     sx={{
                       m: 0,
                       ".MuiFormControlLabel-label": {
@@ -1505,7 +1447,7 @@ export function BiDomesticViolenceDashboardPage() {
               {dashboard.latestImport ? (
                 <Stack spacing={0.6} mt={1}>
                   <Typography variant="body2" sx={{ color: DV_PALETTE.muted }}>
-                    Arquivo: <strong>{dashboard.latestImport.fileName}</strong>
+                    Fonte: <strong>{dashboard.latestImport.fileName}</strong>
                   </Typography>
                   <Typography variant="body2" sx={{ color: DV_PALETTE.muted }}>
                     Data:{" "}
@@ -3682,7 +3624,7 @@ export function BiDomesticViolenceDashboardPage() {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell sx={{ fontWeight: 700 }}>Arquivo</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>Fonte</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Data</TableCell>
                   <TableCell sx={{ fontWeight: 700 }} align="right">
                     Inseridos

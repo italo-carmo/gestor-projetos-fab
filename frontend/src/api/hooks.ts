@@ -4766,6 +4766,16 @@ type BiConfirmedImportArgs = BiImportMutationArgs & {
   } | null;
 };
 
+type BiApiImportMutationArgs = {
+  replace?: boolean;
+};
+
+type BiConfirmedApiImportArgs = BiApiImportMutationArgs & {
+  normalizationPlan?: {
+    decisions?: BiImportNormalizationDecision[];
+  } | null;
+};
+
 export function useImportBiSurvey() {
   const qc = useQueryClient();
   return useMutation({
@@ -4920,6 +4930,34 @@ export function usePreviewImportBiDomesticViolence() {
       form.append("preview", "true");
       return (await api.post("/bi/domestic-violence/import", form)).data;
     },
+  });
+}
+
+export function useImportBiDomesticViolenceApi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: BiConfirmedApiImportArgs) =>
+      (
+        await api.post("/bi/domestic-violence/import-api", {
+          replace: args.replace,
+          normalizationPlan: args.normalizationPlan ?? null,
+        })
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biDomesticViolence"] });
+    },
+  });
+}
+
+export function usePreviewImportBiDomesticViolenceApi() {
+  return useMutation({
+    mutationFn: async (args: BiApiImportMutationArgs) =>
+      (
+        await api.post("/bi/domestic-violence/import-api", {
+          replace: args.replace,
+          preview: true,
+        })
+      ).data,
   });
 }
 

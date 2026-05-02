@@ -294,11 +294,11 @@ model Activity {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  locality             Locality?                   @relation(fields: [localityId], references: [id])
-  activityType         ActivityType?               @relation(fields: [activityTypeId], references: [id])
-  specialty            Specialty?                  @relation(fields: [specialtyId], references: [id])
+  locality             Locality?                     @relation(fields: [localityId], references: [id])
+  activityType         ActivityType?                 @relation(fields: [activityTypeId], references: [id])
+  specialty            Specialty?                    @relation(fields: [specialtyId], references: [id])
   specialties          ActivitySpecialty[]
-  createdBy            User?                       @relation("ActivityCreator", fields: [createdById], references: [id])
+  createdBy            User?                         @relation("ActivityCreator", fields: [createdById], references: [id])
   report               ActivityReport?
   documents            DocumentAsset[]
   visitScheduleItems   ActivityVisitScheduleItem[]
@@ -396,8 +396,8 @@ model MissionScheduleItem {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  mission  Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
-  activity Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  mission       Mission                       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  activity      Activity?                     @relation(fields: [activityId], references: [id], onDelete: SetNull)
   activityLinks MissionScheduleItemActivity[]
 
   @@index([missionId, startAt])
@@ -1752,16 +1752,21 @@ model BiSurveyResponse {
 }
 
 model BiDomesticViolenceImportBatch {
-  id            String         @id @default(cuid())
-  fileName      String
-  format        BiImportFormat
-  sheetName     String?
-  totalRows     Int
-  insertedRows  Int
-  duplicateRows Int
-  invalidRows   Int
-  importedById  String?
-  importedAt    DateTime       @default(now())
+  id                 String         @id @default(cuid())
+  fileName           String
+  format             BiImportFormat
+  sheetName          String?
+  totalRows          Int
+  insertedRows       Int
+  duplicateRows      Int
+  invalidRows        Int
+  importedById       String?
+  apiSinceId         Int?
+  apiNextSinceId     Int?
+  apiLastIdAvailable Int?
+  apiHasMore         Boolean?
+  apiUpdatedAt       DateTime?
+  importedAt         DateTime       @default(now())
 
   importedBy User?                        @relation(fields: [importedById], references: [id], onDelete: SetNull)
   responses  BiDomesticViolenceResponse[]
@@ -1773,6 +1778,7 @@ model BiDomesticViolenceImportBatch {
 model BiDomesticViolenceResponse {
   id                      String    @id @default(cuid())
   batchId                 String?
+  apiId                   Int?      @unique
   submittedAt             DateTime?
   age                     Int?
   organization            String?
@@ -2332,6 +2338,7 @@ model AppSetting {
 enum BiImportFormat {
   CSV
   XLSX
+  API
 }
 
 enum RecruitFemaleStatus {
