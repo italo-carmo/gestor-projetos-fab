@@ -264,19 +264,7 @@ function SignalsPreview({ item }: { item: any }) {
   const moral = Number(item?.moralSignals ?? 0);
   const domestic = Number(item?.domesticSignals?.yes12m ?? 0);
   const military = Number(item?.domesticSignals?.militaryAuthor ?? 0);
-  const schoolsTotal = Number(
-    item?.signalsBySource?.schools?.total ?? item?.surveySignals?.total ?? 0,
-  );
-  const domesticTotal = Number(
-    item?.signalsBySource?.domestic?.total ?? item?.domesticSignals?.total ?? 0,
-  );
   const chips = [
-    schoolsTotal > 0
-      ? { label: `Escolas n=${schoolsTotal}`, color: "#455A64" }
-      : null,
-    domesticTotal > 0
-      ? { label: `VD n=${domesticTotal}`, color: "#00695C" }
-      : null,
     sexual > 0 ? { label: `Sexual ${sexual}`, color: "#AD1457" } : null,
     moral > 0 ? { label: `Moral ${moral}`, color: "#6A1B9A" } : null,
     domestic > 0 ? { label: `VD 12m ${domestic}`, color: "#1565C0" } : null,
@@ -288,7 +276,7 @@ function SignalsPreview({ item }: { item: any }) {
   if (!chips.length) {
     return (
       <Typography variant="body2" color="text.secondary">
-        Sem sinal relevante
+        Sem sinal
       </Typography>
     );
   }
@@ -697,7 +685,7 @@ export function ComgepStrategicTab() {
                     <Chip
                       size="small"
                       color={priorityChipColor(item.priorityBand)}
-                      label={`${item.priorityBand} • Pressão ${item.pressureScore ?? 0}`}
+                      label={item.priorityBand}
                     />
                   </TableCell>
                   <TableCell>
