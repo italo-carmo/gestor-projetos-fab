@@ -268,6 +268,11 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
     description:
       "Painel analítico da pesquisa de Encontro CPCA com leitura de KPIs, distribuições por pergunta e listas de respostas textuais.",
   },
+  "panel-ingestion": {
+    title: "Sincronização via API",
+    description:
+      "Atualize o BI a partir da API do formulário oficial, em modo incremental ou com base zerada.",
+  },
   "kpi-total": {
     title: "Total de respostas",
     description: "Quantidade de registros no recorte atual.",
@@ -596,6 +601,7 @@ export function BiCpcaMeetingDashboardPage() {
   const getCardText = (cardId: string): EditableCardText => {
     return cardSettingsMap.get(cardId) ?? getDefaultCardText(cardId);
   };
+  const ingestionPanelText = getCardText("panel-ingestion");
 
   const openCardEditor = (cardId: string) => {
     const text = getCardText(cardId);
@@ -1004,11 +1010,10 @@ export function BiCpcaMeetingDashboardPage() {
       </Stack>
 
       <BiCollapsibleSection
-        title="Importar dados pela API"
-        description="Sincronização via API do Google Sheets com modo incremental ou reinício completo da base."
+        title={ingestionPanelText.title}
+        description={ingestionPanelText.description}
         icon={<SyncRoundedIcon fontSize="small" />}
         accentColor={CPCA_BI_PALETTE.primary}
-        defaultExpanded
         summary={
           <Chip
             size="small"
@@ -1026,31 +1031,16 @@ export function BiCpcaMeetingDashboardPage() {
           />
         }
         headerActions={
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<SyncRoundedIcon />}
-            onClick={handleImport}
-            disabled={
-              !canUpload ||
-              importMutation.isPending ||
-              previewImportMutation.isPending
-            }
-            sx={{
-              height: 34,
-              px: 1.2,
-              whiteSpace: "nowrap",
-              borderColor: alpha(CPCA_BI_PALETTE.primary, 0.45),
-              color: CPCA_BI_PALETTE.primary,
-              "& .MuiButton-startIcon > *": { fontSize: 17 },
-              "&:hover": {
-                borderColor: CPCA_BI_PALETTE.primary,
-                bgcolor: alpha(CPCA_BI_PALETTE.primary, 0.06),
-              },
-            }}
-          >
-            API
-          </Button>
+          isTiProfile ? (
+            <MuiTooltip title="Editar título/descrição">
+              <IconButton
+                size="small"
+                onClick={() => openCardEditor("panel-ingestion")}
+              >
+                <EditOutlinedIcon fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+          ) : null
         }
         sx={{ mb: 2, ...cardSx }}
       >
