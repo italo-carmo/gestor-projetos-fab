@@ -3,6 +3,7 @@ import {
   buildCpcaSelfRegistrationResubmissionSeed,
   formatCpcaSelfRegistrationAttemptLabel,
   getCpcaSelfRegistrationStatusMeta,
+  hasCpcaSelfRegistrationApprovedAccess,
   sortCpcaSelfRegistrationHistory,
 } from "./cpcaSelfRegistrationStatus";
 
@@ -36,6 +37,40 @@ describe("cpcaSelfRegistrationStatus helpers", () => {
       chipColor: "success",
       alertSeverity: "success",
     });
+  });
+
+  it("não exibe acesso liberado quando a última solicitação ainda está em homologação", () => {
+    expect(
+      hasCpcaSelfRegistrationApprovedAccess({
+        latestRequest: {
+          id: "req-pending",
+          attemptNumber: 2,
+          status: "PENDING",
+          createdAt: "2026-04-22T10:00:00.000Z",
+          bulletinNumber: "BOL 101",
+          requestedAsSubstitution: false,
+          accessGranted: true,
+        },
+        accessGranted: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("exibe acesso liberado quando a última solicitação está homologada", () => {
+    expect(
+      hasCpcaSelfRegistrationApprovedAccess({
+        latestRequest: {
+          id: "req-approved",
+          attemptNumber: 1,
+          status: "APPROVED",
+          createdAt: "2026-04-22T10:00:00.000Z",
+          bulletinNumber: "BOL 101",
+          requestedAsSubstitution: false,
+          accessGranted: true,
+        },
+        accessGranted: true,
+      }),
+    ).toBe(true);
   });
 
   it("monta os dados de reenvio a partir da tentativa rejeitada mais recente", () => {

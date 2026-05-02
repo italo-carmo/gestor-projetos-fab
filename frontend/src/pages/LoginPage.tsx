@@ -49,6 +49,7 @@ import {
   buildCpcaSelfRegistrationResubmissionSeed,
   formatCpcaSelfRegistrationAttemptLabel,
   getCpcaSelfRegistrationStatusMeta,
+  hasCpcaSelfRegistrationApprovedAccess,
   sortCpcaSelfRegistrationHistory,
   type CpcaSelfRegistrationAttempt,
   type CpcaSelfRegistrationStatusLookupResult,
@@ -508,10 +509,11 @@ export function LoginPage() {
   const cpcaStatusHistory = sortCpcaSelfRegistrationHistory(
     (cpcaStatusResult?.history ?? []) as CpcaSelfRegistrationAttempt[],
   );
+  const cpcaLatestAccessGranted =
+    hasCpcaSelfRegistrationApprovedAccess(cpcaStatusResult);
   const cpcaLatestStatusMeta = getCpcaSelfRegistrationStatusMeta(
     cpcaStatusResult?.latestRequest?.status,
-    cpcaStatusResult?.latestRequest?.accessGranted ??
-      cpcaStatusResult?.accessGranted,
+    cpcaLatestAccessGranted,
   );
 
   if (twoFactorState) {
@@ -1181,7 +1183,7 @@ export function LoginPage() {
                             color={cpcaLatestStatusMeta.chipColor}
                             size="small"
                           />
-                          {cpcaStatusResult.accessGranted ? (
+                          {cpcaLatestAccessGranted ? (
                             <Chip
                               label="Acesso liberado"
                               color="success"

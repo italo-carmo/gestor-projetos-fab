@@ -89,6 +89,16 @@ export function getCpcaSelfRegistrationStatusMeta(
   };
 }
 
+export function hasCpcaSelfRegistrationApprovedAccess(
+  result: CpcaSelfRegistrationStatusLookupResult | null | undefined,
+) {
+  const latestRequest = result?.latestRequest;
+  return (
+    latestRequest?.status === "APPROVED" &&
+    Boolean(latestRequest.accessGranted ?? result?.accessGranted)
+  );
+}
+
 export function buildCpcaSelfRegistrationResubmissionSeed(
   result: CpcaSelfRegistrationStatusLookupResult | null | undefined,
   fallbackIdentifier: string,
