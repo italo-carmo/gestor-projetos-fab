@@ -68,10 +68,15 @@ import {
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
 import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
+import { BiSurveyQuestionsPanel } from "../components/bi/BiSurveyQuestionsPanel";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
+import {
+  BI_GSD_EVALUATION_QUESTIONS,
+  buildBiSurveyQuestionsFromColumnsMeta,
+} from "../features/biSurveyQuestions";
 
 type MetricMode = "PERCENT" | "COUNT";
 type CombineMode = "AND" | "OR";
@@ -855,6 +860,10 @@ export function BiGsdEvaluationDashboardPage() {
   const responsesText = getCardText("list-responses");
 
   const visibleColumns = (dashboard.columnsMeta ?? []).slice(0, 6);
+  const surveyQuestions = buildBiSurveyQuestionsFromColumnsMeta(
+    dashboard.columnsMeta,
+    BI_GSD_EVALUATION_QUESTIONS,
+  );
 
   return (
     <Box
@@ -1085,6 +1094,12 @@ export function BiGsdEvaluationDashboardPage() {
           </Box>
         </Stack>
       </BiCollapsibleSection>
+
+      <BiSurveyQuestionsPanel
+        questions={surveyQuestions}
+        accentColor={GSD_BI_PALETTE.primary}
+        sx={{ mb: 2, ...cardSx }}
+      />
 
       <BiCollapsibleSection
         title="Filtros do painel"

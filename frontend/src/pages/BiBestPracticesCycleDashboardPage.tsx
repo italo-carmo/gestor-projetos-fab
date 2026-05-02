@@ -72,10 +72,12 @@ import {
 } from "../components/bi/BiExecutiveNotebookDialog";
 import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
 import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
+import { BiSurveyQuestionsPanel } from "../components/bi/BiSurveyQuestionsPanel";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
+import { BI_BEST_PRACTICES_CYCLE_QUESTIONS } from "../features/biSurveyQuestions";
 
 type MetricMode = "PERCENT" | "COUNT";
 type CombineMode = "AND" | "OR";
@@ -1221,6 +1223,12 @@ export function BiBestPracticesCycleDashboardPage() {
           </Box>
         </Stack>
       </BiCollapsibleSection>
+
+      <BiSurveyQuestionsPanel
+        questions={BI_BEST_PRACTICES_CYCLE_QUESTIONS}
+        accentColor={BPC_PALETTE.primary}
+        sx={{ mb: 2, ...cardSx }}
+      />
 
       <BiCollapsibleSection
         title="Filtros do painel"

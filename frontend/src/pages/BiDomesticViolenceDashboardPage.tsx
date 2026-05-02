@@ -75,10 +75,12 @@ import {
 } from "../components/bi/BiExecutiveNotebookDialog";
 import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
 import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
+import { BiSurveyQuestionsPanel } from "../components/bi/BiSurveyQuestionsPanel";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
+import { BI_DOMESTIC_VIOLENCE_QUESTIONS } from "../features/biSurveyQuestions";
 import {
   getBiDomesticViolenceImportActionLabel,
   getBiDomesticViolenceImportModeLabel,
@@ -1465,6 +1467,12 @@ export function BiDomesticViolenceDashboardPage() {
           </Grid>
         </Grid>
       </BiCollapsibleSection>
+
+      <BiSurveyQuestionsPanel
+        questions={BI_DOMESTIC_VIOLENCE_QUESTIONS}
+        accentColor={DV_PALETTE.primary}
+        sx={{ mb: 2, ...cardSx }}
+      />
 
       <BiCollapsibleSection
         title={filtersPanelText.title}

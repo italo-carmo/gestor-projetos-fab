@@ -73,10 +73,15 @@ import {
 } from "../components/bi/BiExecutiveNotebookDialog";
 import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
 import { BiImportNormalizationReviewDialog } from "../components/bi/BiImportNormalizationReviewDialog";
+import { BiSurveyQuestionsPanel } from "../components/bi/BiSurveyQuestionsPanel";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
+import {
+  BI_CPCA_MEETING_QUESTIONS,
+  buildBiSurveyQuestionsFromColumnsMeta,
+} from "../features/biSurveyQuestions";
 import {
   getBiCpcaMeetingImportActionLabel,
   getBiCpcaMeetingImportModeLabel,
@@ -895,6 +900,10 @@ export function BiCpcaMeetingDashboardPage() {
   const responsesText = getCardText("list-responses");
 
   const visibleColumns = (dashboard.columnsMeta ?? []).slice(0, 6);
+  const surveyQuestions = buildBiSurveyQuestionsFromColumnsMeta(
+    dashboard.columnsMeta,
+    BI_CPCA_MEETING_QUESTIONS,
+  );
   const trendOptions = dashboard.charts.question2TrendByDay?.options ?? [];
   const trendItems = dashboard.charts.question2TrendByDay?.items ?? [];
 
@@ -1128,6 +1137,12 @@ export function BiCpcaMeetingDashboardPage() {
           </Grid>
         </Grid>
       </BiCollapsibleSection>
+
+      <BiSurveyQuestionsPanel
+        questions={surveyQuestions}
+        accentColor={CPCA_BI_PALETTE.primary}
+        sx={{ mb: 2, ...cardSx }}
+      />
 
       <BiCollapsibleSection
         title="Filtros do painel"

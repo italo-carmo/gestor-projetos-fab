@@ -422,7 +422,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
       "/dashboard/bi-encontro-cpca",
       "/dashboard/bi-avaliacao-gsd",
     ],
-    sidebarItems: ["Business Intelligence"],
+    sidebarItems: ["Pesquisas"],
     expectedActions: ["view", "upload", "delete"],
   },
 };

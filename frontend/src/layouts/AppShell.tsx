@@ -259,7 +259,7 @@ const navSections: NavSection[] = [
     label: "BUSINESS INTELLIGENCE",
     items: [
       {
-        label: "Business Intelligence",
+        label: "Pesquisas",
         to: "/dashboard/bi",
         icon: <BarChartRoundedIcon fontSize="small" />,
         menuKey: "bi",

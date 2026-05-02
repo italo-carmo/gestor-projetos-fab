@@ -69,10 +69,12 @@ import {
   type BiExecutiveNotebookPayload,
 } from "../components/bi/BiExecutiveNotebookDialog";
 import { BiCollapsibleSection } from "../components/bi/BiCollapsibleSection";
+import { BiSurveyQuestionsPanel } from "../components/bi/BiSurveyQuestionsPanel";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
+import { BI_RECRUITS_QUESTIONS } from "../features/biSurveyQuestions";
 import { useSearchParams } from "react-router-dom";
 
 type MetricMode = "PERCENT" | "COUNT";
@@ -1322,6 +1324,12 @@ export function BiRecruitsDashboardPage() {
           </Grid>
         </Grid>
       </BiCollapsibleSection>
+
+      <BiSurveyQuestionsPanel
+        questions={BI_RECRUITS_QUESTIONS}
+        accentColor={RC_PALETTE.primary}
+        sx={{ mb: 2, ...cardSx }}
+      />
 
       <BiCollapsibleSection
         title={filtersPanelText.title}
