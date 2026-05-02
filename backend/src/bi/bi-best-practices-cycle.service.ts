@@ -129,6 +129,7 @@ const BEST_PRACTICE_CYCLE_API_HEADER_MAP = {
 
 const BEST_PRACTICE_CARD_IDS = new Set([
   'page-header',
+  'panel-ingestion',
   'kpi-total',
   'kpi-prepared',
   'kpi-interaction',
