@@ -43,7 +43,7 @@ import {
   useFinalizeCpcaCaseCipavdThread,
   useLocalities,
   useMe,
-  usePostos,
+  usePostoOptions,
   useReopenCpcaCaseCipavdThread,
   useResolveCpcaCaseCipavdThread,
   useRemoveCpcaCaseCipavdThread,
@@ -224,6 +224,11 @@ const DETAILED_VIOLENCE_TYPE_OPTIONS: Array<{
     macroComplaintType: "SEXUAL",
   },
   {
+    value: "VIOLENCIA_DOMESTICA_VICARIA",
+    label: "Violência doméstica - Vicária",
+    macroComplaintType: "MORAL",
+  },
+  {
     value: "IMPORTUNACAO_SEXUAL",
     label: "Importunação sexual",
     macroComplaintType: "SEXUAL",
@@ -246,6 +251,11 @@ const DETAILED_VIOLENCE_TYPE_OPTIONS: Array<{
   {
     value: "DIFAMACAO",
     label: "Difamação",
+    macroComplaintType: "MORAL",
+  },
+  {
+    value: "HOMOFOBIA",
+    label: "Homofobia",
     macroComplaintType: "MORAL",
   },
   {
@@ -700,7 +710,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const localitiesQuery = isSmifWorkflow
     ? smifLocalitiesQuery
     : cpcaLocalityOptionsQuery;
-  const postosQuery = usePostos();
+  const postosQuery = usePostoOptions(canAccessByRole);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState("");

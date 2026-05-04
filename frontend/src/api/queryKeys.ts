@@ -72,6 +72,7 @@ export const qk = {
   specialties: ["specialties"] as const,
   eloRoles: ["eloRoles"] as const,
   postos: ["postos"] as const,
+  postosOptions: ["postos", "options"] as const,
   search: (q: string) => ["search", q] as const,
   documents: (filters: Record<string, any>) => ["documents", filters] as const,
   documentSubcategories: (filters: Record<string, any>) =>

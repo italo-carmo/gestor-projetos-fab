@@ -24,6 +24,15 @@ export class PostosController {
   @Get()
   @RequirePermission('postos', 'view')
   async list() {
+    return this.listPostos();
+  }
+
+  @Get('options')
+  async options() {
+    return this.listPostos();
+  }
+
+  private async listPostos() {
     const items = await this.prisma.posto.findMany({
       orderBy: { sortOrder: 'asc' },
     });

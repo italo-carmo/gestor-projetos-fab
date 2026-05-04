@@ -1731,6 +1731,15 @@ export function usePostos(enabled = true) {
   });
 }
 
+export function usePostoOptions(enabled = true) {
+  return useQuery({
+    queryKey: qk.postosOptions,
+    queryFn: async () => (await api.get("/postos/options")).data,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 export function useCreatePosto() {
   const qc = useQueryClient();
   return useMutation({
@@ -1739,7 +1748,10 @@ export function useCreatePosto() {
       name: string;
       sortOrder?: number;
     }) => (await api.post("/postos", payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.postos }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.postos });
+      qc.invalidateQueries({ queryKey: qk.postosOptions });
+    },
   });
 }
 
@@ -1750,7 +1762,10 @@ export function useUpdatePosto() {
       id: string;
       payload: { code?: string; name?: string; sortOrder?: number };
     }) => (await api.put(`/postos/${args.id}`, args.payload)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.postos }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.postos });
+      qc.invalidateQueries({ queryKey: qk.postosOptions });
+    },
   });
 }
 
@@ -1758,7 +1773,10 @@ export function useDeletePosto() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => (await api.delete(`/postos/${id}`)).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.postos }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.postos });
+      qc.invalidateQueries({ queryKey: qk.postosOptions });
+    },
   });
 }
 
