@@ -92,7 +92,7 @@ const DETAILED_VIOLENCE_TYPE_LABELS: Record<string, string> = {
   INJURIA: "Injúria",
   CALUNIA: "Calúnia",
   DIFAMACAO: "Difamação",
-  HOMOFOBIA: "Homofobia",
+  DISCRIMINACAO: "Discriminação",
   DENUNCIACAO_CALUNIOSA: "Denunciação caluniosa",
   ATO_DE_LIBIDINAGEM: "Ato de libidinagem",
   PRESUNCAO_DE_VIOLENCIA: "Presunção de violência",

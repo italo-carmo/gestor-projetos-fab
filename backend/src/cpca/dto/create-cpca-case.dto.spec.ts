@@ -5,6 +5,7 @@ describe('CPCA_DETAILED_VIOLENCE_TYPES', () => {
     expect(CPCA_DETAILED_VIOLENCE_TYPES).toContain(
       'VIOLENCIA_DOMESTICA_VICARIA',
     );
-    expect(CPCA_DETAILED_VIOLENCE_TYPES).toContain('HOMOFOBIA');
+    expect(CPCA_DETAILED_VIOLENCE_TYPES).toContain('DISCRIMINACAO');
+    expect(CPCA_DETAILED_VIOLENCE_TYPES).not.toContain('HOMOFOBIA');
   });
 });

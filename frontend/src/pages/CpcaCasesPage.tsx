@@ -254,8 +254,8 @@ const DETAILED_VIOLENCE_TYPE_OPTIONS: Array<{
     macroComplaintType: "MORAL",
   },
   {
-    value: "HOMOFOBIA",
-    label: "Homofobia",
+    value: "DISCRIMINACAO",
+    label: "Discriminação",
     macroComplaintType: "MORAL",
   },
   {
