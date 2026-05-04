@@ -25,6 +25,9 @@ function createPrismaMock() {
     cpcComplaintCipavdMessage: {
       findFirst: jest.fn(),
     },
+    om: {
+      findUnique: jest.fn(),
+    },
     cpcaCommissionPresident: {
       findFirst: jest.fn(),
     },
@@ -162,6 +165,102 @@ describe('CpcaService CIPAVD threads', () => {
         entityId: 'case-1',
       }),
     );
+  });
+
+  it('envia e-mail ao presidente CPCA quando a gestão registra pendência', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const mail = { sendMail: jest.fn().mockResolvedValue({}) };
+    const service = new CpcaService(
+      prisma,
+      audit as any,
+      undefined,
+      mail as any,
+    );
+    const user = makeUser({
+      roleName: 'Coordenação CIPAVD',
+      scope: 'NATIONAL',
+    });
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue({
+      id: 'case-1',
+      omId: 'om-1',
+      localityId: 'om-1',
+      caseNumber: 'CPCA-2026-BACO-00001',
+      workflowScope: 'CPCA',
+    });
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue(null);
+    prisma.om.findUnique.mockResolvedValue({
+      id: 'om-1',
+      code: 'CCA BR',
+      name: 'CCA BR',
+      cpcaCommissionPresident: {
+        id: 'pres-1',
+        user: {
+          id: 'president-1',
+          name: 'Presidente CPCA',
+          email: 'PRESIDENTE@FAB.MIL.BR',
+        },
+      },
+      cpcaCoverageAsManaged: [],
+    });
+    prisma.__tx.cpcComplaintCipavdThread.create.mockResolvedValue({
+      id: 'thread-1',
+    });
+    prisma.__tx.cpcComplaintCipavdMessage.create.mockResolvedValue({
+      id: 'message-1',
+    });
+    prisma.__tx.cpcComplaintCipavdThread.findUnique.mockResolvedValue({
+      id: 'thread-1',
+      type: 'PENDENCY',
+      status: 'OPEN',
+      reopenedCount: 0,
+      createdAt: new Date('2026-04-22T10:00:00.000Z'),
+      resolvedAt: null,
+      closedAt: null,
+      lastMessageAt: new Date('2026-04-22T10:00:00.000Z'),
+      createdBy: { id: user.id, name: user.name, email: user.email },
+      resolvedBy: null,
+      closedBy: null,
+      messages: [
+        {
+          id: 'message-1',
+          body: 'Ajustar documentação pendente.',
+          authorKind: 'MANAGEMENT',
+          type: 'MESSAGE',
+          createdAt: new Date('2026-04-22T10:00:00.000Z'),
+          createdBy: { id: user.id, name: user.name, email: user.email },
+        },
+      ],
+    });
+
+    await service.createCipavdThread(
+      'case-1',
+      {
+        text: 'Ajustar documentação pendente.',
+        isPending: true,
+      },
+      user as any,
+      CPCA_WORKFLOW_CONTEXT,
+    );
+
+    expect(mail.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'presidente@fab.mil.br',
+        subject:
+          'Gestor CIPAVD | Pendência registrada em denúncia CPCA | CCA BR',
+        html: expect.stringContaining('Pendência registrada'),
+        text: expect.stringContaining('Caso: CPCA-2026-BACO-00001'),
+      }),
+    );
+    const message = mail.sendMail.mock.calls[0][0];
+    expect(message.html).toContain('#B42318');
+    expect(message.subject).not.toContain('CCA BR · CCA BR');
+    expect(message.html).not.toContain('CCA BR · CCA BR');
+    expect(message.text).not.toContain('CCA BR · CCA BR');
+    expect(message.subject).not.toContain('CCA BR - CCA BR');
+    expect(message.html).not.toContain('CCA BR - CCA BR');
+    expect(message.text).not.toContain('CCA BR - CCA BR');
   });
 
   it('permite que o presidente responda e resolva a pendência', async () => {

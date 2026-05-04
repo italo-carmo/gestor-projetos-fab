@@ -1,9 +1,11 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
+import { MailService } from '../mail/mail.service';
+import { buildCpcaApprovalDecisionEmail } from '../mail/templates/cpca-approval-decision-email';
 import {
   hasAnyRole,
   hasPermission,
@@ -171,11 +173,14 @@ export const SMIF_WORKFLOW_CONTEXT: ComplaintWorkflowContext = {
 
 @Injectable()
 export class CpcaService {
+  private readonly logger = new Logger(CpcaService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     @Optional()
     private readonly complaintSummaryPrivacy?: ComplaintSummaryPrivacyService,
+    @Optional() private readonly mail?: MailService,
   ) {}
 
   async localityOptions(user?: RbacUser) {
@@ -2146,6 +2151,17 @@ export class CpcaService {
       },
     });
 
+    if (isPending) {
+      await this.notifyCpcaPresidentOfPendency({
+        complaint,
+        threadId: String(created?.id ?? ''),
+        text,
+        actorName: user?.name ?? user?.email ?? null,
+        createdAt: created?.createdAt ?? now,
+        context: workflowContext,
+      });
+    }
+
     return this.serializeCipavdThread(created);
   }
 
@@ -3261,6 +3277,177 @@ export class CpcaService {
 
   private cleanText(value: string) {
     return sanitizeText(String(value ?? '')).trim();
+  }
+
+  private normalizeEmail(value?: string | null) {
+    const normalized = String(value ?? '')
+      .trim()
+      .toLowerCase();
+    if (!normalized || !normalized.includes('@')) return null;
+    return normalized;
+  }
+
+  private formatEmailDateTime(value: Date | string | null | undefined) {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: 'America/Sao_Paulo',
+    }).format(date);
+  }
+
+  private async resolveCpcaPresidentNotificationTarget(omId: string) {
+    const targetOm = await this.prisma.om.findUnique({
+      where: { id: omId },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        cpcaCommissionPresident: {
+          select: {
+            id: true,
+            user: { select: { id: true, name: true, email: true } },
+          },
+        },
+        cpcaCoverageAsManaged: {
+          take: 1,
+          select: {
+            managerOm: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+                cpcaCommissionPresident: {
+                  select: {
+                    id: true,
+                    user: { select: { id: true, name: true, email: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!targetOm) return null;
+
+    const directPresident = targetOm.cpcaCommissionPresident ?? null;
+    const coverageManagerOm = targetOm.cpcaCoverageAsManaged?.[0]?.managerOm;
+    const coveredPresident = coverageManagerOm?.cpcaCommissionPresident ?? null;
+    const president = directPresident ?? coveredPresident;
+    if (!president?.user) return null;
+
+    return {
+      complaintOm: {
+        id: targetOm.id,
+        code: targetOm.code,
+        name: targetOm.name,
+      },
+      managerOm: directPresident
+        ? {
+            id: targetOm.id,
+            code: targetOm.code,
+            name: targetOm.name,
+          }
+        : coverageManagerOm
+          ? {
+              id: coverageManagerOm.id,
+              code: coverageManagerOm.code,
+              name: coverageManagerOm.name,
+            }
+          : null,
+      president,
+    };
+  }
+
+  private async notifyCpcaPresidentOfPendency(input: {
+    complaint: {
+      id: string;
+      omId?: string | null;
+      localityId?: string | null;
+      caseNumber?: string | null;
+    };
+    threadId?: string | null;
+    text: string;
+    actorName?: string | null;
+    createdAt?: Date | string | null;
+    context: ComplaintWorkflowContext;
+  }) {
+    if (!this.mail) return;
+
+    const omId = String(
+      input.complaint.omId ?? input.complaint.localityId ?? '',
+    ).trim();
+    if (!omId) return;
+
+    try {
+      const target = await this.resolveCpcaPresidentNotificationTarget(omId);
+      const to = this.normalizeEmail(target?.president.user.email);
+      if (!target || !to) {
+        this.logger.warn(
+          `Notificacao de pendencia ${input.threadId || input.complaint.id} ignorada: presidente CPCA ou e-mail ausente para OM ${omId}.`,
+        );
+        return;
+      }
+
+      const workflowLabel = input.context.workflowScope;
+      const caseNumber = String(input.complaint.caseNumber ?? '').trim();
+      const details = [
+        caseNumber ? { label: 'Caso', value: caseNumber } : null,
+        input.actorName
+          ? { label: 'Registrada por', value: String(input.actorName).trim() }
+          : null,
+        this.formatEmailDateTime(input.createdAt)
+          ? {
+              label: 'Registrada em',
+              value: this.formatEmailDateTime(input.createdAt),
+            }
+          : null,
+        target.managerOm && target.managerOm.id !== target.complaintOm.id
+          ? {
+              label: 'Comissão responsável',
+              value: this.formatCpcaAiOmLabel(target.managerOm),
+            }
+          : null,
+        { label: 'Pendência', value: input.text },
+      ].filter((item): item is { label: string; value: string } =>
+        Boolean(item?.value),
+      );
+
+      const message = buildCpcaApprovalDecisionEmail({
+        requestTypeLabel: `Pendência em denúncia ${workflowLabel}`,
+        recipientName: target.president.user.name,
+        status: 'REJECTED',
+        locality: target.complaintOm,
+        heading: `Pendência registrada em denúncia ${workflowLabel}`,
+        badgeLabel: 'Pendência registrada',
+        intro: `A gestão nacional registrou uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
+        bodyText:
+          'Este aviso indica que há uma pendência aberta para análise e resposta no sistema.',
+        nextSteps: [
+          `Acesse o menu Denúncias ${workflowLabel} no sistema.`,
+          caseNumber
+            ? `Localize o caso ${caseNumber} e abra a área de pendências.`
+            : 'Abra a denúncia correspondente e consulte a área de pendências.',
+          'Registre a resposta da comissão para que a gestão nacional possa validar a solução.',
+        ],
+        extraDetails: details,
+      });
+
+      await this.mail.sendMail({
+        to,
+        ...message,
+      });
+    } catch (error) {
+      const detail =
+        error instanceof Error ? error.message : 'falha desconhecida';
+      this.logger.warn(
+        `Falha ao enviar e-mail de pendencia CPCA (${input.threadId || input.complaint.id}): ${detail}.`,
+      );
+    }
   }
 
   private formatCpcaAiOmLabel(item: any) {
