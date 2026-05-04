@@ -11,6 +11,7 @@ import {
   isCpcaChecklistHistoryItem,
   normalizeCpcaChecklistUrl,
   normalizeCpcaChecklistOmCode,
+  prepareCpcaChecklistSave,
 } from "./cpcaChecklist";
 
 describe("cpcaChecklist helpers", () => {
@@ -129,5 +130,74 @@ describe("cpcaChecklist helpers", () => {
     expect(normalizeCpcaChecklistUrl("http://intraer.fab.mil.br/cpca")).toBe(
       "http://intraer.fab.mil.br/cpca",
     );
+  });
+
+  it("prepares save payload with a pending history draft", () => {
+    const draft = buildCpcaChecklistDraft(undefined);
+    const result = prepareCpcaChecklistSave(draft, {
+      PALESTRA: {
+        completedAt: "2026-05-04",
+        details: "Palestra sobre prevenção.",
+        speakerName: "Maj Silva",
+      },
+    });
+
+    if (!result.ok) throw new Error(result.message);
+
+    const palestra = result.items.find((item) => item.itemKey === "PALESTRA");
+    expect(palestra).toMatchObject({
+      isCompleted: true,
+      completedAt: "2026-05-04",
+      details: "Palestra sobre prevenção.",
+      speakerName: "Maj Silva",
+      historyEntries: [
+        {
+          id: null,
+          completedAt: "2026-05-04",
+          details: "Palestra sobre prevenção.",
+          speakerName: "Maj Silva",
+        },
+      ],
+    });
+  });
+
+  it("blocks checklist save with clear validation before calling the API", () => {
+    const missingDateDraft = buildCpcaChecklistDraft(undefined);
+    missingDateDraft[0] = {
+      ...missingDateDraft[0],
+      isCompleted: true,
+      details: "cpca@fab.mil.br",
+    };
+
+    expect(prepareCpcaChecklistSave(missingDateDraft)).toMatchObject({
+      ok: false,
+      message: "Informe a data do registro antes de salvar.",
+    });
+
+    const invalidEmailDraft = buildCpcaChecklistDraft(undefined);
+    invalidEmailDraft[0] = {
+      ...invalidEmailDraft[0],
+      isCompleted: true,
+      completedAt: "2026-05-04",
+      details: "email-invalido",
+    };
+
+    expect(prepareCpcaChecklistSave(invalidEmailDraft)).toMatchObject({
+      ok: false,
+      message: "Informe um e-mail direto válido antes de salvar.",
+    });
+
+    expect(
+      prepareCpcaChecklistSave(buildCpcaChecklistDraft(undefined), {
+        MATERIAIS_INFORMATIVOS: {
+          completedAt: "2026-05-04",
+          details: "",
+          speakerName: "",
+        },
+      }),
+    ).toMatchObject({
+      ok: false,
+      message: "Informe a data e a descrição do registro antes de salvar.",
+    });
   });
 });

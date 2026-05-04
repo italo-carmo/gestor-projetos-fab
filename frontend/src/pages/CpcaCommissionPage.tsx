@@ -75,9 +75,12 @@ import {
   isCpcaChecklistBinaryQuestionItem,
   isCpcaChecklistHistoryItem,
   type CpcaChecklistDraftItem,
+  type CpcaChecklistHistoryEntryDraft as ChecklistHistoryEntryDraft,
   type CpcaChecklistItem,
   type CpcaChecklistItemKey,
   type CpcaChecklistSummary,
+  applyCpcaChecklistHistoryEntriesToDraftItem,
+  prepareCpcaChecklistSave,
 } from "../features/cpcaChecklist";
 import {
   getComplaintPendencyBadge,
@@ -201,47 +204,11 @@ function formatDateTime(value: string | null | undefined) {
   return date.toLocaleString("pt-BR");
 }
 
-type ChecklistHistoryEntryDraft = {
-  id?: string | null;
-  completedAt: string;
-  details: string;
-  speakerName: string;
-  createdAt?: string | null;
-  updatedAt?: string | null;
-};
-
 function createEmptyChecklistHistoryEntryDraft(): ChecklistHistoryEntryDraft {
   return {
     completedAt: "",
     details: "",
     speakerName: "",
-  };
-}
-
-function sortChecklistHistoryEntryDrafts(
-  entries: ChecklistHistoryEntryDraft[],
-) {
-  return [...entries].sort((left, right) =>
-    String(right.completedAt ?? "").localeCompare(
-      String(left.completedAt ?? ""),
-    ),
-  );
-}
-
-function applyHistoryEntriesToDraftItem(
-  item: CpcaChecklistDraftItem,
-  entries: ChecklistHistoryEntryDraft[],
-): CpcaChecklistDraftItem {
-  const nextEntries = sortChecklistHistoryEntryDrafts(entries);
-  const latestEntry = nextEntries[0];
-  return {
-    ...item,
-    supportsHistory: true,
-    isCompleted: nextEntries.length > 0,
-    completedAt: latestEntry?.completedAt ?? "",
-    details: latestEntry?.details ?? "",
-    speakerName: latestEntry?.speakerName ?? "",
-    historyEntries: nextEntries,
   };
 }
 
@@ -805,7 +772,7 @@ export function CpcaCommissionPage() {
     setChecklistDraft((current) =>
       current.map((item) => {
         if (item.itemKey !== itemKey) return item;
-        return applyHistoryEntriesToDraftItem(item, [
+        return applyCpcaChecklistHistoryEntriesToDraftItem(item, [
           ...item.historyEntries,
           {
             id: null,
@@ -836,23 +803,21 @@ export function CpcaCommissionPage() {
     }
 
     try {
+      const prepared = prepareCpcaChecklistSave(
+        checklistDraft,
+        checklistHistoryEntryDrafts,
+      );
+      if (!prepared.ok) {
+        toast.push({
+          message: prepared.message,
+          severity: "warning",
+        });
+        return;
+      }
+
       const response = await updateChecklistMutation.mutateAsync({
         localityId: checklistLocalityId,
-        items: checklistDraft.map((item) => ({
-          itemKey: item.itemKey,
-          isCompleted: item.isCompleted,
-          completedAt: item.completedAt || null,
-          details: item.details.trim() || null,
-          speakerName: item.speakerName.trim() || null,
-          historyEntries: item.supportsHistory
-            ? item.historyEntries.map((entry) => ({
-                id: entry.id ?? null,
-                completedAt: entry.completedAt,
-                details: entry.details.trim() || null,
-                speakerName: entry.speakerName.trim() || null,
-              }))
-            : undefined,
-        })),
+        items: prepared.items,
       });
       const savedItems = (response?.checklist?.items ??
         []) as CpcaChecklistItem[];

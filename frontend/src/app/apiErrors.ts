@@ -53,6 +53,26 @@ const REASON_MESSAGES: Record<string, string> = {
     "Já existe uma solicitação pendente de alteração de cobertura para esta OM.",
   CPCA_PRESIDENT_NOMINATION_ALREADY_PENDING:
     "Já existe uma solicitação pendente de sucessão da presidência para esta OM.",
+  CPCA_CHECKLIST_EMAIL_REQUIRED:
+    "Informe o e-mail direto da CPCA antes de salvar o checklist.",
+  CPCA_CHECKLIST_INTRAER_URL_REQUIRED:
+    "Informe a URL da página intraer antes de salvar o checklist.",
+  CPCA_CHECKLIST_PALESTRA_DETAILS_REQUIRED:
+    "Informe o detalhamento da palestra antes de salvar o checklist.",
+  CPCA_CHECKLIST_HISTORY_DETAILS_REQUIRED:
+    "Informe a descrição do registro antes de salvar o checklist.",
+  CPCA_CHECKLIST_PALESTRA_SPEAKER_REQUIRED:
+    "Informe quem ministrou a palestra antes de salvar o checklist.",
+  CPCA_CHECKLIST_ITEMS_REQUIRED:
+    "Recarregue a página e tente salvar novamente. O checklist enviado está incompleto.",
+  INVALID_CPCA_CHECKLIST_ITEM:
+    "Recarregue a página e tente salvar novamente. Há um item de checklist inválido.",
+  INVALID_CPCA_CHECKLIST_DATE:
+    "Revise a data do registro antes de salvar o checklist.",
+  INVALID_CPCA_CHECKLIST_EMAIL:
+    "Informe um e-mail direto válido antes de salvar o checklist.",
+  INVALID_CPCA_CHECKLIST_URL:
+    "Informe uma URL intraer válida antes de salvar o checklist.",
   LOCALITY_HAS_LINKED_DATA:
     "Esta localidade não pode ser excluída porque possui dados vinculados. Remova ou ajuste esses vínculos antes de excluir.",
   OM_HAS_LINKED_DATA:
