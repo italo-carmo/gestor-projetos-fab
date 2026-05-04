@@ -103,6 +103,16 @@ export type CpcaChecklistSavePreparation =
       itemKey?: CpcaChecklistItemKey;
     };
 
+export type CpcaChecklistDraftSummary = Pick<
+  CpcaChecklistSummary,
+  | "totalCount"
+  | "completedCount"
+  | "pendingCount"
+  | "completionRate"
+  | "status"
+  | "statusLabel"
+>;
+
 type CpcaChecklistDraftPreparation =
   | {
       ok: true;
@@ -201,6 +211,8 @@ export function normalizeCpcaChecklistUrl(value: string | null | undefined) {
 export function formatCpcaChecklistDate(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
   if (!raw) return "-";
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return "-";
   return parsed.toLocaleDateString("pt-BR");
@@ -444,15 +456,8 @@ function mergePendingHistoryDrafts(
 function validateBinaryChecklistItem(item: CpcaChecklistDraftItem) {
   if (!item.isCompleted) return null;
 
-  const completedAt = trimChecklistText(item.completedAt);
   const details = trimChecklistText(item.details);
 
-  if (!completedAt) {
-    return "Informe a data do registro antes de salvar.";
-  }
-  if (!isValidChecklistDate(completedAt)) {
-    return "Revise a data do registro antes de salvar.";
-  }
   if (item.itemKey === "EMAIL_DIRETO_RELATOS") {
     if (!details) return "Informe o e-mail direto da CPCA antes de salvar.";
     if (!isValidChecklistEmail(details)) {
@@ -488,6 +493,71 @@ function validateHistoryChecklistEntry(
   }
 
   return null;
+}
+
+export function isCpcaChecklistPendingHistoryDraftComplete(
+  itemKey: CpcaChecklistItemKey,
+  draft: CpcaChecklistHistoryEntryDraft | null | undefined,
+) {
+  if (isBlankHistoryEntryDraft(draft)) return false;
+  return (
+    validateHistoryChecklistEntry(itemKey, {
+      completedAt: trimChecklistText(draft?.completedAt),
+      details: trimChecklistText(draft?.details),
+      speakerName: trimChecklistText(draft?.speakerName),
+    }) === null
+  );
+}
+
+export function isCpcaChecklistDraftItemComplete(
+  item: CpcaChecklistDraftItem,
+  pendingHistoryDraft?: CpcaChecklistHistoryEntryDraft | null,
+) {
+  if (item.supportsHistory) {
+    return (
+      item.historyEntries.some(
+        (entry) => validateHistoryChecklistEntry(item.itemKey, entry) === null,
+      ) ||
+      isCpcaChecklistPendingHistoryDraftComplete(
+        item.itemKey,
+        pendingHistoryDraft,
+      )
+    );
+  }
+
+  return validateBinaryChecklistItem(item) === null && item.isCompleted;
+}
+
+export function buildCpcaChecklistDraftSummary(
+  draftItems: CpcaChecklistDraftItem[],
+  pendingHistoryDrafts: CpcaChecklistPendingHistoryDrafts = {},
+): CpcaChecklistDraftSummary {
+  const totalCount = draftItems.length;
+  const completedCount = draftItems.filter((item) =>
+    isCpcaChecklistDraftItemComplete(item, pendingHistoryDrafts[item.itemKey]),
+  ).length;
+  const pendingCount = Math.max(0, totalCount - completedCount);
+  const status: CpcaChecklistStatus =
+    completedCount === 0
+      ? "NOT_STARTED"
+      : completedCount === totalCount
+        ? "COMPLETED"
+        : "IN_PROGRESS";
+
+  return {
+    totalCount,
+    completedCount,
+    pendingCount,
+    completionRate:
+      totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0,
+    status,
+    statusLabel:
+      status === "COMPLETED"
+        ? "Concluído"
+        : status === "IN_PROGRESS"
+          ? "Em andamento"
+          : "Não iniciado",
+  };
 }
 
 export function prepareCpcaChecklistSave(
@@ -543,9 +613,7 @@ export function prepareCpcaChecklistSave(
     items.push({
       itemKey: item.itemKey,
       isCompleted: item.isCompleted,
-      completedAt: item.isCompleted
-        ? trimChecklistText(item.completedAt)
-        : null,
+      completedAt: null,
       details: item.isCompleted
         ? trimChecklistText(item.details) || null
         : null,

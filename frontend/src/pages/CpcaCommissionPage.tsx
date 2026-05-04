@@ -69,9 +69,11 @@ import { SkeletonState } from "../components/states/SkeletonState";
 import {
   areCpcaChecklistDraftsEqual,
   buildCpcaChecklistDraft,
+  buildCpcaChecklistDraftSummary,
   formatCpcaChecklistDate,
   getCpcaChecklistStatusTone,
   getCpcaChecklistFieldConfig,
+  isCpcaChecklistDraftItemComplete,
   isCpcaChecklistBinaryQuestionItem,
   isCpcaChecklistHistoryItem,
   type CpcaChecklistDraftItem,
@@ -490,8 +492,18 @@ export function CpcaCommissionPage() {
       ),
     );
   }, [checklistDraft, checklistHistoryEntryDrafts, checklistItems]);
+  const checklistDraftSummary = useMemo(
+    () =>
+      buildCpcaChecklistDraftSummary(
+        checklistDraft,
+        checklistHistoryEntryDrafts,
+      ),
+    [checklistDraft, checklistHistoryEntryDrafts],
+  );
+  const displayedChecklistSummary =
+    checklistDraft.length > 0 ? checklistDraftSummary : checklistSummary;
   const checklistTone = getCpcaChecklistStatusTone(
-    checklistSummary?.status ?? "NOT_STARTED",
+    displayedChecklistSummary?.status ?? "NOT_STARTED",
   );
   const cpcaOpenPendingItems = (
     ((cpcaPendingSummaryQuery.data as any)?.openItems ?? []) as any[]
@@ -737,6 +749,38 @@ export function CpcaCommissionPage() {
     }));
   };
 
+  const handleChecklistHistoryEntryChange = (
+    itemKey: CpcaChecklistItemKey,
+    entryIndex: number,
+    field: keyof ChecklistHistoryEntryDraft,
+    value: string,
+  ) => {
+    setChecklistDraft((current) =>
+      current.map((item) => {
+        if (item.itemKey !== itemKey || !item.supportsHistory) return item;
+        const nextEntries = item.historyEntries.map((entry, index) =>
+          index === entryIndex ? { ...entry, [field]: value } : entry,
+        );
+        return applyCpcaChecklistHistoryEntriesToDraftItem(item, nextEntries);
+      }),
+    );
+  };
+
+  const handleRemoveChecklistHistoryEntry = (
+    itemKey: CpcaChecklistItemKey,
+    entryIndex: number,
+  ) => {
+    setChecklistDraft((current) =>
+      current.map((item) => {
+        if (item.itemKey !== itemKey || !item.supportsHistory) return item;
+        const nextEntries = item.historyEntries.filter(
+          (_entry, index) => index !== entryIndex,
+        );
+        return applyCpcaChecklistHistoryEntriesToDraftItem(item, nextEntries);
+      }),
+    );
+  };
+
   const clearChecklistHistoryDraft = (itemKey: CpcaChecklistItemKey) => {
     setChecklistHistoryEntryDrafts((current) => {
       if (!(itemKey in current)) return current;
@@ -835,10 +879,23 @@ export function CpcaCommissionPage() {
         severity: "success",
       });
     } catch (error) {
+      const parsedError = parseApiError(error);
+      const parsedMessage =
+        typeof parsedError.message === "string"
+          ? parsedError.message
+          : undefined;
+      const isGenericValidationMessage =
+        parsedMessage === "Dados inválidos." || !parsedMessage;
+      const fallbackMessage =
+        parsedError.code === "VALIDATION_ERROR" && isGenericValidationMessage
+          ? "Revise os campos do checklist. Verifique e-mail, URL, data, descrição e palestrante dos registros."
+          : "Erro ao salvar o checklist da comissão.";
+      const message =
+        parsedError.code === "VALIDATION_ERROR" && isGenericValidationMessage
+          ? fallbackMessage
+          : (parsedMessage ?? fallbackMessage);
       toast.push({
-        message:
-          parseApiError(error).message ??
-          "Erro ao salvar o checklist da comissão.",
+        message,
         severity: "error",
       });
     }
@@ -1058,11 +1115,13 @@ export function CpcaCommissionPage() {
                         fontWeight={800}
                         sx={{ mt: 0.75 }}
                       >
-                        {checklistSummary?.completionRate ?? 0}% concluído
+                        {displayedChecklistSummary?.completionRate ?? 0}%
+                        concluído
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {checklistSummary?.completedCount ?? 0}/
-                        {checklistSummary?.totalCount ?? checklistItems.length}{" "}
+                        {displayedChecklistSummary?.completedCount ?? 0}/
+                        {displayedChecklistSummary?.totalCount ??
+                          checklistItems.length}{" "}
                         itens preenchidos
                       </Typography>
                     </Box>
@@ -1156,7 +1215,9 @@ export function CpcaCommissionPage() {
                   </Box>
                   <Stack direction="row" spacing={1} flexWrap="wrap">
                     <Chip
-                      label={checklistSummary?.statusLabel ?? "Não iniciado"}
+                      label={
+                        displayedChecklistSummary?.statusLabel ?? "Não iniciado"
+                      }
                       color={checklistTone.color}
                       sx={{
                         fontWeight: 700,
@@ -1164,7 +1225,7 @@ export function CpcaCommissionPage() {
                       }}
                     />
                     <Chip
-                      label={`${checklistSummary?.completedCount ?? 0}/${checklistSummary?.totalCount ?? checklistItems.length} concluídos`}
+                      label={`${displayedChecklistSummary?.completedCount ?? 0}/${displayedChecklistSummary?.totalCount ?? checklistItems.length} concluídos`}
                       variant="outlined"
                     />
                   </Stack>
@@ -1189,12 +1250,12 @@ export function CpcaCommissionPage() {
                         Progresso do checklist
                       </Typography>
                       <Typography variant="caption" fontWeight={800}>
-                        {checklistSummary?.completionRate ?? 0}%
+                        {displayedChecklistSummary?.completionRate ?? 0}%
                       </Typography>
                     </Stack>
                     <LinearProgress
                       variant="determinate"
-                      value={checklistSummary?.completionRate ?? 0}
+                      value={displayedChecklistSummary?.completionRate ?? 0}
                       color={
                         checklistTone.color === "default"
                           ? "inherit"
@@ -1264,9 +1325,6 @@ export function CpcaCommissionPage() {
                         : [],
                     };
                     const historyEntries = draftItem.historyEntries ?? [];
-                    const itemCompleted = draftItem.supportsHistory
-                      ? historyEntries.length > 0
-                      : Boolean(draftItem?.isCompleted);
                     const fieldConfig = getCpcaChecklistFieldConfig(
                       item.itemKey,
                     );
@@ -1276,6 +1334,10 @@ export function CpcaCommissionPage() {
                     const historyEntryDraft =
                       checklistHistoryEntryDrafts[item.itemKey] ??
                       createEmptyChecklistHistoryEntryDraft();
+                    const itemCompleted = isCpcaChecklistDraftItemComplete(
+                      draftItem,
+                      historyEntryDraft,
+                    );
                     return (
                       <Accordion
                         key={item.itemKey}
@@ -1412,24 +1474,6 @@ export function CpcaCommissionPage() {
                                       {fieldConfig.statusDoneLabel}
                                     </MenuItem>
                                   </TextField>
-                                  <TextField
-                                    label="Data do registro"
-                                    type="date"
-                                    size="small"
-                                    value={draftItem?.completedAt ?? ""}
-                                    onChange={(event) =>
-                                      handleChecklistFieldChange(
-                                        item.itemKey,
-                                        "completedAt",
-                                        event.target.value,
-                                      )
-                                    }
-                                    disabled={
-                                      !canEditChecklist || !itemCompleted
-                                    }
-                                    InputLabelProps={{ shrink: true }}
-                                    sx={{ minWidth: { xs: "100%", md: 170 } }}
-                                  />
                                   <Stack
                                     direction="row"
                                     spacing={0.75}
@@ -1464,10 +1508,12 @@ export function CpcaCommissionPage() {
                                       event.target.value,
                                     )
                                   }
-                                  disabled={!canEditChecklist || !itemCompleted}
+                                  disabled={
+                                    !canEditChecklist || !draftItem?.isCompleted
+                                  }
                                   placeholder={fieldConfig.detailsPlaceholder}
                                   helperText={
-                                    itemCompleted
+                                    draftItem?.isCompleted
                                       ? fieldConfig.detailsHelperText
                                       : undefined
                                   }
@@ -1497,7 +1543,7 @@ export function CpcaCommissionPage() {
                                     >
                                       Último registro:{" "}
                                       {formatCpcaChecklistDate(
-                                        item.completedAt,
+                                        draftItem.completedAt,
                                       )}
                                     </Typography>
                                   </Stack>
@@ -1628,23 +1674,89 @@ export function CpcaCommissionPage() {
                                               : "rgba(15,23,42,0.02)",
                                         }}
                                       >
-                                        <Stack spacing={0.5}>
-                                          <Stack
-                                            direction={{
-                                              xs: "column",
-                                              sm: "row",
-                                            }}
-                                            spacing={1}
-                                            justifyContent="space-between"
-                                          >
-                                            <Typography
-                                              variant="caption"
-                                              fontWeight={800}
+                                        {canEditChecklist ? (
+                                          <Stack spacing={1}>
+                                            <Stack
+                                              direction={{
+                                                xs: "column",
+                                                md: "row",
+                                              }}
+                                              spacing={1}
+                                              alignItems={{
+                                                xs: "stretch",
+                                                md: "center",
+                                              }}
                                             >
-                                              {formatCpcaChecklistDate(
-                                                entry.completedAt,
-                                              )}
-                                            </Typography>
+                                              <TextField
+                                                label="Data"
+                                                type="date"
+                                                size="small"
+                                                value={entry.completedAt}
+                                                onChange={(event) =>
+                                                  handleChecklistHistoryEntryChange(
+                                                    item.itemKey,
+                                                    index,
+                                                    "completedAt",
+                                                    event.target.value,
+                                                  )
+                                                }
+                                                InputLabelProps={{
+                                                  shrink: true,
+                                                }}
+                                                sx={{
+                                                  minWidth: {
+                                                    xs: "100%",
+                                                    md: 170,
+                                                  },
+                                                }}
+                                              />
+                                              {item.requiresSpeakerName ? (
+                                                <TextField
+                                                  label="Quem ministrou a palestra"
+                                                  size="small"
+                                                  value={entry.speakerName}
+                                                  onChange={(event) =>
+                                                    handleChecklistHistoryEntryChange(
+                                                      item.itemKey,
+                                                      index,
+                                                      "speakerName",
+                                                      event.target.value,
+                                                    )
+                                                  }
+                                                  sx={{ flex: 1 }}
+                                                />
+                                              ) : null}
+                                              <IconButton
+                                                color="error"
+                                                aria-label="Excluir registro"
+                                                onClick={() =>
+                                                  handleRemoveChecklistHistoryEntry(
+                                                    item.itemKey,
+                                                    index,
+                                                  )
+                                                }
+                                              >
+                                                <DeleteOutlineRoundedIcon fontSize="small" />
+                                              </IconButton>
+                                            </Stack>
+                                            <TextField
+                                              label={fieldConfig.detailsLabel}
+                                              size="small"
+                                              multiline
+                                              minRows={2}
+                                              value={entry.details}
+                                              onChange={(event) =>
+                                                handleChecklistHistoryEntryChange(
+                                                  item.itemKey,
+                                                  index,
+                                                  "details",
+                                                  event.target.value,
+                                                )
+                                              }
+                                              placeholder={
+                                                fieldConfig.detailsPlaceholder
+                                              }
+                                            />
                                             <Typography
                                               variant="caption"
                                               color="text.secondary"
@@ -1657,18 +1769,49 @@ export function CpcaCommissionPage() {
                                               )}
                                             </Typography>
                                           </Stack>
-                                          <Typography variant="body2">
-                                            {entry.details}
-                                          </Typography>
-                                          {entry.speakerName ? (
-                                            <Typography
-                                              variant="caption"
-                                              fontWeight={700}
+                                        ) : (
+                                          <Stack spacing={0.5}>
+                                            <Stack
+                                              direction={{
+                                                xs: "column",
+                                                sm: "row",
+                                              }}
+                                              spacing={1}
+                                              justifyContent="space-between"
                                             >
-                                              Palestrante: {entry.speakerName}
+                                              <Typography
+                                                variant="caption"
+                                                fontWeight={800}
+                                              >
+                                                {formatCpcaChecklistDate(
+                                                  entry.completedAt,
+                                                )}
+                                              </Typography>
+                                              <Typography
+                                                variant="caption"
+                                                color="text.secondary"
+                                              >
+                                                Registrado em{" "}
+                                                {formatCpcaChecklistDate(
+                                                  entry.updatedAt ??
+                                                    entry.createdAt ??
+                                                    entry.completedAt,
+                                                )}
+                                              </Typography>
+                                            </Stack>
+                                            <Typography variant="body2">
+                                              {entry.details}
                                             </Typography>
-                                          ) : null}
-                                        </Stack>
+                                            {entry.speakerName ? (
+                                              <Typography
+                                                variant="caption"
+                                                fontWeight={700}
+                                              >
+                                                Palestrante: {entry.speakerName}
+                                              </Typography>
+                                            ) : null}
+                                          </Stack>
+                                        )}
                                       </Box>
                                     ))
                                   )}

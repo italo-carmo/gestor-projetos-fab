@@ -20,6 +20,7 @@ function createPrismaMock() {
       findMany: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      deleteMany: jest.fn(),
     },
   };
 
@@ -297,6 +298,64 @@ describe('CpcaChecklistService', () => {
     );
   });
 
+  it('salva e-mail direto sem exigir data manual do registro', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaChecklistService(prisma as any, audit as any);
+
+    prisma.om.findUnique.mockResolvedValue(om);
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
+      id: 'president-1',
+    });
+    prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
+    prisma.cpcaChecklistItem.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([
+        {
+          itemKey: 'EMAIL_DIRETO_RELATOS',
+          isCompleted: true,
+          completedAt: new Date('2026-05-04T14:00:00.000Z'),
+          details: 'cpca@fab.mil.br',
+          speakerName: null,
+          updatedAt: new Date('2026-05-04T14:01:00.000Z'),
+        },
+      ]);
+
+    await service.updateLocalityChecklist(
+      {
+        items: buildPayload({
+          EMAIL_DIRETO_RELATOS: {
+            isCompleted: true,
+            completedAt: null,
+            details: 'cpca@fab.mil.br',
+          },
+        }),
+      },
+      makeUser({
+        id: 'president-1',
+        omId: om.id,
+        permissions: [
+          { resource: 'cpca_cases', action: 'update', scope: 'LOCALITY' },
+        ],
+      }) as any,
+    );
+
+    expect(prisma.cpcaChecklistItem.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          omId_itemKey: {
+            omId: om.id,
+            itemKey: 'EMAIL_DIRETO_RELATOS',
+          },
+        },
+        update: expect.objectContaining({
+          completedAt: expect.any(Date),
+          details: 'cpca@fab.mil.br',
+        }),
+      }),
+    );
+  });
+
   it('salva checklist completo e gera resumo/auditoria', async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();
@@ -404,6 +463,73 @@ describe('CpcaChecklistService', () => {
       expect.objectContaining({
         action: 'cpca_commission_checklist_update',
         localityId: om.id,
+      }),
+    );
+  });
+
+  it('remove registros históricos ausentes no payload salvo', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaChecklistService(prisma as any, audit as any);
+
+    prisma.om.findUnique.mockResolvedValue(om);
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
+      id: 'president-1',
+    });
+    prisma.cpcaChecklistItem.findMany.mockResolvedValue([]);
+    prisma.cpcaChecklistHistoryEntry.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'hist-remove',
+          itemKey: 'PALESTRA',
+          completedAt: new Date('2026-04-21T12:00:00.000Z'),
+          details: 'Registro digitado errado.',
+          speakerName: 'Maj Silva',
+          createdAt: new Date('2026-04-21T12:05:00.000Z'),
+          updatedAt: new Date('2026-04-21T12:05:00.000Z'),
+        },
+      ])
+      .mockResolvedValue([]);
+
+    await service.updateLocalityChecklist(
+      {
+        items: buildPayload({
+          PALESTRA: {
+            isCompleted: false,
+            historyEntries: [],
+          },
+        }),
+      },
+      makeUser({
+        id: 'president-1',
+        omId: om.id,
+        permissions: [
+          { resource: 'cpca_cases', action: 'update', scope: 'LOCALITY' },
+        ],
+      }) as any,
+    );
+
+    expect(prisma.cpcaChecklistHistoryEntry.deleteMany).toHaveBeenCalledWith({
+      where: {
+        omId: om.id,
+        itemKey: 'PALESTRA',
+        id: { in: ['hist-remove'] },
+      },
+    });
+    expect(prisma.cpcaChecklistItem.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          omId_itemKey: {
+            omId: om.id,
+            itemKey: 'PALESTRA',
+          },
+        },
+        update: expect.objectContaining({
+          isCompleted: false,
+          completedAt: null,
+          details: null,
+          speakerName: null,
+        }),
       }),
     );
   });

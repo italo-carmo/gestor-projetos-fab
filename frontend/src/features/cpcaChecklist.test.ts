@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   areCpcaChecklistDraftsEqual,
   buildCpcaChecklistDraft,
+  buildCpcaChecklistDraftSummary,
   formatCpcaChecklistOmLabel,
   formatCpcaChecklistDate,
   getCpcaChecklistFieldConfig,
@@ -85,6 +86,9 @@ describe("cpcaChecklist helpers", () => {
     expect(formatCpcaChecklistDate("2026-04-21T12:00:00.000Z")).toBe(
       "21/04/2026",
     );
+    expect(formatCpcaChecklistDate("2025-11-18T00:00:00.000Z")).toBe(
+      "18/11/2025",
+    );
     expect(formatCpcaChecklistDate(null)).toBe("-");
     expect(getCpcaChecklistStatusTone("COMPLETED").color).toBe("success");
     expect(getCpcaChecklistStatusTone("IN_PROGRESS").color).toBe("warning");
@@ -161,24 +165,73 @@ describe("cpcaChecklist helpers", () => {
     });
   });
 
-  it("blocks checklist save with clear validation before calling the API", () => {
-    const missingDateDraft = buildCpcaChecklistDraft(undefined);
-    missingDateDraft[0] = {
-      ...missingDateDraft[0],
+  it("prepares binary checklist payload without requiring a manual date", () => {
+    const draft = buildCpcaChecklistDraft(undefined);
+    draft[0] = {
+      ...draft[0],
       isCompleted: true,
       details: "cpca@fab.mil.br",
     };
 
-    expect(prepareCpcaChecklistSave(missingDateDraft)).toMatchObject({
+    const result = prepareCpcaChecklistSave(draft);
+    if (!result.ok) throw new Error(result.message);
+
+    expect(result.items[0]).toMatchObject({
+      itemKey: "EMAIL_DIRETO_RELATOS",
+      isCompleted: true,
+      completedAt: null,
+      details: "cpca@fab.mil.br",
+    });
+  });
+
+  it("builds draft progress from current screen state", () => {
+    const draft = buildCpcaChecklistDraft(undefined);
+    draft[0] = {
+      ...draft[0],
+      isCompleted: true,
+      details: "cpca@fab.mil.br",
+    };
+
+    expect(buildCpcaChecklistDraftSummary(draft)).toMatchObject({
+      completedCount: 1,
+      pendingCount: 7,
+      completionRate: 13,
+      status: "IN_PROGRESS",
+    });
+
+    expect(
+      buildCpcaChecklistDraftSummary(draft, {
+        PALESTRA: {
+          completedAt: "2026-05-04",
+          details: "Palestra sobre prevenção.",
+          speakerName: "Maj Silva",
+        },
+      }),
+    ).toMatchObject({
+      completedCount: 2,
+      pendingCount: 6,
+      completionRate: 25,
+      status: "IN_PROGRESS",
+    });
+  });
+
+  it("blocks checklist save with clear validation before calling the API", () => {
+    const missingEmailDraft = buildCpcaChecklistDraft(undefined);
+    missingEmailDraft[0] = {
+      ...missingEmailDraft[0],
+      isCompleted: true,
+      details: "",
+    };
+
+    expect(prepareCpcaChecklistSave(missingEmailDraft)).toMatchObject({
       ok: false,
-      message: "Informe a data do registro antes de salvar.",
+      message: "Informe o e-mail direto da CPCA antes de salvar.",
     });
 
     const invalidEmailDraft = buildCpcaChecklistDraft(undefined);
     invalidEmailDraft[0] = {
       ...invalidEmailDraft[0],
       isCompleted: true,
-      completedAt: "2026-05-04",
       details: "email-invalido",
     };
 
