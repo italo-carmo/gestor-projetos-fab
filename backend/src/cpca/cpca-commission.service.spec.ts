@@ -627,6 +627,165 @@ describe('CpcaCommissionService', () => {
     );
   });
 
+  it('envia email ao membro quando presidente cadastra novo membro da CPCA', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const mail = createMailMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+      mail as any,
+    );
+    const sameCodeNameOm = {
+      id: 'om-cca',
+      code: 'CCA BR',
+      name: 'CCA BR',
+      hasCpca: true,
+    };
+
+    prisma.om.findUnique.mockResolvedValue(sameCodeNameOm);
+    prisma.cpcaCommissionPresident.findFirst
+      .mockResolvedValueOnce({ id: 'pres-1' })
+      .mockResolvedValueOnce(null);
+    ldap.lookupByEmail.mockResolvedValue({
+      uid: 'uid-member',
+      email: 'membro@fab.mil.br',
+      name: '2S MARIA',
+      fabom: 'CCA BR',
+    });
+    (resolveBestOmByFabOm as jest.Mock).mockResolvedValue(sameCodeNameOm);
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: 'member-user-1',
+        email: 'membro@fab.mil.br',
+        omId: null,
+        localityId: null,
+      },
+    ]);
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.update.mockResolvedValue({
+      id: 'member-user-1',
+      name: '2S MARIA',
+      email: 'membro@fab.mil.br',
+      ldapUid: 'uid-member',
+      omId: 'om-cca',
+      localityId: null,
+    });
+    prisma.role.findMany.mockResolvedValue([{ id: 'role-cpca', name: 'CPCA' }]);
+    prisma.userRole.createMany.mockResolvedValue({ count: 1 });
+    prisma.cpcaCommissionMember.findUnique.mockResolvedValue(null);
+    prisma.cpcaCommissionMember.upsert.mockResolvedValue({
+      id: 'member-1',
+      omId: 'om-cca',
+      userId: 'member-user-1',
+      addedByUserId: 'pres-user',
+      user: {
+        id: 'member-user-1',
+        name: '2S MARIA',
+        email: 'membro@fab.mil.br',
+        ldapUid: 'uid-member',
+        omId: 'om-cca',
+        localityId: null,
+      },
+      addedByUser: {
+        id: 'pres-user',
+        name: 'Presidente CPCA',
+        email: 'presidente@fab.mil.br',
+      },
+      om: sameCodeNameOm,
+    });
+
+    await service.addMember(
+      { identifier: 'membro@fab.mil.br' },
+      makeUser({ id: 'pres-user', omId: 'om-cca', roles: ['CPCA'] }) as any,
+    );
+
+    expect(mail.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'membro@fab.mil.br',
+        subject:
+          'Gestor CIPAVD | Cadastro como membro da CPCA registrado | CCA BR',
+        html: expect.stringContaining(
+          'Você foi cadastrado como membro da CPCA desta OM no sistema.',
+        ),
+        text: expect.stringContaining('Cadastrado por: Presidente CPCA'),
+      }),
+    );
+    expect((mail.sendMail as jest.Mock).mock.calls[0][0].subject).not.toContain(
+      'CCA BR · CCA BR',
+    );
+  });
+
+  it('nao reenvia email quando o membro ja estava cadastrado na CPCA', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const mail = createMailMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+      mail as any,
+    );
+
+    prisma.om.findUnique.mockResolvedValue(om);
+    prisma.cpcaCommissionPresident.findFirst
+      .mockResolvedValueOnce({ id: 'pres-1' })
+      .mockResolvedValueOnce(null);
+    ldap.lookupByEmail.mockResolvedValue({
+      uid: 'uid-member',
+      email: 'membro@fab.mil.br',
+      name: '2S MARIA',
+      fabom: 'BACO',
+    });
+    (resolveBestOmByFabOm as jest.Mock).mockResolvedValue(om);
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: 'member-user-1',
+        email: 'membro@fab.mil.br',
+        omId: 'om-1',
+        localityId: null,
+      },
+    ]);
+    prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.update.mockResolvedValue({
+      id: 'member-user-1',
+      name: '2S MARIA',
+      email: 'membro@fab.mil.br',
+      ldapUid: 'uid-member',
+      omId: 'om-1',
+      localityId: null,
+    });
+    prisma.role.findMany.mockResolvedValue([{ id: 'role-cpca', name: 'CPCA' }]);
+    prisma.userRole.createMany.mockResolvedValue({ count: 1 });
+    prisma.cpcaCommissionMember.findUnique.mockResolvedValue({
+      id: 'member-existing',
+    });
+    prisma.cpcaCommissionMember.upsert.mockResolvedValue({
+      id: 'member-existing',
+      user: {
+        id: 'member-user-1',
+        name: '2S MARIA',
+        email: 'membro@fab.mil.br',
+      },
+      addedByUser: {
+        id: 'pres-user',
+        name: 'Presidente CPCA',
+        email: 'presidente@fab.mil.br',
+      },
+      om,
+    });
+
+    await service.addMember(
+      { identifier: 'membro@fab.mil.br' },
+      makeUser({ id: 'pres-user', omId: 'om-1', roles: ['CPCA'] }) as any,
+    );
+
+    expect(mail.sendMail).not.toHaveBeenCalled();
+  });
+
   it('só o presidente da OM pode abrir solicitação de sucessão', async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();

@@ -1740,6 +1740,16 @@ export class CpcaCommissionService {
       });
     }
 
+    const existingMember = await this.prisma.cpcaCommissionMember.findUnique({
+      where: {
+        omId_userId: {
+          omId: localityId,
+          userId: memberUser.id,
+        },
+      },
+      select: { id: true },
+    });
+
     await this.grantCpcaRole(memberUser.id, localityId);
 
     const created = await this.prisma.cpcaCommissionMember.upsert({
@@ -1771,6 +1781,9 @@ export class CpcaCommissionService {
         addedByUser: {
           select: { id: true, name: true, email: true },
         },
+        om: {
+          select: { id: true, code: true, name: true },
+        },
       },
     });
 
@@ -1786,6 +1799,10 @@ export class CpcaCommissionService {
         memberUserName: memberUser.name,
       },
     });
+
+    if (!existingMember) {
+      await this.notifyMemberAddedByEmail(created);
+    }
 
     return { member: created };
   }
@@ -2833,6 +2850,15 @@ export class CpcaCommissionService {
     managedLocalitiesLabel?: string | null;
     decidedAt?: Date | null;
     decisionReason?: string | null;
+    heading?: string | null;
+    badgeLabel?: string | null;
+    intro?: string | null;
+    bodyText?: string | null;
+    nextSteps?: string[];
+    extraDetails?: Array<{
+      label: string;
+      value?: string | null;
+    }>;
   }) {
     if (!this.mail) {
       return;
@@ -2863,6 +2889,12 @@ export class CpcaCommissionService {
         managedLocalitiesLabel: input.managedLocalitiesLabel,
         decidedAt: input.decidedAt,
         decisionReason: input.decisionReason,
+        heading: input.heading,
+        badgeLabel: input.badgeLabel,
+        intro: input.intro,
+        bodyText: input.bodyText,
+        nextSteps: input.nextSteps,
+        extraDetails: input.extraDetails,
       });
 
       await this.mail.sendMail({
@@ -2876,6 +2908,38 @@ export class CpcaCommissionService {
         `Falha ao enviar e-mail de decisao CPCA para ${to} (${input.requestTypeLabel} ${input.requestId}): ${detail}.`,
       );
     }
+  }
+
+  private async notifyMemberAddedByEmail(member: {
+    id: string;
+    user: { name?: string | null; email?: string | null };
+    addedByUser?: { name?: string | null; email?: string | null } | null;
+    om?: { code?: string | null; name?: string | null } | null;
+  }) {
+    await this.sendCpcaApprovalDecisionEmail({
+      requestId: member.id,
+      requestTypeLabel: 'Cadastro como membro da CPCA',
+      to: member.user.email ?? null,
+      recipientName: member.user.name ?? null,
+      status: 'APPROVED',
+      locality: member.om ?? null,
+      heading: 'Cadastro como membro da CPCA registrado',
+      badgeLabel: 'Cadastro registrado',
+      intro: 'Você foi cadastrado como membro da CPCA desta OM no sistema.',
+      bodyText:
+        'Este aviso confirma o seu cadastro como membro da comissão CPCA. Abaixo estão os principais detalhes para consulta rápida.',
+      nextSteps: [
+        'A atualização já foi registrada no sistema.',
+        'Acesse novamente o sistema caso o perfil ou a tela da CPCA ainda não apareçam.',
+        'Procure o presidente da CPCA da sua OM em caso de dúvida sobre a atuação na comissão.',
+      ],
+      extraDetails: [
+        {
+          label: 'Cadastrado por',
+          value: member.addedByUser?.name ?? null,
+        },
+      ],
+    });
   }
 
   private async notifySelfRegistrationCreatedByEmail(input: {

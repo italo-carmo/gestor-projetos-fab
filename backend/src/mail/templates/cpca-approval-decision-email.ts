@@ -15,6 +15,11 @@ export type CpcaApprovalDecisionEmailInput = {
   managedLocalitiesLabel?: string | null;
   decidedAt?: Date | string | null;
   decisionReason?: string | null;
+  heading?: string | null;
+  badgeLabel?: string | null;
+  intro?: string | null;
+  bodyText?: string | null;
+  nextSteps?: string[];
   extraDetails?: Array<{
     label: string;
     value?: string | null;
@@ -69,16 +74,23 @@ export function buildCpcaApprovalDecisionEmail(
   const recipientName = String(input.recipientName ?? '').trim() || 'militar';
   const localityLabel = formatLocalityLabel(input.locality);
   const decidedAtLabel = formatDateTime(input.decidedAt);
-  const heading =
+  const defaultHeading =
     input.status === 'APPROVED'
       ? `${input.requestTypeLabel} homologada`
       : `${input.requestTypeLabel} rejeitada`;
+  const heading = String(input.heading ?? '').trim() || defaultHeading;
   const accentColor = input.status === 'APPROVED' ? '#0B7A3B' : '#B42318';
-  const badgeLabel = input.status === 'APPROVED' ? 'Homologada' : 'Rejeitada';
-  const intro =
+  const defaultBadgeLabel =
+    input.status === 'APPROVED' ? 'Homologada' : 'Rejeitada';
+  const badgeLabel = String(input.badgeLabel ?? '').trim() || defaultBadgeLabel;
+  const defaultIntro =
     input.status === 'APPROVED'
       ? 'A gestão nacional concluiu a análise e homologou esta solicitação no sistema.'
       : 'A gestão nacional concluiu a análise e rejeitou esta solicitação no sistema.';
+  const intro = String(input.intro ?? '').trim() || defaultIntro;
+  const bodyText =
+    String(input.bodyText ?? '').trim() ||
+    'Este aviso confirma a decisão sobre a sua solicitação vinculada à comissão CPCA. Abaixo estão os principais detalhes para consulta rápida.';
   const reason =
     input.status === 'REJECTED'
       ? String(input.decisionReason ?? '').trim() || 'Motivo não informado.'
@@ -112,7 +124,7 @@ export function buildCpcaApprovalDecisionEmail(
     Boolean(item?.value),
   );
 
-  const nextSteps =
+  const defaultNextSteps =
     input.status === 'APPROVED'
       ? [
           'A atualização já foi registrada no sistema.',
@@ -123,6 +135,10 @@ export function buildCpcaApprovalDecisionEmail(
           'Ajuste os dados necessários e envie uma nova solicitação quando aplicável.',
           'Você pode acompanhar o andamento pela tela de login do sistema.',
         ];
+  const nextSteps =
+    input.nextSteps && input.nextSteps.length > 0
+      ? input.nextSteps.map((step) => String(step ?? '').trim()).filter(Boolean)
+      : defaultNextSteps;
 
   const detailsHtml = details
     .map(
@@ -160,7 +176,7 @@ export function buildCpcaApprovalDecisionEmail(
         </div>
         <div style="padding: 32px;">
           <p style="margin: 0 0 18px; color: #101828; font-size: 16px; line-height: 1.6;">Olá, <strong>${escapeHtml(recipientName)}</strong>.</p>
-          <p style="margin: 0 0 24px; color: #344054; font-size: 15px; line-height: 1.7;">Este aviso confirma a decisão sobre a sua solicitação vinculada à comissão CPCA. Abaixo estão os principais detalhes para consulta rápida.</p>
+          <p style="margin: 0 0 24px; color: #344054; font-size: 15px; line-height: 1.7;">${escapeHtml(bodyText)}</p>
           <div style="padding: 20px; border-radius: 16px; background: #F8FAFC; border: 1px solid #E4E7EC;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">
               ${detailsHtml}
@@ -183,6 +199,7 @@ export function buildCpcaApprovalDecisionEmail(
     '',
     `Olá, ${recipientName}.`,
     intro,
+    bodyText,
     '',
     ...details.map((item) => `${item.label}: ${item.value}`),
     reason ? '' : null,
