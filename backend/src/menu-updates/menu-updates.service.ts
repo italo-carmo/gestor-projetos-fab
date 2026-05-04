@@ -30,9 +30,9 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
   library: ['library'],
   ai: [],
   cpca_dashboard: [],
-  cpca_cases: ['cpca_cases'],
-  cpca_commission: ['cpca_cases'],
-  cpca_coverage: ['cpca_coverage', 'cpca_cases'],
+  cpca_cases: [],
+  cpca_commission: [],
+  cpca_coverage: [],
   cpca_checklist: [],
   cpca_president_approvals: [],
   bi: ['bi', 'bi_survey'],
@@ -96,7 +96,18 @@ export class MenuUpdatesService {
     const shouldTrackCpcaApprovals = menuKeys.includes(
       'cpca_president_approvals',
     );
-    const [aggregateRows, seenRows, pendingCpcaApprovals] = await Promise.all([
+    const shouldTrackCpcaParticipantItems =
+      menuKeys.includes('cpca_cases') || menuKeys.includes('cpca_commission');
+    const cpcaParticipantContext = shouldTrackCpcaParticipantItems
+      ? await this.resolveCpcaParticipantContext(user)
+      : { isParticipant: false, omId: '', scopeOmIds: [] };
+    const [
+      aggregateRows,
+      seenRows,
+      pendingCpcaApprovals,
+      cpcaCasePendencies,
+      cpcaCommissionActionItems,
+    ] = await Promise.all([
       menuResourcePairs.length
         ? this.prisma.$queryRaw<
             Array<{
@@ -315,6 +326,13 @@ export class MenuUpdatesService {
             counts.reduce((sum: number, value: number) => sum + value, 0),
           )
         : Promise.resolve(0),
+      menuKeys.includes('cpca_cases') && cpcaParticipantContext.isParticipant
+        ? this.countCpcaOpenPendencies(cpcaParticipantContext.scopeOmIds)
+        : Promise.resolve(0),
+      menuKeys.includes('cpca_commission') &&
+      cpcaParticipantContext.isParticipant
+        ? this.countCpcaLocalApprovalRequests(cpcaParticipantContext.omId)
+        : Promise.resolve(0),
     ]);
 
     const aggregatesByMenuKey = new Map<
@@ -336,11 +354,19 @@ export class MenuUpdatesService {
     const items = menuKeys.map((menuKey) => {
       const cpcaApprovalUnreadCount =
         menuKey === 'cpca_president_approvals' ? pendingCpcaApprovals : null;
+      const cpcaParticipantUnreadCount =
+        menuKey === 'cpca_cases'
+          ? cpcaCasePendencies
+          : menuKey === 'cpca_commission'
+            ? cpcaCommissionActionItems
+            : null;
       const aggregate = aggregatesByMenuKey.get(menuKey);
       const unreadCount =
-        cpcaApprovalUnreadCount !== null
-          ? cpcaApprovalUnreadCount
-          : (aggregate?.unreadCount ?? 0);
+        cpcaParticipantUnreadCount !== null
+          ? cpcaParticipantUnreadCount
+          : cpcaApprovalUnreadCount !== null
+            ? cpcaApprovalUnreadCount
+            : (aggregate?.unreadCount ?? 0);
       const lastEventAt = aggregate?.lastEventAt ?? null;
       const seenAt = seenAtByMenuKey.get(menuKey) ?? null;
       const hasUnread = unreadCount > 0;
@@ -425,6 +451,72 @@ export class MenuUpdatesService {
     }
 
     return 0;
+  }
+
+  private async resolveCpcaParticipantContext(user: RbacUser | undefined) {
+    const userId = String(user?.id ?? '').trim();
+    const omId = String(user?.omId ?? '').trim();
+    if (!userId || !omId) {
+      return { isParticipant: false, omId: '', scopeOmIds: [] as string[] };
+    }
+
+    const [presidentCount, memberCount, coverageRows] = await Promise.all([
+      this.prisma.cpcaCommissionPresident.count({
+        where: { omId, userId },
+      }),
+      this.prisma.cpcaCommissionMember.count({
+        where: { omId, userId },
+      }),
+      this.prisma.cpcaCommissionCoverageOm.findMany({
+        where: { managerOmId: omId },
+        select: { managedOmId: true },
+      }),
+    ]);
+    const isParticipant = presidentCount + memberCount > 0;
+    if (!isParticipant) {
+      return { isParticipant: false, omId, scopeOmIds: [] as string[] };
+    }
+
+    const scopeOmIds = Array.from(
+      new Set([
+        omId,
+        ...coverageRows
+          .map((row) => String(row.managedOmId ?? '').trim())
+          .filter(Boolean),
+      ]),
+    );
+
+    return { isParticipant, omId, scopeOmIds };
+  }
+
+  private async countCpcaOpenPendencies(scopeOmIds: string[]) {
+    if (scopeOmIds.length === 0) return 0;
+    const threadModel = (this.prisma as any).cpcComplaintCipavdThread;
+    const count = await threadModel.count({
+      where: {
+        type: 'PENDENCY',
+        status: 'OPEN',
+        complaintCase: {
+          workflowScope: 'CPCA',
+          omId: { in: scopeOmIds },
+        },
+      },
+    });
+    return this.toUnreadCount(count);
+  }
+
+  private async countCpcaLocalApprovalRequests(omId: string) {
+    if (!omId) return 0;
+    const [nominationRequests, coverageRequests] = await Promise.all([
+      this.prisma.cpcaPresidentNominationRequest.count({
+        where: { omId, status: 'PENDING' },
+      }),
+      this.prisma.cpcaCommissionCoverageRequest.count({
+        where: { omId, status: 'PENDING' },
+      }),
+    ]);
+
+    return nominationRequests + coverageRequests;
   }
 
   private normalizeMenuKeys(rawMenuKeys: string | string[] | undefined) {

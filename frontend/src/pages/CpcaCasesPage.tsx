@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -412,6 +413,32 @@ const OCCURRENCE_FORM_OPTIONS = [
 
 const NOT_INFORMED_RANK_VALUE = "NAO INFORMADO";
 const NOT_INFORMED_RANK_LABEL = "Não informado";
+const LONG_SELECT_MENU_PROPS = {
+  PaperProps: {
+    sx: {
+      maxHeight: 360,
+    },
+  },
+  MenuListProps: {
+    dense: true,
+  },
+};
+const RANK_SELECT_MENU_PROPS = {
+  ...LONG_SELECT_MENU_PROPS,
+  PaperProps: {
+    sx: {
+      maxHeight: 300,
+    },
+  },
+};
+const MULTI_SELECT_CHECKBOX_SX = {
+  p: 0,
+  mr: 1,
+  color: "text.secondary",
+  "&.Mui-checked": {
+    color: "primary.main",
+  },
+};
 
 const PROCEDURE_CURRENT_SITUATION_OPTIONS = [
   { value: "EM_ANDAMENTO", label: "Em andamento" },
@@ -1686,6 +1713,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               setForm((prev) => ({ ...prev, localityId: e.target.value }))
             }
             disabled={!isNationalScope && (isSmifWorkflow || !isCreateMode)}
+            SelectProps={{ MenuProps: LONG_SELECT_MENU_PROPS }}
           >
             {(isNationalScope || (!isSmifWorkflow && isCreateMode)) && (
               <MenuItem value="">Selecionar</MenuItem>
@@ -1712,6 +1740,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 complaintType: inferred ?? prev.complaintType,
               }));
             }}
+            SelectProps={{ MenuProps: LONG_SELECT_MENU_PROPS }}
           >
             <MenuItem value="">Selecionar</MenuItem>
             {DETAILED_VIOLENCE_TYPE_OPTIONS.map((item) => (
@@ -1808,6 +1837,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               }))
             }
             sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
+            SelectProps={{ MenuProps: LONG_SELECT_MENU_PROPS }}
           >
             <MenuItem value="">Selecionar</MenuItem>
             {OCCURRENCE_LOCATION_OPTIONS.map((item) => (
@@ -1832,6 +1862,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             onChange={(e) =>
               setForm((prev) => ({ ...prev, aggressorRank: e.target.value }))
             }
+            SelectProps={{ MenuProps: RANK_SELECT_MENU_PROPS }}
           >
             {rankOptionsWithUnknown.map((rank: string) => (
               <MenuItem key={rank} value={rank}>
@@ -1903,6 +1934,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 };
               })
             }
+            SelectProps={{ MenuProps: RANK_SELECT_MENU_PROPS }}
           >
             {rankOptionsWithUnknown.map((rank: string) => (
               <MenuItem key={rank} value={rank}>
@@ -1984,6 +2016,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, notifierRank: e.target.value }))
               }
+              SelectProps={{ MenuProps: RANK_SELECT_MENU_PROPS }}
             >
               {rankOptionsWithUnknown.map((rank: string) => (
                 <MenuItem key={`notifier-rank-${rank}`} value={rank}>
@@ -2105,6 +2138,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             SelectProps={{
               multiple: true,
               displayEmpty: true,
+              MenuProps: LONG_SELECT_MENU_PROPS,
               renderValue: (selected) => {
                 const selectedValues = Array.isArray(selected)
                   ? selected.map((item) => String(item).trim()).filter(Boolean)
@@ -2120,6 +2154,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           >
             {OCCURRENCE_FORM_OPTIONS.map((item) => (
               <MenuItem key={item.value} value={item.value}>
+                <Checkbox
+                  size="small"
+                  disableRipple
+                  checked={form.occurrenceForms.includes(item.value)}
+                  sx={MULTI_SELECT_CHECKBOX_SX}
+                />
                 {item.label}
               </MenuItem>
             ))}
@@ -2796,6 +2836,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 value={localityId}
                 onChange={(e) => updateParam("localityId", e.target.value)}
                 sx={{ minWidth: 220 }}
+                SelectProps={{ MenuProps: LONG_SELECT_MENU_PROPS }}
               >
                 <MenuItem value="">Todas</MenuItem>
                 {localities.map((loc: any) => (
@@ -2814,6 +2855,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 updateParam("detailedViolenceType", e.target.value)
               }
               sx={{ minWidth: 280 }}
+              SelectProps={{ MenuProps: LONG_SELECT_MENU_PROPS }}
             >
               <MenuItem value="">Todos</MenuItem>
               {DETAILED_VIOLENCE_TYPE_OPTIONS.map((item) => (
