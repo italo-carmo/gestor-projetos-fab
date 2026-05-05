@@ -34,6 +34,10 @@ export class SmifComplaintsService {
     return this.cpca.getById(id, user, SMIF_WORKFLOW_CONTEXT);
   }
 
+  async markSeen(id: string, user?: RbacUser) {
+    return this.cpca.markComplaintSeen(id, user, SMIF_WORKFLOW_CONTEXT);
+  }
+
   async pendingSummary(
     filters: {
       localityId?: string;

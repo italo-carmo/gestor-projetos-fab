@@ -71,6 +71,7 @@ model User {
   biGsdEvaluationCardSettings             BiGsdEvaluationCardSetting[]     @relation("BiGsdEvaluationCardSettingUpdatedBy")
   cpcaCasesCreated                        CpcComplaintCase[]               @relation("CpcComplaintCaseCreatedBy")
   cpcaCasesUpdated                        CpcComplaintCase[]               @relation("CpcComplaintCaseUpdatedBy")
+  cpcaCaseReads                           CpcComplaintCaseRead[]
   cpcaCaseComments                        CpcComplaintComment[]            @relation("CpcComplaintCommentAuthor")
   cpcaCaseCipavdThreadsCreated            CpcComplaintCipavdThread[]       @relation("CpcComplaintCipavdThreadCreatedBy")
   cpcaCaseCipavdThreadsResolved           CpcComplaintCipavdThread[]       @relation("CpcComplaintCipavdThreadResolvedBy")
@@ -1429,6 +1430,7 @@ model CpcComplaintCase {
   comments      CpcComplaintComment[]
   cipavdThreads CpcComplaintCipavdThread[]
   statusHistory CpcComplaintStatusHistory[]
+  reads         CpcComplaintCaseRead[]
 
   @@index([omId, status])
   @@index([localityId, status])
@@ -1438,6 +1440,21 @@ model CpcComplaintCase {
   @@index([procedureType])
   @@index([reportedAt])
   @@index([workflowScope, reportedAt])
+}
+
+model CpcComplaintCaseRead {
+  id              String   @id @default(cuid())
+  userId          String
+  complaintCaseId String
+  seenAt          DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  complaintCase CpcComplaintCase @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, complaintCaseId])
+  @@index([userId, seenAt])
+  @@index([complaintCaseId, seenAt])
 }
 
 model CpcComplaintComment {

@@ -15,6 +15,7 @@ export type CpcaApprovalDecisionEmailInput = {
   managedLocalitiesLabel?: string | null;
   decidedAt?: Date | string | null;
   decisionReason?: string | null;
+  reasonLabel?: string | null;
   heading?: string | null;
   badgeLabel?: string | null;
   intro?: string | null;
@@ -95,6 +96,8 @@ export function buildCpcaApprovalDecisionEmail(
     input.status === 'REJECTED'
       ? String(input.decisionReason ?? '').trim() || 'Motivo não informado.'
       : null;
+  const reasonLabel =
+    String(input.reasonLabel ?? '').trim() || 'Motivo informado';
 
   const details = [
     localityLabel ? { label: 'OM', value: localityLabel } : null,
@@ -160,7 +163,7 @@ export function buildCpcaApprovalDecisionEmail(
   const reasonHtml = reason
     ? `
       <div style="margin-top: 20px; padding: 16px; border-radius: 14px; background: #FEF3F2; border: 1px solid #FECDCA;">
-        <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #B42318; margin-bottom: 8px;">Motivo informado</div>
+        <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #B42318; margin-bottom: 8px;">${escapeHtml(reasonLabel)}</div>
         <div style="font-size: 14px; line-height: 1.6; color: #7A271A;">${escapeHtml(reason)}</div>
       </div>`
     : '';
@@ -203,7 +206,7 @@ export function buildCpcaApprovalDecisionEmail(
     '',
     ...details.map((item) => `${item.label}: ${item.value}`),
     reason ? '' : null,
-    reason ? `Motivo informado: ${reason}` : null,
+    reason ? `${reasonLabel}: ${reason}` : null,
     '',
     'Próximos passos:',
     ...nextSteps.map((step, index) => `${index + 1}. ${step}`),

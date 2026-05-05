@@ -3166,6 +3166,7 @@ export function useMenuUpdates(menuKeys: string[], enabled = true) {
           hasUnread: boolean;
           lastEventAt: string | null;
           seenAt: string | null;
+          clearedByMenuSeen?: boolean;
         }>;
       },
     enabled: enabled && normalizedKeys.length > 0,
@@ -3280,6 +3281,19 @@ export function useCpcaCase(id: string, enabled = true) {
   });
 }
 
+export function useMarkCpcaCaseSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post(`/cpca-cases/${encodeURIComponent(id)}/seen`)).data,
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(id) });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
 export function useCpcaCasePendingSummary(
   filters: Record<string, any>,
   enabled = true,
@@ -3311,6 +3325,7 @@ export function useCreateCpcaCase() {
       (await api.post("/cpca-cases", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
 }
@@ -3826,6 +3841,19 @@ export function useSmifComplaintCase(id: string, enabled = true) {
   });
 }
 
+export function useMarkSmifComplaintSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post(`/smif-complaints/${encodeURIComponent(id)}/seen`)).data,
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: qk.smifComplaintCase(id) });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+    },
+  });
+}
+
 export function useSmifComplaintPendingSummary(
   filters: Record<string, any>,
   enabled = true,
@@ -3850,6 +3878,7 @@ export function useCreateSmifComplaintCase() {
       (await api.post("/smif-complaints", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
 }

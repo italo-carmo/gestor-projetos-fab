@@ -47,6 +47,27 @@ describe('buildCpcaApprovalDecisionEmail', () => {
     expect(message.text).not.toContain('CPCA COMGEP');
   });
 
+  it('permite personalizar o rotulo do bloco vermelho', () => {
+    const message = buildCpcaApprovalDecisionEmail({
+      requestTypeLabel: 'Pendência em denúncia CPCA',
+      recipientName: 'Maj Silva',
+      status: 'REJECTED',
+      locality: {
+        code: 'CCA BR',
+        name: 'CCA BR',
+      },
+      heading: 'Pendência registrada em denúncia CPCA',
+      decisionReason: 'Ajustar documentação pendente.',
+      reasonLabel: 'Texto da pendência',
+    });
+
+    expect(message.html).toContain('Texto da pendência');
+    expect(message.text).toContain(
+      'Texto da pendência: Ajustar documentação pendente.',
+    );
+    expect(message.text).not.toContain('Motivo informado:');
+  });
+
   it('permite reutilizar o modelo para notificar cadastro de membro sem duplicar OM', () => {
     const message = buildCpcaApprovalDecisionEmail({
       requestTypeLabel: 'Cadastro como membro da CPCA',

@@ -50,6 +50,23 @@ function createAuditMock() {
   };
 }
 
+function mockCpcaPresidentNotificationTarget(prisma: any) {
+  prisma.om.findUnique.mockResolvedValue({
+    id: 'om-1',
+    code: 'CCA BR',
+    name: 'CCA BR',
+    cpcaCommissionPresident: {
+      id: 'pres-1',
+      user: {
+        id: 'president-1',
+        name: 'Presidente CPCA',
+        email: 'PRESIDENTE@FAB.MIL.BR',
+      },
+    },
+    cpcaCoverageAsManaged: [],
+  });
+}
+
 function makeUser(args: {
   id?: string;
   omId?: string;
@@ -190,20 +207,7 @@ describe('CpcaService CIPAVD threads', () => {
       workflowScope: 'CPCA',
     });
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue(null);
-    prisma.om.findUnique.mockResolvedValue({
-      id: 'om-1',
-      code: 'CCA BR',
-      name: 'CCA BR',
-      cpcaCommissionPresident: {
-        id: 'pres-1',
-        user: {
-          id: 'president-1',
-          name: 'Presidente CPCA',
-          email: 'PRESIDENTE@FAB.MIL.BR',
-        },
-      },
-      cpcaCoverageAsManaged: [],
-    });
+    mockCpcaPresidentNotificationTarget(prisma);
     prisma.__tx.cpcComplaintCipavdThread.create.mockResolvedValue({
       id: 'thread-1',
     });
@@ -255,6 +259,18 @@ describe('CpcaService CIPAVD threads', () => {
     );
     const message = mail.sendMail.mock.calls[0][0];
     expect(message.html).toContain('#B42318');
+    expect(message.html).toContain('Texto da pendência');
+    expect(message.html).toContain('Ajustar documentação pendente.');
+    expect(message.html).not.toMatch(/<td[^>]*>Pendência<\/td>/);
+    expect(message.text).toContain(
+      'Texto da pendência: Ajustar documentação pendente.',
+    );
+    expect(message.text).not.toContain(
+      'Motivo informado: Motivo não informado.',
+    );
+    expect(message.text).not.toContain(
+      '\nPendência: Ajustar documentação pendente.',
+    );
     expect(message.subject).not.toContain('CCA BR · CCA BR');
     expect(message.html).not.toContain('CCA BR · CCA BR');
     expect(message.text).not.toContain('CCA BR · CCA BR');
@@ -444,6 +460,81 @@ describe('CpcaService CIPAVD threads', () => {
     );
   });
 
+  it('envia e-mail ao presidente CPCA quando a gestão atualiza pendência aberta', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const mail = { sendMail: jest.fn().mockResolvedValue({}) };
+    const service = new CpcaService(
+      prisma,
+      audit as any,
+      undefined,
+      mail as any,
+    );
+    const user = makeUser({
+      id: 'manager-1',
+      roleName: 'COMGEP',
+      scope: 'NATIONAL',
+    });
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue({
+      id: 'case-1',
+      omId: 'om-1',
+      localityId: 'om-1',
+      caseNumber: 'CPCA-2026-BACO-00001',
+      workflowScope: 'CPCA',
+    });
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue(null);
+    mockCpcaPresidentNotificationTarget(prisma);
+    prisma.cpcComplaintCipavdThread.findUnique.mockResolvedValue({
+      id: 'thread-1',
+      complaintCaseId: 'case-1',
+      type: 'PENDENCY',
+      status: 'OPEN',
+      reopenedCount: 0,
+      complaintCase: { workflowScope: 'CPCA' },
+    });
+    prisma.cpcComplaintCipavdMessage.findFirst.mockResolvedValue({
+      id: 'message-1',
+      body: 'Texto original da pendência.',
+    });
+    prisma.__tx.cpcComplaintCipavdMessage.update.mockResolvedValue({
+      id: 'message-1',
+    });
+    prisma.__tx.cpcComplaintCipavdThread.findUnique.mockResolvedValue({
+      id: 'thread-1',
+      type: 'PENDENCY',
+      status: 'OPEN',
+      reopenedCount: 0,
+      createdAt: new Date('2026-04-22T10:00:00.000Z'),
+      resolvedAt: null,
+      closedAt: null,
+      lastMessageAt: new Date('2026-04-22T10:00:00.000Z'),
+      createdBy: { id: user.id, name: user.name, email: user.email },
+      resolvedBy: null,
+      closedBy: null,
+      messages: [],
+    });
+
+    await service.updateCipavdThread(
+      'case-1',
+      'thread-1',
+      { text: 'Atentar para o nome no registro do fato.' },
+      user as any,
+      CPCA_WORKFLOW_CONTEXT,
+    );
+
+    expect(mail.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'presidente@fab.mil.br',
+        subject:
+          'Gestor CIPAVD | Pendência atualizada em denúncia CPCA | CCA BR',
+        text: expect.stringContaining(
+          'Texto da pendência: Atentar para o nome no registro do fato.',
+        ),
+      }),
+    );
+  });
+
   it('bloqueia a resolução da pendência quando o usuário não é o presidente da OM', async () => {
     const prisma = createPrismaMock();
     const service = new CpcaService(prisma, createAuditMock() as any);
@@ -479,7 +570,13 @@ describe('CpcaService CIPAVD threads', () => {
   it('permite que a gestão reabra uma pendência resolvida mantendo o histórico', async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();
-    const service = new CpcaService(prisma, audit as any);
+    const mail = { sendMail: jest.fn().mockResolvedValue({}) };
+    const service = new CpcaService(
+      prisma,
+      audit as any,
+      undefined,
+      mail as any,
+    );
     const user = makeUser({
       id: 'manager-1',
       roleName: 'TI',
@@ -494,6 +591,7 @@ describe('CpcaService CIPAVD threads', () => {
       workflowScope: 'CPCA',
     });
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue(null);
+    mockCpcaPresidentNotificationTarget(prisma);
     prisma.cpcComplaintCipavdThread.findUnique.mockResolvedValue({
       id: 'thread-1',
       complaintCaseId: 'case-1',
@@ -561,12 +659,27 @@ describe('CpcaService CIPAVD threads', () => {
         entityId: 'case-1',
       }),
     );
+    expect(mail.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'presidente@fab.mil.br',
+        subject: 'Gestor CIPAVD | Pendência reaberta em denúncia CPCA | CCA BR',
+        text: expect.stringContaining(
+          'Texto da pendência: Ainda falta complementar o despacho final.',
+        ),
+      }),
+    );
   });
 
   it('permite que a gestão valide e finalize a pendência com solução registrada', async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();
-    const service = new CpcaService(prisma, audit as any);
+    const mail = { sendMail: jest.fn().mockResolvedValue({}) };
+    const service = new CpcaService(
+      prisma,
+      audit as any,
+      undefined,
+      mail as any,
+    );
     const user = makeUser({
       id: 'manager-1',
       roleName: 'TI',
@@ -581,6 +694,7 @@ describe('CpcaService CIPAVD threads', () => {
       workflowScope: 'CPCA',
     });
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue(null);
+    mockCpcaPresidentNotificationTarget(prisma);
     prisma.cpcComplaintCipavdThread.findUnique.mockResolvedValue({
       id: 'thread-1',
       complaintCaseId: 'case-1',
@@ -670,6 +784,19 @@ describe('CpcaService CIPAVD threads', () => {
         entityId: 'case-1',
       }),
     );
+    expect(mail.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'presidente@fab.mil.br',
+        subject:
+          'Gestor CIPAVD | Pendência finalizada com sucesso em denúncia CPCA | CCA BR',
+        html: expect.stringContaining('Pendência finalizada'),
+        text: expect.stringContaining(
+          'Validação da gestão: Validação concluída pela gestão nacional.',
+        ),
+      }),
+    );
+    const message = mail.sendMail.mock.calls[0][0];
+    expect(message.html).toContain('#0B7A3B');
   });
 
   it('permite que a gestão exclua pendência aberta sem histórico da comissão', async () => {

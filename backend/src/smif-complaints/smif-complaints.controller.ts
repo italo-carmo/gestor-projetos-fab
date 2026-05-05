@@ -89,6 +89,12 @@ export class SmifComplaintsController {
     return this.smifComplaints.getById(id, user);
   }
 
+  @Post(':id/seen')
+  @RequirePermission('smif_complaints', 'view')
+  markSeen(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.smifComplaints.markSeen(id, user);
+  }
+
   @Post()
   @RequirePermission('smif_complaints', 'create')
   create(@Body() dto: CreateCpcaCaseDto, @CurrentUser() user: RbacUser) {

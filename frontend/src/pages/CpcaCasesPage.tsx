@@ -43,6 +43,8 @@ import {
   useDeleteCpcaCase,
   useFinalizeCpcaCaseCipavdThread,
   useLocalities,
+  useMarkCpcaCaseSeen,
+  useMarkSmifComplaintSeen,
   useMe,
   usePostoOptions,
   useReopenCpcaCaseCipavdThread,
@@ -797,6 +799,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const createCpcaCase = useCreateCpcaCase();
   const updateCpcaCase = useUpdateCpcaCase();
   const deleteCpcaCase = useDeleteCpcaCase();
+  const markCpcaCaseSeen = useMarkCpcaCaseSeen();
   const createCpcaCipavdThread = useCreateCpcaCaseCipavdThread();
   const updateCpcaCipavdThread = useUpdateCpcaCaseCipavdThread();
   const removeCpcaCipavdThread = useRemoveCpcaCaseCipavdThread();
@@ -806,6 +809,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const createSmifCase = useCreateSmifComplaintCase();
   const updateSmifCase = useUpdateSmifComplaintCase();
   const deleteSmifCase = useDeleteSmifComplaintCase();
+  const markSmifCaseSeen = useMarkSmifComplaintSeen();
   const createSmifCipavdThread = useCreateSmifComplaintCaseCipavdThread();
   const updateSmifCipavdThread = useUpdateSmifComplaintCaseCipavdThread();
   const removeSmifCipavdThread = useRemoveSmifComplaintCaseCipavdThread();
@@ -815,6 +819,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const createCase = isSmifWorkflow ? createSmifCase : createCpcaCase;
   const updateCase = isSmifWorkflow ? updateSmifCase : updateCpcaCase;
   const deleteCase = isSmifWorkflow ? deleteSmifCase : deleteCpcaCase;
+  const markCaseSeen = isSmifWorkflow ? markSmifCaseSeen : markCpcaCaseSeen;
   const createCipavdThread = isSmifWorkflow
     ? createSmifCipavdThread
     : createCpcaCipavdThread;
@@ -1229,8 +1234,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   };
 
   const openDetails = (id: string, threadId?: string) => {
+    const normalizedId = String(id ?? "").trim();
+    if (!normalizedId) return;
     setIsCreateMode(false);
-    setSelectedId(id);
+    setSelectedId(normalizedId);
     setConfirmDeleteOpen(false);
     setSummarySaveState("idle");
     setSummaryPrivacyReview(null);
@@ -1242,6 +1249,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setActiveStep(0);
     setArchiveReasonDialog(null);
     setDrawerOpen(true);
+    if (isNationalScope) {
+      markCaseSeen.mutate(normalizedId);
+    }
   };
 
   const closeDrawer = () => {
@@ -2989,6 +2999,19 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 item.caseNumber,
                               )}
                             </Typography>
+                            {item.isNewForViewer && (
+                              <Chip
+                                size="small"
+                                label="Novo"
+                                sx={{
+                                  height: 22,
+                                  fontWeight: 800,
+                                  color: "#075985",
+                                  bgcolor: "rgba(14, 165, 233, 0.14)",
+                                  border: "1px solid rgba(14, 165, 233, 0.28)",
+                                }}
+                              />
+                            )}
                             {inconsistencies.map(
                               (inconsistency: CpcaCaseInconsistency) => (
                                 <Chip

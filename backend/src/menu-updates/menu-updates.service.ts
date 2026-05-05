@@ -6,6 +6,7 @@ import {
   hasPermission,
   normalizeRoleName,
   ROLE_COMANDANTE_COMGEP,
+  ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from '../rbac/role-access';
 import { Prisma } from '@prisma/client';
@@ -51,6 +52,11 @@ const IGNORED_AUDIT_ACTIONS = ['view', 'list', 'read', 'query', 'search'];
 const CPCA_APPROVAL_ROLE_NAMES = new Set([
   normalizeRoleName(ROLE_TI),
   normalizeRoleName(ROLE_COMANDANTE_COMGEP),
+]);
+const COMPLAINT_NOTIFICATION_ROLE_NAMES = new Set([
+  normalizeRoleName(ROLE_TI),
+  normalizeRoleName(ROLE_COMANDANTE_COMGEP),
+  normalizeRoleName(ROLE_COORDENACAO_CIPAVD),
 ]);
 
 @Injectable()
@@ -101,9 +107,16 @@ export class MenuUpdatesService {
     const cpcaParticipantContext = shouldTrackCpcaParticipantItems
       ? await this.resolveCpcaParticipantContext(user)
       : { isParticipant: false, omId: '', scopeOmIds: [] };
+    const complaintNotificationMenus = this.resolveComplaintNotificationMenus({
+      menuKeys,
+      user,
+      canSeeCpcaCasesNational,
+      canSeeSmifComplaintsNational,
+    });
     const [
       aggregateRows,
       seenRows,
+      managementComplaintRows,
       pendingCpcaApprovals,
       cpcaCasePendencies,
       cpcaCommissionActionItems,
@@ -311,6 +324,12 @@ export class MenuUpdatesService {
             AND "menuKey" IN (${Prisma.join(menuKeys)})
         `,
       ),
+      complaintNotificationMenus.length
+        ? this.countUnreadComplaintNotifications(
+            userId,
+            complaintNotificationMenus,
+          )
+        : Promise.resolve([]),
       shouldTrackCpcaApprovals && this.isCpcaApprovalsManager(user)
         ? Promise.all([
             this.prisma.cpcaPresidentSelfRegistration.count({
@@ -351,7 +370,20 @@ export class MenuUpdatesService {
       seenAtByMenuKey.set(row.menuKey, row.seenAt);
     }
 
+    const managementComplaintsByMenuKey = new Map<
+      string,
+      { unreadCount: number; lastEventAt: Date | null }
+    >();
+    for (const row of managementComplaintRows) {
+      managementComplaintsByMenuKey.set(row.menuKey, {
+        unreadCount: this.toUnreadCount(row.unreadCount),
+        lastEventAt: row.lastEventAt ?? null,
+      });
+    }
+
     const items = menuKeys.map((menuKey) => {
+      const managementComplaintUnread =
+        managementComplaintsByMenuKey.get(menuKey) ?? null;
       const cpcaApprovalUnreadCount =
         menuKey === 'cpca_president_approvals' ? pendingCpcaApprovals : null;
       const cpcaParticipantUnreadCount =
@@ -362,14 +394,23 @@ export class MenuUpdatesService {
             : null;
       const aggregate = aggregatesByMenuKey.get(menuKey);
       const unreadCount =
-        cpcaParticipantUnreadCount !== null
-          ? cpcaParticipantUnreadCount
-          : cpcaApprovalUnreadCount !== null
-            ? cpcaApprovalUnreadCount
-            : (aggregate?.unreadCount ?? 0);
-      const lastEventAt = aggregate?.lastEventAt ?? null;
+        managementComplaintUnread !== null
+          ? managementComplaintUnread.unreadCount
+          : cpcaParticipantUnreadCount !== null
+            ? cpcaParticipantUnreadCount
+            : cpcaApprovalUnreadCount !== null
+              ? cpcaApprovalUnreadCount
+              : (aggregate?.unreadCount ?? 0);
+      const lastEventAt =
+        managementComplaintUnread?.lastEventAt ??
+        aggregate?.lastEventAt ??
+        null;
       const seenAt = seenAtByMenuKey.get(menuKey) ?? null;
       const hasUnread = unreadCount > 0;
+      const clearedByMenuSeen =
+        managementComplaintUnread === null &&
+        cpcaParticipantUnreadCount === null &&
+        cpcaApprovalUnreadCount === null;
 
       return {
         menuKey,
@@ -377,6 +418,7 @@ export class MenuUpdatesService {
         hasUnread,
         lastEventAt: lastEventAt ? lastEventAt.toISOString() : null,
         seenAt: seenAt ? seenAt.toISOString() : null,
+        clearedByMenuSeen,
       };
     });
 
@@ -519,6 +561,98 @@ export class MenuUpdatesService {
     return nominationRequests + coverageRequests;
   }
 
+  private resolveComplaintNotificationMenus(input: {
+    menuKeys: string[];
+    user?: RbacUser;
+    canSeeCpcaCasesNational: boolean;
+    canSeeSmifComplaintsNational: boolean;
+  }) {
+    if (!this.isComplaintNotificationManager(input.user)) {
+      return [] as Array<{ menuKey: string; workflowScope: 'CPCA' | 'SMIF' }>;
+    }
+
+    const menus: Array<{ menuKey: string; workflowScope: 'CPCA' | 'SMIF' }> =
+      [];
+    if (
+      input.menuKeys.includes('cpca_cases') &&
+      input.canSeeCpcaCasesNational
+    ) {
+      menus.push({ menuKey: 'cpca_cases', workflowScope: 'CPCA' });
+    }
+    if (
+      input.menuKeys.includes('smif_complaints') &&
+      input.canSeeSmifComplaintsNational
+    ) {
+      menus.push({ menuKey: 'smif_complaints', workflowScope: 'SMIF' });
+    }
+    return menus;
+  }
+
+  private async countUnreadComplaintNotifications(
+    userId: string,
+    menus: Array<{ menuKey: string; workflowScope: 'CPCA' | 'SMIF' }>,
+  ) {
+    if (menus.length === 0) {
+      return [] as Array<{
+        menuKey: string;
+        unreadCount: bigint | number | string | null;
+        lastEventAt: Date | null;
+      }>;
+    }
+
+    return this.prisma.$queryRaw<
+      Array<{
+        menuKey: string;
+        unreadCount: bigint | number | string | null;
+        lastEventAt: Date | null;
+      }>
+    >(Prisma.sql`
+      WITH "target_menus" ("menuKey", "workflowScope") AS (
+        VALUES ${Prisma.join(
+          menus.map(
+            (item) => Prisma.sql`(${item.menuKey}, ${item.workflowScope})`,
+          ),
+        )}
+      ),
+      "notification_events" AS (
+        SELECT
+          tm."menuKey" AS "menuKey",
+          c."id" AS "complaintCaseId",
+          GREATEST(
+            c."createdAt",
+            COALESCE(
+              MAX(COALESCE(t."resolvedAt", t."lastMessageAt")),
+              c."createdAt"
+            )
+          ) AS "lastEventAt"
+        FROM "target_menus" tm
+        JOIN "CpcComplaintCase" c
+          ON c."workflowScope"::text = tm."workflowScope"
+        LEFT JOIN "CpcComplaintCipavdThread" t
+          ON t."complaintCaseId" = c."id"
+         AND t."type"::text = 'PENDENCY'
+         AND t."status"::text = 'RESOLVED'
+        GROUP BY tm."menuKey", c."id", c."createdAt"
+      ),
+      "unread_events" AS (
+        SELECT ne."menuKey", ne."lastEventAt"
+        FROM "notification_events" ne
+        LEFT JOIN "CpcComplaintCaseRead" r
+          ON r."complaintCaseId" = ne."complaintCaseId"
+         AND r."userId" = ${userId}
+        WHERE r."id" IS NULL OR r."seenAt" < ne."lastEventAt"
+      )
+      SELECT
+        tm."menuKey" AS "menuKey",
+        COUNT(ue."lastEventAt") AS "unreadCount",
+        MAX(ue."lastEventAt") AS "lastEventAt"
+      FROM "target_menus" tm
+      LEFT JOIN "unread_events" ue
+        ON ue."menuKey" = tm."menuKey"
+      GROUP BY tm."menuKey"
+    `);
+  }
+
   private normalizeMenuKeys(rawMenuKeys: string | string[] | undefined) {
     const defaultKeys = Object.keys(MENU_UPDATE_RESOURCES).sort((a, b) =>
       a.localeCompare(b, 'pt-BR'),
@@ -565,6 +699,18 @@ export class MenuUpdatesService {
       ),
     );
     for (const roleName of CPCA_APPROVAL_ROLE_NAMES) {
+      if (roleNames.has(roleName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private isComplaintNotificationManager(user?: RbacUser) {
+    const roleNames = new Set(
+      (user?.roles ?? []).map((role) => normalizeRoleName(role.name)),
+    );
+    for (const roleName of COMPLAINT_NOTIFICATION_ROLE_NAMES) {
       if (roleNames.has(roleName)) {
         return true;
       }

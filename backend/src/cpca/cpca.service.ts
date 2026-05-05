@@ -247,19 +247,47 @@ export class CpcaService {
             complaintCaseId: true,
             type: true,
             status: true,
+            resolvedAt: true,
             lastMessageAt: true,
           },
         })
       : [];
+    const shouldTrackViewerNotifications =
+      this.shouldTrackComplaintViewerNotifications(user);
+    const readRows =
+      shouldTrackViewerNotifications && complaintCaseIds.length
+        ? await (this.prisma as any).cpcComplaintCaseRead.findMany({
+            where: {
+              userId: String(user?.id ?? ''),
+              complaintCaseId: { in: complaintCaseIds },
+            },
+            select: { complaintCaseId: true, seenAt: true },
+          })
+        : [];
+    const seenAtByCaseId = new Map<string, Date | null>(
+      (readRows ?? []).map((row: any) => [
+        String(row?.complaintCaseId ?? ''),
+        row?.seenAt ?? null,
+      ]),
+    );
+    const cipavdThreadsByCaseId =
+      this.groupCipavdThreadsByCaseId(cipavdThreads);
     const cipavdSummaryByCaseId =
       this.buildCipavdSummaryByCaseId(cipavdThreads);
 
     return {
       items: (items ?? []).map((item: any) => {
+        const caseId = String(item?.id ?? '');
         const serialized = this.serializeComplaint(item);
         const cipavdCommentsSummary =
-          cipavdSummaryByCaseId.get(String(item?.id ?? '')) ??
-          this.buildEmptyCipavdSummary();
+          cipavdSummaryByCaseId.get(caseId) ?? this.buildEmptyCipavdSummary();
+        const viewerNotification = shouldTrackViewerNotifications
+          ? this.buildComplaintViewerNotification(
+              item,
+              cipavdThreadsByCaseId.get(caseId) ?? [],
+              seenAtByCaseId.get(caseId) ?? null,
+            )
+          : null;
         const inconsistencies =
           workflowContext.workflowScope === 'CPCA'
             ? getCpcaCaseInconsistencies(serialized)
@@ -274,6 +302,8 @@ export class CpcaService {
           comments: undefined,
           cipavdCommentsSummary,
           inconsistencies,
+          viewerNotification,
+          isNewForViewer: Boolean(viewerNotification?.isNew),
         };
       }),
       page,
@@ -1354,9 +1384,12 @@ export class CpcaService {
       workflowContext,
     );
 
+    const viewerNotification = await this.markComplaintSeenRecord(item, user);
     const cipavdAccess = await this.resolveCipavdAccess(item, user);
     return {
       ...this.serializeComplaint(item),
+      viewerNotification,
+      isNewForViewer: Boolean(viewerNotification?.isNew),
       cipavdComments: {
         access: cipavdAccess,
         summary: this.buildCipavdSummary(item.cipavdThreads ?? []),
@@ -1364,6 +1397,56 @@ export class CpcaService {
           this.serializeCipavdThread(thread),
         ),
       },
+    };
+  }
+
+  async markComplaintSeen(
+    id: string,
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const complaintModel = (this.prisma as any).cpcComplaintCase;
+    const item = await complaintModel.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        caseNumber: true,
+        workflowScope: true,
+        omId: true,
+        localityId: true,
+        createdAt: true,
+        reportedAt: true,
+        cipavdThreads: {
+          select: {
+            type: true,
+            status: true,
+            resolvedAt: true,
+            lastMessageAt: true,
+          },
+        },
+      },
+    });
+
+    if (!item) throwError('NOT_FOUND');
+    if (item.workflowScope !== workflowContext.workflowScope) {
+      throwError('NOT_FOUND');
+    }
+
+    await this.assertCaseAccess(
+      {
+        localityId: item.omId ?? item.localityId ?? '',
+        caseNumber: item.caseNumber,
+      },
+      user,
+      workflowContext,
+    );
+
+    const viewerNotification = await this.markComplaintSeenRecord(item, user);
+    return {
+      ok: true,
+      tracked: Boolean(viewerNotification?.tracked),
+      viewerNotification,
     };
   }
 
@@ -2289,6 +2372,7 @@ export class CpcaService {
     if (!text) {
       throwError('VALIDATION_ERROR', { field: 'text', reason: 'required' });
     }
+    const now = new Date();
 
     const currentMessage = await (
       this.prisma as any
@@ -2346,6 +2430,16 @@ export class CpcaService {
         previousText: currentMessage.body,
         nextText: text,
       },
+    });
+
+    await this.notifyCpcaPresidentOfPendency({
+      complaint,
+      threadId,
+      text,
+      actorName: user?.name ?? user?.email ?? null,
+      createdAt: now,
+      event: 'updated',
+      context: workflowContext,
     });
 
     return this.serializeCipavdThread(updated);
@@ -2439,6 +2533,16 @@ export class CpcaService {
         omId: complaint.omId,
         workflowScope: workflowContext.workflowScope,
       },
+    });
+
+    await this.notifyCpcaPresidentOfPendency({
+      complaint,
+      threadId,
+      text,
+      actorName: user?.name ?? user?.email ?? null,
+      createdAt: updated?.lastMessageAt ?? now,
+      event: 'reopened',
+      context: workflowContext,
     });
 
     return this.serializeCipavdThread(updated);
@@ -2601,6 +2705,16 @@ export class CpcaService {
         workflowScope: workflowContext.workflowScope,
         finalizationText: text,
       },
+    });
+
+    await this.notifyCpcaPresidentOfPendency({
+      complaint,
+      threadId,
+      text,
+      actorName: user?.name ?? user?.email ?? null,
+      createdAt: updated?.closedAt ?? now,
+      event: 'finalized',
+      context: workflowContext,
     });
 
     return this.serializeCipavdThread(updated);
@@ -2812,6 +2926,16 @@ export class CpcaService {
   }
 
   private buildCipavdSummaryByCaseId(threads: any[]) {
+    const threadGroups = this.groupCipavdThreadsByCaseId(threads);
+    const summaryByCaseId = new Map<string, any>();
+    for (const [complaintCaseId, group] of threadGroups.entries()) {
+      summaryByCaseId.set(complaintCaseId, this.buildCipavdSummary(group));
+    }
+
+    return summaryByCaseId;
+  }
+
+  private groupCipavdThreadsByCaseId(threads: any[]) {
     const threadGroups = new Map<string, any[]>();
     for (const thread of threads ?? []) {
       const complaintCaseId = String(thread?.complaintCaseId ?? '').trim();
@@ -2821,12 +2945,7 @@ export class CpcaService {
       threadGroups.set(complaintCaseId, group);
     }
 
-    const summaryByCaseId = new Map<string, any>();
-    for (const [complaintCaseId, group] of threadGroups.entries()) {
-      summaryByCaseId.set(complaintCaseId, this.buildCipavdSummary(group));
-    }
-
-    return summaryByCaseId;
+    return threadGroups;
   }
 
   private resolveLatestIsoDate(
@@ -2847,6 +2966,130 @@ export class CpcaService {
     if (!value) return null;
     const parsed = value instanceof Date ? value : new Date(value);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private shouldTrackComplaintViewerNotifications(user?: RbacUser) {
+    return this.isCipavdManagementUser(user);
+  }
+
+  private resolveComplaintNotificationEvent(item: any, threads: any[]) {
+    let lastEventAt =
+      this.parseDateValue(item?.createdAt ?? null) ??
+      this.parseDateValue(item?.reportedAt ?? null);
+    let reason: 'NEW_COMPLAINT' | 'PENDENCY_RESOLVED' = 'NEW_COMPLAINT';
+
+    for (const thread of threads ?? []) {
+      if (String(thread?.type ?? '') !== 'PENDENCY') continue;
+      if (String(thread?.status ?? '') !== 'RESOLVED') continue;
+      const resolvedAt = this.parseDateValue(
+        thread?.resolvedAt ?? thread?.lastMessageAt ?? null,
+      );
+      if (!resolvedAt) continue;
+      if (!lastEventAt || resolvedAt.getTime() > lastEventAt.getTime()) {
+        lastEventAt = resolvedAt;
+        reason = 'PENDENCY_RESOLVED';
+      }
+    }
+
+    return {
+      lastEventAt,
+      reason,
+      label:
+        reason === 'PENDENCY_RESOLVED'
+          ? 'Solução de pendência'
+          : 'Nova denúncia',
+    };
+  }
+
+  private buildComplaintViewerNotification(
+    item: any,
+    threads: any[],
+    seenAt: Date | string | null | undefined,
+  ) {
+    const event = this.resolveComplaintNotificationEvent(item, threads);
+    if (!event.lastEventAt) return null;
+
+    const seenAtDate = this.parseDateValue(seenAt ?? null);
+    const isNew =
+      !seenAtDate || seenAtDate.getTime() < event.lastEventAt.getTime();
+
+    return {
+      tracked: true,
+      isNew,
+      reason: event.reason,
+      label: event.label,
+      lastEventAt: event.lastEventAt.toISOString(),
+      seenAt: seenAtDate ? seenAtDate.toISOString() : null,
+    };
+  }
+
+  private async markComplaintSeenRecord(item: any, user?: RbacUser) {
+    if (!this.shouldTrackComplaintViewerNotifications(user)) {
+      return {
+        tracked: false,
+        isNew: false,
+        wasNew: false,
+        reason: null,
+        label: null,
+        lastEventAt: null,
+        seenAt: null,
+      };
+    }
+
+    const userId = this.requireUserId(user);
+    const complaintCaseId = String(item?.id ?? '').trim();
+    if (!complaintCaseId) {
+      return {
+        tracked: false,
+        isNew: false,
+        wasNew: false,
+        reason: null,
+        label: null,
+        lastEventAt: null,
+        seenAt: null,
+      };
+    }
+
+    const readModel = (this.prisma as any).cpcComplaintCaseRead;
+    const currentRead = await readModel.findFirst({
+      where: { userId, complaintCaseId },
+      select: { seenAt: true },
+    });
+    const currentNotification = this.buildComplaintViewerNotification(
+      item,
+      item?.cipavdThreads ?? [],
+      currentRead?.seenAt ?? null,
+    );
+    const seenAt = new Date();
+
+    await readModel.upsert({
+      where: {
+        userId_complaintCaseId: {
+          userId,
+          complaintCaseId,
+        },
+      },
+      create: {
+        userId,
+        complaintCaseId,
+        seenAt,
+      },
+      update: {
+        seenAt,
+      },
+    });
+
+    return {
+      ...(currentNotification ?? {
+        tracked: true,
+        reason: null,
+        label: null,
+        lastEventAt: null,
+      }),
+      isNew: false,
+      wasNew: Boolean(currentNotification?.isNew),
+      seenAt: seenAt.toISOString(),
+    };
   }
 
   private isCipavdManagementUser(user?: RbacUser) {
@@ -3374,6 +3617,7 @@ export class CpcaService {
     text: string;
     actorName?: string | null;
     createdAt?: Date | string | null;
+    event?: 'created' | 'updated' | 'reopened' | 'finalized';
     context: ComplaintWorkflowContext;
   }) {
     if (!this.mail) return;
@@ -3395,14 +3639,57 @@ export class CpcaService {
 
       const workflowLabel = input.context.workflowScope;
       const caseNumber = String(input.complaint.caseNumber ?? '').trim();
+      const event = input.event ?? 'created';
+      const isFinalized = event === 'finalized';
+      const eventCopy = {
+        created: {
+          actorLabel: 'Registrada por',
+          dateLabel: 'Registrada em',
+          heading: `Pendência registrada em denúncia ${workflowLabel}`,
+          badgeLabel: 'Pendência registrada',
+          intro: `A gestão nacional registrou uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
+          bodyText:
+            'Este aviso indica que há uma pendência aberta para análise e resposta no sistema.',
+        },
+        updated: {
+          actorLabel: 'Atualizada por',
+          dateLabel: 'Atualizada em',
+          heading: `Pendência atualizada em denúncia ${workflowLabel}`,
+          badgeLabel: 'Pendência atualizada',
+          intro: `A gestão nacional atualizou uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
+          bodyText:
+            'Este aviso indica que o texto da pendência foi ajustado e precisa ser observado no sistema.',
+        },
+        reopened: {
+          actorLabel: 'Reaberta por',
+          dateLabel: 'Reaberta em',
+          heading: `Pendência reaberta em denúncia ${workflowLabel}`,
+          badgeLabel: 'Pendência reaberta',
+          intro: `A gestão nacional reabriu uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
+          bodyText:
+            'Este aviso indica que há nova análise pendente de resposta pela comissão no sistema.',
+        },
+        finalized: {
+          actorLabel: 'Finalizada por',
+          dateLabel: 'Finalizada em',
+          heading: `Pendência finalizada com sucesso em denúncia ${workflowLabel}`,
+          badgeLabel: 'Pendência finalizada',
+          intro: `A gestão nacional validou e finalizou uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
+          bodyText:
+            'Este aviso confirma que a solução registrada pela comissão foi aceita e a pendência foi encerrada no sistema.',
+        },
+      }[event];
       const details = [
         caseNumber ? { label: 'Caso', value: caseNumber } : null,
         input.actorName
-          ? { label: 'Registrada por', value: String(input.actorName).trim() }
+          ? {
+              label: eventCopy.actorLabel,
+              value: String(input.actorName).trim(),
+            }
           : null,
         this.formatEmailDateTime(input.createdAt)
           ? {
-              label: 'Registrada em',
+              label: eventCopy.dateLabel,
               value: this.formatEmailDateTime(input.createdAt),
             }
           : null,
@@ -3412,7 +3699,9 @@ export class CpcaService {
               value: this.formatCpcaAiOmLabel(target.managerOm),
             }
           : null,
-        { label: 'Pendência', value: input.text },
+        isFinalized && input.text
+          ? { label: 'Validação da gestão', value: input.text }
+          : null,
       ].filter((item): item is { label: string; value: string } =>
         Boolean(item?.value),
       );
@@ -3420,20 +3709,29 @@ export class CpcaService {
       const message = buildCpcaApprovalDecisionEmail({
         requestTypeLabel: `Pendência em denúncia ${workflowLabel}`,
         recipientName: target.president.user.name,
-        status: 'REJECTED',
+        status: isFinalized ? 'APPROVED' : 'REJECTED',
         locality: target.complaintOm,
-        heading: `Pendência registrada em denúncia ${workflowLabel}`,
-        badgeLabel: 'Pendência registrada',
-        intro: `A gestão nacional registrou uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
-        bodyText:
-          'Este aviso indica que há uma pendência aberta para análise e resposta no sistema.',
-        nextSteps: [
-          `Acesse o menu Denúncias ${workflowLabel} no sistema.`,
-          caseNumber
-            ? `Localize o caso ${caseNumber} e abra a área de pendências.`
-            : 'Abra a denúncia correspondente e consulte a área de pendências.',
-          'Registre a resposta da comissão para que a gestão nacional possa validar a solução.',
-        ],
+        heading: eventCopy.heading,
+        badgeLabel: eventCopy.badgeLabel,
+        intro: eventCopy.intro,
+        bodyText: eventCopy.bodyText,
+        decisionReason: isFinalized ? null : input.text,
+        reasonLabel: isFinalized ? null : 'Texto da pendência',
+        nextSteps: isFinalized
+          ? [
+              `Acesse o menu Denúncias ${workflowLabel} no sistema se precisar consultar o histórico.`,
+              caseNumber
+                ? `Localize o caso ${caseNumber} e abra a área de pendências.`
+                : 'Abra a denúncia correspondente e consulte a área de pendências.',
+              'Mantenha o registro para consulta futura, se necessário.',
+            ]
+          : [
+              `Acesse o menu Denúncias ${workflowLabel} no sistema.`,
+              caseNumber
+                ? `Localize o caso ${caseNumber} e abra a área de pendências.`
+                : 'Abra a denúncia correspondente e consulte a área de pendências.',
+              'Registre a resposta da comissão para que a gestão nacional possa validar a solução.',
+            ],
         extraDetails: details,
       });
 

@@ -607,13 +607,17 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
   const markMenuUpdateSeen = useMarkMenuUpdateSeen();
 
-  const unreadMenuCountByKey = useMemo(() => {
-    const map = new Map<string, number>();
+  const unreadMenuInfoByKey = useMemo(() => {
+    const map = new Map<
+      string,
+      { unreadCount: number; clearedByMenuSeen: boolean }
+    >();
     (
       (menuUpdatesQuery.data?.items ?? []) as Array<{
         menuKey?: string | null;
         unreadCount?: number | null;
         hasUnread?: boolean;
+        clearedByMenuSeen?: boolean;
       }>
     ).forEach((item) => {
       const key = String(item?.menuKey ?? "").trim();
@@ -625,7 +629,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       const fallbackCount = item?.hasUnread ? 1 : 0;
       const unreadCount = safeCount > 0 ? safeCount : fallbackCount;
       if (unreadCount > 0) {
-        map.set(key, unreadCount);
+        map.set(key, {
+          unreadCount,
+          clearedByMenuSeen: item?.clearedByMenuSeen !== false,
+        });
       }
     });
     return map;
@@ -645,10 +652,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     (menuKeyRaw: string | null | undefined) => {
       const menuKey = String(menuKeyRaw ?? "").trim();
       if (!menuKey) return;
-      if ((unreadMenuCountByKey.get(menuKey) ?? 0) <= 0) return;
+      const info = unreadMenuInfoByKey.get(menuKey);
+      if (!info || info.unreadCount <= 0 || !info.clearedByMenuSeen) return;
       markMenuUpdateSeen.mutate(menuKey);
     },
-    [markMenuUpdateSeen, unreadMenuCountByKey],
+    [markMenuUpdateSeen, unreadMenuInfoByKey],
   );
 
   useEffect(() => {
@@ -772,8 +780,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               {section.items.map((item) => {
                 const selected = toPathOnly(item.to) === activeNavItemPath;
                 const unreadCount =
-                  unreadMenuCountByKey.get(String(item.menuKey ?? "").trim()) ??
-                  0;
+                  unreadMenuInfoByKey.get(String(item.menuKey ?? "").trim())
+                    ?.unreadCount ?? 0;
                 const showUnreadBadge = !sidebarCollapsed && unreadCount > 0;
                 const unreadLabel =
                   unreadCount > 99 ? "99+" : String(unreadCount);
@@ -886,7 +894,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       isMobile,
       markMenuAsSeen,
       sidebarCollapsed,
-      unreadMenuCountByKey,
+      unreadMenuInfoByKey,
       visibleNavSections,
     ],
   );

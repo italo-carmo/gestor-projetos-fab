@@ -110,4 +110,54 @@ describe('MenuUpdatesService CPCA badges', () => {
       where: { omId: 'om-1', status: 'PENDING' },
     });
   });
+
+  it('mantem badge de denuncias para gestao ate a denuncia ser aberta', async () => {
+    const prisma = buildPrismaMock();
+    const lastEventAt = new Date('2026-05-04T12:00:00.000Z');
+    prisma.$queryRaw
+      .mockResolvedValueOnce([
+        { menuKey: 'smif_complaints', unreadCount: 0, lastEventAt: null },
+      ])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { menuKey: 'cpca_cases', unreadCount: 2, lastEventAt },
+        { menuKey: 'smif_complaints', unreadCount: 1, lastEventAt },
+      ]);
+    const service = new MenuUpdatesService(prisma as any);
+
+    const result = await service.list(
+      'cpca_cases,smif_complaints',
+      buildCpcaUser({
+        roles: [
+          {
+            id: 'role-coord',
+            name: 'Coordenação CIPAVD',
+            wildcard: false,
+            permissions: [],
+          },
+        ],
+        permissions: [
+          { resource: 'cpca_cases', action: 'view', scope: 'NATIONAL' },
+          { resource: 'smif_complaints', action: 'view', scope: 'NATIONAL' },
+        ],
+      }),
+    );
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        menuKey: 'cpca_cases',
+        unreadCount: 2,
+        hasUnread: true,
+        clearedByMenuSeen: false,
+        lastEventAt: lastEventAt.toISOString(),
+      }),
+      expect.objectContaining({
+        menuKey: 'smif_complaints',
+        unreadCount: 1,
+        hasUnread: true,
+        clearedByMenuSeen: false,
+        lastEventAt: lastEventAt.toISOString(),
+      }),
+    ]);
+  });
 });

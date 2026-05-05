@@ -107,6 +107,12 @@ export class CpcaController {
     return this.cpca.getById(id, user);
   }
 
+  @Post(':id/seen')
+  @RequirePermission('cpca_cases', 'view')
+  markSeen(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.cpca.markComplaintSeen(id, user);
+  }
+
   @Post()
   @RequirePermission('cpca_cases', 'create')
   create(@Body() dto: CreateCpcaCaseDto, @CurrentUser() user: RbacUser) {
