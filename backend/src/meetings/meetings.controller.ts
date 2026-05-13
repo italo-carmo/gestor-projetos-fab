@@ -146,13 +146,41 @@ export class MeetingsController {
       user,
     );
     const storageKey =
-      document.storageKey ?? path.basename(String(document.fileUrl ?? ''));
+      document.storageKey || path.basename(String(document.fileUrl ?? ''));
     const filePath = path.join(documentsDir, storageKey);
     if (!storageKey || !fs.existsSync(filePath)) {
       throwError('NOT_FOUND');
     }
 
     return res.download(filePath, document.fileName);
+  }
+
+  @Delete(':id/minutes/files/:documentId')
+  @RequirePermission('meetings', 'update')
+  async deleteMinutesFile(
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    const document = await this.meetings.deleteMinutesFile(
+      id,
+      documentId,
+      user,
+    );
+    const storageKey =
+      document.storageKey ?? path.basename(String(document.fileUrl ?? ''));
+    const safeFileName = storageKey ? path.basename(storageKey) : '';
+
+    if (safeFileName) {
+      const filePath = path.join(documentsDir, safeFileName);
+      try {
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      } catch {
+        // Removing the DB record is authoritative; filesystem cleanup is best effort.
+      }
+    }
+
+    return { ok: true };
   }
 
   @Put(':id')

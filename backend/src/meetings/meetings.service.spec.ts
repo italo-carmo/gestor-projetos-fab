@@ -18,9 +18,11 @@ const prismaMock = {
 const txMock = {
   documentAsset: {
     create: jest.fn(),
+    delete: jest.fn(),
   },
   documentLink: {
     upsert: jest.fn(),
+    deleteMany: jest.fn(),
   },
 };
 
@@ -194,6 +196,68 @@ describe('MeetingsService task generation', () => {
       }),
     });
     expect(txMock.documentAsset.create).not.toHaveBeenCalled();
+  });
+
+  it('deletes a minutes file and unlinks it from the meeting', async () => {
+    prismaMock.meeting.findUnique.mockResolvedValue({
+      id: 'meeting-1',
+      localityId: 'loc-1',
+    });
+    prismaMock.documentAsset.findFirst.mockResolvedValue({
+      id: 'doc-1',
+      fileName: 'ata.pdf',
+      fileUrl: '/documents/ata-storage.pdf',
+      storageKey: 'ata-storage.pdf',
+      meetingId: 'meeting-1',
+    });
+    txMock.documentLink.deleteMany.mockResolvedValue({ count: 1 });
+    txMock.documentAsset.delete.mockResolvedValue({
+      id: 'doc-1',
+      fileName: 'ata.pdf',
+    });
+
+    await expect(
+      service.deleteMinutesFile('meeting-1', 'doc-1'),
+    ).resolves.toMatchObject({
+      id: 'doc-1',
+      storageKey: 'ata-storage.pdf',
+    });
+
+    expect(txMock.documentLink.deleteMany).toHaveBeenCalledWith({
+      where: {
+        documentId: 'doc-1',
+        entityType: DocumentLinkEntity.MEETING,
+        entityId: 'meeting-1',
+      },
+    });
+    expect(txMock.documentAsset.delete).toHaveBeenCalledWith({
+      where: { id: 'doc-1' },
+    });
+    expect(auditMock.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resource: 'meetings',
+        action: 'delete_minutes_file',
+        entityId: 'meeting-1',
+        localityId: 'loc-1',
+        diffJson: { documentId: 'doc-1', fileName: 'ata.pdf' },
+      }),
+    );
+  });
+
+  it('rejects minutes file deletion when the document is not from the meeting', async () => {
+    prismaMock.meeting.findUnique.mockResolvedValue({
+      id: 'meeting-1',
+      localityId: null,
+    });
+    prismaMock.documentAsset.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.deleteMinutesFile('meeting-1', 'doc-outside'),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'NOT_FOUND' }),
+    });
+    expect(txMock.documentLink.deleteMany).not.toHaveBeenCalled();
+    expect(txMock.documentAsset.delete).not.toHaveBeenCalled();
   });
 
   it('passes the meeting scope when generating task instances', async () => {

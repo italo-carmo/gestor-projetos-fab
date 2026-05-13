@@ -2903,6 +2903,22 @@ export function useDownloadMeetingMinutesFile() {
   });
 }
 
+export function useDeleteMeetingMinutesFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { meetingId: string; documentId: string }) =>
+      (
+        await api.delete(
+          `/meetings/${args.meetingId}/minutes/files/${args.documentId}`,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    },
+  });
+}
+
 export function useDeleteMeeting() {
   const qc = useQueryClient();
   return useMutation({

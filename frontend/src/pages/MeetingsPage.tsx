@@ -6,6 +6,7 @@ import {
   Chip,
   Divider,
   Drawer,
+  IconButton,
   MenuItem,
   Stack,
   Step,
@@ -19,8 +20,11 @@ import {
   TableRow,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import { addDays, endOfMonth, format, startOfMonth, startOfWeek } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -28,6 +32,7 @@ import {
   useAddMeetingDecision,
   useCreateMeeting,
   useDeleteMeeting,
+  useDeleteMeetingMinutesFile,
   useDownloadMeetingMinutesFile,
   useGenerateMeetingTasks,
   useLocalities,
@@ -104,12 +109,14 @@ export function MeetingsPage() {
   const updateMeetingMinutes = useUpdateMeetingMinutes();
   const uploadMeetingMinutesFiles = useUploadMeetingMinutesFiles();
   const downloadMeetingMinutesFile = useDownloadMeetingMinutesFile();
+  const deleteMeetingMinutesFile = useDeleteMeetingMinutesFile();
   const addDecision = useAddMeetingDecision();
   const generateTasks = useGenerateMeetingTasks();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState(0);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [minutesFileToDelete, setMinutesFileToDelete] = useState<any | null>(null);
   const [selectedMeeting, setSelectedMeeting] = useState<any | null>(null);
   const [minutesDraft, setMinutesDraft] = useState('');
   const [form, setForm] = useState({
@@ -286,6 +293,21 @@ export function MeetingsPage() {
     } catch (error) {
       const payload = parseApiError(error);
       toast.push({ message: payload.message ?? 'Erro ao baixar arquivo', severity: 'error' });
+    }
+  };
+
+  const handleConfirmDeleteMinutesFile = async () => {
+    if (!selectedMeeting || !minutesFileToDelete || !canUpdate) return;
+    try {
+      await deleteMeetingMinutesFile.mutateAsync({
+        meetingId: selectedMeeting.id,
+        documentId: minutesFileToDelete.id,
+      });
+      toast.push({ message: 'Arquivo da ata excluído', severity: 'success' });
+      setMinutesFileToDelete(null);
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao excluir arquivo', severity: 'error' });
     }
   };
 
@@ -912,16 +934,37 @@ export function MeetingsPage() {
                               : document.mimeType ?? 'Arquivo'}
                           </Typography>
                         </Box>
-                        <Button
-                          size="small"
-                          variant="text"
-                          onClick={() => {
-                            void handleDownloadMinutesFile(document);
-                          }}
-                          disabled={downloadMeetingMinutesFile.isPending}
-                        >
-                          Baixar
-                        </Button>
+                        <Stack direction="row" spacing={0.5}>
+                          <Tooltip title="Baixar arquivo">
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  void handleDownloadMinutesFile(document);
+                                }}
+                                disabled={downloadMeetingMinutesFile.isPending}
+                                aria-label="Baixar arquivo da ata"
+                              >
+                                <DownloadRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          {canUpdate && (
+                            <Tooltip title="Excluir arquivo">
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => setMinutesFileToDelete(document)}
+                                  disabled={deleteMeetingMinutesFile.isPending}
+                                  aria-label="Excluir arquivo da ata"
+                                >
+                                  <DeleteOutlineRoundedIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                        </Stack>
                       </Stack>
                     </CardContent>
                   </Card>
@@ -1112,6 +1155,19 @@ export function MeetingsPage() {
         confirmLabel="Excluir reunião"
         severity="error"
         confirmLoading={deleteMeeting.isPending}
+      />
+
+      <ConfirmDialog
+        open={Boolean(minutesFileToDelete)}
+        onCancel={() => setMinutesFileToDelete(null)}
+        onConfirm={handleConfirmDeleteMinutesFile}
+        title="Excluir arquivo da ata"
+        message="Deseja excluir este arquivo da ata?"
+        highlightText={minutesFileToDelete?.title ?? minutesFileToDelete?.fileName ?? 'Arquivo selecionado'}
+        note="O arquivo será removido da reunião e não aparecerá mais na aba Ata."
+        confirmLabel="Excluir arquivo"
+        severity="error"
+        confirmLoading={deleteMeetingMinutesFile.isPending}
       />
     </Box>
   );

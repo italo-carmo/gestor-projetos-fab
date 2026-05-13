@@ -439,6 +439,52 @@ export class MeetingsService {
     return document;
   }
 
+  async deleteMinutesFile(
+    meetingId: string,
+    documentId: string,
+    user?: RbacUser,
+  ) {
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      select: { id: true, localityId: true },
+    });
+    if (!meeting) throwError('NOT_FOUND');
+    this.assertLocality(meeting.localityId ?? null, user);
+
+    const document = await this.prisma.documentAsset.findFirst({
+      where: {
+        id: documentId,
+        meetingId,
+      },
+    });
+    if (!document) throwError('NOT_FOUND');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.documentLink.deleteMany({
+        where: {
+          documentId: document.id,
+          entityType: DocumentLinkEntity.MEETING,
+          entityId: meeting.id,
+        },
+      });
+      await tx.documentAsset.delete({ where: { id: document.id } });
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'meetings',
+      action: 'delete_minutes_file',
+      entityId: meetingId,
+      localityId: meeting.localityId ?? undefined,
+      diffJson: {
+        documentId: document.id,
+        fileName: document.fileName,
+      },
+    });
+
+    return document;
+  }
+
   async generateTasks(
     meetingId: string,
     payload: {
