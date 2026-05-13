@@ -2087,16 +2087,38 @@ export class ActivitiesService {
     if (!(activity as any).report) throwError('ACTIVITY_REPORT_NOT_FOUND');
 
     const report = (activity as any).report;
-    if (
-      !report.location ||
-      !report.responsible ||
-      !report.missionSupport ||
-      !report.activitiesPerformed ||
-      !report.participantsCharacteristics ||
-      !report.conclusion ||
-      !report.city
-    ) {
-      throwError('VALIDATION_ERROR', { reason: 'ACTIVITY_REPORT_INCOMPLETE' });
+    const missingFields: { field: string; label: string }[] = [];
+    if (activity.scope === ActivityScope.CIPAVD) {
+      if (
+        activity.reportRequired &&
+        Number(report.participantsCount ?? 0) <= 0
+      ) {
+        missingFields.push({
+          field: 'participantsCount',
+          label: 'Total de Participantes',
+        });
+      }
+    } else {
+      const requiredTextFields = [
+        ['location', 'Local'],
+        ['responsible', 'Responsável(is)'],
+        ['missionSupport', 'Apoio à Missão'],
+        ['activitiesPerformed', 'Desenvolvimento'],
+        ['participantsCharacteristics', 'Características dos Participantes'],
+        ['conclusion', 'Conclusão'],
+        ['city', 'Cidade'],
+      ] as const;
+      for (const [field, label] of requiredTextFields) {
+        if (!String(report[field] ?? '').trim()) {
+          missingFields.push({ field, label });
+        }
+      }
+    }
+    if (missingFields.length > 0) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'ACTIVITY_REPORT_INCOMPLETE',
+        missingFields,
+      });
     }
 
     const signedAt = new Date();
@@ -2549,17 +2571,26 @@ export class ActivitiesService {
       },
     ]);
 
-    drawSectionTitle('4. DESCRIÇÃO DA ATIVIDADE');
-    if (report.introduction) {
-      drawNarrativeBlock('Introdução', report.introduction);
+    if (
+      report.introduction ||
+      report.missionObjectives ||
+      report.executionSchedule ||
+      report.activitiesPerformed
+    ) {
+      drawSectionTitle('4. DESCRIÇÃO DA ATIVIDADE');
+      if (report.introduction) {
+        drawNarrativeBlock('Introdução', report.introduction);
+      }
+      if (report.missionObjectives) {
+        drawNarrativeBlock('Objetivos da Missão', report.missionObjectives);
+      }
+      if (report.executionSchedule) {
+        drawNarrativeBlock('Cronograma de Execução', report.executionSchedule);
+      }
+      if (report.activitiesPerformed) {
+        drawNarrativeBlock('Desenvolvimento', report.activitiesPerformed);
+      }
     }
-    if (report.missionObjectives) {
-      drawNarrativeBlock('Objetivos da Missão', report.missionObjectives);
-    }
-    if (report.executionSchedule) {
-      drawNarrativeBlock('Cronograma de Execução', report.executionSchedule);
-    }
-    drawNarrativeBlock('Desenvolvimento', report.activitiesPerformed);
 
     if (report.mainPointsObserved) {
       drawSectionTitle('5. PRINCIPAIS PONTOS OBSERVADOS');

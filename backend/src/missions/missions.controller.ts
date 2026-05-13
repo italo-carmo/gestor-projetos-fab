@@ -34,6 +34,8 @@ import { UpdateMissionBannerDto } from './dto/update-mission-banner.dto';
 import { MissionLdapParticipantDto } from './dto/mission-ldap-participant.dto';
 import { MissionUserParticipantDto } from './dto/mission-user-participant.dto';
 import { UpsertMissionChecklistDto } from './dto/upsert-mission-checklist.dto';
+import { UpsertMissionReportDto } from './dto/upsert-mission-report.dto';
+import { SignMissionReportDto } from './dto/sign-mission-report.dto';
 import { CreateMissionChecklistDimensionDto } from './dto/create-mission-checklist-dimension.dto';
 import { UpdateMissionChecklistDimensionDto } from './dto/update-mission-checklist-dimension.dto';
 import { UpdateMissionChecklistClassificationDto } from './dto/update-mission-checklist-classification.dto';
@@ -160,6 +162,36 @@ export class MissionsController {
   @RequirePermission('missions', 'delete')
   remove(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.missions.delete(id, user);
+  }
+
+  @Put(':id/report')
+  @RequirePermission('missions', 'update')
+  upsertReport(
+    @Param('id') id: string,
+    @Body() dto: UpsertMissionReportDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.upsertReport(id, dto, user);
+  }
+
+  @Post(':id/report/signatures')
+  @RequirePermission('missions', 'update')
+  signReport(
+    @Param('id') id: string,
+    @Body() dto: SignMissionReportDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.signReport(id, user, dto.totpCode);
+  }
+
+  @Delete(':id/report/signatures/:signatureId')
+  @RequirePermission('missions', 'update')
+  removeReportSignature(
+    @Param('id') id: string,
+    @Param('signatureId') signatureId: string,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.missions.removeReportSignature(id, signatureId, user);
   }
 
   @Get('ldap-participant')

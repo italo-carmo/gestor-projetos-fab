@@ -11,6 +11,7 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   Drawer,
   IconButton,
@@ -32,12 +33,26 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
+import FormatAlignCenterRoundedIcon from '@mui/icons-material/FormatAlignCenterRounded';
+import FormatAlignJustifyRoundedIcon from '@mui/icons-material/FormatAlignJustifyRounded';
+import FormatAlignLeftRoundedIcon from '@mui/icons-material/FormatAlignLeftRounded';
+import FormatAlignRightRoundedIcon from '@mui/icons-material/FormatAlignRightRounded';
+import FormatBoldRoundedIcon from '@mui/icons-material/FormatBoldRounded';
+import FormatClearRoundedIcon from '@mui/icons-material/FormatClearRounded';
+import FormatColorTextRoundedIcon from '@mui/icons-material/FormatColorTextRounded';
+import FormatItalicRoundedIcon from '@mui/icons-material/FormatItalicRounded';
+import FormatListBulletedRoundedIcon from '@mui/icons-material/FormatListBulletedRounded';
+import FormatListNumberedRoundedIcon from '@mui/icons-material/FormatListNumberedRounded';
+import FormatUnderlinedRoundedIcon from '@mui/icons-material/FormatUnderlinedRounded';
 import PersonAddAlt1RoundedIcon from '@mui/icons-material/PersonAddAlt1Rounded';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
 import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import RedoRoundedIcon from '@mui/icons-material/RedoRounded';
+import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
+import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useActivities,
@@ -67,8 +82,11 @@ import {
   useUpdateMissionBanner,
   useUpdateMission,
   useUpdateMissionScheduleItem,
+  useDeleteMissionReportSignature,
   useSpecialties,
+  useSignMissionReport,
   useUpsertMissionScheduleFieldActivities,
+  useUpsertMissionReport,
   useUsers,
 } from '../api/hooks';
 import { parseApiError } from '../app/apiErrors';
@@ -622,6 +640,265 @@ function normalizeMissionBannerLayoutOverrides(
   return next;
 }
 
+function missionReportHtmlToText(html: string | null | undefined) {
+  const raw = String(html ?? '');
+  if (typeof document === 'undefined') {
+    return raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  const element = document.createElement('div');
+  element.innerHTML = raw;
+  return (element.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+const missionReportFontSizes = [
+  { value: '2', label: '12' },
+  { value: '3', label: '14' },
+  { value: '4', label: '16' },
+  { value: '5', label: '18' },
+  { value: '6', label: '24' },
+  { value: '7', label: '32' },
+];
+
+const missionReportFontFamilies = [
+  'Arial',
+  'Calibri',
+  'Georgia',
+  'Times New Roman',
+  'Verdana',
+];
+
+function MissionReportEditor({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const lastValueRef = useRef('');
+  const [fontSize, setFontSize] = useState('4');
+  const [fontFamily, setFontFamily] = useState('Arial');
+  const [fontColor, setFontColor] = useState('#1F2937');
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const next = value || '';
+    if (document.activeElement !== editor && next !== lastValueRef.current) {
+      editor.innerHTML = next;
+      lastValueRef.current = next;
+    }
+  }, [value]);
+
+  const emitChange = useCallback(() => {
+    const next = editorRef.current?.innerHTML ?? '';
+    lastValueRef.current = next;
+    onChange(next);
+  }, [onChange]);
+
+  const applyCommand = useCallback(
+    (command: string, commandValue?: string) => {
+      if (disabled) return;
+      editorRef.current?.focus();
+      document.execCommand(command, false, commandValue);
+      emitChange();
+    },
+    [disabled, emitChange],
+  );
+
+  return (
+    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+      <Stack
+        direction="row"
+        spacing={0.75}
+        flexWrap="wrap"
+        alignItems="center"
+        sx={{ p: 1, gap: 0.75, borderBottom: '1px solid', borderColor: 'divider', bgcolor: '#F8FAFC' }}
+      >
+        <TextField
+          select
+          size="small"
+          label="Fonte"
+          value={fontFamily}
+          onChange={(event) => {
+            const next = event.target.value;
+            setFontFamily(next);
+            applyCommand('fontName', next);
+          }}
+          disabled={disabled}
+          sx={{ width: 150 }}
+        >
+          {missionReportFontFamilies.map((family) => (
+            <MenuItem key={family} value={family}>
+              {family}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Tamanho"
+          value={fontSize}
+          onChange={(event) => {
+            const next = event.target.value;
+            setFontSize(next);
+            applyCommand('fontSize', next);
+          }}
+          disabled={disabled}
+          sx={{ width: 112 }}
+        >
+          {missionReportFontSizes.map((size) => (
+            <MenuItem key={size.value} value={size.value}>
+              {size.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          label="Formato"
+          defaultValue="P"
+          onChange={(event) => applyCommand('formatBlock', event.target.value)}
+          disabled={disabled}
+          sx={{ width: 130 }}
+        >
+          <MenuItem value="P">Parágrafo</MenuItem>
+          <MenuItem value="H2">Título</MenuItem>
+          <MenuItem value="H3">Subtítulo</MenuItem>
+          <MenuItem value="BLOCKQUOTE">Citação</MenuItem>
+        </TextField>
+        <Divider orientation="vertical" flexItem />
+        <Tooltip title="Negrito">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('bold')} disabled={disabled}>
+              <FormatBoldRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Itálico">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('italic')} disabled={disabled}>
+              <FormatItalicRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Sublinhado">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('underline')} disabled={disabled}>
+              <FormatUnderlinedRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Cor da fonte">
+          <span>
+            <IconButton component="label" size="small" disabled={disabled}>
+              <FormatColorTextRoundedIcon fontSize="small" sx={{ color: fontColor }} />
+              <input
+                type="color"
+                hidden
+                value={fontColor}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setFontColor(next);
+                  applyCommand('foreColor', next);
+                }}
+              />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Limpar formatação">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('removeFormat')} disabled={disabled}>
+              <FormatClearRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Divider orientation="vertical" flexItem />
+        <Tooltip title="Alinhar à esquerda">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('justifyLeft')} disabled={disabled}>
+              <FormatAlignLeftRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Centralizar">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('justifyCenter')} disabled={disabled}>
+              <FormatAlignCenterRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Alinhar à direita">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('justifyRight')} disabled={disabled}>
+              <FormatAlignRightRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Justificar">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('justifyFull')} disabled={disabled}>
+              <FormatAlignJustifyRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Divider orientation="vertical" flexItem />
+        <Tooltip title="Lista com marcadores">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('insertUnorderedList')} disabled={disabled}>
+              <FormatListBulletedRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Lista numerada">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('insertOrderedList')} disabled={disabled}>
+              <FormatListNumberedRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Divider orientation="vertical" flexItem />
+        <Tooltip title="Desfazer">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('undo')} disabled={disabled}>
+              <UndoRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip title="Refazer">
+          <span>
+            <IconButton size="small" onClick={() => applyCommand('redo')} disabled={disabled}>
+              <RedoRoundedIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Stack>
+      <Box
+        ref={editorRef}
+        contentEditable={!disabled}
+        suppressContentEditableWarning
+        onInput={emitChange}
+        onBlur={emitChange}
+        sx={{
+          minHeight: 360,
+          p: 2,
+          outline: 'none',
+          bgcolor: disabled ? '#F8FAFC' : '#fff',
+          color: 'text.primary',
+          '&:focus': {
+            boxShadow: 'inset 0 0 0 2px rgba(25, 118, 210, 0.24)',
+          },
+          '& p': { my: 1 },
+          '& h2, & h3': { mt: 2, mb: 1 },
+          '& ul, & ol': { pl: 3 },
+        }}
+      />
+    </Box>
+  );
+}
+
 export function MissionsPage() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -672,6 +949,9 @@ export function MissionsPage() {
   const exportSchedulePdf = useExportMissionSchedulePdf();
   const updateMissionChecklist = useUpdateMissionChecklist();
   const uploadMissionChecklistPhoto = useUploadMissionChecklistPhoto();
+  const upsertMissionReport = useUpsertMissionReport();
+  const signMissionReport = useSignMissionReport();
+  const deleteMissionReportSignature = useDeleteMissionReportSignature();
 
   const [drawerOpen, setDrawerOpen] = useState(Boolean(missionIdFromUrl));
   const [isCreateMode, setIsCreateMode] = useState(false);
@@ -718,6 +998,12 @@ export function MissionsPage() {
     responsibleUserId: '',
     reportRequired: true,
   });
+  const [missionReportHtml, setMissionReportHtml] = useState('');
+  const [missionReportDirty, setMissionReportDirty] = useState(false);
+  const [missionReportSignDialogOpen, setMissionReportSignDialogOpen] = useState(false);
+  const [missionReportSignCode, setMissionReportSignCode] = useState('');
+  const [missionReportSignError, setMissionReportSignError] = useState('');
+  const [missionReportSignatureDeleteTarget, setMissionReportSignatureDeleteTarget] = useState<any | null>(null);
   const [expandedStatsCards, setExpandedStatsCards] = useState<
     Record<MissionStatsCardKey, boolean>
   >({
@@ -728,6 +1014,7 @@ export function MissionsPage() {
 
   const { data: me } = useMe();
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const canUpdateMissions = can(me, 'missions', 'update');
   const canCreateFieldActivities = can(me, 'task_instances', 'create');
   const canLinkFieldActivities = can(me, 'task_instances', 'update');
   const canManageScheduleFieldActivities = canCreateFieldActivities || canLinkFieldActivities;
@@ -807,6 +1094,24 @@ export function MissionsPage() {
 
   const items = missionsQuery.data?.items ?? [];
   const selectedMission = missionDetailQuery.data ?? null;
+  const showMissionReportTab = missionScope === 'CIPAVD';
+  const missionReportTabIndex = showMissionReportTab ? 3 : -1;
+  const missionChecklistTabIndex = showMissionReportTab ? 4 : 3;
+  const missionReport = selectedMission?.report ?? null;
+  const missionReportSignatures = useMemo(
+    () => ((missionReport?.signatures ?? []) as any[]),
+    [missionReport?.signatures],
+  );
+  const activeMissionReportSignatures = useMemo(
+    () => missionReportSignatures.filter((signature) => !signature.removedAt),
+    [missionReportSignatures],
+  );
+  const currentUserHasActiveMissionReportSignature = activeMissionReportSignatures.some(
+    (signature) =>
+      String(signature.signedById ?? signature.signedBy?.id ?? '') ===
+      String(me?.id ?? ''),
+  );
+  const missionReportDraftFilled = Boolean(missionReportHtmlToText(missionReportHtml));
   const activityTypes = activityTypesQuery.data?.items ?? [];
   const specialties = specialtiesQuery.data?.items ?? [];
   const existingFieldActivities = useMemo(
@@ -1021,6 +1326,12 @@ export function MissionsPage() {
       setMissionTab(0);
       setSelectedScheduleItemIds([]);
       resetBannerForm();
+      setMissionReportHtml('');
+      setMissionReportDirty(false);
+      setMissionReportSignDialogOpen(false);
+      setMissionReportSignCode('');
+      setMissionReportSignError('');
+      setMissionReportSignatureDeleteTarget(null);
       if (!isCreateMode) {
         resetScheduleForm();
       }
@@ -1046,6 +1357,22 @@ export function MissionsPage() {
       endDate: selectedMission.endDate ? String(selectedMission.endDate).slice(0, 10) : '',
     });
   }, [selectedMission]);
+
+  useEffect(() => {
+    if (!showMissionReportTab && missionTab === 4) {
+      setMissionTab(0);
+    }
+  }, [missionTab, showMissionReportTab]);
+
+  useEffect(() => {
+    const nextHtml = String(selectedMission?.report?.contentHtml ?? '');
+    setMissionReportHtml(nextHtml);
+    setMissionReportDirty(false);
+    setMissionReportSignDialogOpen(false);
+    setMissionReportSignCode('');
+    setMissionReportSignError('');
+    setMissionReportSignatureDeleteTarget(null);
+  }, [selectedMission?.id, selectedMission?.report?.contentHtml]);
 
   useEffect(() => {
     if (!selectedMission?.id) {
@@ -1169,6 +1496,12 @@ export function MissionsPage() {
     resetScheduleForm();
     resetBannerForm();
     setCloneSourceMissionId('');
+    setMissionReportHtml('');
+    setMissionReportDirty(false);
+    setMissionReportSignDialogOpen(false);
+    setMissionReportSignCode('');
+    setMissionReportSignError('');
+    setMissionReportSignatureDeleteTarget(null);
     setDrawerOpen(true);
 
     const next = new URLSearchParams(params);
@@ -1184,6 +1517,12 @@ export function MissionsPage() {
     resetScheduleForm();
     resetBannerForm();
     setCloneSourceMissionId('');
+    setMissionReportHtml('');
+    setMissionReportDirty(false);
+    setMissionReportSignDialogOpen(false);
+    setMissionReportSignCode('');
+    setMissionReportSignError('');
+    setMissionReportSignatureDeleteTarget(null);
 
     const next = new URLSearchParams(params);
     next.set('missionId', id);
@@ -1208,6 +1547,12 @@ export function MissionsPage() {
     setMissionDeleteTarget(null);
     setBannerDeleteTarget(null);
     setScheduleDeleteTarget(null);
+    setMissionReportHtml('');
+    setMissionReportDirty(false);
+    setMissionReportSignDialogOpen(false);
+    setMissionReportSignCode('');
+    setMissionReportSignError('');
+    setMissionReportSignatureDeleteTarget(null);
 
     const next = new URLSearchParams(params);
     next.delete('missionId');
@@ -1321,6 +1666,115 @@ export function MissionsPage() {
       setMissionDeleteTarget(null);
     } catch (error) {
       toast.push({ message: parseApiError(error).message ?? 'Erro ao remover missão.', severity: 'error' });
+    }
+  };
+
+  const handleSaveMissionReport = async () => {
+    if (!selectedMission?.id) return;
+    try {
+      await upsertMissionReport.mutateAsync({
+        id: selectedMission.id,
+        payload: {
+          contentHtml: missionReportHtml,
+          contentText: missionReportHtmlToText(missionReportHtml),
+        },
+      });
+      setMissionReportDirty(false);
+      toast.push({ message: 'Relatório salvo.', severity: 'success' });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao salvar relatório.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleMissionReportSignClick = () => {
+    if (!selectedMission?.id) return;
+    if (!missionReportDraftFilled) {
+      toast.push({
+        message: 'Preencha o relatório antes de assinar.',
+        severity: 'warning',
+      });
+      return;
+    }
+    setMissionReportSignCode('');
+    setMissionReportSignError('');
+    setMissionReportSignDialogOpen(true);
+  };
+
+  const handleMissionReportSignConfirm = async () => {
+    if (!selectedMission?.id) return;
+    const code = missionReportSignCode.replace(/\s/g, '').trim();
+    if (code.length < 6) {
+      setMissionReportSignError('Informe o código de 6 dígitos do Google Authenticator.');
+      return;
+    }
+    try {
+      if (missionReportDirty) {
+        await upsertMissionReport.mutateAsync({
+          id: selectedMission.id,
+          payload: {
+            contentHtml: missionReportHtml,
+            contentText: missionReportHtmlToText(missionReportHtml),
+          },
+        });
+        setMissionReportDirty(false);
+      }
+      await signMissionReport.mutateAsync({
+        id: selectedMission.id,
+        totpCode: code,
+      });
+      setMissionReportSignDialogOpen(false);
+      setMissionReportSignCode('');
+      setMissionReportSignError('');
+      toast.push({ message: 'Relatório assinado.', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      if (payload.code === 'AUTH_2FA_INVALID_CODE') {
+        setMissionReportSignError('Código inválido. Verifique o Google Authenticator e tente novamente.');
+        return;
+      }
+      if (
+        payload.code === 'VALIDATION_ERROR' &&
+        payload.details?.reason === 'MISSION_REPORT_ALREADY_SIGNED'
+      ) {
+        setMissionReportSignDialogOpen(false);
+        toast.push({
+          message: 'Este usuário já possui uma assinatura ativa neste relatório.',
+          severity: 'warning',
+        });
+        return;
+      }
+      if (
+        payload.code === 'VALIDATION_ERROR' &&
+        payload.details?.reason === 'MISSION_REPORT_EMPTY'
+      ) {
+        setMissionReportSignDialogOpen(false);
+        toast.push({
+          message: 'Preencha o relatório antes de assinar.',
+          severity: 'warning',
+        });
+        return;
+      }
+      setMissionReportSignError(payload.message ?? 'Erro ao assinar relatório.');
+    }
+  };
+
+  const handleDeleteMissionReportSignature = async () => {
+    if (!selectedMission?.id || !missionReportSignatureDeleteTarget?.id) return;
+    try {
+      await deleteMissionReportSignature.mutateAsync({
+        id: selectedMission.id,
+        signatureId: String(missionReportSignatureDeleteTarget.id),
+      });
+      setMissionReportSignatureDeleteTarget(null);
+      toast.push({ message: 'Assinatura removida.', severity: 'success' });
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? 'Erro ao remover assinatura.',
+        severity: 'error',
+      });
     }
   };
 
@@ -2304,6 +2758,9 @@ export function MissionsPage() {
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Período</TableCell>
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Participantes</TableCell>
                   <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Itens de cronograma</TableCell>
+                  {showMissionReportTab ? (
+                    <TableCell sx={{ color: '#fff', fontWeight: 700, width: 110 }}>Relatório</TableCell>
+                  ) : null}
                   <TableCell sx={{ color: '#fff', fontWeight: 700, width: 90 }}>Ações</TableCell>
                 </TableRow>
               </TableHead>
@@ -2350,6 +2807,20 @@ export function MissionsPage() {
                     <TableCell>
                       <Chip label={String(mission.scheduleItemsCount ?? mission.scheduleItems?.length ?? 0)} size="small" />
                     </TableCell>
+                    {showMissionReportTab ? (
+                      <TableCell>
+                        <Tooltip title={mission.reportFilled ? 'Relatório preenchido' : 'Relatório não preenchido'}>
+                          <span>
+                            <Checkbox
+                              checked={Boolean(mission.reportFilled)}
+                              disabled
+                              size="small"
+                              inputProps={{ 'aria-label': 'Relatório preenchido' }}
+                            />
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                    ) : null}
                     <TableCell onClick={(event) => event.stopPropagation()}>
                       <IconButton
                         size="small"
@@ -2507,6 +2978,7 @@ export function MissionsPage() {
                         <Tab label="Participantes" />
                         <Tab label="Cronograma" />
                         <Tab label="Banners" />
+                        {showMissionReportTab ? <Tab label="Relatório" /> : null}
                         <Tab label="Mapeamento Institucional" />
                       </Tabs>
                     </CardContent>
@@ -3207,7 +3679,158 @@ export function MissionsPage() {
                     </Card>
                   )}
 
-                  {missionTab === 3 && (
+                  {showMissionReportTab && missionTab === missionReportTabIndex && (
+                    <Card sx={{ mb: 2 }}>
+                      <CardContent>
+                        <Stack
+                          direction={{ xs: 'column', md: 'row' }}
+                          justifyContent="space-between"
+                          alignItems={{ xs: 'stretch', md: 'center' }}
+                          spacing={1.5}
+                          mb={1.8}
+                        >
+                          <Box>
+                            <Typography variant="subtitle1" fontWeight={700}>
+                              Relatório da missão
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Texto livre da missão CIPAVD com assinatura digital de múltiplos usuários.
+                            </Typography>
+                          </Box>
+                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Chip
+                              size="small"
+                              color={missionReportDraftFilled ? 'success' : 'default'}
+                              label={missionReportDraftFilled ? 'Preenchido' : 'Não preenchido'}
+                            />
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={`${activeMissionReportSignatures.length} assinatura(s) ativa(s)`}
+                            />
+                          </Stack>
+                        </Stack>
+
+                        <Stack spacing={1.5}>
+                          <MissionReportEditor
+                            value={missionReportHtml}
+                            onChange={(next) => {
+                              setMissionReportHtml(next);
+                              setMissionReportDirty(true);
+                            }}
+                            disabled={!canUpdateMissions || upsertMissionReport.isPending}
+                          />
+
+                          {activeMissionReportSignatures.length > 0 && missionReportDirty ? (
+                            <Typography variant="caption" color="warning.main">
+                              Salvar alterações no texto remove as assinaturas ativas, mantendo o histórico.
+                            </Typography>
+                          ) : null}
+
+                          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                            <Button
+                              variant="contained"
+                              startIcon={<SaveRoundedIcon />}
+                              onClick={handleSaveMissionReport}
+                              disabled={!canUpdateMissions || upsertMissionReport.isPending || !missionReportDirty}
+                            >
+                              {upsertMissionReport.isPending ? 'Salvando...' : 'Salvar relatório'}
+                            </Button>
+                            <Button
+                              variant="outlined"
+                              onClick={handleMissionReportSignClick}
+                              disabled={
+                                !canUpdateMissions ||
+                                signMissionReport.isPending ||
+                                upsertMissionReport.isPending ||
+                                !missionReportDraftFilled ||
+                                currentUserHasActiveMissionReportSignature
+                              }
+                            >
+                              {currentUserHasActiveMissionReportSignature ? 'Assinado por você' : 'Assinar relatório'}
+                            </Button>
+                          </Stack>
+
+                          <Divider />
+
+                          <Box>
+                            <Typography variant="subtitle2" fontWeight={700} mb={1}>
+                              Histórico de assinaturas
+                            </Typography>
+                            {missionReportSignatures.length === 0 ? (
+                              <Typography variant="body2" color="text.secondary">
+                                Nenhuma assinatura registrada para este relatório.
+                              </Typography>
+                            ) : (
+                              <Stack spacing={1}>
+                                {missionReportSignatures.map((signature: any) => {
+                                  const removed = Boolean(signature.removedAt);
+                                  return (
+                                    <Box
+                                      key={signature.id}
+                                      sx={{
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        borderRadius: 1,
+                                        p: 1.2,
+                                      }}
+                                    >
+                                      <Stack
+                                        direction={{ xs: 'column', md: 'row' }}
+                                        justifyContent="space-between"
+                                        alignItems={{ xs: 'stretch', md: 'flex-start' }}
+                                        spacing={1}
+                                      >
+                                        <Box>
+                                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                                            <Typography variant="body2" fontWeight={700}>
+                                              {signature.signedBy?.name ?? signature.signedById ?? 'Usuário'}
+                                            </Typography>
+                                            <Chip
+                                              size="small"
+                                              color={removed ? 'default' : 'success'}
+                                              label={removed ? 'Removida' : 'Ativa'}
+                                            />
+                                          </Stack>
+                                          <Typography variant="caption" color="text.secondary" display="block">
+                                            Assinado em {signature.signedAt ? new Date(signature.signedAt).toLocaleString('pt-BR') : '-'}
+                                          </Typography>
+                                          {removed ? (
+                                            <Typography variant="caption" color="text.secondary" display="block">
+                                              Removida em {new Date(signature.removedAt).toLocaleString('pt-BR')} por {signature.removedBy?.name ?? signature.removedById ?? 'usuário'}
+                                            </Typography>
+                                          ) : null}
+                                          {signature.signatureHash ? (
+                                            <Typography variant="caption" color="text.secondary" display="block">
+                                              Hash {String(signature.signatureHash).slice(0, 18)}...
+                                            </Typography>
+                                          ) : null}
+                                        </Box>
+                                        {!removed && canUpdateMissions ? (
+                                          <Button
+                                            size="small"
+                                            color="warning"
+                                            variant="outlined"
+                                            startIcon={<DeleteOutlineIcon />}
+                                            onClick={() => setMissionReportSignatureDeleteTarget(signature)}
+                                            disabled={deleteMissionReportSignature.isPending}
+                                          >
+                                            Excluir assinatura
+                                          </Button>
+                                        ) : null}
+                                      </Stack>
+                                    </Box>
+                                  );
+                                })}
+                              </Stack>
+                            )}
+                          </Box>
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {missionTab === missionChecklistTabIndex && (
                     <Card>
                       <CardContent>
                         <Stack
@@ -3918,6 +4541,68 @@ export function MissionsPage() {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={missionReportSignDialogOpen}
+        onClose={() => {
+          setMissionReportSignDialogOpen(false);
+          setMissionReportSignCode('');
+          setMissionReportSignError('');
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Assinar relatório</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Informe o código de 6 dígitos do seu <strong>Google Authenticator</strong>.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Código de verificação"
+            placeholder="000 000"
+            value={missionReportSignCode}
+            onChange={(event) => {
+              const value = event.target.value.replace(/[^0-9\s]/g, '');
+              setMissionReportSignCode(value);
+              if (missionReportSignError) setMissionReportSignError('');
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') handleMissionReportSignConfirm();
+            }}
+            error={Boolean(missionReportSignError)}
+            helperText={
+              missionReportSignError ||
+              'Abra o Google Authenticator e digite o código exibido.'
+            }
+            inputProps={{
+              maxLength: 7,
+              inputMode: 'numeric',
+              autoComplete: 'one-time-code',
+            }}
+            size="small"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setMissionReportSignDialogOpen(false);
+              setMissionReportSignCode('');
+              setMissionReportSignError('');
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleMissionReportSignConfirm}
+            disabled={signMissionReport.isPending || upsertMissionReport.isPending}
+          >
+            {signMissionReport.isPending ? 'Assinando...' : 'Confirmar e assinar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <ConfirmDialog
         open={Boolean(missionDeleteTarget)}
         onCancel={() => setMissionDeleteTarget(null)}
@@ -3996,6 +4681,23 @@ export function MissionsPage() {
         }
         severity="error"
         confirmLoading={deleteScheduleItem.isPending}
+      />
+
+      <ConfirmDialog
+        open={Boolean(missionReportSignatureDeleteTarget)}
+        onCancel={() => setMissionReportSignatureDeleteTarget(null)}
+        onConfirm={handleDeleteMissionReportSignature}
+        title="Excluir assinatura"
+        message="Confirma a exclusão desta assinatura do relatório?"
+        highlightText={
+          missionReportSignatureDeleteTarget?.signedBy?.name ??
+          missionReportSignatureDeleteTarget?.signedById ??
+          ''
+        }
+        note="A assinatura será marcada como removida e continuará no histórico."
+        confirmLabel="Excluir assinatura"
+        severity="warning"
+        confirmLoading={deleteMissionReportSignature.isPending}
       />
     </Box>
   );

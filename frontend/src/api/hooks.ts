@@ -685,6 +685,52 @@ export function useDeleteMission() {
   });
 }
 
+export function useUpsertMissionReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: { contentHtml?: string; contentText?: string };
+    }) => (await api.put(`/missions/${args.id}/report`, args.payload)).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useSignMissionReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; totpCode: string }) =>
+      (
+        await api.post(`/missions/${args.id}/report/signatures`, {
+          totpCode: args.totpCode,
+        })
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useDeleteMissionReportSignature() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; signatureId: string }) =>
+      (
+        await api.delete(
+          `/missions/${args.id}/report/signatures/${args.signatureId}`,
+        )
+      ).data,
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: ["missions"] });
+      qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
 export function useLookupMissionLdapParticipant(query: string) {
   return useQuery({
     queryKey: ["missions", "ldap", query],
@@ -2802,6 +2848,58 @@ export function useUpdateMeeting() {
     mutationFn: async (args: { id: string; payload: any }) =>
       (await api.put(`/meetings/${args.id}`, args.payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["meetings"] }),
+  });
+}
+
+export function useUpdateMeetingMinutes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; minutes: string }) =>
+      (await api.put(`/meetings/${args.id}/minutes`, { minutes: args.minutes }))
+        .data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["meetings"] }),
+  });
+}
+
+export function useUploadMeetingMinutesFiles() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { id: string; files: File[] }) => {
+      const form = new FormData();
+      for (const file of args.files) {
+        form.append("files", file);
+      }
+      return (await api.post(`/meetings/${args.id}/minutes/files`, form)).data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["meetings"] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+    },
+  });
+}
+
+export function useDownloadMeetingMinutesFile() {
+  return useMutation({
+    mutationFn: async (args: {
+      meetingId: string;
+      documentId: string;
+      fileName: string;
+    }) => {
+      const response = await api.get(
+        `/meetings/${args.meetingId}/minutes/files/${args.documentId}/download`,
+        { responseType: "blob" },
+      );
+      const blob = new Blob([response.data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = args.fileName || `ata-${args.documentId}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    },
   });
 }
 

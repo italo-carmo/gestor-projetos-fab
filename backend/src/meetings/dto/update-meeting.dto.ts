@@ -37,6 +37,10 @@ export class UpdateMeetingDto {
 
   @IsOptional()
   @IsString()
+  minutes?: string | null;
+
+  @IsOptional()
+  @IsString()
   localityId?: string | null;
 
   @IsOptional()

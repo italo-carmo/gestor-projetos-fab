@@ -55,6 +55,8 @@ model User {
   activityComments                        ActivityComment[]                @relation("ActivityCommentAuthor")
   activityCommentReads                    ActivityCommentRead[]
   signedActivityReports                   ActivityReport[]                 @relation("ActivityReportSigner")
+  signedMissionReports                    MissionReportSignature[]         @relation("MissionReportSigner")
+  removedMissionReportSignatures          MissionReportSignature[]         @relation("MissionReportSignatureRemover")
   auditLogs                               AuditLog[]
   meetingParticipations                   MeetingParticipant[]
   biSurveyImportBatches                   BiSurveyImportBatch[]
@@ -360,10 +362,48 @@ model Mission {
   participants  MissionParticipant[]
   scheduleItems MissionScheduleItem[]
   banners       MissionBanner[]
+  report        MissionReport?
 
   @@index([localityId, startDate])
   @@index([startDate, endDate])
   @@index([scope, localityId])
+}
+
+model MissionReport {
+  id          String   @id @default(cuid())
+  missionId   String   @unique
+  contentHtml String   @default("")
+  contentText String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  mission    Mission                  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  signatures MissionReportSignature[]
+
+  @@index([updatedAt])
+}
+
+model MissionReportSignature {
+  id                   String    @id @default(cuid())
+  reportId             String
+  signedById           String?
+  signedAt             DateTime  @default(now())
+  removedAt            DateTime?
+  removedById          String?
+  signaturePayloadHash String
+  signatureHash        String
+  signatureAlgorithm   String    @default("HMAC-SHA256")
+  signatureVersion     Int       @default(1)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  report    MissionReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  signedBy  User?         @relation("MissionReportSigner", fields: [signedById], references: [id], onDelete: SetNull)
+  removedBy User?         @relation("MissionReportSignatureRemover", fields: [removedById], references: [id], onDelete: SetNull)
+
+  @@index([reportId, signedAt])
+  @@index([signedById])
+  @@index([removedById])
 }
 
 model MissionParticipant {
@@ -697,6 +737,7 @@ model Meeting {
   location         String?
   meetingLink      String?
   agenda           String?
+  minutes          String?
   localityId       String?
   participantsJson Json?
   createdAt        DateTime      @default(now())

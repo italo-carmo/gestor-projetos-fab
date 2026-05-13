@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ActivityScope, LocalityCatalogType, Prisma } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHash, createHmac } from 'node:crypto';
 import PDFDocument from 'pdfkit';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
@@ -12,6 +14,7 @@ import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { FabLdapService } from '../ldap/fab-ldap.service';
 import { selectTargetLocalities } from '../common/priority-localities';
+import { decryptSecret, verifyTotpCode } from '../auth/totp.util';
 import {
   DEFAULT_MISSION_CHECKLIST_CLASSIFICATION,
   MISSION_CHECKLIST_CLASSIFICATION_DEFAULT_META,
@@ -29,6 +32,99 @@ import {
   renderMissionBannerPng,
   type MissionBannerRenderable,
 } from './mission-banner.renderer';
+
+const MISSION_PARTICIPANT_OM_SUFFIXES = new Set([
+  'CENIPA',
+  'COMAE',
+  'COMAER',
+  'COMAR',
+  'COMGAP',
+  'COMGEP',
+  'COMPREP',
+  'DCTA',
+  'DECEA',
+  'DIRENS',
+  'DIRAP',
+  'DIRSA',
+  'EMAER',
+  'GABAER',
+]);
+
+const MISSION_PARTICIPANT_RANK_ORDER_ENTRIES: Array<
+  readonly [string, number]
+> = [
+  ['GEN', 0],
+  ['TEN BRIG', 1],
+  ['TENBRIG', 1],
+  ['TB', 1],
+  ['MAJ BRIG', 2],
+  ['MAJBRIG', 2],
+  ['MB', 2],
+  ['BRIG', 3],
+  ['BRIGADEIRO', 3],
+  ['CEL', 4],
+  ['CORONEL', 4],
+  ['TEN CEL', 5],
+  ['TENCEL', 5],
+  ['TENENTE CORONEL', 5],
+  ['TCEL', 5],
+  ['MJ', 6],
+  ['MAJ', 6],
+  ['MAJOR', 6],
+  ['CAP', 7],
+  ['CAPITAO', 7],
+  ['CL', 7],
+  ['CAPELAO', 7],
+  ['CP', 7],
+  ['1 TEN', 8],
+  ['1TEN', 8],
+  ['1 TENENTE', 8],
+  ['PRIMEIRO TENENTE', 8],
+  ['TEN', 8],
+  ['1T', 8],
+  ['2 TEN', 9],
+  ['2TEN', 9],
+  ['2 TENENTE', 9],
+  ['SEGUNDO TENENTE', 9],
+  ['2T', 9],
+  ['ASP', 10],
+  ['ASPIRANTE', 10],
+  ['SO', 11],
+  ['SUBOFICIAL', 11],
+  ['1 SGT', 12],
+  ['1SGT', 12],
+  ['1 SARGENTO', 12],
+  ['PRIMEIRO SARGENTO', 12],
+  ['1S', 12],
+  ['2 SGT', 13],
+  ['2SGT', 13],
+  ['2 SARGENTO', 13],
+  ['SEGUNDO SARGENTO', 13],
+  ['2S', 13],
+  ['3 SGT', 14],
+  ['3SGT', 14],
+  ['3 SARGENTO', 14],
+  ['TERCEIRO SARGENTO', 14],
+  ['3S', 14],
+  ['CB', 15],
+  ['CABO', 15],
+  ['SD1', 16],
+  ['S1', 16],
+  ['SD2', 17],
+  ['S2', 17],
+  ['SD', 17],
+  ['SOLDADO', 17],
+  ['ALUNO', 18],
+];
+
+const MISSION_PARTICIPANT_RANK_ORDER = new Map(
+  MISSION_PARTICIPANT_RANK_ORDER_ENTRIES,
+);
+
+const MISSION_PARTICIPANT_RANK_PREFIXES =
+  MISSION_PARTICIPANT_RANK_ORDER_ENTRIES.map(([rank]) => rank).sort(
+    (a, b) => b.length - a.length,
+  );
 
 const scheduleLogoCandidates = [
   path.resolve(process.cwd(), 'frontend', 'public', 'brand', 'cipavd-7.png'),
@@ -112,6 +208,7 @@ export class MissionsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly fabLdap: FabLdapService,
+    private readonly config?: ConfigService,
   ) {}
 
   async listLocalityOptions(scopeParam: string | undefined, user?: RbacUser) {
@@ -192,6 +289,17 @@ export class MissionsService {
           scheduleItems: {
             select: { id: true },
           },
+          report: {
+            select: {
+              id: true,
+              contentHtml: true,
+              contentText: true,
+              signatures: {
+                where: { removedAt: null },
+                select: { id: true },
+              },
+            },
+          },
         },
       }),
       this.prisma.mission.count({ where }),
@@ -202,6 +310,8 @@ export class MissionsService {
         ...mission,
         participantsCount: mission.participants.length,
         scheduleItemsCount: mission.scheduleItems.length,
+        reportFilled: this.isMissionReportFilled(mission.report),
+        reportSignaturesCount: mission.report?.signatures.length ?? 0,
       })),
       page,
       pageSize,
@@ -909,12 +1019,304 @@ export class MissionsService {
             { createdAt: 'asc' },
           ],
         },
+        report: {
+          include: {
+            signatures: {
+              orderBy: [{ signedAt: 'desc' }, { createdAt: 'desc' }],
+              include: {
+                signedBy: { select: { id: true, name: true, email: true } },
+                removedBy: { select: { id: true, name: true, email: true } },
+              },
+            },
+          },
+        },
       },
     });
 
     if (!mission) throwError('NOT_FOUND');
     await this.assertMissionLocalityAllowed(mission);
-    return mission;
+    return {
+      ...mission,
+      reportFilled: this.isMissionReportFilled(mission.report),
+      reportSignaturesCount:
+        mission.report?.signatures.filter((signature) => !signature.removedAt)
+          .length ?? 0,
+    };
+  }
+
+  async upsertReport(
+    id: string,
+    dto: { contentHtml?: string | null; contentText?: string | null },
+    user?: RbacUser,
+  ) {
+    this.assertMissionReportEditAccess(user);
+
+    const mission = await this.prisma.mission.findUnique({
+      where: { id },
+      select: { id: true, localityId: true, scope: true },
+    });
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+    this.assertMissionReportScope(mission);
+
+    const contentHtml = this.sanitizeMissionReportHtml(dto.contentHtml);
+    const contentText = this.sanitizeMissionReportContentText(
+      dto.contentText ?? this.stripMissionReportHtml(contentHtml),
+    );
+
+    const existing = await this.prisma.missionReport.findUnique({
+      where: { missionId: id },
+      select: {
+        id: true,
+        contentHtml: true,
+        contentText: true,
+      },
+    });
+    const contentChanged =
+      !existing ||
+      existing.contentHtml !== contentHtml ||
+      existing.contentText !== contentText;
+
+    const report = await this.prisma.$transaction(async (tx) => {
+      const saved = await tx.missionReport.upsert({
+        where: { missionId: id },
+        create: {
+          missionId: id,
+          contentHtml,
+          contentText,
+        },
+        update: {
+          contentHtml,
+          contentText,
+        },
+      });
+
+      if (contentChanged) {
+        await tx.missionReportSignature.updateMany({
+          where: { reportId: saved.id, removedAt: null },
+          data: {
+            removedAt: new Date(),
+            removedById: user?.id ?? null,
+          },
+        });
+      }
+
+      return tx.missionReport.findUnique({
+        where: { id: saved.id },
+        include: {
+          signatures: {
+            orderBy: [{ signedAt: 'desc' }, { createdAt: 'desc' }],
+            include: {
+              signedBy: { select: { id: true, name: true, email: true } },
+              removedBy: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+      });
+    });
+    if (!report) throwError('UNEXPECTED');
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'missions',
+      action: 'upsert_report',
+      entityId: id,
+      localityId: mission.localityId,
+      diffJson: {
+        reportId: report.id,
+        contentChanged,
+        activeSignatures: report.signatures.filter((item) => !item.removedAt)
+          .length,
+      },
+    });
+
+    return {
+      ...report,
+      filled: this.isMissionReportFilled(report),
+    };
+  }
+
+  async signReport(id: string, user?: RbacUser, totpCode?: string) {
+    if (!user?.id) throwError('RBAC_FORBIDDEN');
+    this.assertMissionReportEditAccess(user);
+
+    const code = String(totpCode ?? '')
+      .replace(/\s/g, '')
+      .trim();
+    if (!code) throwError('AUTH_2FA_INVALID_CODE');
+
+    const signer = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { id: true, name: true, email: true, totpSecret: true, totpEnabled: true },
+    });
+    if (!signer?.totpEnabled || !signer?.totpSecret) {
+      throwError('AUTH_2FA_INVALID_CODE');
+    }
+    const encKey =
+      this.getConfigValue('TOTP_ENCRYPTION_KEY') ??
+      this.getConfigValue('JWT_ACCESS_SECRET') ??
+      'fallback-totp-key';
+    const secretBase32 = decryptSecret(signer.totpSecret, encKey);
+    if (!verifyTotpCode(secretBase32, code)) {
+      throwError('AUTH_2FA_INVALID_CODE');
+    }
+
+    const mission = await this.prisma.mission.findUnique({
+      where: { id },
+      include: {
+        locality: { select: { id: true, code: true, name: true } },
+        report: {
+          include: {
+            signatures: {
+              where: { removedAt: null },
+              select: { id: true, signedById: true },
+            },
+          },
+        },
+      },
+    });
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+    this.assertMissionReportScope(mission);
+    if (!mission.report || !this.isMissionReportFilled(mission.report)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'MISSION_REPORT_EMPTY',
+        field: 'contentHtml',
+      });
+    }
+    if (
+      mission.report.signatures.some(
+        (signature) => signature.signedById === user.id,
+      )
+    ) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'MISSION_REPORT_ALREADY_SIGNED',
+        field: 'signedById',
+      });
+    }
+
+    const signedAt = new Date();
+    const payload = {
+      mission: {
+        id: mission.id,
+        title: mission.title,
+        localityId: mission.localityId,
+        locality: mission.locality,
+        startDate: mission.startDate.toISOString(),
+        endDate: mission.endDate.toISOString(),
+      },
+      report: {
+        id: mission.report.id,
+        contentHash: createHash('sha256')
+          .update(mission.report.contentHtml)
+          .digest('hex'),
+        textHash: createHash('sha256')
+          .update(mission.report.contentText)
+          .digest('hex'),
+        updatedAt: mission.report.updatedAt.toISOString(),
+      },
+      signer: {
+        userId: user.id,
+        signedAt: signedAt.toISOString(),
+      },
+    };
+    const serialized = JSON.stringify(payload);
+    const payloadHash = createHash('sha256').update(serialized).digest('hex');
+    const secret =
+      this.getConfigValue('MISSION_SIGNATURE_SECRET') ??
+      this.getConfigValue('JWT_ACCESS_SECRET') ??
+      'cipavd-mission-signature';
+    const signatureHash = createHmac('sha256', secret)
+      .update(payloadHash)
+      .digest('hex');
+
+    const signature = await this.prisma.missionReportSignature.create({
+      data: {
+        reportId: mission.report.id,
+        signedById: user.id,
+        signedAt,
+        signaturePayloadHash: payloadHash,
+        signatureHash,
+        signatureAlgorithm: 'HMAC-SHA256',
+        signatureVersion: 1,
+      },
+      include: {
+        signedBy: { select: { id: true, name: true, email: true } },
+        removedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    await this.audit.log({
+      userId: user.id,
+      resource: 'missions',
+      action: 'sign_report',
+      entityId: id,
+      localityId: mission.localityId,
+      diffJson: {
+        signatureId: signature.id,
+        signatureAlgorithm: signature.signatureAlgorithm,
+        signatureVersion: signature.signatureVersion,
+      },
+    });
+
+    return signature;
+  }
+
+  async removeReportSignature(
+    id: string,
+    signatureId: string,
+    user?: RbacUser,
+  ) {
+    if (!user?.id) throwError('RBAC_FORBIDDEN');
+    this.assertMissionReportEditAccess(user);
+
+    const signature = await this.prisma.missionReportSignature.findFirst({
+      where: {
+        id: signatureId,
+        report: { missionId: id },
+      },
+      include: {
+        report: {
+          include: {
+            mission: {
+              select: { id: true, localityId: true, scope: true },
+            },
+          },
+        },
+        signedBy: { select: { id: true, name: true, email: true } },
+        removedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+    if (!signature) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(signature.report.mission);
+    this.assertMissionReportScope(signature.report.mission);
+
+    if (signature.removedAt) {
+      return signature;
+    }
+
+    const updated = await this.prisma.missionReportSignature.update({
+      where: { id: signature.id },
+      data: {
+        removedAt: new Date(),
+        removedById: user.id,
+      },
+      include: {
+        signedBy: { select: { id: true, name: true, email: true } },
+        removedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    await this.audit.log({
+      userId: user.id,
+      resource: 'missions',
+      action: 'remove_report_signature',
+      entityId: id,
+      localityId: signature.report.mission.localityId,
+      diffJson: { signatureId: signature.id },
+    });
+
+    return updated;
   }
 
   async getChecklist(id: string, user?: RbacUser) {
@@ -2318,22 +2720,24 @@ export class MissionsService {
       ? `${mission.locality.name} (${mission.locality.code})`
       : '-';
     const missionTimeZone = this.missionPdfTimeZone;
-    const missionPeriod = `${this.formatDate(mission.startDate, missionTimeZone)} a ${this.formatDate(mission.endDate, missionTimeZone)}`;
+    const missionPeriod = `${this.formatMissionPeriodDate(mission.startDate)} a ${this.formatMissionPeriodDate(mission.endDate)}`;
+    const participantOmSuffixes =
+      await this.buildMissionParticipantOmSuffixSet();
+    const participantNames = mission.participants.map((participant) => {
+      const baseName =
+        participant.name ||
+        participant.email ||
+        participant.cpf ||
+        'Participante';
+      return this.removeOmFromParticipantName(
+        baseName,
+        participant.fabom,
+        participantOmSuffixes,
+      );
+    });
     const participantsLabel =
       mission.participants.length > 0
-        ? mission.participants
-            .map((participant) => {
-              const baseName =
-                participant.name ||
-                participant.email ||
-                participant.cpf ||
-                'Participante';
-              return this.removeOmFromParticipantName(
-                baseName,
-                participant.fabom,
-              );
-            })
-            .join(', ')
+        ? this.sortParticipantsByRankSeniority(participantNames).join(', ')
         : 'Nenhum participante cadastrado';
 
     const drawPageFooter = () => {
@@ -2731,7 +3135,10 @@ export class MissionsService {
         activity: item.title || '-',
         location: item.location || '-',
         responsible: item.responsible || '-',
-        participants: item.participants || '-',
+        participants: this.formatParticipantTextForPdf(
+          item.participants,
+          participantOmSuffixes,
+        ),
       };
     };
 
@@ -3423,6 +3830,94 @@ export class MissionsService {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
+  private isMissionReportFilled(
+    report:
+      | {
+          contentHtml?: string | null;
+          contentText?: string | null;
+        }
+      | null
+      | undefined,
+  ) {
+    if (!report) return false;
+    return Boolean(
+      this.sanitizeMissionReportContentText(
+        report.contentText ?? this.stripMissionReportHtml(report.contentHtml),
+      ),
+    );
+  }
+
+  private sanitizeMissionReportHtml(value: string | null | undefined) {
+    const raw = String(value ?? '').slice(0, 120_000);
+    return raw
+      .replace(
+        /<\s*(script|style|iframe|object|embed|link|meta)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi,
+        '',
+      )
+      .replace(
+        /<\s*(script|style|iframe|object|embed|link|meta)[^>]*\/?>/gi,
+        '',
+      )
+      .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(
+        /\s+(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi,
+        '',
+      )
+      .replace(/\s+(href|src)\s*=\s*javascript:[^\s>]+/gi, '')
+      .replace(/\s+style\s*=\s*(['"])([\s\S]*?)\1/gi, (_match, quote, css) => {
+        const safeCss = String(css)
+          .replace(/url\s*\([^)]*\)/gi, '')
+          .replace(/expression\s*\([^)]*\)/gi, '')
+          .replace(/javascript:/gi, '')
+          .trim();
+        return safeCss ? ` style=${quote}${safeCss}${quote}` : '';
+      })
+      .trim();
+  }
+
+  private stripMissionReportHtml(value: string | null | undefined) {
+    return String(value ?? '')
+      .replace(
+        /<\s*(script|style|iframe|object|embed|link|meta)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi,
+        ' ',
+      )
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'");
+  }
+
+  private sanitizeMissionReportContentText(value: string | null | undefined) {
+    return String(value ?? '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 120_000);
+  }
+
+  private assertMissionReportScope(mission: { scope: ActivityScope }) {
+    if (mission.scope !== ActivityScope.CIPAVD) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'MISSION_REPORT_ONLY_CIPAVD',
+        field: 'scope',
+      });
+    }
+  }
+
+  private assertMissionReportEditAccess(user?: RbacUser) {
+    if (hasPermission(user, 'missions', 'update')) {
+      return;
+    }
+    throwError('RBAC_FORBIDDEN');
+  }
+
+  private getConfigValue(key: string) {
+    return this.config?.get<string>(key) ?? process.env[key];
+  }
+
   private assertMissionAccess(user?: RbacUser) {
     if (
       hasAnyPermission(user, [
@@ -3768,11 +4263,11 @@ export class MissionsService {
     return `${hours}h ${mins}min`;
   }
 
-  private formatDate(value: Date, timeZone = this.missionPdfTimeZone) {
-    return new Intl.DateTimeFormat('pt-BR', {
-      dateStyle: 'short',
-      timeZone,
-    }).format(value);
+  private formatMissionPeriodDate(value: Date) {
+    const day = String(value.getUTCDate()).padStart(2, '0');
+    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const year = String(value.getUTCFullYear());
+    return `${day}/${month}/${year}`;
   }
 
   private formatTime(value: Date, timeZone = this.missionPdfTimeZone) {
@@ -3838,28 +4333,162 @@ export class MissionsService {
     return (asUtc - value.getTime()) / 60_000;
   }
 
-  private removeOmFromParticipantName(name: string, fabom?: string | null) {
+  private async buildMissionParticipantOmSuffixSet() {
+    const suffixes = new Set(MISSION_PARTICIPANT_OM_SUFFIXES);
+    const [oms, localities] = await Promise.all([
+      this.prisma.om.findMany({ select: { code: true, name: true } }),
+      this.prisma.locality.findMany({
+        select: { code: true, name: true, commandName: true },
+      }),
+    ]);
+
+    for (const om of oms) {
+      this.addMissionParticipantOmSuffix(suffixes, om.code);
+      this.addMissionParticipantOmSuffix(suffixes, om.name);
+    }
+    for (const locality of localities) {
+      this.addMissionParticipantOmSuffix(suffixes, locality.code);
+      this.addMissionParticipantOmSuffix(suffixes, locality.name);
+      this.addMissionParticipantOmSuffix(suffixes, locality.commandName);
+    }
+    return suffixes;
+  }
+
+  private addMissionParticipantOmSuffix(
+    suffixes: Set<string>,
+    value: string | null | undefined,
+  ) {
+    const normalized = this.normalizeMissionParticipantOmToken(value);
+    if (!normalized || /\s/.test(normalized)) return;
+    if (/^[A-Z0-9][A-Z0-9-]{1,13}$/.test(normalized)) {
+      suffixes.add(normalized);
+    }
+  }
+
+  private normalizeMissionParticipantOmToken(value: string | null | undefined) {
+    return sanitizeText(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+  }
+
+  private normalizeMissionParticipantRankText(
+    value: string | null | undefined,
+  ) {
+    return sanitizeText(value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[ºª]/g, '')
+      .replace(/[._/-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toUpperCase();
+  }
+
+  private getMissionParticipantRankSortOrder(name: string) {
+    const normalized = this.normalizeMissionParticipantRankText(name);
+    for (const rank of MISSION_PARTICIPANT_RANK_PREFIXES) {
+      if (normalized === rank || normalized.startsWith(`${rank} `)) {
+        return (
+          MISSION_PARTICIPANT_RANK_ORDER.get(rank) ??
+          Number.MAX_SAFE_INTEGER
+        );
+      }
+    }
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  private sortParticipantsByRankSeniority(participants: string[]) {
+    return participants
+      .map((participant, index) => ({
+        participant,
+        index,
+        sortOrder: this.getMissionParticipantRankSortOrder(participant),
+      }))
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.index - b.index)
+      .map(({ participant }) => participant);
+  }
+
+  private removeOmFromParticipantName(
+    name: string,
+    fabom?: string | null,
+    knownOmSuffixes = MISSION_PARTICIPANT_OM_SUFFIXES,
+  ) {
     const normalizedName = sanitizeText(name ?? '').trim();
     if (!normalizedName) return 'Participante';
     const normalizedFabom = sanitizeText(fabom ?? '').trim();
-    if (!normalizedFabom) {
-      const parts = normalizedName.split(/\s+/).filter(Boolean);
-      if (parts.length >= 3) {
-        const lastToken = parts[parts.length - 1];
-        const looksLikeOm = /^[A-Z]{2,5}$/.test(lastToken);
-        if (looksLikeOm) {
-          return parts.slice(0, -1).join(' ').trim() || normalizedName;
-        }
-      }
-      return normalizedName;
+    const withoutFabom = normalizedFabom
+      ? this.stripExplicitOmSuffix(normalizedName, normalizedFabom)
+      : normalizedName;
+    return (
+      this.stripKnownOmTokenSuffix(withoutFabom, knownOmSuffixes) ||
+      withoutFabom ||
+      normalizedName
+    );
+  }
+
+  private stripExplicitOmSuffix(name: string, fabom: string) {
+    const escapedFabom = fabom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return (
+      name
+        .replace(new RegExp(`\\s+\\(${escapedFabom}\\)$`, 'i'), '')
+        .replace(new RegExp(`\\s+-\\s+${escapedFabom}$`, 'i'), '')
+        .replace(new RegExp(`\\s+/\\s+${escapedFabom}$`, 'i'), '')
+        .replace(new RegExp(`\\s+${escapedFabom}$`, 'i'), '')
+        .trim() || name
+    );
+  }
+
+  private stripKnownOmTokenSuffix(name: string, knownOmSuffixes: Set<string>) {
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length < 2) return name;
+    if (
+      this.getMissionParticipantRankSortOrder(name) ===
+      Number.MAX_SAFE_INTEGER
+    ) {
+      return name;
     }
 
-    const escapedFabom = normalizedFabom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return (
-      normalizedName
-        .replace(new RegExp(`\\s+${escapedFabom}$`, 'i'), '')
-        .trim() || normalizedName
+    const lastToken = this.normalizeMissionParticipantOmToken(
+      parts[parts.length - 1],
     );
+    if (!knownOmSuffixes.has(lastToken)) return name;
+    return parts.slice(0, -1).join(' ').trim() || name;
+  }
+
+  private formatParticipantTextForPdf(
+    value: string | null | undefined,
+    knownOmSuffixes = MISSION_PARTICIPANT_OM_SUFFIXES,
+  ) {
+    const normalized = sanitizeText(value ?? '').trim();
+    if (!normalized) return '-';
+
+    const separator = normalized.includes(',')
+      ? ','
+      : normalized.includes(';')
+        ? ';'
+        : null;
+    if (!separator) {
+      return this.removeOmFromParticipantName(
+        normalized,
+        null,
+        knownOmSuffixes,
+      );
+    }
+
+    const participants = normalized
+      .split(separator)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) =>
+        this.removeOmFromParticipantName(item, null, knownOmSuffixes),
+    );
+    return participants.length
+      ? this.sortParticipantsByRankSeniority(participants).join(
+          `${separator} `,
+        )
+      : '-';
   }
 
   private extractCpf(value: string | null | undefined) {

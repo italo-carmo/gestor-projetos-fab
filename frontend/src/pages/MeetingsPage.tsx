@@ -1,5 +1,4 @@
 import {
-  Autocomplete,
   Box,
   Button,
   Card,
@@ -24,25 +23,25 @@ import {
 } from '@mui/material';
 import { addDays, endOfMonth, format, startOfMonth, startOfWeek } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   useAddMeetingDecision,
   useCreateMeeting,
   useDeleteMeeting,
+  useDownloadMeetingMinutesFile,
   useGenerateMeetingTasks,
   useLocalities,
   useMeetings,
   usePhases,
   useSpecialties,
   useTaskTemplates,
-  useTasks,
   useUpdateMeeting,
-  useUpdateTaskMeeting,
+  useUpdateMeetingMinutes,
+  useUploadMeetingMinutesFiles,
   useMe,
   useUsers,
 } from '../api/hooks';
 import { FiltersBar } from '../components/filters/FiltersBar';
-import { EntityDocumentLinksManager } from '../components/documents/EntityDocumentLinksManager';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { EmptyState } from '../components/states/EmptyState';
 import { ErrorState } from '../components/states/ErrorState';
@@ -102,15 +101,17 @@ export function MeetingsPage() {
   const createMeeting = useCreateMeeting();
   const deleteMeeting = useDeleteMeeting();
   const updateMeeting = useUpdateMeeting();
+  const updateMeetingMinutes = useUpdateMeetingMinutes();
+  const uploadMeetingMinutesFiles = useUploadMeetingMinutesFiles();
+  const downloadMeetingMinutesFile = useDownloadMeetingMinutesFile();
   const addDecision = useAddMeetingDecision();
   const generateTasks = useGenerateMeetingTasks();
-  const updateTaskMeeting = useUpdateTaskMeeting();
-  const tasksQuery = useTasks({ pageSize: '200' });
-  const allTasks = tasksQuery.data?.items ?? [];
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerTab, setDrawerTab] = useState(0);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<any | null>(null);
+  const [minutesDraft, setMinutesDraft] = useState('');
   const [form, setForm] = useState({
     datetime: '',
     scope: '',
@@ -124,7 +125,6 @@ export function MeetingsPage() {
   });
 
   const [decisionText, setDecisionText] = useState('');
-  const [linkTaskValue, setLinkTaskValue] = useState<any | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [wizardPayload, setWizardPayload] = useState<any>({
@@ -145,7 +145,8 @@ export function MeetingsPage() {
       const meeting = meetingsQuery.data.items.find((m: any) => m.id === meetingIdFromUrl);
       if (meeting) {
         setSelectedMeeting(meeting);
-        setLinkTaskValue(null);
+        setMinutesDraft(meeting.minutes ?? '');
+        setDrawerTab(0);
         setDrawerOpen(true);
       }
     }
@@ -180,6 +181,8 @@ export function MeetingsPage() {
 
   const openCreate = () => {
     setSelectedMeeting(null);
+    setMinutesDraft('');
+    setDrawerTab(0);
     setForm({
       datetime: '',
       scope: '',
@@ -196,7 +199,8 @@ export function MeetingsPage() {
 
   const openEdit = (meeting: any) => {
     setSelectedMeeting(meeting);
-    setLinkTaskValue(null);
+    setMinutesDraft(meeting.minutes ?? '');
+    setDrawerTab(0);
     setForm({
       datetime: meeting.datetime ? meeting.datetime.slice(0, 16) : '',
       scope: meeting.scope ?? '',
@@ -237,6 +241,51 @@ export function MeetingsPage() {
     } catch (error) {
       const payload = parseApiError(error);
       toast.push({ message: payload.message ?? 'Erro ao salvar reunião', severity: 'error' });
+    }
+  };
+
+  const handleSaveMinutes = async () => {
+    if (!selectedMeeting || !canUpdate) return;
+    try {
+      await updateMeetingMinutes.mutateAsync({
+        id: selectedMeeting.id,
+        minutes: minutesDraft,
+      });
+      toast.push({ message: 'Ata salva', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao salvar ata', severity: 'error' });
+    }
+  };
+
+  const handleUploadMinutesFiles = async (files: File[]) => {
+    if (!selectedMeeting || !canUpdate || files.length === 0) return;
+    try {
+      await uploadMeetingMinutesFiles.mutateAsync({
+        id: selectedMeeting.id,
+        files,
+      });
+      toast.push({
+        message: files.length === 1 ? 'Arquivo enviado' : 'Arquivos enviados',
+        severity: 'success',
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao enviar arquivos', severity: 'error' });
+    }
+  };
+
+  const handleDownloadMinutesFile = async (document: any) => {
+    if (!selectedMeeting) return;
+    try {
+      await downloadMeetingMinutesFile.mutateAsync({
+        meetingId: selectedMeeting.id,
+        documentId: document.id,
+        fileName: document.fileName ?? 'ata',
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao baixar arquivo', severity: 'error' });
     }
   };
 
@@ -311,11 +360,7 @@ export function MeetingsPage() {
   const canCreate = can(me, 'meetings', 'create');
   const canUpdate = can(me, 'meetings', 'update');
   const canGenerate = can(me, 'tasks', 'generate_from_meeting');
-  const canUpdateLinkedTask = can(me, 'task_instances', 'update');
   const canDelete = can(me, 'meetings', 'delete');
-
-  const getTaskOptionLabel = (t: any) =>
-    (t.taskTemplate?.title ?? t.title ?? 'Tarefa') + ' - ' + format(new Date(t.dueDate), 'dd/MM/yyyy');
 
   const handleDeleteMeeting = async () => {
     if (!selectedMeeting || !canDelete) return;
@@ -604,9 +649,20 @@ export function MeetingsPage() {
           flexDirection="column"
           gap={2}
           height="100%"
-          sx={{ overflowY: 'auto', pt: { xs: 8, md: 7 } }}
+          sx={{ overflowY: 'auto', pt: { xs: 10, md: 9 } }}
         >
-          <Typography variant="h5">{selectedMeeting ? 'Detalhes da reunião' : 'Nova reunião'}</Typography>
+          <Typography variant="h5" sx={{ mt: 1 }}>
+            {selectedMeeting ? 'Detalhes da reunião' : 'Nova reunião'}
+          </Typography>
+          <Tabs
+            value={drawerTab}
+            onChange={(_, value) => setDrawerTab(value)}
+            variant="fullWidth"
+          >
+            <Tab label="Detalhes" />
+            <Tab label="Ata" disabled={!selectedMeeting} />
+          </Tabs>
+          <Stack spacing={2} sx={{ display: drawerTab === 0 ? 'flex' : 'none' }}>
           <TextField
             size="small"
             type="datetime-local"
@@ -780,75 +836,98 @@ export function MeetingsPage() {
                   </Button>
                 </Stack>
               </Stack>
+            </>
+          )}
+          </Stack>
+          {selectedMeeting && (
+            <Stack spacing={2} sx={{ display: drawerTab === 1 ? 'flex' : 'none' }}>
+              <TextField
+                label="Texto da ata"
+                value={minutesDraft}
+                onChange={(e) => setMinutesDraft(e.target.value)}
+                multiline
+                minRows={12}
+                fullWidth
+                disabled={!canUpdate}
+              />
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                {canUpdate && (
+                  <Button
+                    variant="contained"
+                    onClick={handleSaveMinutes}
+                    disabled={updateMeetingMinutes.isPending}
+                  >
+                    Salvar ata
+                  </Button>
+                )}
+                {canUpdate && (
+                  <Button
+                    variant="outlined"
+                    component="label"
+                    disabled={uploadMeetingMinutesFiles.isPending}
+                  >
+                    Enviar arquivos
+                    <input
+                      hidden
+                      type="file"
+                      multiple
+                      onChange={(event) => {
+                        const files = Array.from(event.target.files ?? []);
+                        event.target.value = '';
+                        void handleUploadMinutesFiles(files);
+                      }}
+                    />
+                  </Button>
+                )}
+              </Stack>
+              {uploadMeetingMinutesFiles.isPending && (
+                <Typography variant="body2" color="text.secondary">
+                  Enviando arquivos...
+                </Typography>
+              )}
               <Divider />
-              <Typography variant="subtitle1">Tarefas geradas</Typography>
+              <Typography variant="subtitle1">Arquivos da ata</Typography>
               <Stack spacing={1}>
-                {(selectedMeeting.tasks ?? []).map((task: any) => (
-                  <Card key={task.id} variant="outlined">
+                {(selectedMeeting.documents ?? []).length === 0 && (
+                  <Typography variant="body2" color="text.secondary">
+                    Nenhum arquivo enviado.
+                  </Typography>
+                )}
+                {(selectedMeeting.documents ?? []).map((document: any) => (
+                  <Card key={document.id} variant="outlined">
                     <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
-                      <Typography variant="body2">{task.taskTemplate?.title ?? 'Tarefa'}</Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {format(new Date(task.dueDate), 'dd/MM/yyyy')}
-                      </Typography>
-                      <Button
-                        component={Link}
-                        to={`/tasks?scope=${encodeURIComponent(
-                          String(task.scope ?? "SMIF"),
-                        )}&taskId=${task.id}`}
-                        size="small"
-                        sx={{ mt: 0.5 }}
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1}
+                        justifyContent="space-between"
+                        alignItems={{ xs: 'flex-start', sm: 'center' }}
                       >
-                        Ver tarefa →
-                      </Button>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={600} noWrap>
+                            {document.title ?? document.fileName ?? 'Arquivo'}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {document.fileSize
+                              ? `${Math.round(Number(document.fileSize) / 1024)} KB`
+                              : document.mimeType ?? 'Arquivo'}
+                          </Typography>
+                        </Box>
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={() => {
+                            void handleDownloadMinutesFile(document);
+                          }}
+                          disabled={downloadMeetingMinutesFile.isPending}
+                        >
+                          Baixar
+                        </Button>
+                      </Stack>
                     </CardContent>
                   </Card>
                 ))}
-                {(selectedMeeting.tasks ?? []).length === 0 && (
-                  <Typography variant="body2" color="text.secondary">
-                    Nenhuma tarefa vinculada.
-                  </Typography>
-                )}
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  Vincular tarefa existente
-                </Typography>
-                <Autocomplete
-                  size="small"
-                  value={linkTaskValue}
-                  disabled={!canUpdateLinkedTask || updateTaskMeeting.isPending}
-                  onChange={(_e, newValue: any) => {
-                    if (!canUpdateLinkedTask) return;
-                    setLinkTaskValue(null);
-                    if (newValue) {
-                      updateTaskMeeting
-                        .mutateAsync({ id: newValue.id, meetingId: selectedMeeting.id })
-                        .then(() => toast.push({ message: 'Tarefa vinculada à reunião', severity: 'success' }))
-                        .catch((err) =>
-                          toast.push({
-                            message:
-                              parseApiError(err).message ??
-                              'Não foi possível vincular a tarefa à reunião.',
-                            severity: 'error',
-                          }),
-                        );
-                    }
-                  }}
-                  options={allTasks.filter(
-                    (t: any) => !(selectedMeeting.tasks ?? []).some((linked: any) => linked.id === t.id),
-                  )}
-                  getOptionLabel={getTaskOptionLabel}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Selecionar tarefa" placeholder="Buscar tarefa..." />
-                  )}
-                />
-                <Divider sx={{ my: 1 }} />
-                <EntityDocumentLinksManager
-                  entityType="MEETING"
-                  entityId={selectedMeeting.id}
-                  canManage={canUpdate}
-                  title="Documentos da reunião"
-                />
               </Stack>
-            </>
+            </Stack>
           )}
         </Box>
       </Drawer>

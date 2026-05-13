@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, MeetingStatus, MeetingType } from '@prisma/client';
+import {
+  DocumentCategory,
+  DocumentLinkEntity,
+  Prisma,
+  MeetingStatus,
+  MeetingType,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
 import { AuditService } from '../audit/audit.service';
@@ -76,6 +82,9 @@ export class MeetingsService {
             include: { taskTemplate: true },
             orderBy: { dueDate: 'asc' },
           },
+          documents: {
+            orderBy: { createdAt: 'desc' },
+          },
         },
         skip,
         take,
@@ -95,6 +104,7 @@ export class MeetingsService {
       meetingLink?: string | null;
       location?: string | null;
       agenda?: string | null;
+      minutes?: string | null;
       localityId?: string | null;
       participantIds?: string[];
     },
@@ -124,6 +134,7 @@ export class MeetingsService {
         location: location ? sanitizeText(location) : null,
         meetingLink: payload.meetingLink?.trim() || null,
         agenda: payload.agenda ? sanitizeText(payload.agenda) : null,
+        minutes: payload.minutes ? sanitizeText(payload.minutes) : null,
         localityId: payload.localityId ?? null,
         participants: payload.participantIds?.length
           ? { create: payload.participantIds.map((userId) => ({ userId })) }
@@ -159,6 +170,7 @@ export class MeetingsService {
       meetingLink?: string | null;
       location?: string | null;
       agenda?: string | null;
+      minutes?: string | null;
       localityId?: string | null;
       participantIds?: string[];
     },
@@ -222,6 +234,10 @@ export class MeetingsService {
           : payload.agenda === null
             ? null
             : undefined,
+        minutes:
+          payload.minutes !== undefined
+            ? sanitizeText(payload.minutes ?? '') || null
+            : undefined,
         localityId: payload.localityId !== undefined ? localityId : undefined,
         participants: payload.participantIds?.length
           ? { create: payload.participantIds.map((userId) => ({ userId })) }
@@ -271,6 +287,156 @@ export class MeetingsService {
     });
 
     return created;
+  }
+
+  async updateMinutes(
+    meetingId: string,
+    minutes: string | null | undefined,
+    user?: RbacUser,
+  ) {
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      select: { id: true, localityId: true },
+    });
+    if (!meeting) throwError('NOT_FOUND');
+    this.assertLocality(meeting.localityId ?? null, user);
+
+    const updated = await this.prisma.meeting.update({
+      where: { id: meetingId },
+      data: {
+        minutes:
+          minutes !== undefined ? sanitizeText(minutes ?? '') || null : null,
+      },
+      include: {
+        locality: true,
+        participants: {
+          include: { user: { select: { id: true, name: true, email: true } } },
+        },
+        decisions: true,
+        tasks: {
+          include: { taskTemplate: true },
+          orderBy: { dueDate: 'asc' },
+        },
+        documents: {
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'meetings',
+      action: 'update_minutes',
+      entityId: meetingId,
+      localityId: updated.localityId ?? undefined,
+      diffJson: { hasMinutes: Boolean(updated.minutes?.trim()) },
+    });
+
+    return updated;
+  }
+
+  async uploadMinutesFiles(
+    meetingId: string,
+    files: Array<{
+      fileName: string;
+      fileUrl: string;
+      storageKey: string;
+      mimeType?: string | null;
+      fileSize?: number | null;
+      checksum?: string | null;
+    }>,
+    user?: RbacUser,
+  ) {
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      select: { id: true, scope: true, localityId: true },
+    });
+    if (!meeting) throwError('NOT_FOUND');
+    this.assertLocality(meeting.localityId ?? null, user);
+
+    if (!files.length) {
+      throwError('VALIDATION_ERROR', { field: 'files', reason: 'required' });
+    }
+
+    const sourceLabel = meeting.scope?.trim() || meeting.id;
+    const documents = await this.prisma.$transaction(async (tx) => {
+      const created: Prisma.DocumentAssetGetPayload<{}>[] = [];
+      for (const file of files) {
+        const title = sanitizeText(file.fileName || 'Arquivo da ata');
+        const document = await tx.documentAsset.create({
+          data: {
+            title,
+            category: DocumentCategory.GENERAL,
+            sourcePath: `Reuniões / Ata / ${sourceLabel}`,
+            fileName: file.fileName,
+            fileUrl: file.fileUrl,
+            storageKey: file.storageKey,
+            mimeType: file.mimeType ?? null,
+            fileSize: file.fileSize ?? null,
+            checksum: file.checksum ?? null,
+            localityId: meeting.localityId ?? null,
+            meetingId: meeting.id,
+          },
+        });
+
+        await tx.documentLink.upsert({
+          where: {
+            documentId_entityType_entityId: {
+              documentId: document.id,
+              entityType: DocumentLinkEntity.MEETING,
+              entityId: meeting.id,
+            },
+          },
+          update: { label: 'Ata' },
+          create: {
+            documentId: document.id,
+            entityType: DocumentLinkEntity.MEETING,
+            entityId: meeting.id,
+            label: 'Ata',
+          },
+        });
+
+        created.push(document);
+      }
+      return created;
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'meetings',
+      action: 'upload_minutes_files',
+      entityId: meetingId,
+      localityId: meeting.localityId ?? undefined,
+      diffJson: {
+        count: documents.length,
+        fileNames: documents.map((document) => document.fileName),
+      },
+    });
+
+    return { items: documents };
+  }
+
+  async getMinutesFileForDownload(
+    meetingId: string,
+    documentId: string,
+    user?: RbacUser,
+  ) {
+    const meeting = await this.prisma.meeting.findUnique({
+      where: { id: meetingId },
+      select: { id: true, localityId: true },
+    });
+    if (!meeting) throwError('NOT_FOUND');
+    this.assertLocality(meeting.localityId ?? null, user);
+
+    const document = await this.prisma.documentAsset.findFirst({
+      where: {
+        id: documentId,
+        meetingId,
+      },
+    });
+    if (!document) throwError('NOT_FOUND');
+
+    return document;
   }
 
   async generateTasks(

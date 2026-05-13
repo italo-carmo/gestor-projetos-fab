@@ -1,13 +1,28 @@
+import { DocumentCategory, DocumentLinkEntity } from '@prisma/client';
 import { MeetingsService } from './meetings.service';
 
 const prismaMock = {
   meeting: {
     findUnique: jest.fn(),
+    update: jest.fn(),
   },
   taskTemplate: {
     create: jest.fn(),
   },
+  documentAsset: {
+    findFirst: jest.fn(),
+  },
+  $transaction: jest.fn(),
 } as any;
+
+const txMock = {
+  documentAsset: {
+    create: jest.fn(),
+  },
+  documentLink: {
+    upsert: jest.fn(),
+  },
+};
 
 const tasksMock = {
   generateInstances: jest.fn(),
@@ -22,6 +37,163 @@ describe('MeetingsService task generation', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    prismaMock.$transaction.mockImplementation(async (input: any) => {
+      if (Array.isArray(input)) return Promise.all(input);
+      return input(txMock);
+    });
+  });
+
+  it('saves optional free-text minutes without requiring files', async () => {
+    prismaMock.meeting.findUnique.mockResolvedValue({
+      id: 'meeting-1',
+      localityId: null,
+    });
+    prismaMock.meeting.update.mockResolvedValue({
+      id: 'meeting-1',
+      localityId: null,
+      minutes: 'Ata registrada com encaminhamentos',
+      participants: [],
+      decisions: [],
+      tasks: [],
+      documents: [],
+    });
+
+    await expect(
+      service.updateMinutes(
+        'meeting-1',
+        '  Ata registrada\ncom encaminhamentos  ',
+      ),
+    ).resolves.toMatchObject({
+      id: 'meeting-1',
+      minutes: 'Ata registrada com encaminhamentos',
+    });
+
+    expect(prismaMock.meeting.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'meeting-1' },
+        data: { minutes: 'Ata registrada com encaminhamentos' },
+      }),
+    );
+    expect(auditMock.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resource: 'meetings',
+        action: 'update_minutes',
+        entityId: 'meeting-1',
+        diffJson: { hasMinutes: true },
+      }),
+    );
+  });
+
+  it('clears minutes when the free-text field is empty', async () => {
+    prismaMock.meeting.findUnique.mockResolvedValue({
+      id: 'meeting-1',
+      localityId: null,
+    });
+    prismaMock.meeting.update.mockResolvedValue({
+      id: 'meeting-1',
+      localityId: null,
+      minutes: null,
+      participants: [],
+      decisions: [],
+      tasks: [],
+      documents: [],
+    });
+
+    await service.updateMinutes('meeting-1', '   ');
+
+    expect(prismaMock.meeting.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { minutes: null },
+      }),
+    );
+  });
+
+  it('uploads one or more minutes files and links them to the meeting', async () => {
+    prismaMock.meeting.findUnique.mockResolvedValue({
+      id: 'meeting-1',
+      scope: 'CIPAVD',
+      localityId: 'loc-1',
+    });
+    txMock.documentAsset.create
+      .mockResolvedValueOnce({
+        id: 'doc-1',
+        fileName: 'ata.pdf',
+      })
+      .mockResolvedValueOnce({
+        id: 'doc-2',
+        fileName: 'lista.xlsx',
+      });
+    txMock.documentLink.upsert.mockResolvedValue({});
+
+    const result = await service.uploadMinutesFiles('meeting-1', [
+      {
+        fileName: 'ata.pdf',
+        fileUrl: '/documents/ata.pdf',
+        storageKey: 'ata-storage.pdf',
+        mimeType: 'application/pdf',
+        fileSize: 1234,
+      },
+      {
+        fileName: 'lista.xlsx',
+        fileUrl: '/documents/lista.xlsx',
+        storageKey: 'lista-storage.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        fileSize: 987,
+      },
+    ]);
+
+    expect(result.items).toHaveLength(2);
+    expect(txMock.documentAsset.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        title: 'ata.pdf',
+        category: DocumentCategory.GENERAL,
+        sourcePath: 'Reuniões / Ata / CIPAVD',
+        fileName: 'ata.pdf',
+        fileUrl: '/documents/ata.pdf',
+        storageKey: 'ata-storage.pdf',
+        localityId: 'loc-1',
+        meetingId: 'meeting-1',
+      }),
+    });
+    expect(txMock.documentLink.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          documentId_entityType_entityId: {
+            documentId: 'doc-1',
+            entityType: DocumentLinkEntity.MEETING,
+            entityId: 'meeting-1',
+          },
+        },
+        create: expect.objectContaining({ label: 'Ata' }),
+      }),
+    );
+    expect(auditMock.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resource: 'meetings',
+        action: 'upload_minutes_files',
+        entityId: 'meeting-1',
+        diffJson: {
+          count: 2,
+          fileNames: ['ata.pdf', 'lista.xlsx'],
+        },
+      }),
+    );
+  });
+
+  it('rejects minutes upload without files', async () => {
+    prismaMock.meeting.findUnique.mockResolvedValue({
+      id: 'meeting-1',
+      scope: 'CIPAVD',
+      localityId: null,
+    });
+
+    await expect(service.uploadMinutesFiles('meeting-1', [])).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'VALIDATION_ERROR',
+        details: { field: 'files', reason: 'required' },
+      }),
+    });
+    expect(txMock.documentAsset.create).not.toHaveBeenCalled();
   });
 
   it('passes the meeting scope when generating task instances', async () => {

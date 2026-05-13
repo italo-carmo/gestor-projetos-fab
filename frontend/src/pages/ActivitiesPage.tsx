@@ -1,5 +1,8 @@
 import {
   Autocomplete,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -35,6 +38,7 @@ import CheckBoxRoundedIcon from '@mui/icons-material/CheckBoxRounded';
 import CheckBoxOutlineBlankRoundedIcon from '@mui/icons-material/CheckBoxOutlineBlankRounded';
 import CloudDownloadRoundedIcon from '@mui/icons-material/CloudDownloadRounded';
 import DragIndicatorRoundedIcon from '@mui/icons-material/DragIndicatorRounded';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -280,8 +284,18 @@ function isFormsReportRecord(row: unknown): row is Record<string, unknown> {
   return Boolean(row && typeof row === 'object');
 }
 
-function getReportMissingFields(reportForm: typeof blankReport) {
+function getReportMissingFields(
+  reportForm: typeof blankReport,
+  reportRequired = false,
+  optionalTextMode = false,
+) {
   const missing: string[] = [];
+  if (optionalTextMode) {
+    if (reportRequired && toNonNegativeInt(reportForm.participantsCount) <= 0) {
+      missing.push('Total de Participantes');
+    }
+    return missing;
+  }
   if (!String(reportForm.date ?? '').trim()) missing.push('Data');
   if (!String(reportForm.closingDate ?? reportForm.date ?? '').trim()) {
     missing.push('Data de Fechamento');
@@ -869,6 +883,8 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
     reportIsSigned && (can(me, 'reports', 'update') || isReportSigner);
   const canEditReportContent = canEditReport && !reportIsSigned;
   const canUploadReportPhotos = canUpload && !reportIsSigned;
+  const reportOptionalTextMode = scope === 'cipavd';
+  const reportPublicParticipantRequired = Boolean(selected?.reportRequired);
   const canEditActivityForm = isCreateMode ? canCreate : canUpdate;
   const canManageBatch = can(me, 'task_instances', 'update');
   const canBatchAssignResponsible = selectedLocalityIds.length <= 1;
@@ -1306,8 +1322,25 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       });
       return;
     }
-    const reportDateIso = toIsoDateStartOfDay(reportForm.date);
-    const closingDateInput = reportForm.closingDate || reportForm.date;
+    const missingFields = reportOptionalTextMode
+      ? getReportMissingFields(
+          reportForm,
+          reportPublicParticipantRequired,
+          reportOptionalTextMode,
+        )
+      : [];
+    if (missingFields.length > 0) {
+      toast.push({
+        message: `Preencha os campos obrigatórios antes de salvar: ${missingFields.join(', ')}.`,
+        severity: 'warning',
+      });
+      return;
+    }
+    const fallbackDateInput =
+      reportForm.date ||
+      (selected.eventDate ? String(selected.eventDate).slice(0, 10) : new Date().toISOString().slice(0, 10));
+    const reportDateIso = toIsoDateStartOfDay(fallbackDateInput);
+    const closingDateInput = reportForm.closingDate || reportForm.date || fallbackDateInput;
     const closingDateIso = toIsoDateStartOfDay(closingDateInput);
     if (!reportDateIso || !closingDateIso) {
       toast.push({
@@ -1362,7 +1395,11 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       });
       return;
     }
-    const missingFields = getReportMissingFields(reportForm);
+    const missingFields = getReportMissingFields(
+      reportForm,
+      reportPublicParticipantRequired,
+      reportOptionalTextMode,
+    );
     if (missingFields.length > 0) {
       toast.push({
         message: `Preencha os campos obrigatórios antes de assinar: ${missingFields.join(', ')}.`,
@@ -1370,8 +1407,11 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       });
       return;
     }
-    const reportDateIso = toIsoDateStartOfDay(reportForm.date);
-    const closingDateInput = reportForm.closingDate || reportForm.date;
+    const fallbackDateInput =
+      reportForm.date ||
+      (selected.eventDate ? String(selected.eventDate).slice(0, 10) : new Date().toISOString().slice(0, 10));
+    const reportDateIso = toIsoDateStartOfDay(fallbackDateInput);
+    const closingDateInput = reportForm.closingDate || reportForm.date || fallbackDateInput;
     const closingDateIso = toIsoDateStartOfDay(closingDateInput);
     if (!reportDateIso || !closingDateIso) {
       toast.push({
@@ -1392,8 +1432,11 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       setSign2faError('Informe o código de 6 dígitos do Google Authenticator.');
       return;
     }
-    const reportDateIso = toIsoDateStartOfDay(reportForm.date);
-    const closingDateInput = reportForm.closingDate || reportForm.date;
+    const fallbackDateInput =
+      reportForm.date ||
+      (selected.eventDate ? String(selected.eventDate).slice(0, 10) : new Date().toISOString().slice(0, 10));
+    const reportDateIso = toIsoDateStartOfDay(fallbackDateInput);
+    const closingDateInput = reportForm.closingDate || reportForm.date || fallbackDateInput;
     const closingDateIso = toIsoDateStartOfDay(closingDateInput);
     if (!reportDateIso || !closingDateIso) return;
     const participantsMaleCount = toOptionalNonNegativeInt(reportForm.participantsMaleCount);
@@ -1457,7 +1500,14 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       ) {
         setSign2faDialogOpen(false);
         toast.push({
-          message: buildIncompleteReportMessage(payload, getReportMissingFields(reportForm)),
+          message: buildIncompleteReportMessage(
+            payload,
+            getReportMissingFields(
+              reportForm,
+              reportPublicParticipantRequired,
+              reportOptionalTextMode,
+            ),
+          ),
           severity: 'warning',
         });
         return;
@@ -2674,6 +2724,18 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
               </Stack>
 
               <Stack spacing={3}>
+                <Accordion
+                  variant="outlined"
+                  disableGutters
+                  defaultExpanded={!reportOptionalTextMode}
+                >
+                  <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      Identificação e equipe
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Stack spacing={3}>
                 {/* 1. IDENTIFICAÇÃO DA ATIVIDADE */}
                 <Box>
                   <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
@@ -2743,6 +2805,9 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                     />
                   </Stack>
                 </Box>
+                    </Stack>
+                  </AccordionDetails>
+                </Accordion>
 
                 {/* 3. PÚBLICO PARTICIPANTE */}
                 <Box>
@@ -2759,6 +2824,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                         setReportForm({ ...reportForm, participantsCount: Number(e.target.value) || 0 })
                       }
                       inputProps={{ min: 0 }}
+                      required={reportPublicParticipantRequired}
                       fullWidth
                       disabled={!canEditReportContent}
                     />
@@ -2923,6 +2989,18 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                   </Stack>
                 </Box>
 
+                <Accordion
+                  variant="outlined"
+                  disableGutters
+                  defaultExpanded={!reportOptionalTextMode}
+                >
+                  <AccordionSummary expandIcon={<ExpandMoreRoundedIcon />}>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      Informações complementares
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Stack spacing={3}>
                 {/* 4. DESCRIÇÃO DA ATIVIDADE */}
                 <Box>
                   <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 'bold', textDecoration: 'underline' }}>
@@ -3063,6 +3141,9 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                     disabled={!canEditReportContent}
                   />
                 </Stack>
+                    </Stack>
+                  </AccordionDetails>
+                </Accordion>
 
                 <Box>
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
