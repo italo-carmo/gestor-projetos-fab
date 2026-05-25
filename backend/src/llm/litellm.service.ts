@@ -82,7 +82,7 @@ export const LITELLM_MODEL_ENV_KEYS = [
   'OPENAI_MODEL',
 ] as const;
 
-export const LITELLM_DEFAULT_GPT_OSS = 'gpt-oss:20b';
+export const LITELLM_DEFAULT_GPT_OSS = 'gpt-oss-120b';
 
 export function normalizeLitellmModelId(
   raw: string,
@@ -91,8 +91,12 @@ export function normalizeLitellmModelId(
   let m = raw.trim();
   if (!m) return LITELLM_DEFAULT_GPT_OSS;
   const low = m.toLowerCase().replace(/_/g, '-');
-  if (low === 'gptoss-20b') {
-    m = 'gpt-oss-20b';
+  if (low === 'openai/gpt-oss-20b') {
+    m = 'openai/gpt-oss-120b';
+  }
+  const gptOssAlias = low.match(/^gpt-?oss(?::|-)?(20|120)b$/);
+  if (gptOssAlias) {
+    m = LITELLM_DEFAULT_GPT_OSS;
   }
   const styleFlag = firstConfig(config, [
     'API_LITELLM_OPENAI_STYLE_MODEL',
@@ -107,16 +111,16 @@ export function normalizeLitellmModelId(
   if (
     openAiStyle &&
     !m.includes('/') &&
-    mLow.startsWith('gpt-oss:') &&
+    mLow.startsWith('gpt-oss-') &&
     !mLow.startsWith('openai/')
   ) {
-    return `openai/${m.replace(/:/g, '-')}`;
+    return `openai/${m}`;
   }
   return m;
 }
 
 /**
- * Some reasoning models (e.g. gpt-oss:20b) output chain-of-thought
+ * Some reasoning models (e.g. gpt-oss-120b) output chain-of-thought
  * before the real answer, delimited by a marker like "assistantfinal".
  * Pattern: "analysis<thinking>...assistantfinal<actual answer>"
  */

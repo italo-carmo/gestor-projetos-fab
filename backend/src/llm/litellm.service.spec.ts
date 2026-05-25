@@ -45,8 +45,20 @@ describe('LitellmService', () => {
 
     expect(stripEnvQuotes('  "abc"  ')).toBe('abc');
     expect(stripEnvQuotes(" 'abc' ")).toBe('abc');
+    expect(normalizeLitellmModelId('gpt-oss:120b', configMock)).toBe(
+      'openai/gpt-oss-120b',
+    );
+  });
+
+  it('uses the LiteLLM gpt-oss-120b id by default', () => {
+    configMock.get = jest.fn(() => undefined) as any;
+
+    expect(normalizeLitellmModelId('', configMock)).toBe('gpt-oss-120b');
+    expect(normalizeLitellmModelId('gptoss-120b', configMock)).toBe(
+      'gpt-oss-120b',
+    );
     expect(normalizeLitellmModelId('gpt-oss:20b', configMock)).toBe(
-      'openai/gpt-oss-20b',
+      'gpt-oss-120b',
     );
   });
 
