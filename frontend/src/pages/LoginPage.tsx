@@ -78,7 +78,6 @@ type CpcaSelfRegistrationLookupPreview = {
     name?: string | null;
     email?: string | null;
     fabom?: string | null;
-    postoGraduacao?: string | null;
     warName?: string | null;
   };
   locality?: {
@@ -347,7 +346,6 @@ export function LoginPage() {
           name?: string | null;
           email?: string | null;
           fabom?: string | null;
-          postoGraduacao?: string | null;
           warName?: string | null;
         };
         locality?: {
@@ -438,7 +436,6 @@ export function LoginPage() {
               name: cpcaStatusResult.profile.name,
               email: cpcaStatusResult.profile.email,
               fabom: cpcaStatusResult.profile.fabom,
-              postoGraduacao: cpcaStatusResult.profile.postoGraduacao,
               warName:
                 cpcaStatusResult.profile.warName ??
                 cpcaStatusResult.profile.name,
@@ -932,16 +929,6 @@ export function LoginPage() {
                     <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
                       <TextField
                         size="small"
-                        label="Posto/Graduação"
-                        value={
-                          cpcaLookupPreview.profile.postoGraduacao ||
-                          "Não identificado"
-                        }
-                        InputProps={{ readOnly: true }}
-                        fullWidth
-                      />
-                      <TextField
-                        size="small"
                         label="Nome de guerra"
                         value={
                           cpcaLookupPreview.profile.warName ||
@@ -978,7 +965,7 @@ export function LoginPage() {
                   renderInput={(params) => (
                     <TextField
                       {...params}
-                      label="OM da presidência CPCA"
+                      label="OM da CPCA"
                       helperText={
                         cpcaSelfRegistrationLocalitiesQuery.isError
                           ? "Não foi possível carregar o catálogo de OMs."
