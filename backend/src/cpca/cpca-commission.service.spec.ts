@@ -26,6 +26,7 @@ function createPrismaMock() {
       findMany: jest.fn(),
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      update: jest.fn(),
     },
     user: {
       findMany: jest.fn(),
@@ -206,7 +207,7 @@ describe('CpcaCommissionService', () => {
     (deleteCpcaPresidentBulletinFile as jest.Mock).mockReturnValue(true);
   });
 
-  it('permite autoinscrição de presidente usando a OM resolvida do LDAP mesmo com presidente já existente', async () => {
+  it('permite autoinscrição de presidente para OM selecionada diferente da OM do LDAP', async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();
     const ldap = createLdapMock();
@@ -216,14 +217,27 @@ describe('CpcaCommissionService', () => {
       ldap as any,
     );
 
-    (resolveBestOmByFabOm as jest.Mock).mockResolvedValue(om);
+    const ldapOm = {
+      id: 'om-ldap',
+      code: 'GSAU-AN',
+      name: 'GSAU-AN',
+      hasCpca: false,
+    };
+    const selectedOm = {
+      id: 'om-selected',
+      code: 'BAAN',
+      name: 'BAAN',
+      hasCpca: false,
+    };
+
+    (resolveBestOmByFabOm as jest.Mock).mockResolvedValue(ldapOm);
     ldap.lookupByEmail.mockResolvedValue({
       uid: 'uid-pres-1',
       email: 'presidente@fab.mil.br',
       name: 'Cel Presidente',
-      fabom: 'BACO',
+      fabom: 'GSAU-AN',
     });
-    prisma.om.findUnique.mockResolvedValue(om);
+    prisma.om.findUnique.mockResolvedValue(selectedOm);
     prisma.user.findMany.mockResolvedValue([]);
     prisma.user.findFirst.mockResolvedValue(null);
     prisma.user.create.mockResolvedValue({
@@ -231,8 +245,8 @@ describe('CpcaCommissionService', () => {
       name: 'Cel Presidente',
       email: 'presidente@fab.mil.br',
       ldapUid: 'uid-pres-1',
-      omId: om.id,
-      localityId: om.id,
+      omId: ldapOm.id,
+      localityId: ldapOm.id,
     });
     prisma.cpcaPresidentSelfRegistration.findMany.mockResolvedValue([]);
     prisma.cpcaPresidentSelfRegistration.create.mockResolvedValue({
@@ -240,12 +254,13 @@ describe('CpcaCommissionService', () => {
       status: 'PENDING',
       createdAt: new Date('2026-04-19T10:00:00Z'),
       attemptNumber: 1,
-      om,
+      om: selectedOm,
     });
 
     const result = await service.createSelfRegistration(
       {
         identifier: 'presidente@fab.mil.br',
+        localityId: selectedOm.id,
         isSubstitution: false,
         bulletinNumber: 'BOL 001',
         bulletinFile: {
@@ -263,13 +278,13 @@ describe('CpcaCommissionService', () => {
     expect(prisma.cpcaPresidentSelfRegistration.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          omId: om.id,
+          omId: selectedOm.id,
           bulletinFileName: 'boletim-publicacao.pdf',
           bulletinStorageKey: 'bulletin-1.pdf',
         }),
       }),
     );
-    expect(result.request.locality).toEqual(om);
+    expect(result.request.locality).toEqual(selectedOm);
   });
 
   it('notifica o email configurado quando uma autoinscrição de presidente é criada', async () => {
@@ -328,6 +343,7 @@ describe('CpcaCommissionService', () => {
     await service.createSelfRegistration(
       {
         identifier: 'presidente@fab.mil.br',
+        localityId: om.id,
         isSubstitution: true,
         bulletinNumber: 'BOL 001',
         bulletinFile: {
@@ -403,6 +419,120 @@ describe('CpcaCommissionService', () => {
         makeUser({ id: 'approver', roles: ['COMGEP'] }) as any,
       ),
       'CPCA_LOCALITY_ALREADY_HAS_PRESIDENT',
+    );
+  });
+
+  it('ativa CPCA da OM durante a homologação quando a solicitação veio de OM ainda não habilitada', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+    const omWithoutCpca = {
+      ...om,
+      id: 'om-baan',
+      code: 'BAAN',
+      name: 'BAAN',
+      hasCpca: false,
+    };
+    const enabledOm = { ...omWithoutCpca, hasCpca: true };
+
+    prisma.cpcaPresidentSelfRegistration.findUnique.mockResolvedValue({
+      id: 'req-approve-without-cpca',
+      status: 'PENDING',
+      omId: omWithoutCpca.id,
+      requestedAsSubstitution: false,
+      bulletinNumber: 'BOL 030',
+      applicantUserId: 'user-target',
+      applicantIdentifier: 'novo@fab.mil.br',
+      applicantUid: 'uid-novo',
+      applicantEmail: 'novo@fab.mil.br',
+      om: omWithoutCpca,
+      applicantUser: {
+        id: 'user-target',
+        name: 'Maj Novo',
+        email: 'novo@fab.mil.br',
+        ldapUid: 'uid-novo',
+        omId: null,
+        localityId: null,
+      },
+    });
+    prisma.om.findUnique.mockResolvedValue(omWithoutCpca);
+    prisma.om.update.mockResolvedValue(enabledOm);
+    prisma.cpcaCommissionPresident.findUnique.mockResolvedValue(null);
+    prisma.role.findMany.mockResolvedValue([{ id: 'role-cpca', name: 'CPCA' }]);
+    prisma.user.update.mockResolvedValue({
+      id: 'user-target',
+      name: 'Maj Novo',
+      email: 'novo@fab.mil.br',
+      ldapUid: 'uid-novo',
+      omId: omWithoutCpca.id,
+      localityId: omWithoutCpca.id,
+    });
+    prisma.userRole.createMany.mockResolvedValue({ count: 1 });
+    prisma.cpcaCommissionMember.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.cpcaCommissionPresident.upsert.mockResolvedValue({
+      id: 'president-1',
+      user: {
+        id: 'user-target',
+        name: 'Maj Novo',
+        email: 'novo@fab.mil.br',
+        ldapUid: 'uid-novo',
+        omId: omWithoutCpca.id,
+        localityId: omWithoutCpca.id,
+      },
+      assignedByUser: {
+        id: 'approver',
+        name: 'Aprovador',
+        email: 'approver@fab.mil.br',
+      },
+    });
+    prisma.cpcaPresidentSelfRegistration.findMany.mockResolvedValue([]);
+    prisma.cpcaPresidentSelfRegistration.update.mockResolvedValue({
+      id: 'req-approve-without-cpca',
+      status: 'APPROVED',
+      applicantName: 'Maj Novo',
+      requestedAsSubstitution: false,
+      bulletinNumber: 'BOL 030',
+      attemptNumber: 1,
+      decidedAt: new Date('2026-04-22T13:05:00Z'),
+      om: enabledOm,
+      applicantUser: {
+        id: 'user-target',
+        name: 'Maj Novo',
+        email: 'novo@fab.mil.br',
+        ldapUid: 'uid-novo',
+      },
+      decidedByUser: {
+        id: 'approver',
+        name: 'Aprovador',
+        email: 'approver@fab.mil.br',
+      },
+    });
+
+    await service.approvePresidentRequest(
+      'req-approve-without-cpca',
+      {},
+      makeUser({ id: 'approver', roles: ['COMGEP'] }) as any,
+    );
+
+    expect(prisma.om.update).toHaveBeenCalledWith({
+      where: { id: omWithoutCpca.id },
+      data: { hasCpca: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        hasCpca: true,
+      },
+    });
+    expect(prisma.cpcaCommissionPresident.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ omId: omWithoutCpca.id }),
+      }),
     );
   });
 
@@ -889,6 +1019,7 @@ describe('CpcaCommissionService', () => {
     const result = await service.createSelfRegistration(
       {
         identifier: 'presidente@fab.mil.br',
+        localityId: om.id,
         resubmissionOfId: 'req-rejected-1',
         isSubstitution: true,
         bulletinNumber: 'BOL 099',
@@ -974,6 +1105,7 @@ describe('CpcaCommissionService', () => {
     const result = await service.createSelfRegistration(
       {
         identifier: 'presidente@fab.mil.br',
+        localityId: om.id,
         isSubstitution: false,
         bulletinNumber: 'BOL 101',
         bulletinFile: {
@@ -1069,6 +1201,7 @@ describe('CpcaCommissionService', () => {
     const result = await service.createSelfRegistration(
       {
         identifier: 'presidente@fab.mil.br',
+        localityId: om.id,
         isSubstitution: false,
         bulletinNumber: 'BOL 103',
         bulletinFile: {

@@ -1,10 +1,12 @@
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -34,6 +36,7 @@ import { resolveHomePath } from "../app/roleAccess";
 import { ACTIVE_ROLE_STORAGE_KEY, api } from "../api/client";
 import {
   useCreateCpcaPresidentSelfRegistration,
+  useCpcaSelfRegistrationLocalities,
   useLogin,
   useLookupCpcaSelfRegistrationCandidate,
   useLookupCpcaSelfRegistrationStatus,
@@ -86,27 +89,18 @@ type CpcaSelfRegistrationLookupPreview = {
   } | null;
 };
 
+type CpcaSelfRegistrationLocalityOption = {
+  id: string;
+  code: string;
+  name?: string | null;
+  uf?: string | null;
+  hasCpca?: boolean;
+};
+
 type ValidCpcaPresidentBulletin = Extract<
   CpcaPresidentBulletinValidationResult,
   { ok: true }
 >;
-
-function formatOmLabel(
-  code: string | null | undefined,
-  name: string | null | undefined,
-) {
-  const codeValue = String(code ?? "").trim();
-  const nameValue = String(name ?? "").trim();
-  if (codeValue && nameValue) {
-    if (
-      codeValue.localeCompare(nameValue, "pt-BR", { sensitivity: "base" }) === 0
-    ) {
-      return codeValue;
-    }
-    return `${codeValue} - ${nameValue}`;
-  }
-  return codeValue || nameValue;
-}
 
 function formatDateTime(value: string | null | undefined) {
   const raw = String(value ?? "").trim();
@@ -129,6 +123,7 @@ export function LoginPage() {
     "register" | "status"
   >("register");
   const [cpcaIdentifier, setCpcaIdentifier] = useState("");
+  const [cpcaSelectedLocalityId, setCpcaSelectedLocalityId] = useState("");
   const [cpcaResubmissionOfId, setCpcaResubmissionOfId] = useState("");
   const [cpcaIsSubstitution, setCpcaIsSubstitution] = useState(false);
   const [cpcaBulletinNumber, setCpcaBulletinNumber] = useState("");
@@ -150,8 +145,20 @@ export function LoginPage() {
   const cpcaSelfRegistrationStatusMutation =
     useLookupCpcaSelfRegistrationStatus();
   const cpcaSelfRegistrationMutation = useCreateCpcaPresidentSelfRegistration();
+  const cpcaSelfRegistrationLocalitiesQuery =
+    useCpcaSelfRegistrationLocalities(cpcaSelfRegistrationOpen);
   const navigate = useNavigate();
   const toast = useToast();
+
+  const cpcaSelfRegistrationLocalities =
+    ((cpcaSelfRegistrationLocalitiesQuery.data?.items ??
+      []) as CpcaSelfRegistrationLocalityOption[]).filter(
+      (item) => item?.id && item?.code,
+    );
+  const cpcaSelectedLocality =
+    cpcaSelfRegistrationLocalities.find(
+      (item) => item.id === cpcaSelectedLocalityId,
+    ) ?? null;
 
   const normalizeCpfInput = (value: string) => value.replace(/\D/g, "");
 
@@ -267,6 +274,7 @@ export function LoginPage() {
 
   const resetCpcaSelfRegistrationForm = () => {
     setCpcaIdentifier("");
+    setCpcaSelectedLocalityId("");
     setCpcaResubmissionOfId("");
     setCpcaIsSubstitution(false);
     setCpcaBulletinNumber("");
@@ -413,6 +421,7 @@ export function LoginPage() {
       cpcaStatusIdentifier,
     );
     setCpcaIdentifier(seed.identifier);
+    setCpcaSelectedLocalityId(seed.localityId);
     setCpcaResubmissionOfId(seed.resubmissionOfId);
     setCpcaIsSubstitution(seed.isSubstitution);
     setCpcaBulletinNumber(seed.bulletinNumber);
@@ -434,7 +443,6 @@ export function LoginPage() {
                 cpcaStatusResult.profile.warName ??
                 cpcaStatusResult.profile.name,
             },
-            locality: cpcaStatusResult.locality ?? null,
           }
         : null,
     );
@@ -443,12 +451,12 @@ export function LoginPage() {
 
   const handleSubmitCpcaSelfRegistration = async () => {
     const identifier = cpcaIdentifier.trim();
-    const localityId = String(cpcaLookupPreview?.locality?.id ?? "").trim();
+    const localityId = cpcaSelectedLocalityId.trim();
     const bulletinNumber = cpcaBulletinNumber.trim();
     if (!identifier || !localityId || !bulletinNumber) {
       toast.push({
         message:
-          "Preencha e-mail/CPF, faça a busca LDAP e informe o boletim para enviar a solicitação.",
+          "Preencha e-mail/CPF, faça a busca LDAP, selecione a OM e informe o boletim para enviar a solicitação.",
         severity: "warning",
       });
       return;
@@ -946,20 +954,49 @@ export function LoginPage() {
                     </Stack>
                   </>
                 ) : null}
-                <TextField
+                <Autocomplete
                   size="small"
-                  label="OM"
-                  value={
-                    cpcaLookupPreview?.locality
-                      ? formatOmLabel(
-                          cpcaLookupPreview.locality.code,
-                          cpcaLookupPreview.locality.name,
-                        )
-                      : ""
-                  }
-                  InputProps={{ readOnly: true }}
                   fullWidth
-                  helperText="Preenchida automaticamente via LDAP. Não é possível alterar."
+                  options={cpcaSelfRegistrationLocalities}
+                  value={cpcaSelectedLocality}
+                  onChange={(_, option) => {
+                    setCpcaSelectedLocalityId(option?.id ?? "");
+                    if (!cpcaResubmissionOfId) return;
+                    if (option?.id !== cpcaSelectedLocalityId) {
+                      setCpcaResubmissionOfId("");
+                    }
+                  }}
+                  loading={cpcaSelfRegistrationLocalitiesQuery.isLoading}
+                  getOptionLabel={(option) => String(option?.code ?? "")}
+                  isOptionEqualToValue={(option, value) =>
+                    option.id === value.id
+                  }
+                  renderOption={(props, option) => (
+                    <li {...props}>{option.code}</li>
+                  )}
+                  noOptionsText="Nenhuma OM encontrada"
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="OM da presidência CPCA"
+                      helperText={
+                        cpcaSelfRegistrationLocalitiesQuery.isError
+                          ? "Não foi possível carregar o catálogo de OMs."
+                          : "Selecione a OM pelo código."
+                      }
+                      InputProps={{
+                        ...params.InputProps,
+                        endAdornment: (
+                          <>
+                            {cpcaSelfRegistrationLocalitiesQuery.isLoading ? (
+                              <CircularProgress color="inherit" size={16} />
+                            ) : null}
+                            {params.InputProps.endAdornment}
+                          </>
+                        ),
+                      }}
+                    />
+                  )}
                 />
                 <TextField
                   select
@@ -1166,15 +1203,12 @@ export function LoginPage() {
                             ? ` • ${cpcaStatusResult.profile.email}`
                             : ""}
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          OM atual no LDAP:{" "}
-                          {cpcaStatusResult.locality
-                            ? formatOmLabel(
-                                cpcaStatusResult.locality.code,
-                                cpcaStatusResult.locality.name,
-                              )
-                            : "Não identificada"}
-                        </Typography>
+                        {cpcaStatusResult.latestRequest?.locality ? (
+                          <Typography variant="body2" color="text.secondary">
+                            OM solicitada:{" "}
+                            {cpcaStatusResult.latestRequest.locality.code}
+                          </Typography>
+                        ) : null}
                       </Box>
                       {cpcaStatusResult.latestRequest ? (
                         <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -1208,6 +1242,15 @@ export function LoginPage() {
                         direction={{ xs: "column", md: "row" }}
                         spacing={1}
                       >
+                        <TextField
+                          size="small"
+                          label="OM solicitada"
+                          value={
+                            cpcaStatusResult.latestRequest.locality?.code ?? "-"
+                          }
+                          InputProps={{ readOnly: true }}
+                          fullWidth
+                        />
                         <TextField
                           size="small"
                           label="Solicitação mais recente"
@@ -1328,7 +1371,8 @@ export function LoginPage() {
                                     variant="body2"
                                     color="text.secondary"
                                   >
-                                    Boletim: {entry.bulletinNumber}
+                                    OM: {entry.locality?.code ?? "-"}
+                                    {" • "}Boletim: {entry.bulletinNumber}
                                     {entry.requestedAsSubstitution
                                       ? " • Substituição"
                                       : ""}
@@ -1388,6 +1432,10 @@ export function LoginPage() {
               disabled={
                 cpcaSelfRegistrationMutation.isPending ||
                 cpcaBulletinFileIsValidating ||
+                !cpcaSelectedLocalityId ||
+                !cpcaLookupPreview ||
+                cpcaLookupPreview.identifier.toLowerCase() !==
+                  cpcaIdentifier.trim().toLowerCase() ||
                 !cpcaBulletinFile ||
                 !cpcaBulletinFileValidation
               }

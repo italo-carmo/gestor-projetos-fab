@@ -31,8 +31,14 @@ const REASON_MESSAGES: Record<string, string> = {
     "Esta solicitação já foi processada anteriormente.",
   CPCA_PRESIDENT_REQUEST_RESUBMISSION_ONLY_AFTER_REJECTION:
     "Só é possível reenviar uma solicitação que tenha sido rejeitada.",
+  CPCA_SELF_REGISTRATION_LOCALITY_REQUIRED:
+    "Selecione a OM para a qual deseja solicitar homologação como presidente CPCA.",
+  CPCA_SELF_REGISTRATION_LOCALITY_NOT_FOUND:
+    "A OM selecionada não foi encontrada no cadastro do sistema.",
+  CPCA_SELF_REGISTRATION_RESUBMISSION_LOCALITY_MISMATCH:
+    "O reenvio deve manter a mesma OM da tentativa rejeitada. Para trocar a OM, envie uma nova solicitação.",
   CPCA_SELF_REGISTRATION_LOCALITY_MISMATCH:
-    "Você não pode se cadastrar como presidente da CPCA de uma OM diferente da sua OM no LDAP.",
+    "A OM selecionada não corresponde à solicitação anterior.",
   CPCA_SELF_REGISTRATION_LDAP_LOCALITY_NOT_FOUND:
     "Não foi possível identificar sua OM no LDAP para validar o cadastro.",
   CPCA_SELF_REGISTRATION_LDAP_LOCALITY_WITHOUT_CPCA:

@@ -87,6 +87,11 @@ describe("cpcaSelfRegistrationStatus helpers", () => {
           createdAt: "2026-04-22T10:00:00.000Z",
           bulletinNumber: "BOL 101",
           requestedAsSubstitution: true,
+          locality: {
+            id: "om-1",
+            code: "BAAN",
+            name: "BAAN",
+          },
         },
       },
       "presidente@fab.mil.br",
@@ -94,6 +99,7 @@ describe("cpcaSelfRegistrationStatus helpers", () => {
 
     expect(seed).toEqual({
       identifier: "presidente@fab.mil.br",
+      localityId: "om-1",
       bulletinNumber: "BOL 101",
       isSubstitution: true,
       resubmissionOfId: "req-2",

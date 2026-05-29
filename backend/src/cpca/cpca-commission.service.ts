@@ -83,15 +83,14 @@ export class CpcaCommissionService {
 
   async listSelfRegistrationLocalities() {
     const items = await this.prisma.om.findMany({
-      where: {
-        hasCpca: true,
-      },
       select: {
         id: true,
         code: true,
         name: true,
+        uf: true,
+        hasCpca: true,
       },
-      orderBy: { name: 'asc' },
+      orderBy: { code: 'asc' },
     });
 
     return { items };
@@ -181,31 +180,24 @@ export class CpcaCommissionService {
       maxLength: 220,
     });
 
+    const requestedLocalityId = String(payload.localityId ?? '').trim();
+    if (!requestedLocalityId) {
+      throwError('VALIDATION_ERROR', {
+        field: 'localityId',
+        reason: 'CPCA_SELF_REGISTRATION_LOCALITY_REQUIRED',
+      });
+    }
+
     const ldapProfile = await this.resolveLdapProfile(identifier);
     const ldapLocality = await this.resolveOmFromFabOm(ldapProfile.fabom);
-    if (!ldapLocality) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'CPCA_SELF_REGISTRATION_LDAP_LOCALITY_NOT_FOUND',
-      });
-    }
-    if (!ldapLocality.hasCpca) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'CPCA_SELF_REGISTRATION_LDAP_LOCALITY_WITHOUT_CPCA',
-      });
-    }
-    const requestedLocalityId = String(payload.localityId ?? '').trim();
-    if (requestedLocalityId && ldapLocality.id !== requestedLocalityId) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'CPCA_SELF_REGISTRATION_LOCALITY_MISMATCH',
-        selectedLocalityId: requestedLocalityId,
-        ldapLocalityId: ldapLocality.id,
-        ldapLocalityCode: ldapLocality.code,
-        ldapLocalityName: ldapLocality.name,
-      });
-    }
-    const locality = await this.assertOmSupportsCpca(ldapLocality.id);
+    const locality = await this.assertOmExistsForSelfRegistration(
+      requestedLocalityId,
+    );
 
-    const user = await this.upsertLdapBackedUser(ldapProfile, ldapLocality.id);
+    const user = await this.upsertLdapBackedUser(
+      ldapProfile,
+      ldapLocality?.id ?? null,
+    );
     const applicantName = ldapProfile.name?.trim() || user.name;
     const resubmissionOfId = String(payload.resubmissionOfId ?? '').trim();
     const attemptChainWhere = this.buildSelfRegistrationAttemptChainWhere({
@@ -279,11 +271,9 @@ export class CpcaCommissionService {
       }
       if (validatedResubmission.omId !== locality.id) {
         throwError('VALIDATION_ERROR', {
-          reason: 'CPCA_SELF_REGISTRATION_LOCALITY_MISMATCH',
+          reason: 'CPCA_SELF_REGISTRATION_RESUBMISSION_LOCALITY_MISMATCH',
           selectedLocalityId: locality.id,
-          ldapLocalityId: locality.id,
-          ldapLocalityCode: locality.code,
-          ldapLocalityName: locality.name,
+          previousLocalityId: validatedResubmission.omId,
         });
       }
       if (validatedResubmission.status !== 'REJECTED') {
@@ -1922,7 +1912,9 @@ export class CpcaCommissionService {
     requestId: string | null;
     assignmentSource: CpcaCommissionPresidentAssignmentSource;
   }) {
-    const locality = await this.assertOmSupportsCpca(input.localityId);
+    const locality = await this.ensureOmSupportsCpcaForPresidentAssignment(
+      input.localityId,
+    );
 
     const existing = await this.prisma.cpcaCommissionPresident.findUnique({
       where: { omId: input.localityId },
@@ -2227,6 +2219,58 @@ export class CpcaCommissionService {
     }
 
     return locality;
+  }
+
+  private async assertOmExistsForSelfRegistration(localityId: string) {
+    const locality = await this.prisma.om.findUnique({
+      where: { id: localityId },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        hasCpca: true,
+      },
+    });
+
+    if (!locality) {
+      throwError('VALIDATION_ERROR', {
+        field: 'localityId',
+        reason: 'CPCA_SELF_REGISTRATION_LOCALITY_NOT_FOUND',
+      });
+    }
+
+    return locality;
+  }
+
+  private async ensureOmSupportsCpcaForPresidentAssignment(localityId: string) {
+    const locality = await this.prisma.om.findUnique({
+      where: { id: localityId },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        hasCpca: true,
+      },
+    });
+
+    if (!locality) {
+      throwError('NOT_FOUND');
+    }
+
+    if (locality.hasCpca) {
+      return locality;
+    }
+
+    return this.prisma.om.update({
+      where: { id: localityId },
+      data: { hasCpca: true },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        hasCpca: true,
+      },
+    });
   }
 
   private async resolveLdapProfile(identifier: string) {

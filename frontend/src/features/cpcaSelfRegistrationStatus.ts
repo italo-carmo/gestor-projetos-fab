@@ -109,6 +109,7 @@ export function buildCpcaSelfRegistrationResubmissionSeed(
       String(fallbackIdentifier ?? "").trim() ||
       String(result?.profile?.email ?? "").trim() ||
       String(result?.profile?.uid ?? "").trim(),
+    localityId: String(latestRequest?.locality?.id ?? "").trim(),
     bulletinNumber: String(latestRequest?.bulletinNumber ?? "").trim(),
     isSubstitution: Boolean(latestRequest?.requestedAsSubstitution),
     resubmissionOfId: String(latestRequest?.id ?? "").trim(),
