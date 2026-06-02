@@ -40,10 +40,10 @@ import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import {
   buildOmCpcaCoverageSummary,
+  formatOmCpcaPresidentBadgeLabel,
   matchesOmCpcaCoverageFilter,
   matchesOmCpcaPresidentFilter,
   resolveOmCpcaCoverageStatus,
-  splitOmCpcaPresidentDisplayName,
   type OmCpcaCoverageFilter,
   type OmCpcaPresidentFilter,
 } from "../features/omCpcaCoverage";
@@ -901,7 +901,7 @@ export function OmsAdminPage() {
                   const coverageStatus = resolveOmCpcaCoverageStatus(locality);
                   const managedBy = locality.cpcaManagedByLocality;
                   const president = locality.currentPresident;
-                  const presidentDisplay = splitOmCpcaPresidentDisplayName(
+                  const presidentDisplay = formatOmCpcaPresidentBadgeLabel(
                     president?.user?.name,
                   );
                   return (
@@ -974,42 +974,25 @@ export function OmsAdminPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {president ? (
-                          <Stack spacing={0.5} sx={{ minWidth: 0 }}>
-                            {presidentDisplay.rank ? (
-                              <Chip
-                                size="small"
-                                variant="outlined"
-                                label={presidentDisplay.rank}
-                                sx={{
-                                  alignSelf: "flex-start",
-                                  height: 22,
-                                  fontSize: 12,
-                                }}
-                              />
-                            ) : (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                Posto não informado
-                              </Typography>
-                            )}
-                            <Typography
-                              variant="body2"
-                              fontWeight={600}
-                              sx={{
+                        {president && presidentDisplay.label ? (
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={presidentDisplay.label}
+                            title={presidentDisplay.fullName || undefined}
+                            sx={{
+                              maxWidth: 180,
+                              fontWeight: 700,
+                              "& .MuiChip-label": {
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                              title={presidentDisplay.fullName || undefined}
-                            >
-                              {presidentDisplay.name ||
-                                presidentDisplay.fullName ||
-                                "Nome não informado"}
-                            </Typography>
-                          </Stack>
+                              },
+                            }}
+                          />
+                        ) : president ? (
+                          <Typography variant="body2" color="text.secondary">
+                            Nome não informado
+                          </Typography>
                         ) : (
                           <Typography variant="body2" color="text.secondary">
                             Sem presidente

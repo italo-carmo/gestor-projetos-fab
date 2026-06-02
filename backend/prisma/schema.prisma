@@ -100,6 +100,7 @@ model User {
   lessonsLearnedCreated                   LessonLearnedPost[]              @relation("LessonLearnedCreator")
   smifComplaintsCreated                   SmifComplaint[]                  @relation("SmifComplaintCreatedBy")
   smifComplaintsUpdated                   SmifComplaint[]                  @relation("SmifComplaintUpdatedBy")
+  emailDeliveryFailuresResolved           EmailDeliveryFailure[]           @relation("EmailDeliveryFailureResolvedBy")
 }
 
 model Om {
@@ -1000,6 +1001,27 @@ model UserMenuUpdateRead {
   @@unique([userId, menuKey])
   @@index([userId, seenAt])
   @@index([menuKey])
+}
+
+model EmailDeliveryFailure {
+  id           String                     @id @default(cuid())
+  to           String[]
+  cc           String[]                   @default([])
+  bcc          String[]                   @default([])
+  subject      String
+  errorMessage String
+  errorStack   String?
+  status       EmailDeliveryFailureStatus @default(OPEN)
+  occurredAt   DateTime                   @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+
+  resolvedBy User? @relation("EmailDeliveryFailureResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, occurredAt])
+  @@index([resolvedById])
 }
 
 model Kpi {
@@ -2266,6 +2288,11 @@ enum MeetingStatus {
   PLANNED
   HELD
   CANCELLED
+}
+
+enum EmailDeliveryFailureStatus {
+  OPEN
+  RESOLVED
 }
 
 enum KpiVisibility {

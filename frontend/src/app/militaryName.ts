@@ -2,8 +2,40 @@ function normalizeWhitespace(value: string) {
   return String(value ?? '').replace(/\s+/g, ' ').trim();
 }
 
-const MILITARY_RANK_PREFIX =
-  /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN CEL|CEL|BRIG|BRIGADEIRO|GEN)\b/i;
+const MILITARY_RANK_PREFIXES = [
+  'TEN CEL',
+  'BRIGADEIRO',
+  'ALUNO',
+  'TCEL',
+  'BRIG',
+  'ASP',
+  'CAP',
+  'CEL',
+  'GEN',
+  'MAJ',
+  'TEN',
+  'SD',
+  'CB',
+  '3S',
+  '2S',
+  '1S',
+  'SO',
+  'CP',
+  'CL',
+  'MB',
+  'TB',
+  '2T',
+  '1T',
+];
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+const MILITARY_RANK_PREFIX = new RegExp(
+  `^(${MILITARY_RANK_PREFIXES.map(escapeRegExp).join('|')})\\b`,
+  'i',
+);
 
 export function splitMilitaryNameAndOm(raw: string | null | undefined) {
   const name = normalizeWhitespace(raw ?? '');
@@ -24,7 +56,7 @@ export function splitMilitaryNameAndOm(raw: string | null | undefined) {
   }
 
   const tokens = name.split(' ');
-  if (tokens.length >= 3 && MILITARY_RANK_PREFIX.test(tokens[0])) {
+  if (tokens.length >= 3 && MILITARY_RANK_PREFIX.test(upper)) {
     const last = tokens[tokens.length - 1].toUpperCase();
     if (/^[A-Z0-9-]{2,14}$/.test(last)) {
       return {
@@ -41,4 +73,33 @@ export function toMilitaryDisplayName(raw: string | null | undefined) {
   return splitMilitaryNameAndOm(raw).displayName;
 }
 
+export function splitMilitaryRankAndName(raw: string | null | undefined) {
+  const displayName = normalizeWhitespace(toMilitaryDisplayName(raw));
+  if (!displayName) {
+    return {
+      rank: null as string | null,
+      nameWithoutRank: '',
+      displayName: '',
+    };
+  }
 
+  const match = displayName.match(MILITARY_RANK_PREFIX);
+  if (!match) {
+    return {
+      rank: null as string | null,
+      nameWithoutRank: displayName,
+      displayName,
+    };
+  }
+
+  const rank = normalizeWhitespace(match[1] ?? '').toUpperCase() || null;
+  const nameWithoutRank = normalizeWhitespace(
+    displayName.slice(match[0].length),
+  );
+
+  return {
+    rank,
+    nameWithoutRank,
+    displayName,
+  };
+}

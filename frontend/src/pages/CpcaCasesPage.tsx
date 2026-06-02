@@ -36,6 +36,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   useCpcaCase,
   useCpcaCases,
+  useCpcaCaseHistory,
   useCpcaCaseLocalityOptions,
   useCpcaCasePendingSummary,
   useCreateCpcaCaseCipavdThread,
@@ -110,6 +111,20 @@ const STATUS_OPTIONS = [
   { value: "INVESTIGATION", label: "Em apuração" },
   { value: "CONCLUDED", label: "Concluída" },
   { value: "ARCHIVED", label: "Arquivada" },
+];
+
+const CPCA_HISTORY_ACTION_OPTIONS = [
+  { value: "create", label: "Criação" },
+  { value: "update", label: "Atualização" },
+  { value: "delete", label: "Exclusão" },
+  { value: "comment", label: "Comentário" },
+  { value: "cipavd_pendency_create", label: "Pendência registrada" },
+  { value: "cipavd_pendency_update", label: "Pendência modificada" },
+  { value: "cipavd_pendency_resolve", label: "Pendência respondida" },
+  { value: "cipavd_pendency_reopen", label: "Pendência reaberta" },
+  { value: "cipavd_pendency_finalize", label: "Pendência finalizada" },
+  { value: "cipavd_pendency_delete", label: "Pendência excluída" },
+  { value: "cipavd_comment_create", label: "Comentário da gestão" },
 ];
 
 const STATUS_CHIP_STYLES: Record<
@@ -658,6 +673,33 @@ function getComplaintTypeLabel(value: string | null | undefined) {
   );
 }
 
+function formatHistoryValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "-";
+  if (Array.isArray(value)) {
+    return value.length ? value.map(formatHistoryValue).join(", ") : "-";
+  }
+  if (typeof value === "boolean") return value ? "Sim" : "Não";
+  const raw = String(value);
+  const parsedDate = /^\d{4}-\d{2}-\d{2}T/.test(raw) ? new Date(raw) : null;
+  if (parsedDate && !Number.isNaN(parsedDate.getTime())) {
+    return parsedDate.toLocaleString("pt-BR");
+  }
+  return raw;
+}
+
+function formatHistoryActor(actor: any) {
+  const name = String(actor?.name ?? "").trim();
+  const email = String(actor?.email ?? "").trim();
+  if (name && email) return `${name} (${email})`;
+  return name || email || "Sistema";
+}
+
+function formatHistoryOm(om: any) {
+  const code = String(om?.code ?? "").trim();
+  const name = String(om?.name ?? "").trim();
+  return code && name ? `${code} - ${name}` : code || name || "-";
+}
+
 function statusOptionsForStep(step: number, currentStatus: string) {
   const allowed = new Set(STEP_STATUS_OPTIONS[step] ?? []);
   if (currentStatus) allowed.add(currentStatus);
@@ -740,6 +782,44 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     ? smifLocalitiesQuery
     : cpcaLocalityOptionsQuery;
   const postosQuery = usePostoOptions(canAccessByRole);
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyPageSize, setHistoryPageSize] = useState(10);
+  const [historyAction, setHistoryAction] = useState("");
+  const [historyActor, setHistoryActor] = useState("");
+  const [historyFrom, setHistoryFrom] = useState("");
+  const [historyTo, setHistoryTo] = useState("");
+  const historyFilters = useMemo(
+    () => ({
+      q: q || undefined,
+      localityId: localityId || undefined,
+      status: status || undefined,
+      detailedViolenceType: detailedViolenceType || undefined,
+      procedureType: procedureType || undefined,
+      action: historyAction || undefined,
+      actor: historyActor.trim() || undefined,
+      from: historyFrom || undefined,
+      to: historyTo ? `${historyTo}T23:59:59` : undefined,
+      page: historyPage + 1,
+      pageSize: historyPageSize,
+    }),
+    [
+      q,
+      localityId,
+      status,
+      detailedViolenceType,
+      procedureType,
+      historyAction,
+      historyActor,
+      historyFrom,
+      historyTo,
+      historyPage,
+      historyPageSize,
+    ],
+  );
+  const historyQuery = useCpcaCaseHistory(
+    historyFilters,
+    canAccessByRole && !isSmifWorkflow,
+  );
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedId, setSelectedId] = useState("");
@@ -903,6 +983,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
   const items = casesQuery.data?.items ?? [];
   const totalItems = Number(casesQuery.data?.total ?? 0);
+  const historyItems = ((historyQuery.data as any)?.items ?? []) as any[];
+  const historyTotalItems = Number((historyQuery.data as any)?.total ?? 0);
   const pendingSummaryData = pendingSummaryQuery.data as
     | {
         summary?: {
@@ -973,6 +1055,19 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       next.set("pageSize", String(nextSize));
     }
     setParams(next, { replace: true });
+  };
+
+  const handleHistoryPageChange = (_event: unknown, nextPage: number) => {
+    setHistoryPage(nextPage);
+  };
+
+  const handleHistoryPageSizeChange = (
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
+    setHistoryPage(0);
+    setHistoryPageSize(
+      Math.min(50, Math.max(10, Number(event.target.value ?? 10) || 10)),
+    );
   };
 
   const localities = useMemo(
@@ -1055,6 +1150,20 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     return 0;
   })();
   const maxUnlockedStep = Math.max(dataUnlockedStep, statusUnlockedStep);
+
+  useEffect(() => {
+    setHistoryPage(0);
+  }, [
+    q,
+    localityId,
+    status,
+    detailedViolenceType,
+    procedureType,
+    historyAction,
+    historyActor,
+    historyFrom,
+    historyTo,
+  ]);
 
   useEffect(() => {
     if (!isCreateMode || !drawerOpen) return;
@@ -3170,6 +3279,239 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           />
         )}
       </Card>
+
+      {!isSmifWorkflow && (
+        <Card sx={{ mt: 2, mb: 2 }}>
+          <CardContent>
+            <Stack spacing={2}>
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "flex-start", md: "center" }}
+                spacing={1.5}
+              >
+                <Box>
+                  <Typography variant="h6" fontWeight={800}>
+                    Histórico de modificações
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {historyTotalItems} registro
+                    {historyTotalItems === 1 ? "" : "s"}
+                  </Typography>
+                </Box>
+                {historyQuery.isFetching && (
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <CircularProgress size={16} />
+                    <Typography variant="body2" color="text.secondary">
+                      Atualizando
+                    </Typography>
+                  </Stack>
+                )}
+              </Stack>
+
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={1}
+                flexWrap="wrap"
+              >
+                <TextField
+                  select
+                  size="small"
+                  label="Movimento"
+                  value={historyAction}
+                  onChange={(event) => setHistoryAction(event.target.value)}
+                  sx={{ minWidth: 220 }}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {CPCA_HISTORY_ACTION_OPTIONS.map((item) => (
+                    <MenuItem key={item.value} value={item.value}>
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+                <TextField
+                  size="small"
+                  label="Usuário"
+                  value={historyActor}
+                  onChange={(event) => setHistoryActor(event.target.value)}
+                  sx={{ minWidth: 220 }}
+                />
+                <TextField
+                  size="small"
+                  label="De"
+                  type="date"
+                  value={historyFrom}
+                  onChange={(event) => setHistoryFrom(event.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 160 }}
+                />
+                <TextField
+                  size="small"
+                  label="Até"
+                  type="date"
+                  value={historyTo}
+                  onChange={(event) => setHistoryTo(event.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 160 }}
+                />
+                <Button
+                  variant="text"
+                  onClick={() => {
+                    setHistoryAction("");
+                    setHistoryActor("");
+                    setHistoryFrom("");
+                    setHistoryTo("");
+                  }}
+                >
+                  Limpar histórico
+                </Button>
+              </Stack>
+
+              {historyQuery.isError ? (
+                <Alert severity="error">
+                  Não foi possível carregar o histórico.
+                </Alert>
+              ) : historyItems.length === 0 && !historyQuery.isLoading ? (
+                <EmptyState
+                  title="Nenhuma modificação encontrada"
+                  description="Sem registros para os critérios atuais."
+                />
+              ) : (
+                <Box sx={{ overflowX: "auto" }}>
+                  <Table size="small" sx={{ minWidth: 980 }}>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: "primary.main" }}>
+                        <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                          Data e hora
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                          Denúncia
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                          OM
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                          Usuário
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                          Movimento
+                        </TableCell>
+                        <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                          O que mudou
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {historyItems.map((entry: any) => {
+                        const changes = Array.isArray(entry.changes)
+                          ? entry.changes
+                          : [];
+                        return (
+                          <TableRow key={entry.id} hover>
+                            <TableCell sx={{ whiteSpace: "nowrap" }}>
+                              {entry.createdAt
+                                ? new Date(entry.createdAt).toLocaleString(
+                                    "pt-BR",
+                                  )
+                                : "-"}
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 180 }}>
+                              <Typography fontWeight={700} variant="body2">
+                                {formatComplaintCaseNumberForDisplay(
+                                  entry.case?.caseNumber,
+                                )}
+                              </Typography>
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 180 }}>
+                              {formatHistoryOm(entry.om)}
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 220 }}>
+                              {formatHistoryActor(entry.actor)}
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 190 }}>
+                              <Chip
+                                size="small"
+                                label={entry.actionLabel ?? entry.action}
+                                sx={{ fontWeight: 700 }}
+                              />
+                            </TableCell>
+                            <TableCell sx={{ minWidth: 320 }}>
+                              <Stack spacing={0.7}>
+                                <Typography variant="body2">
+                                  {entry.summary}
+                                </Typography>
+                                {changes.slice(0, 4).map((change: any) => {
+                                  const label = String(
+                                    change.label ?? change.field ?? "",
+                                  );
+                                  const previous = formatHistoryValue(
+                                    change.previous,
+                                  );
+                                  const next = formatHistoryValue(change.next);
+                                  const type = String(change.type ?? "");
+                                  const valueText =
+                                    type === "inserted"
+                                      ? `Inserido: ${next}`
+                                      : type === "removed"
+                                        ? `Removido: ${previous}`
+                                        : `${previous} -> ${next}`;
+                                  return (
+                                    <Typography
+                                      key={`${entry.id}-${change.field}-${label}`}
+                                      variant="caption"
+                                      color="text.secondary"
+                                      sx={{
+                                        display: "block",
+                                        overflowWrap: "anywhere",
+                                      }}
+                                    >
+                                      <Box
+                                        component="span"
+                                        sx={{ fontWeight: 700 }}
+                                      >
+                                        {label}
+                                      </Box>
+                                      : {valueText}
+                                    </Typography>
+                                  );
+                                })}
+                                {changes.length > 4 && (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    +{changes.length - 4} alteração
+                                    {changes.length - 4 === 1 ? "" : "es"}
+                                  </Typography>
+                                )}
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+            </Stack>
+          </CardContent>
+          {historyTotalItems > 0 && (
+            <TablePagination
+              component="div"
+              count={historyTotalItems}
+              page={historyPage}
+              onPageChange={handleHistoryPageChange}
+              rowsPerPage={historyPageSize}
+              onRowsPerPageChange={handleHistoryPageSizeChange}
+              rowsPerPageOptions={[10, 20, 50]}
+              labelRowsPerPage="Registros por página"
+              labelDisplayedRows={({ from, to, count }) =>
+                `${from}-${to} de ${count !== -1 ? count : `mais de ${to}`}`
+              }
+            />
+          )}
+        </Card>
+      )}
 
       <Drawer
         anchor="right"

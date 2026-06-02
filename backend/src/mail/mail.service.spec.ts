@@ -62,6 +62,7 @@ describe('MailService', () => {
       html: '<p>Teste</p>',
       text: 'Teste',
     });
+    await service.waitForIdle();
 
     expect(nodemailer.createTransport).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -90,11 +91,13 @@ describe('MailService', () => {
       }),
     );
     expect(result).toMatchObject({
-      messageId: '<test-message-id>',
+      queued: true,
+      accepted: ['destinatario@fab.mil.br'],
+      response: 'queued',
     });
   });
 
-  it('falha explicitamente quando a configuracao SMTP esta incompleta', async () => {
+  it('registra falha em segundo plano quando a configuracao SMTP esta incompleta', async () => {
     configMock.get = jest.fn((key: string) => {
       switch (key) {
         case 'SMTP_HOST':
@@ -106,7 +109,12 @@ describe('MailService', () => {
       }
     }) as any;
 
-    const service = new MailService(configMock);
+    const prismaMock = {
+      emailDeliveryFailure: {
+        create: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const service = new MailService(configMock, prismaMock as any);
 
     await expect(
       service.sendMail({
@@ -114,7 +122,19 @@ describe('MailService', () => {
         subject: 'Teste SMTP',
         html: '<p>Teste</p>',
       }),
-    ).rejects.toThrow(/SMTP is not configured/i);
+    ).resolves.toMatchObject({
+      queued: true,
+      accepted: ['destinatario@fab.mil.br'],
+    });
+    await service.waitForIdle();
+
     expect(nodemailer.createTransport).not.toHaveBeenCalled();
+    expect(prismaMock.emailDeliveryFailure.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        to: ['destinatario@fab.mil.br'],
+        subject: 'Teste SMTP',
+        errorMessage: expect.stringMatching(/SMTP is not configured/i),
+      }),
+    });
   });
 });

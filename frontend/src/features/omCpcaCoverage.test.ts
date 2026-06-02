@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOmCpcaCoverageSummary,
+  formatOmCpcaPresidentBadgeLabel,
   hasOmCpcaPresident,
   isOmCoveredByCpca,
   matchesOmCpcaCoverageFilter,
   matchesOmCpcaPresidentFilter,
   resolveOmCpcaCoverageStatus,
-  splitOmCpcaPresidentDisplayName,
 } from "./omCpcaCoverage";
 
 const ownCpca = {
@@ -88,15 +88,23 @@ describe("omCpcaCoverage", () => {
     ).toBe(true);
   });
 
-  it("separa posto e nome do presidente para renderizacao da tabela", () => {
-    expect(splitOmCpcaPresidentDisplayName("CAP JOAO SILVA BASV")).toEqual({
-      rank: "CAP",
-      name: "JOAO SILVA",
+  it("formata presidente como badge de posto e nome de guerra", () => {
+    expect(formatOmCpcaPresidentBadgeLabel("CAP JOAO SILVA BASV")).toEqual({
+      label: "CAP JOAO",
       fullName: "CAP JOAO SILVA",
     });
-    expect(splitOmCpcaPresidentDisplayName("JOAO SILVA")).toEqual({
-      rank: null,
-      name: "JOAO SILVA",
+    expect(formatOmCpcaPresidentBadgeLabel("CP JESSICA")).toEqual({
+      label: "CP JESSICA",
+      fullName: "CP JESSICA",
+    });
+    expect(formatOmCpcaPresidentBadgeLabel("TEN CEL MARIA SILVA BASV")).toEqual(
+      {
+        label: "TEN CEL MARIA",
+        fullName: "TEN CEL MARIA SILVA",
+      },
+    );
+    expect(formatOmCpcaPresidentBadgeLabel("JOAO SILVA")).toEqual({
+      label: "JOAO SILVA",
       fullName: "JOAO SILVA",
     });
   });

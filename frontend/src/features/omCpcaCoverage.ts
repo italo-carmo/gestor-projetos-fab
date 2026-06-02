@@ -1,4 +1,4 @@
-import { toMilitaryDisplayName } from "../app/militaryName";
+import { splitMilitaryRankAndName } from "../app/militaryName";
 
 export type OmCpcaCoverageFilter =
   | "ALL"
@@ -25,9 +25,6 @@ export type OmCpcaCoverageStatus =
   | "OWN_CPCA"
   | "MANAGED_BY_OTHER"
   | "UNCOVERED";
-
-const MILITARY_RANK_PREFIX =
-  /^(ALUNO|SD|CB|3S|2S|1S|SO|ASP|CP|CL|MB|TB|2T|1T|CAP|MAJ|TCEL|TEN CEL|CEL|BRIG|BRIGADEIRO|GEN)\b/i;
 
 function normalizeWhitespace(value: string | null | undefined) {
   return String(value ?? "")
@@ -74,33 +71,30 @@ export function matchesOmCpcaPresidentFilter(
   return !hasOmCpcaPresident(item);
 }
 
-export function splitOmCpcaPresidentDisplayName(
+export function formatOmCpcaPresidentBadgeLabel(
   raw: string | null | undefined,
 ) {
-  const fullName = normalizeWhitespace(toMilitaryDisplayName(raw));
+  const { rank, nameWithoutRank, displayName } = splitMilitaryRankAndName(raw);
+  const fullName = normalizeWhitespace(displayName);
   if (!fullName) {
     return {
-      rank: null as string | null,
-      name: "",
+      label: "",
       fullName: "",
     };
   }
 
-  const match = fullName.match(MILITARY_RANK_PREFIX);
-  if (!match) {
+  if (!rank) {
     return {
-      rank: null as string | null,
-      name: fullName,
+      label: fullName,
       fullName,
     };
   }
 
-  const rank = normalizeWhitespace(match[1] ?? "").toUpperCase() || null;
-  const strippedName = normalizeWhitespace(fullName.slice(match[0].length));
+  const warName = normalizeWhitespace(nameWithoutRank).split(" ")[0] ?? "";
+  const label = normalizeWhitespace([rank, warName].filter(Boolean).join(" "));
 
   return {
-    rank,
-    name: strippedName || fullName,
+    label: label || fullName,
     fullName,
   };
 }

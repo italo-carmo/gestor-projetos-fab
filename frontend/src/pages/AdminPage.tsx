@@ -22,6 +22,7 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TablePagination,
   TableRow,
   TextField,
   Typography,
@@ -40,15 +41,19 @@ import TextSnippetRoundedIcon from '@mui/icons-material/TextSnippetRounded';
 import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import TrendingUpRoundedIcon from '@mui/icons-material/TrendingUpRounded';
 import RadarRoundedIcon from '@mui/icons-material/RadarRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { useCallback, useEffect, useMemo, useState, type ReactNode, type SyntheticEvent } from 'react';
 import {
   useAiSettings,
   useComgepScoringSettings,
+  useEmailDeliveryFailures,
   useEmailSettings,
   useMe,
   usePhases,
+  useResolveEmailDeliveryFailure,
   useSelectableKnowledgeBases,
   useUpdateAiSettings,
   useUpdateComgepScoringSettings,
@@ -67,6 +72,7 @@ import {
   type ComgepScoringSettingItem,
   type ComgepScoringSettingsPatch,
   type ComgepScoringWeightKey,
+  type EmailDeliveryFailure,
 } from '../api/hooks';
 import {
   useCreatePosto,
@@ -3664,6 +3670,214 @@ function EmailSettingsTab() {
   );
 }
 
+function formatAdminDateTime(value?: string | null) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
+}
+
+function formatEmailAddressList(values: string[] | undefined) {
+  const addresses = (values ?? [])
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+  return addresses.length ? addresses.join(', ') : '-';
+}
+
+function EmailFailuresTab() {
+  const toast = useToast();
+  const [status, setStatus] = useState<'OPEN' | 'RESOLVED' | 'ALL'>('OPEN');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const failuresQuery = useEmailDeliveryFailures({
+    status,
+    page: page + 1,
+    pageSize,
+  });
+  const resolveFailure = useResolveEmailDeliveryFailure();
+  const items = (failuresQuery.data?.items ?? []) as EmailDeliveryFailure[];
+  const openCount = Number(failuresQuery.data?.openCount ?? 0);
+
+  const handleResolve = async (item: EmailDeliveryFailure) => {
+    try {
+      await resolveFailure.mutateAsync(item.id);
+      toast.push({
+        message: 'Falha de e-mail marcada como verificada.',
+        severity: 'success',
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ??
+          'Erro ao marcar falha de e-mail como verificada.',
+        severity: 'error',
+      });
+    }
+  };
+
+  if (failuresQuery.isLoading) return <SkeletonState />;
+  if (failuresQuery.isError) {
+    return (
+      <ErrorState
+        error={failuresQuery.error}
+        onRetry={() => failuresQuery.refetch()}
+      />
+    );
+  }
+
+  return (
+    <Stack spacing={2.5}>
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={1.5}
+        alignItems={{ xs: 'stretch', md: 'center' }}
+        justifyContent="space-between"
+      >
+        <Box>
+          <Typography variant="h6" fontWeight={800}>
+            Falhas de envio de e-mail
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Monitore tentativas de SMTP que falharam após a resposta ao usuário.
+          </Typography>
+        </Box>
+        <Chip
+          color={openCount > 0 ? 'error' : 'success'}
+          label={`${openCount} aberta${openCount === 1 ? '' : 's'}`}
+          sx={{ alignSelf: { xs: 'flex-start', md: 'center' }, fontWeight: 700 }}
+        />
+      </Stack>
+
+      <Alert severity={openCount > 0 ? 'warning' : 'success'}>
+        {openCount > 0
+          ? 'Existem falhas abertas. Verifique a mensagem de erro e a configuração SMTP/Zimbra.'
+          : 'Não há falhas abertas de envio de e-mail.'}
+      </Alert>
+
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+        <TextField
+          select
+          size="small"
+          label="Status"
+          value={status}
+          onChange={(event) => {
+            setStatus(event.target.value as typeof status);
+            setPage(0);
+          }}
+          sx={{ minWidth: 220 }}
+        >
+          <MenuItem value="OPEN">Abertas</MenuItem>
+          <MenuItem value="RESOLVED">Verificadas</MenuItem>
+          <MenuItem value="ALL">Todas</MenuItem>
+        </TextField>
+        <Button
+          variant="outlined"
+          startIcon={<RefreshRoundedIcon />}
+          onClick={() => failuresQuery.refetch()}
+        >
+          Atualizar
+        </Button>
+      </Stack>
+
+      {items.length === 0 ? (
+        <EmptyState
+          title="Nenhuma falha encontrada"
+          description="Não há registros para o filtro selecionado."
+        />
+      ) : (
+        <Box sx={{ overflowX: 'auto' }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Ocorrência</TableCell>
+                <TableCell>Destinatários</TableCell>
+                <TableCell>Assunto</TableCell>
+                <TableCell>Erro</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Ações</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {items.map((item) => (
+                <TableRow key={item.id} hover>
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                    {formatAdminDateTime(item.occurredAt)}
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 220 }}>
+                    <Typography variant="body2">
+                      {formatEmailAddressList(item.to)}
+                    </Typography>
+                    {item.cc?.length ? (
+                      <Typography variant="caption" color="text.secondary">
+                        Cc: {formatEmailAddressList(item.cc)}
+                      </Typography>
+                    ) : null}
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 220 }}>{item.subject}</TableCell>
+                  <TableCell sx={{ minWidth: 280 }}>
+                    <Typography variant="body2" color="error.main">
+                      {item.errorMessage}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      size="small"
+                      color={item.status === 'OPEN' ? 'error' : 'success'}
+                      label={item.status === 'OPEN' ? 'Aberta' : 'Verificada'}
+                    />
+                    {item.resolvedAt ? (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: 'block', mt: 0.5 }}
+                      >
+                        {formatAdminDateTime(item.resolvedAt)}
+                      </Typography>
+                    ) : null}
+                  </TableCell>
+                  <TableCell align="right">
+                    {item.status === 'OPEN' ? (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<CheckCircleRoundedIcon />}
+                        disabled={resolveFailure.isPending}
+                        onClick={() => {
+                          void handleResolve(item);
+                        }}
+                      >
+                        Verificada
+                      </Button>
+                    ) : (
+                      '-'
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <TablePagination
+            component="div"
+            count={Number(failuresQuery.data?.total ?? 0)}
+            page={page}
+            onPageChange={(_event, nextPage) => setPage(nextPage)}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(0);
+            }}
+            rowsPerPageOptions={[10, 20, 50, 100]}
+            labelRowsPerPage="Linhas por página"
+          />
+        </Box>
+      )}
+    </Stack>
+  );
+}
+
 export function AdminPage() {
   const { data: me } = useMe();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -3672,6 +3886,7 @@ export function AdminPage() {
   const canViewCipavdLocalities = can(me, 'localities_cipavd', 'view');
   const canViewAiSettings = hasAnyRole(me, [ROLE_TI]);
   const canViewEmailSettings = hasAnyRole(me, [ROLE_TI]);
+  const canViewEmailFailures = hasAnyRole(me, [ROLE_TI]);
   const canViewKnowledgeBases = canViewAiSettings;
   const canViewComgepSettings = canViewAiSettings;
   const canViewBiNormalization = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
@@ -3717,6 +3932,13 @@ export function AdminPage() {
     setSearchParams(params, { replace: true });
   }, [canViewEmailSettings, currentTab, searchParams, setSearchParams]);
 
+  useEffect(() => {
+    if (currentTab !== 'email-failures' || canViewEmailFailures) return;
+    const params = new URLSearchParams(searchParams);
+    params.set('tab', 'postos');
+    setSearchParams(params, { replace: true });
+  }, [canViewEmailFailures, currentTab, searchParams, setSearchParams]);
+
   const handleTabChange = (_event: SyntheticEvent, newValue: string) => {
     setCurrentTab(newValue);
     const params = new URLSearchParams(searchParams);
@@ -3760,6 +3982,9 @@ export function AdminPage() {
               <Tab label="Configuração COMGEP" value="comgep-settings" />
             )}
             {canViewEmailSettings && <Tab label="E-mails" value="emails" />}
+            {canViewEmailFailures && (
+              <Tab label="Falhas de E-mail" value="email-failures" />
+            )}
             {canViewAiSettings && <Tab label="Configuração IA" value="ai-settings" />}
           </Tabs>
 
@@ -3782,6 +4007,9 @@ export function AdminPage() {
           )}
           {canViewEmailSettings && currentTab === 'emails' && (
             <EmailSettingsTab />
+          )}
+          {canViewEmailFailures && currentTab === 'email-failures' && (
+            <EmailFailuresTab />
           )}
           {canViewAiSettings && currentTab === 'ai-settings' && <AiSettingsTab />}
         </CardContent>

@@ -51,6 +51,9 @@ function buildPrismaMock() {
     cpcaCommissionCoverageRequest: {
       count: jest.fn().mockResolvedValue(0),
     },
+    emailDeliveryFailure: {
+      count: jest.fn().mockResolvedValue(0),
+    },
   };
 }
 
@@ -159,5 +162,37 @@ describe('MenuUpdatesService CPCA badges', () => {
         lastEventAt: lastEventAt.toISOString(),
       }),
     ]);
+  });
+
+  it('mostra badge de falhas de email somente para TI', async () => {
+    const prisma = buildPrismaMock();
+    prisma.emailDeliveryFailure.count.mockResolvedValue(3);
+    const service = new MenuUpdatesService(prisma as any);
+
+    const result = await service.list(
+      'admin_email_failures',
+      buildCpcaUser({
+        roles: [
+          {
+            id: 'role-ti',
+            name: 'TI',
+            wildcard: false,
+            permissions: [],
+          },
+        ],
+      }),
+    );
+
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        menuKey: 'admin_email_failures',
+        unreadCount: 3,
+        hasUnread: true,
+        clearedByMenuSeen: false,
+      }),
+    ]);
+    expect(prisma.emailDeliveryFailure.count).toHaveBeenCalledWith({
+      where: { status: 'OPEN' },
+    });
   });
 });

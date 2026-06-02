@@ -62,6 +62,8 @@ export const qk = {
   auditLogs: (filters: Record<string, any>) => ["auditLogs", filters] as const,
   auditLastLogins: ["auditLogs", "lastLogins"] as const,
   menuUpdates: (menuKeys: string[]) => ["menuUpdates", menuKeys] as const,
+  cpcaCaseHistory: (filters: Record<string, any>) =>
+    ["cpcaCaseHistory", filters] as const,
   localities: ["localities"] as const,
   oms: ["oms"] as const,
   cipavdLocalities: ["cipavdLocalities"] as const,
@@ -167,6 +169,8 @@ export const qk = {
     ["admin", "knowledgeBases", knowledgeBaseId, "documents"] as const,
   aiSettings: ["admin", "aiSettings"] as const,
   emailSettings: ["admin", "emailSettings"] as const,
+  emailDeliveryFailures: (filters: Record<string, any>) =>
+    ["admin", "emailDeliveryFailures", filters] as const,
   comgepSettings: ["admin", "comgepSettings"] as const,
   biNormalizationOverview: ["bi", "normalization", "overview"] as const,
   biNormalizationReview: (sourceType?: string | null) =>

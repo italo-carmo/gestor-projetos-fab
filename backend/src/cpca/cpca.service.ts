@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
@@ -93,6 +94,21 @@ type ComplaintListFilters = {
   pageSize?: string;
 };
 
+type ComplaintHistoryFilters = ComplaintListFilters & {
+  action?: string;
+  actor?: string;
+  from?: string;
+  to?: string;
+};
+
+type ComplaintHistoryChange = {
+  field: string;
+  label: string;
+  previous?: unknown;
+  next?: unknown;
+  type?: 'inserted' | 'modified' | 'removed';
+};
+
 export type CpcaAiContextReference = {
   id: string;
   label: string;
@@ -170,6 +186,85 @@ export const SMIF_WORKFLOW_CONTEXT: ComplaintWorkflowContext = {
   resource: 'smif_complaints',
   caseNumberPrefix: 'SMIF',
 };
+
+const COMPLAINT_HISTORY_FIELD_LABELS: Record<string, string> = {
+  caseNumber: 'Número do caso',
+  omId: 'OM',
+  complaintType: 'Tipo',
+  notifierType: 'Tipo de noticiante',
+  status: 'Status',
+  procedureType: 'Procedimento administrativo',
+  procedureCurrentSituation: 'Situação do procedimento',
+  reportedAt: 'Data de recebimento',
+  incidentDate: 'Data do fato',
+  aggressorRank: 'Posto/graduação do agressor',
+  aggressorGender: 'Gênero do agressor',
+  aggressorAgeRange: 'Faixa etária do agressor',
+  victimRank: 'Posto/graduação da vítima',
+  victimGender: 'Gênero da vítima',
+  victimAgeRange: 'Faixa etária da vítima',
+  victimIsNotifier: 'Noticiante é a vítima',
+  notifierRank: 'Posto/graduação do noticiante',
+  notifierGender: 'Gênero do noticiante',
+  notifierAgeRange: 'Faixa etária do noticiante',
+  detailedViolenceType: 'Tipo de assédio ou violência',
+  harassmentContext: 'Contexto',
+  occurrenceLocation: 'Local de ocorrência',
+  incidentFrequency: 'Frequência',
+  hierarchicalFunctionalRelation: 'Relação hierárquica/funcional',
+  occurrenceForms: 'Forma de ocorrência',
+  administrativeProcedure: 'Procedimento administrativo informado',
+  retaliationReported: 'Retaliação reportada',
+  retaliationAgainst: 'Retaliação contra',
+  evidenceCount: 'Quantidade de evidências',
+  evidenceSummary: 'Resumo do fato',
+  confidentialityTermSigned: 'Termo de confidencialidade',
+  confidentialityHandlingNotes: 'Notas de confidencialidade',
+  cpcaMembersExcludedFromInquiry: 'Membros da CPCA afastados da apuração',
+  immediateProtectionMeasures: 'Medidas imediatas de proteção',
+  privateSupportActions: 'Ações reservadas de suporte',
+  psychologicalSupportProvided: 'Apoio psicológico',
+  medicalSupportProvided: 'Apoio médico',
+  socialSupportProvided: 'Apoio social',
+  legalSupportProvided: 'Apoio jurídico',
+  contactRestrictionApplied: 'Restrição de contato',
+  preliminaryAnalysis: 'Análise preliminar',
+  preliminaryReportGenerated: 'Relatório preliminar gerado',
+  preliminaryReportDate: 'Data do relatório preliminar',
+  procedureReference: 'Referência do procedimento',
+  procedureNotes: 'Notas do procedimento',
+  womenLedHandlingPrioritized: 'Tratamento por mulheres priorizado',
+  victimAccusedSeparationEvaluated: 'Separação vítima/acusado avaliada',
+  victimAccusedSeparationApplied: 'Separação vítima/acusado aplicada',
+  accusedDefenseEnsured: 'Defesa do acusado assegurada',
+  outcomeSummary: 'Resumo do desfecho',
+  archiveReason: 'Motivo de arquivamento',
+  archivedAt: 'Data de arquivamento',
+  notifierFeedbackSummary: 'Retorno ao noticiante',
+  victimFeedbackSummary: 'Retorno à vítima',
+  notifierFeedbackDate: 'Data do retorno ao noticiante',
+  victimFeedbackDate: 'Data do retorno à vítima',
+  retaliationRisk: 'Risco de retaliação',
+  retaliationNotes: 'Notas sobre retaliação',
+  outsourcedAccused: 'Acusado terceirizado',
+  contractorReferralDate: 'Data de encaminhamento terceirizado',
+  contractorFollowUpNotes: 'Acompanhamento terceirizado',
+};
+
+const COMPLAINT_HISTORY_CREATE_FIELDS = [
+  'caseNumber',
+  'omId',
+  'complaintType',
+  'status',
+  'procedureType',
+  'detailedViolenceType',
+  'reportedAt',
+] as const;
+
+const COMPLAINT_HISTORY_EXCLUDED_ACTION_PREFIXES = [
+  'cpca_commission_',
+  'cpca_president_',
+] as const;
 
 @Injectable()
 export class CpcaService {
@@ -309,6 +404,179 @@ export class CpcaService {
       page,
       pageSize,
       total,
+    };
+  }
+
+  async history(
+    filters: ComplaintHistoryFilters,
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const constraints = this.getScopeConstraints(user, workflowContext);
+    const scopedLocalityIds = await this.resolveCpcaScopedLocalityIds(
+      constraints,
+      workflowContext,
+    );
+    const allowedLocalityIds = constraints.localityId
+      ? scopedLocalityIds?.length
+        ? scopedLocalityIds
+        : [constraints.localityId]
+      : null;
+    const requestedLocalityId = String(filters.localityId ?? '').trim();
+
+    if (
+      requestedLocalityId &&
+      allowedLocalityIds &&
+      !allowedLocalityIds.includes(requestedLocalityId)
+    ) {
+      const { page, pageSize } = parsePagination(
+        filters.page,
+        filters.pageSize,
+      );
+      return { items: [], page, pageSize, total: 0 };
+    }
+
+    const { page, pageSize, skip, take } = parsePagination(
+      filters.page,
+      filters.pageSize,
+    );
+    const action = String(filters.action ?? '').trim();
+    const actor = String(filters.actor ?? '').trim();
+    const q = String(filters.q ?? '').trim();
+    const from = this.parseDateValue(filters.from ?? null);
+    const to = this.parseDateValue(filters.to ?? null);
+    const omExpression = Prisma.sql`COALESCE(c."omId", c."localityId", al."diffJson"->>'omId', al."diffJson"->>'localityId')`;
+    const caseNumberExpression = Prisma.sql`COALESCE(c."caseNumber", al."diffJson"->>'caseNumber', al."diffJson"->>'caseId', al."entityId")`;
+    const whereClauses: Prisma.Sql[] = [
+      Prisma.sql`al."resource" = ${workflowContext.resource}`,
+      Prisma.sql`COALESCE(c."workflowScope"::text, al."diffJson"->>'workflowScope', ${workflowContext.workflowScope}) = ${workflowContext.workflowScope}`,
+    ];
+
+    for (const prefix of COMPLAINT_HISTORY_EXCLUDED_ACTION_PREFIXES) {
+      whereClauses.push(Prisma.sql`al."action" NOT LIKE ${`${prefix}%`}`);
+    }
+
+    if (allowedLocalityIds?.length) {
+      whereClauses.push(
+        Prisma.sql`${omExpression} IN (${Prisma.join(allowedLocalityIds)})`,
+      );
+    }
+    if (requestedLocalityId) {
+      whereClauses.push(Prisma.sql`${omExpression} = ${requestedLocalityId}`);
+    }
+    if (filters.status) {
+      whereClauses.push(
+        Prisma.sql`COALESCE(c."status"::text, al."diffJson"->>'status') = ${filters.status}`,
+      );
+    }
+    if (filters.complaintType) {
+      whereClauses.push(
+        Prisma.sql`COALESCE(c."complaintType"::text, al."diffJson"->>'complaintType') = ${filters.complaintType}`,
+      );
+    }
+    if (filters.detailedViolenceType) {
+      whereClauses.push(
+        Prisma.sql`COALESCE(c."detailedViolenceType", al."diffJson"->>'detailedViolenceType') = ${filters.detailedViolenceType}`,
+      );
+    }
+    if (filters.procedureType) {
+      whereClauses.push(
+        Prisma.sql`COALESCE(c."procedureType"::text, al."diffJson"->>'procedureType') = ${filters.procedureType}`,
+      );
+    }
+    if (q) {
+      whereClauses.push(Prisma.sql`${caseNumberExpression} ILIKE ${`%${q}%`}`);
+    }
+    if (action) {
+      whereClauses.push(Prisma.sql`al."action" = ${action}`);
+    }
+    if (actor) {
+      whereClauses.push(
+        Prisma.sql`(u."name" ILIKE ${`%${actor}%`} OR u."email" ILIKE ${`%${actor}%`})`,
+      );
+    }
+    if (from) {
+      whereClauses.push(Prisma.sql`al."createdAt" >= ${from}`);
+    }
+    if (to) {
+      whereClauses.push(Prisma.sql`al."createdAt" <= ${to}`);
+    }
+
+    const whereSql = Prisma.sql`WHERE ${Prisma.join(whereClauses, ' AND ')}`;
+    const paginationSql =
+      take === undefined
+        ? Prisma.empty
+        : Prisma.sql`LIMIT ${take} OFFSET ${skip}`;
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        action: string;
+        entityId: string | null;
+        diffJson: Prisma.JsonValue | null;
+        createdAt: Date;
+        userId: string | null;
+        userName: string | null;
+        userEmail: string | null;
+        caseId: string | null;
+        caseNumber: string | null;
+        omId: string | null;
+        omCode: string | null;
+        omName: string | null;
+        status: string | null;
+        complaintType: string | null;
+        detailedViolenceType: string | null;
+        procedureType: string | null;
+      }>
+    >(Prisma.sql`
+      SELECT
+        al."id" AS "id",
+        al."action" AS "action",
+        al."entityId" AS "entityId",
+        al."diffJson" AS "diffJson",
+        al."createdAt" AS "createdAt",
+        u."id" AS "userId",
+        u."name" AS "userName",
+        u."email" AS "userEmail",
+        c."id" AS "caseId",
+        ${caseNumberExpression} AS "caseNumber",
+        ${omExpression} AS "omId",
+        om."code" AS "omCode",
+        om."name" AS "omName",
+        COALESCE(c."status"::text, al."diffJson"->>'status') AS "status",
+        COALESCE(c."complaintType"::text, al."diffJson"->>'complaintType') AS "complaintType",
+        COALESCE(c."detailedViolenceType", al."diffJson"->>'detailedViolenceType') AS "detailedViolenceType",
+        COALESCE(c."procedureType"::text, al."diffJson"->>'procedureType') AS "procedureType"
+      FROM "AuditLog" al
+      LEFT JOIN "User" u
+        ON u."id" = al."userId"
+      LEFT JOIN "CpcComplaintCase" c
+        ON c."id" = al."entityId"
+      LEFT JOIN "Om" om
+        ON om."id" = ${omExpression}
+      ${whereSql}
+      ORDER BY al."createdAt" DESC
+      ${paginationSql}
+    `);
+
+    const totalRows = await this.prisma.$queryRaw<Array<{ total: number }>>(
+      Prisma.sql`
+        SELECT COUNT(*)::int AS "total"
+        FROM "AuditLog" al
+        LEFT JOIN "User" u
+          ON u."id" = al."userId"
+        LEFT JOIN "CpcComplaintCase" c
+          ON c."id" = al."entityId"
+        ${whereSql}
+      `,
+    );
+
+    return {
+      items: rows.map((row) => this.serializeComplaintHistoryEntry(row)),
+      page,
+      pageSize,
+      total: Number(totalRows[0]?.total ?? 0),
     };
   }
 
@@ -1684,8 +1952,11 @@ export class CpcaService {
         caseNumber: created.caseNumber,
         workflowScope: workflowContext.workflowScope,
         complaintType: created.complaintType,
+        detailedViolenceType: created.detailedViolenceType,
         status: created.status,
         procedureType: created.procedureType,
+        reportedAt: created.reportedAt,
+        insertedFields: this.buildComplaintCaseInsertedFields(created),
       },
     });
 
@@ -1715,7 +1986,13 @@ export class CpcaService {
         localityId: true,
         caseNumber: true,
         workflowScope: true,
+        reportedAt: true,
+        incidentDate: true,
         complaintType: true,
+        notifierType: true,
+        aggressorRank: true,
+        aggressorGender: true,
+        aggressorAgeRange: true,
         evidenceSummary: true,
         victimIsNotifier: true,
         victimRank: true,
@@ -1724,19 +2001,50 @@ export class CpcaService {
         notifierRank: true,
         notifierGender: true,
         notifierAgeRange: true,
+        detailedViolenceType: true,
+        harassmentContext: true,
+        occurrenceLocation: true,
+        incidentFrequency: true,
+        hierarchicalFunctionalRelation: true,
+        occurrenceForm: true,
+        occurrenceForms: true,
+        administrativeProcedure: true,
+        retaliationReported: true,
+        retaliationAgainst: true,
+        evidenceCount: true,
         confidentialityTermSigned: true,
+        confidentialityHandlingNotes: true,
+        cpcaMembersExcludedFromInquiry: true,
+        immediateProtectionMeasures: true,
+        privateSupportActions: true,
+        psychologicalSupportProvided: true,
+        medicalSupportProvided: true,
+        socialSupportProvided: true,
+        legalSupportProvided: true,
+        contactRestrictionApplied: true,
         status: true,
         procedureType: true,
         procedureCurrentSituation: true,
+        preliminaryAnalysis: true,
         preliminaryReportGenerated: true,
         preliminaryReportDate: true,
+        procedureReference: true,
+        procedureNotes: true,
+        womenLedHandlingPrioritized: true,
         victimAccusedSeparationEvaluated: true,
         victimAccusedSeparationApplied: true,
         outsourcedAccused: true,
         contractorReferralDate: true,
+        contractorFollowUpNotes: true,
         accusedDefenseEnsured: true,
         outcomeSummary: true,
         archiveReason: true,
+        notifierFeedbackSummary: true,
+        victimFeedbackSummary: true,
+        notifierFeedbackDate: true,
+        victimFeedbackDate: true,
+        retaliationRisk: true,
+        retaliationNotes: true,
         archivedAt: true,
       },
     });
@@ -2081,6 +2389,8 @@ export class CpcaService {
       });
     }
 
+    const changedFields = this.buildComplaintCaseAuditChanges(current, updated);
+
     await this.audit.log({
       userId: user?.id,
       resource: workflowContext.resource,
@@ -2088,9 +2398,13 @@ export class CpcaService {
       entityId: id,
       diffJson: {
         omId: updated.omId,
+        caseNumber: updated.caseNumber,
         workflowScope: workflowContext.workflowScope,
         status: updated.status,
         procedureType: updated.procedureType,
+        complaintType: updated.complaintType,
+        detailedViolenceType: updated.detailedViolenceType,
+        changedFields,
         evidenceSummaryPrivacyOverride:
           payload.evidenceSummaryPrivacyOverride ?? false,
       },
@@ -2825,6 +3139,328 @@ export class CpcaService {
     });
 
     return { items };
+  }
+
+  private serializeComplaintHistoryEntry(row: {
+    id: string;
+    action: string;
+    entityId: string | null;
+    diffJson: Prisma.JsonValue | null;
+    createdAt: Date;
+    userId: string | null;
+    userName: string | null;
+    userEmail: string | null;
+    caseId: string | null;
+    caseNumber: string | null;
+    omId: string | null;
+    omCode: string | null;
+    omName: string | null;
+    status: string | null;
+    complaintType: string | null;
+    detailedViolenceType: string | null;
+    procedureType: string | null;
+  }) {
+    const diffJson = this.toRecord(row.diffJson);
+    const changes = this.resolveComplaintHistoryChanges(row.action, diffJson);
+    return {
+      id: row.id,
+      action: row.action,
+      actionLabel: this.describeComplaintHistoryAction(row.action),
+      summary: this.describeComplaintHistorySummary(row.action, changes),
+      createdAt: row.createdAt.toISOString(),
+      actor: row.userId
+        ? {
+            id: row.userId,
+            name: row.userName,
+            email: row.userEmail,
+          }
+        : null,
+      case: {
+        id: row.caseId ?? row.entityId,
+        caseNumber: row.caseNumber,
+        status: row.status,
+        complaintType: row.complaintType,
+        detailedViolenceType: row.detailedViolenceType,
+        procedureType: row.procedureType,
+      },
+      om: row.omId
+        ? {
+            id: row.omId,
+            code: row.omCode,
+            name: row.omName,
+          }
+        : null,
+      changes,
+      diffJson,
+    };
+  }
+
+  private resolveComplaintHistoryChanges(
+    action: string,
+    diffJson: Record<string, unknown> | null,
+  ): ComplaintHistoryChange[] {
+    const changedFields = Array.isArray(diffJson?.changedFields)
+      ? (diffJson.changedFields as unknown[])
+          .map((item) => this.toHistoryChange(item, 'modified'))
+          .filter((item): item is ComplaintHistoryChange => Boolean(item))
+      : [];
+    if (changedFields.length > 0) {
+      return changedFields;
+    }
+
+    if (action === 'create') {
+      return COMPLAINT_HISTORY_CREATE_FIELDS.flatMap((field) => {
+        const value = diffJson?.[field];
+        if (value === undefined || value === null || value === '') return [];
+        return [
+          {
+            field,
+            label: COMPLAINT_HISTORY_FIELD_LABELS[field] ?? field,
+            next: this.normalizeHistoryValue(value),
+            type: 'inserted' as const,
+          },
+        ];
+      });
+    }
+
+    if (action === 'delete') {
+      return COMPLAINT_HISTORY_CREATE_FIELDS.flatMap((field) => {
+        const value = diffJson?.[field];
+        if (value === undefined || value === null || value === '') return [];
+        return [
+          {
+            field,
+            label: COMPLAINT_HISTORY_FIELD_LABELS[field] ?? field,
+            previous: this.normalizeHistoryValue(value),
+            type: 'removed' as const,
+          },
+        ];
+      });
+    }
+
+    if (action === 'cipavd_pendency_update') {
+      return [
+        {
+          field: 'pendencyText',
+          label: 'Texto da pendência',
+          previous: this.normalizeHistoryValue(diffJson?.previousText),
+          next: this.normalizeHistoryValue(diffJson?.nextText),
+          type: 'modified',
+        },
+      ];
+    }
+
+    if (action === 'cipavd_pendency_finalize' && diffJson?.finalizationText) {
+      return [
+        {
+          field: 'finalizationText',
+          label: 'Validação final',
+          next: this.normalizeHistoryValue(diffJson.finalizationText),
+          type: 'inserted',
+        },
+      ];
+    }
+
+    if (action === 'update') {
+      return ['status', 'procedureType'].flatMap((field) => {
+        const value = diffJson?.[field];
+        if (value === undefined || value === null || value === '') return [];
+        return [
+          {
+            field,
+            label: COMPLAINT_HISTORY_FIELD_LABELS[field] ?? field,
+            next: this.normalizeHistoryValue(value),
+            type: 'modified' as const,
+          },
+        ];
+      });
+    }
+
+    return [];
+  }
+
+  private toHistoryChange(
+    value: unknown,
+    fallbackType: ComplaintHistoryChange['type'],
+  ): ComplaintHistoryChange | null {
+    const record = this.toRecord(value);
+    const field = String(record?.field ?? '').trim();
+    if (!record || !field) return null;
+    const changeType =
+      record.type === 'inserted' ||
+      record.type === 'modified' ||
+      record.type === 'removed'
+        ? record.type
+        : (fallbackType ?? 'modified');
+    return {
+      field,
+      label:
+        String(record.label ?? '').trim() ||
+        COMPLAINT_HISTORY_FIELD_LABELS[field] ||
+        field,
+      previous: this.normalizeHistoryValue(record.previous),
+      next: this.normalizeHistoryValue(record.next),
+      type: changeType,
+    };
+  }
+
+  private describeComplaintHistoryAction(action: string) {
+    switch (action) {
+      case 'create':
+        return 'Denúncia criada';
+      case 'update':
+        return 'Denúncia atualizada';
+      case 'delete':
+        return 'Denúncia excluída';
+      case 'comment':
+        return 'Comentário inserido';
+      case 'cipavd_comment_create':
+        return 'Comentário da gestão inserido';
+      case 'cipavd_pendency_create':
+        return 'Pendência registrada';
+      case 'cipavd_pendency_update':
+        return 'Pendência modificada';
+      case 'cipavd_pendency_delete':
+        return 'Pendência excluída';
+      case 'cipavd_pendency_resolve':
+        return 'Pendência respondida';
+      case 'cipavd_pendency_reopen':
+        return 'Pendência reaberta';
+      case 'cipavd_pendency_finalize':
+        return 'Pendência finalizada';
+      default:
+        return action;
+    }
+  }
+
+  private describeComplaintHistorySummary(
+    action: string,
+    changes: ComplaintHistoryChange[],
+  ) {
+    if (changes.length > 0) {
+      const labels = changes
+        .slice(0, 3)
+        .map((item) => item.label)
+        .filter(Boolean);
+      const suffix = changes.length > 3 ? ` e mais ${changes.length - 3}` : '';
+      if (action === 'create')
+        return `Campos inseridos: ${labels.join(', ')}${suffix}.`;
+      if (action === 'delete')
+        return `Dados removidos: ${labels.join(', ')}${suffix}.`;
+      return `Campos modificados: ${labels.join(', ')}${suffix}.`;
+    }
+
+    switch (action) {
+      case 'comment':
+      case 'cipavd_comment_create':
+        return 'Comentário registrado na denúncia.';
+      case 'cipavd_pendency_create':
+        return 'Nova pendência registrada pela gestão.';
+      case 'cipavd_pendency_resolve':
+        return 'Pendência respondida pela comissão.';
+      case 'cipavd_pendency_reopen':
+        return 'Pendência reaberta pela gestão.';
+      case 'cipavd_pendency_delete':
+        return 'Pendência removida da denúncia.';
+      default:
+        return 'Movimentação registrada.';
+    }
+  }
+
+  private buildComplaintCaseInsertedFields(item: Record<string, unknown>) {
+    return COMPLAINT_HISTORY_CREATE_FIELDS.flatMap((field) => {
+      const value = item[field];
+      if (value === undefined || value === null || value === '') return [];
+      return [
+        {
+          field,
+          label: COMPLAINT_HISTORY_FIELD_LABELS[field] ?? field,
+          next: this.normalizeHistoryValue(value),
+          type: 'inserted' as const,
+        },
+      ];
+    });
+  }
+
+  private buildComplaintCaseAuditChanges(
+    current: Record<string, unknown>,
+    updated: Record<string, unknown>,
+  ) {
+    return Object.keys(COMPLAINT_HISTORY_FIELD_LABELS)
+      .filter((field) => field !== 'caseNumber')
+      .flatMap((field) => {
+        const previous = this.normalizeAuditComparableValue(current[field]);
+        const next = this.normalizeAuditComparableValue(updated[field]);
+        if (this.historyValuesEqual(previous, next)) return [];
+        const previousIsEmpty = this.isEmptyHistoryValue(previous);
+        const nextIsEmpty = this.isEmptyHistoryValue(next);
+        const type = previousIsEmpty
+          ? 'inserted'
+          : nextIsEmpty
+            ? 'removed'
+            : 'modified';
+        return [
+          {
+            field,
+            label: COMPLAINT_HISTORY_FIELD_LABELS[field] ?? field,
+            previous: this.normalizeAuditHistoryValue(previous),
+            next: this.normalizeAuditHistoryValue(next),
+            type,
+          },
+        ];
+      })
+      .slice(0, 12);
+  }
+
+  private normalizeAuditComparableValue(value: unknown): unknown {
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) {
+      return value.map((item) => this.normalizeAuditComparableValue(item));
+    }
+    return value ?? null;
+  }
+
+  private historyValuesEqual(left: unknown, right: unknown) {
+    return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+  }
+
+  private isEmptyHistoryValue(value: unknown) {
+    if (value === null || value === undefined || value === '') return true;
+    if (Array.isArray(value)) return value.length === 0;
+    return false;
+  }
+
+  private normalizeAuditHistoryValue(value: unknown): unknown {
+    const normalized = this.normalizeHistoryValue(value);
+    if (typeof normalized === 'string' && normalized.length > 120) {
+      return `${normalized.slice(0, 120)}...`;
+    }
+    if (Array.isArray(normalized)) {
+      return normalized.slice(0, 8);
+    }
+    return normalized;
+  }
+
+  private toRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private normalizeHistoryValue(value: unknown): unknown {
+    if (value === undefined) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) {
+      return value.map((item) => this.normalizeHistoryValue(item));
+    }
+    if (value && typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+    if (typeof value === 'string' && value.length > 300) {
+      return `${value.slice(0, 300)}...`;
+    }
+    return value;
   }
 
   private async buildComplaintWhere(

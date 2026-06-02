@@ -302,12 +302,22 @@ export class FabLdapService {
 
   private isConnectivityError(error: unknown) {
     const code = String((error as { code?: string })?.code ?? '').toUpperCase();
+    const message = this.stringifyError(error).toUpperCase();
     return (
       code === 'ECONNREFUSED' ||
       code === 'ENOTFOUND' ||
       code === 'EHOSTUNREACH' ||
+      code === 'ENETUNREACH' ||
       code === 'ECONNRESET' ||
-      code === 'ETIMEDOUT'
+      code === 'ETIMEDOUT' ||
+      message.includes('CONNECTION TIMEOUT') ||
+      message.includes('CONNECT TIMEOUT') ||
+      message.includes('ETIMEDOUT') ||
+      message.includes('ENOTFOUND') ||
+      message.includes('EHOSTUNREACH') ||
+      message.includes('ENETUNREACH') ||
+      message.includes('ECONNREFUSED') ||
+      message.includes('ECONNRESET')
     );
   }
 

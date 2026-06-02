@@ -9,7 +9,7 @@ import {
   ROLE_COORDENACAO_CIPAVD,
   ROLE_TI,
 } from '../rbac/role-access';
-import { Prisma } from '@prisma/client';
+import { EmailDeliveryFailureStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
@@ -46,6 +46,7 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
     'localities_cipavd',
   ],
   admin_oms: ['cpca_coverage', 'cpca_cases'],
+  admin_email_failures: [],
 };
 
 const IGNORED_AUDIT_ACTIONS = ['view', 'list', 'read', 'query', 'search'];
@@ -102,6 +103,7 @@ export class MenuUpdatesService {
     const shouldTrackCpcaApprovals = menuKeys.includes(
       'cpca_president_approvals',
     );
+    const shouldTrackEmailFailures = menuKeys.includes('admin_email_failures');
     const shouldTrackCpcaParticipantItems =
       menuKeys.includes('cpca_cases') || menuKeys.includes('cpca_commission');
     const cpcaParticipantContext = shouldTrackCpcaParticipantItems
@@ -120,6 +122,7 @@ export class MenuUpdatesService {
       pendingCpcaApprovals,
       cpcaCasePendencies,
       cpcaCommissionActionItems,
+      openEmailFailures,
     ] = await Promise.all([
       menuResourcePairs.length
         ? this.prisma.$queryRaw<
@@ -352,6 +355,11 @@ export class MenuUpdatesService {
       cpcaParticipantContext.isParticipant
         ? this.countCpcaLocalApprovalRequests(cpcaParticipantContext.omId)
         : Promise.resolve(0),
+      shouldTrackEmailFailures && this.isEmailFailuresManager(user)
+        ? this.prisma.emailDeliveryFailure.count({
+            where: { status: EmailDeliveryFailureStatus.OPEN },
+          })
+        : Promise.resolve(0),
     ]);
 
     const aggregatesByMenuKey = new Map<
@@ -392,15 +400,19 @@ export class MenuUpdatesService {
           : menuKey === 'cpca_commission'
             ? cpcaCommissionActionItems
             : null;
+      const emailFailureUnreadCount =
+        menuKey === 'admin_email_failures' ? openEmailFailures : null;
       const aggregate = aggregatesByMenuKey.get(menuKey);
       const unreadCount =
         managementComplaintUnread !== null
           ? managementComplaintUnread.unreadCount
-          : cpcaParticipantUnreadCount !== null
-            ? cpcaParticipantUnreadCount
-            : cpcaApprovalUnreadCount !== null
-              ? cpcaApprovalUnreadCount
-              : (aggregate?.unreadCount ?? 0);
+          : emailFailureUnreadCount !== null
+            ? emailFailureUnreadCount
+            : cpcaParticipantUnreadCount !== null
+              ? cpcaParticipantUnreadCount
+              : cpcaApprovalUnreadCount !== null
+                ? cpcaApprovalUnreadCount
+                : (aggregate?.unreadCount ?? 0);
       const lastEventAt =
         managementComplaintUnread?.lastEventAt ??
         aggregate?.lastEventAt ??
@@ -409,6 +421,7 @@ export class MenuUpdatesService {
       const hasUnread = unreadCount > 0;
       const clearedByMenuSeen =
         managementComplaintUnread === null &&
+        emailFailureUnreadCount === null &&
         cpcaParticipantUnreadCount === null &&
         cpcaApprovalUnreadCount === null;
 
@@ -704,6 +717,13 @@ export class MenuUpdatesService {
       }
     }
     return false;
+  }
+
+  private isEmailFailuresManager(user?: RbacUser) {
+    const roleNames = new Set(
+      (user?.roles ?? []).map((role) => normalizeRoleName(role.name)),
+    );
+    return roleNames.has(normalizeRoleName(ROLE_TI));
   }
 
   private isComplaintNotificationManager(user?: RbacUser) {

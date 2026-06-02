@@ -86,6 +86,7 @@ type NavItem = {
   to: string;
   icon: ReactNode;
   menuKey?: string;
+  menuKeys?: string[];
 };
 type NavSection = { id: string; label?: string; items: NavItem[] };
 type SemanticResultItem = {
@@ -321,11 +322,22 @@ const navSections: NavSection[] = [
         label: "Administração",
         to: "/admin",
         icon: <SettingsIcon fontSize="small" />,
-        menuKey: "admin_catalog",
+        menuKeys: ["admin_catalog", "admin_email_failures"],
       },
     ],
   },
 ];
+
+function getNavItemMenuKeys(item: NavItem | null | undefined) {
+  if (!item) return [];
+  return Array.from(
+    new Set(
+      [item.menuKey, ...(item.menuKeys ?? [])]
+        .map((menuKey) => String(menuKey ?? "").trim())
+        .filter(Boolean),
+    ),
+  );
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -594,7 +606,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         new Set(
           visibleNavSections
             .flatMap((section) => section.items)
-            .map((item) => String(item.menuKey ?? "").trim())
+            .flatMap((item) => getNavItemMenuKeys(item))
             .filter(Boolean),
         ),
       ).sort((a, b) => a.localeCompare(b, "pt-BR")),
@@ -660,8 +672,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    markMenuAsSeen(activeNavItem?.menuKey);
-  }, [activeNavItem?.menuKey, markMenuAsSeen]);
+    for (const menuKey of getNavItemMenuKeys(activeNavItem)) {
+      markMenuAsSeen(menuKey);
+    }
+  }, [activeNavItem, markMenuAsSeen]);
 
   useEffect(() => {
     const fromUrl = (
@@ -779,9 +793,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <List disablePadding>
               {section.items.map((item) => {
                 const selected = toPathOnly(item.to) === activeNavItemPath;
-                const unreadCount =
-                  unreadMenuInfoByKey.get(String(item.menuKey ?? "").trim())
-                    ?.unreadCount ?? 0;
+                const unreadCount = getNavItemMenuKeys(item).reduce(
+                  (total, menuKey) =>
+                    total + (unreadMenuInfoByKey.get(menuKey)?.unreadCount ?? 0),
+                  0,
+                );
                 const showUnreadBadge = !sidebarCollapsed && unreadCount > 0;
                 const unreadLabel =
                   unreadCount > 99 ? "99+" : String(unreadCount);
@@ -798,7 +814,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                     }
                     selected={selected}
                     onClick={() => {
-                      markMenuAsSeen(item.menuKey);
+                      for (const menuKey of getNavItemMenuKeys(item)) {
+                        markMenuAsSeen(menuKey);
+                      }
                       setMobileOpen(false);
                     }}
                     sx={{

@@ -3422,6 +3422,19 @@ export function useCpcaCasePendingSummary(
   });
 }
 
+export function useCpcaCaseHistory(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.cpcaCaseHistory(filters),
+    queryFn: async () =>
+      (await api.get("/cpca-cases/history", { params: filters })).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useCpcaCaseStats(filters: Record<string, any>, enabled = true) {
   return useQuery({
     queryKey: qk.cpcaCaseStats(filters),
@@ -3439,6 +3452,7 @@ export function useCreateCpcaCase() {
       (await api.post("/cpca-cases", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
@@ -3452,6 +3466,7 @@ export function useUpdateCpcaCase() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
     },
   });
 }
@@ -3464,6 +3479,7 @@ export function useDeleteCpcaCase() {
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
     },
   });
 }
@@ -3477,6 +3493,7 @@ export function useAddCpcaCaseComment() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
     },
   });
 }
@@ -3499,6 +3516,7 @@ export function useCreateCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
@@ -3521,6 +3539,7 @@ export function useUpdateCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
@@ -3540,6 +3559,7 @@ export function useRemoveCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
@@ -3560,6 +3580,7 @@ export function useResolveCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
@@ -3580,6 +3601,7 @@ export function useReopenCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
@@ -3600,6 +3622,7 @@ export function useFinalizeCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
@@ -5976,6 +5999,34 @@ export type EmailSettingsPatch = {
   cpcaPresidentSelfRegistrationRecipientEmail?: string | null;
 };
 
+export type EmailDeliveryFailureStatus = "OPEN" | "RESOLVED";
+
+export type EmailDeliveryFailure = {
+  id: string;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  errorMessage: string;
+  errorStack?: string | null;
+  status: EmailDeliveryFailureStatus;
+  occurredAt: string;
+  resolvedAt?: string | null;
+  resolvedBy?: {
+    id: string;
+    name: string | null;
+    email: string | null;
+  } | null;
+};
+
+export type EmailDeliveryFailuresResponse = {
+  items: EmailDeliveryFailure[];
+  total: number;
+  page: number;
+  pageSize: number;
+  openCount: number;
+};
+
 export type ComgepScoringWeightKey =
   | "riskOpenCases"
   | "riskRetaliationCases"
@@ -6048,6 +6099,23 @@ export function useEmailSettings() {
     queryKey: qk.emailSettings,
     queryFn: async () =>
       (await api.get<EmailSettingsResponse>("/admin/email-settings")).data,
+  });
+}
+
+export function useEmailDeliveryFailures(
+  filters: { status?: string; page?: number; pageSize?: number },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.emailDeliveryFailures(filters),
+    queryFn: async () =>
+      (
+        await api.get<EmailDeliveryFailuresResponse>("/admin/email-failures", {
+          params: filters,
+        })
+      ).data,
+    enabled,
+    staleTime: 10_000,
   });
 }
 
@@ -6271,6 +6339,22 @@ export function useUpdateEmailSettings() {
       (await api.put("/admin/email-settings", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.emailSettings });
+    },
+  });
+}
+
+export function useResolveEmailDeliveryFailure() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (
+        await api.post(
+          `/admin/email-failures/${encodeURIComponent(id)}/resolve`,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "emailDeliveryFailures"] });
+      qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
 }

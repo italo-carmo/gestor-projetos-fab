@@ -101,6 +101,43 @@ export class CpcaController {
     );
   }
 
+  @Get('history')
+  @RequirePermission('cpca_cases', 'view')
+  history(
+    @Query('omId') omId: string | undefined,
+    @Query('localityId') localityId: string | undefined,
+    @Query('status') status: string | undefined,
+    @Query('complaintType') complaintType: string | undefined,
+    @Query('detailedViolenceType') detailedViolenceType: string | undefined,
+    @Query('procedureType') procedureType: string | undefined,
+    @Query('q') q: string | undefined,
+    @Query('action') action: string | undefined,
+    @Query('actor') actor: string | undefined,
+    @Query('from') from: string | undefined,
+    @Query('to') to: string | undefined,
+    @Query('page') page: string | undefined,
+    @Query('pageSize') pageSize: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.history(
+      {
+        localityId: omId ?? localityId,
+        status,
+        complaintType,
+        detailedViolenceType,
+        procedureType,
+        q,
+        action,
+        actor,
+        from,
+        to,
+        page,
+        pageSize,
+      },
+      user,
+    );
+  }
+
   @Get(':id')
   @RequirePermission('cpca_cases', 'view')
   getById(@Param('id') id: string, @CurrentUser() user: RbacUser) {

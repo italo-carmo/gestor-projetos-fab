@@ -37,6 +37,7 @@ import { SettingsModule } from './settings/settings.module';
 import { AiModule } from './ai/ai.module';
 import { KnowledgeBasesModule } from './knowledge-bases/knowledge-bases.module';
 import { ManualsModule } from './manuals/manuals.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { ManualsModule } from './manuals/manuals.module';
     MenuUpdatesModule,
     StrategicModule,
     SettingsModule,
+    MailModule,
     KnowledgeBasesModule,
     ManualsModule,
     AiModule,
