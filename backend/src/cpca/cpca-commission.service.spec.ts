@@ -74,6 +74,7 @@ function createPrismaMock() {
     },
     cpcaCommissionMember: {
       findMany: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       upsert: jest.fn(),
       delete: jest.fn(),
@@ -205,6 +206,158 @@ describe('CpcaCommissionService', () => {
       checksum: 'checksum-1',
     });
     (deleteCpcaPresidentBulletinFile as jest.Mock).mockReturnValue(true);
+  });
+
+  it('abre a visão da comissão pela OM onde o usuário é presidente, ignorando a OM do LDAP', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+    const ldapOm = {
+      id: 'om-ldap',
+      code: 'GSAU-AN',
+      name: 'GSAU-AN',
+      hasCpca: false,
+    };
+    const baan = {
+      id: 'om-baan',
+      code: 'BAAN',
+      name: 'Base Aérea de Anápolis',
+      hasCpca: true,
+    };
+    const president = {
+      id: 'pres-1',
+      omId: baan.id,
+      userId: 'patricia-1',
+      designationBulletin: null,
+      isSubstitution: true,
+      assignedAt: new Date('2026-06-09T10:00:00Z'),
+      assignmentSource: 'SELF_REGISTRATION_APPROVAL',
+      user: {
+        id: 'patricia-1',
+        name: 'MJ Patrícia',
+        email: 'patricia@fab.mil.br',
+        ldapUid: 'uid-patricia',
+        omId: ldapOm.id,
+        localityId: ldapOm.id,
+      },
+      assignedByUser: null,
+    };
+
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
+      omId: baan.id,
+    });
+    prisma.om.findUnique.mockResolvedValue(baan);
+    prisma.cpcaCommissionPresident.findUnique.mockResolvedValue(president);
+    prisma.cpcaCommissionMember.findMany.mockResolvedValue([]);
+    prisma.cpcaCommissionCoverageOm.findMany.mockResolvedValue([]);
+    prisma.om.findMany.mockResolvedValue([]);
+    prisma.cpcaCommissionCoverageRequest.findFirst.mockResolvedValue(null);
+    prisma.cpcaPresidentNominationRequest.findFirst.mockResolvedValue(null);
+    prisma.$queryRaw.mockResolvedValue([]);
+
+    const result = await service.commissionOverview(
+      makeUser({ id: 'patricia-1', omId: ldapOm.id, roles: ['CPCA'] }) as any,
+    );
+
+    expect(prisma.om.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: baan.id } }),
+    );
+    expect(result.locality).toMatchObject({
+      id: baan.id,
+      code: 'BAAN',
+    });
+    expect(result.userIsPresident).toBe(true);
+    expect(result.canManageMembers).toBe(true);
+  });
+
+  it('abre a visão da comissão pela OM onde o usuário é membro, ignorando a OM do LDAP', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const ldap = createLdapMock();
+    const service = new CpcaCommissionService(
+      prisma as any,
+      audit as any,
+      ldap as any,
+    );
+    const ldapOm = {
+      id: 'om-ldap',
+      code: 'GSAU-AN',
+      name: 'GSAU-AN',
+      hasCpca: false,
+    };
+    const baan = {
+      id: 'om-baan',
+      code: 'BAAN',
+      name: 'Base Aérea de Anápolis',
+      hasCpca: true,
+    };
+    const currentPresident = {
+      id: 'pres-current',
+      omId: baan.id,
+      userId: 'president-1',
+      designationBulletin: null,
+      isSubstitution: true,
+      assignedAt: new Date('2026-06-09T10:00:00Z'),
+      assignmentSource: 'DIRECT_ASSIGNMENT',
+      user: {
+        id: 'president-1',
+        name: 'Presidente CPCA',
+        email: 'presidente@fab.mil.br',
+        ldapUid: 'uid-presidente',
+        omId: baan.id,
+        localityId: baan.id,
+      },
+      assignedByUser: null,
+    };
+
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValueOnce(null);
+    prisma.cpcaCommissionMember.findFirst.mockResolvedValue({
+      omId: baan.id,
+    });
+    prisma.om.findUnique.mockResolvedValue(baan);
+    prisma.cpcaCommissionPresident.findUnique.mockResolvedValue(
+      currentPresident,
+    );
+    prisma.cpcaCommissionMember.findMany.mockResolvedValue([
+      {
+        id: 'member-1',
+        createdAt: new Date('2026-06-09T11:00:00Z'),
+        user: {
+          id: 'patricia-1',
+          name: 'MJ Patrícia',
+          email: 'patricia@fab.mil.br',
+          ldapUid: 'uid-patricia',
+          omId: ldapOm.id,
+          localityId: ldapOm.id,
+        },
+        addedByUser: null,
+      },
+    ]);
+    prisma.cpcaCommissionCoverageOm.findMany.mockResolvedValue([]);
+    prisma.om.findMany.mockResolvedValue([]);
+    prisma.cpcaCommissionCoverageRequest.findFirst.mockResolvedValue(null);
+    prisma.cpcaPresidentNominationRequest.findFirst.mockResolvedValue(null);
+    prisma.$queryRaw.mockResolvedValue([]);
+
+    const result = await service.commissionOverview(
+      makeUser({ id: 'patricia-1', omId: ldapOm.id, roles: ['CPCA'] }) as any,
+    );
+
+    expect(prisma.om.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: baan.id } }),
+    );
+    expect(result.locality).toMatchObject({
+      id: baan.id,
+      code: 'BAAN',
+    });
+    expect(result.userIsPresident).toBe(false);
+    expect(result.canManageMembers).toBe(false);
+    expect(result.members).toHaveLength(1);
   });
 
   it('permite autoinscrição de presidente para OM selecionada diferente da OM do LDAP', async () => {
@@ -777,6 +930,7 @@ describe('CpcaCommissionService', () => {
 
     prisma.om.findUnique.mockResolvedValue(sameCodeNameOm);
     prisma.cpcaCommissionPresident.findFirst
+      .mockResolvedValueOnce({ omId: 'om-cca' })
       .mockResolvedValueOnce({ id: 'pres-1' })
       .mockResolvedValueOnce(null);
     ldap.lookupByEmail.mockResolvedValue({
@@ -862,6 +1016,7 @@ describe('CpcaCommissionService', () => {
 
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst
+      .mockResolvedValueOnce({ omId: 'om-1' })
       .mockResolvedValueOnce({ id: 'pres-1' })
       .mockResolvedValueOnce(null);
     ldap.lookupByEmail.mockResolvedValue({

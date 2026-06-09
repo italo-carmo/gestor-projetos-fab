@@ -537,11 +537,12 @@ export class CpcaCommissionService {
         localityId = String(firstLocality?.id ?? '');
       }
     } else {
-      localityId = String(user?.omId ?? '').trim();
+      localityId = await this.resolveUserCommissionLocalityId(
+        userId,
+        localityId,
+        { includeMembers: true },
+      );
       if (!localityId) {
-        throwError('RBAC_FORBIDDEN');
-      }
-      if (requestedLocalityId && requestedLocalityId !== localityId) {
         throwError('RBAC_FORBIDDEN');
       }
     }
@@ -1699,7 +1700,7 @@ export class CpcaCommissionService {
     user: RbacUser | undefined,
   ) {
     const actorUserId = this.requireUserId(user);
-    const localityId = this.resolveLocalityForMemberManagement(
+    const localityId = await this.resolveLocalityForMemberManagement(
       user,
       payload.localityId,
     );
@@ -2086,7 +2087,7 @@ export class CpcaCommissionService {
     };
   }
 
-  private resolveLocalityForMemberManagement(
+  private async resolveLocalityForMemberManagement(
     user: RbacUser | undefined,
     requestedLocalityId?: string,
   ) {
@@ -2101,14 +2102,69 @@ export class CpcaCommissionService {
       return requested;
     }
 
-    const userLocalityId = String(user?.omId ?? '').trim();
-    if (!userLocalityId) {
+    const userId = this.requireUserId(user);
+    const resolvedLocalityId = await this.resolveUserCommissionLocalityId(
+      userId,
+      requested,
+      { includeMembers: false },
+    );
+    return resolvedLocalityId;
+  }
+
+  private async resolveUserCommissionLocalityId(
+    userId: string,
+    requestedLocalityId?: string,
+    options: { includeMembers: boolean } = { includeMembers: true },
+  ) {
+    const requested = String(requestedLocalityId ?? '').trim();
+
+    if (requested) {
+      const president = await this.prisma.cpcaCommissionPresident.findFirst({
+        where: {
+          omId: requested,
+          userId,
+        },
+        select: { omId: true },
+      });
+      if (president?.omId) return president.omId;
+
+      if (options.includeMembers) {
+        const member = await this.prisma.cpcaCommissionMember.findFirst({
+          where: {
+            omId: requested,
+            userId,
+          },
+          select: { omId: true },
+        });
+        if (member?.omId) return member.omId;
+      }
+
       throwError('RBAC_FORBIDDEN');
     }
-    if (requested && requested !== userLocalityId) {
-      throwError('RBAC_FORBIDDEN');
+
+    const president = await this.prisma.cpcaCommissionPresident.findFirst({
+      where: {
+        userId,
+        omId: { not: null },
+      },
+      select: { omId: true },
+      orderBy: [{ assignedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    if (president?.omId) return president.omId;
+
+    if (options.includeMembers) {
+      const member = await this.prisma.cpcaCommissionMember.findFirst({
+        where: {
+          userId,
+          omId: { not: null },
+        },
+        select: { omId: true },
+        orderBy: [{ createdAt: 'desc' }],
+      });
+      if (member?.omId) return member.omId;
     }
-    return userLocalityId;
+
+    throwError('RBAC_FORBIDDEN');
   }
 
   private async assertCanManageMembers(
@@ -3526,27 +3582,10 @@ export class CpcaCommissionService {
     }
 
     const requested = String(requestedLocalityId ?? '').trim();
-    const userLocalityId = String(user?.omId ?? '').trim();
-    if (!userLocalityId) {
-      throwError('RBAC_FORBIDDEN');
-    }
-    if (requested && requested !== userLocalityId) {
-      throwError('RBAC_FORBIDDEN');
-    }
-
     const userId = this.requireUserId(user);
-    const isPresident = await this.prisma.cpcaCommissionPresident.findFirst({
-      where: {
-        omId: userLocalityId,
-        userId,
-      },
-      select: { id: true },
+    return this.resolveUserCommissionLocalityId(userId, requested, {
+      includeMembers: false,
     });
-    if (!isPresident) {
-      throwError('RBAC_FORBIDDEN');
-    }
-
-    return userLocalityId;
   }
 
   private async applyCoverageAssignment(

@@ -310,8 +310,11 @@ export function CpcaCommissionPage() {
     isApprover ? selectedLocalityId : undefined,
     Boolean(me?.id),
   );
+  const overviewLocalityId = String(
+    (overviewQuery.data as any)?.locality?.id ?? "",
+  ).trim();
   const checklistLocalityId = String(
-    isApprover ? selectedLocalityId : ownLocalityId,
+    isApprover ? selectedLocalityId : overviewLocalityId,
   ).trim();
   const checklistQuery = useCpcaChecklistLocality(
     checklistLocalityId,
@@ -977,7 +980,7 @@ export function CpcaCommissionPage() {
                   value={
                     isApprover
                       ? selectedLocalityId
-                      : ownLocalityId || locality?.id || selectedLocalityId
+                      : overviewLocalityId || selectedLocalityId
                   }
                   onChange={(event) => {
                     if (!isApprover) return;
