@@ -1729,8 +1729,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     }
   };
 
-  const validateSelectedCase = async () => {
-    if (!selectedId || !canValidateCpcaCase || isSmifWorkflow) {
+  const validateCaseById = async (caseId: string) => {
+    const normalizedId = String(caseId ?? "").trim();
+    if (!normalizedId || !canValidateCpcaCase || isSmifWorkflow) {
       toast.push({
         message:
           "Seu perfil ativo não possui permissão para validar denúncias.",
@@ -1740,7 +1741,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     }
 
     try {
-      const result = await validateCpcaCase.mutateAsync(selectedId);
+      const result = await validateCpcaCase.mutateAsync(normalizedId);
       toast.push({
         message: result?.alreadyValidated
           ? "Denúncia já estava validada."
@@ -1754,6 +1755,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         severity: "error",
       });
     }
+  };
+
+  const validateSelectedCase = async () => {
+    await validateCaseById(selectedId);
   };
 
   const saveCipavdThread = async () => {
@@ -3246,6 +3251,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                   <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
                     Caso
                   </TableCell>
+                  {!isSmifWorkflow && (
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                      Validação
+                    </TableCell>
+                  )}
                   <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
                     OM
                   </TableCell>
@@ -3377,21 +3387,6 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 />
                               ),
                             )}
-                            {!isSmifWorkflow &&
-                              canValidateCpcaCase &&
-                              !validation?.isValidated && (
-                                <Chip
-                                  size="small"
-                                  label="A validar"
-                                  sx={{
-                                    fontWeight: 700,
-                                    color: "#B45309",
-                                    bgcolor: "rgba(245, 158, 11, 0.12)",
-                                    border:
-                                      "1px solid rgba(245, 158, 11, 0.24)",
-                                  }}
-                                />
-                              )}
                             {pendencyBadge && (
                               <Chip
                                 size="small"
@@ -3448,6 +3443,74 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                           )}
                         </Stack>
                       </TableCell>
+                      {!isSmifWorkflow && (
+                        <TableCell sx={{ minWidth: 190 }}>
+                          <Stack spacing={0.75} alignItems="flex-start">
+                            <Chip
+                              size="small"
+                              icon={
+                                validation?.isValidated ? (
+                                  <CheckCircleIcon />
+                                ) : (
+                                  <PendingActionsIcon />
+                                )
+                              }
+                              label={
+                                validation?.isValidated
+                                  ? "Validada"
+                                  : "A validar"
+                              }
+                              sx={{
+                                fontWeight: 700,
+                                color: validation?.isValidated
+                                  ? "#166534"
+                                  : "#B45309",
+                                bgcolor: validation?.isValidated
+                                  ? "rgba(34, 197, 94, 0.12)"
+                                  : "rgba(245, 158, 11, 0.12)",
+                                border: "1px solid",
+                                borderColor: validation?.isValidated
+                                  ? "rgba(34, 197, 94, 0.24)"
+                                  : "rgba(245, 158, 11, 0.24)",
+                                "& .MuiChip-icon": {
+                                  color: "inherit",
+                                },
+                              }}
+                            />
+                            {validation?.isValidated ? (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ lineHeight: 1.25 }}
+                              >
+                                {getValidationActorName(validation)}
+                                <br />
+                                {formatDateTimePtBr(validation.validatedAt)}
+                              </Typography>
+                            ) : canValidateCpcaCase ? (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<FactCheckIcon fontSize="small" />}
+                                disabled={validateCpcaCase.isPending}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void validateCaseById(item.id);
+                                }}
+                              >
+                                Validar
+                              </Button>
+                            ) : (
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                Abra com perfil COMGEP ou Coordenação CIPAVD
+                              </Typography>
+                            )}
+                          </Stack>
+                        </TableCell>
+                      )}
                       <TableCell>{formatOmLabel(item.locality)}</TableCell>
                       <TableCell>
                         {getDetailedViolenceTypeLabel(
@@ -3939,6 +4002,14 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                             )}
                         </Stack>
                       </Stack>
+
+                      {!selectedValidation?.isValidated &&
+                        !canValidateCpcaCase && (
+                          <Alert severity="info" sx={{ py: 0.75 }}>
+                            Para validar esta denúncia, altere o perfil ativo
+                            para COMGEP ou Coordenação CIPAVD.
+                          </Alert>
+                        )}
 
                       {(selectedValidation?.logs ?? []).length > 0 && (
                         <Box>
