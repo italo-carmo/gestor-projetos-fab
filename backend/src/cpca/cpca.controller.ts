@@ -44,6 +44,7 @@ export class CpcaController {
     @Query('complaintType') complaintType: string | undefined,
     @Query('detailedViolenceType') detailedViolenceType: string | undefined,
     @Query('procedureType') procedureType: string | undefined,
+    @Query('validationStatus') validationStatus: string | undefined,
     @Query('q') q: string | undefined,
     @Query('page') page: string | undefined,
     @Query('pageSize') pageSize: string | undefined,
@@ -56,6 +57,7 @@ export class CpcaController {
         complaintType,
         detailedViolenceType,
         procedureType,
+        validationStatus,
         q,
         page,
         pageSize,
@@ -85,10 +87,37 @@ export class CpcaController {
     @Query('complaintType') complaintType: string | undefined,
     @Query('detailedViolenceType') detailedViolenceType: string | undefined,
     @Query('procedureType') procedureType: string | undefined,
+    @Query('validationStatus') validationStatus: string | undefined,
     @Query('q') q: string | undefined,
     @CurrentUser() user: RbacUser,
   ) {
     return this.cpca.pendingSummary(
+      {
+        localityId: omId ?? localityId,
+        status,
+        complaintType,
+        detailedViolenceType,
+        procedureType,
+        validationStatus,
+        q,
+      },
+      user,
+    );
+  }
+
+  @Get('validation-summary')
+  @RequirePermission('cpca_cases', 'view')
+  validationSummary(
+    @Query('omId') omId: string | undefined,
+    @Query('localityId') localityId: string | undefined,
+    @Query('status') status: string | undefined,
+    @Query('complaintType') complaintType: string | undefined,
+    @Query('detailedViolenceType') detailedViolenceType: string | undefined,
+    @Query('procedureType') procedureType: string | undefined,
+    @Query('q') q: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.validationSummary(
       {
         localityId: omId ?? localityId,
         status,
@@ -164,6 +193,12 @@ export class CpcaController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.cpca.update(id, dto, user);
+  }
+
+  @Post(':id/validate')
+  @RequirePermission('cpca_cases', 'update')
+  validate(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.cpca.validateComplaintCase(id, user);
   }
 
   @Delete(':id')

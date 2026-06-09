@@ -3422,6 +3422,20 @@ export function useCpcaCasePendingSummary(
   });
 }
 
+export function useCpcaCaseValidationSummary(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.cpcaCaseValidationSummary(filters),
+    queryFn: async () =>
+      (await api.get("/cpca-cases/validation-summary", { params: filters }))
+        .data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useCpcaCaseHistory(
   filters: Record<string, any>,
   enabled = true,
@@ -3466,6 +3480,20 @@ export function useUpdateCpcaCase() {
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
+    },
+  });
+}
+
+export function useValidateCpcaCase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.post(`/cpca-cases/${encodeURIComponent(id)}/validate`)).data,
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCase(id) });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseValidationSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
     },
   });

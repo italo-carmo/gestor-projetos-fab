@@ -28,8 +28,12 @@ import {
   TablePagination,
   TableRow,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import FactCheckIcon from "@mui/icons-material/FactCheck";
+import PendingActionsIcon from "@mui/icons-material/PendingActions";
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -39,6 +43,7 @@ import {
   useCpcaCaseHistory,
   useCpcaCaseLocalityOptions,
   useCpcaCasePendingSummary,
+  useCpcaCaseValidationSummary,
   useCreateCpcaCaseCipavdThread,
   useCreateCpcaCase,
   useDeleteCpcaCase,
@@ -65,6 +70,7 @@ import {
   useUpdateCpcaCaseCipavdThread,
   useUpdateCpcaCase,
   useUpdateSmifComplaintCaseCipavdThread,
+  useValidateCpcaCase,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
@@ -125,6 +131,7 @@ const CPCA_HISTORY_ACTION_OPTIONS = [
   { value: "cipavd_pendency_finalize", label: "Pendência finalizada" },
   { value: "cipavd_pendency_delete", label: "Pendência excluída" },
   { value: "cipavd_comment_create", label: "Comentário da gestão" },
+  { value: "validation", label: "Validação da comissão" },
 ];
 
 const STATUS_CHIP_STYLES: Record<
@@ -700,6 +707,29 @@ function formatHistoryOm(om: any) {
   return code && name ? `${code} - ${name}` : code || name || "-";
 }
 
+function formatDateTimePtBr(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "-";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleString("pt-BR");
+}
+
+function getValidationActorName(validation: any) {
+  return (
+    String(validation?.validatedByName ?? "").trim() ||
+    String(validation?.validatedBy?.name ?? "").trim() ||
+    "Militar não informado"
+  );
+}
+
+function getValidationTooltip(validation: any) {
+  if (!validation?.isValidated) return "Denúncia aguardando validação";
+  return `Validada por ${getValidationActorName(validation)} em ${formatDateTimePtBr(
+    validation.validatedAt,
+  )}`;
+}
+
 function statusOptionsForStep(step: number, currentStatus: string) {
   const allowed = new Set(STEP_STATUS_OPTIONS[step] ?? []);
   if (currentStatus) allowed.add(currentStatus);
@@ -717,12 +747,22 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const isSmifWorkflow = workflow === "SMIF";
   const resourceKey = isSmifWorkflow ? "smif_complaints" : "cpca_cases";
   const canAccessByRole = can(me, resourceKey, "view");
+  const canCreateCase = can(me, resourceKey, "create");
+  const canUpdateCase = can(me, resourceKey, "update");
+  const canDeleteCase = can(me, resourceKey, "delete");
+  const canValidateCpcaCaseByProfile =
+    !isSmifWorkflow &&
+    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
+  const canValidateCpcaCase = canValidateCpcaCaseByProfile && canUpdateCase;
 
   const q = params.get("q") ?? "";
   const localityId = params.get("localityId") ?? "";
   const status = params.get("status") ?? "";
   const detailedViolenceType = params.get("detailedViolenceType") ?? "";
   const procedureType = params.get("procedureType") ?? "";
+  const validationStatus = isSmifWorkflow
+    ? ""
+    : (params.get("validationStatus") ?? "");
   const pageSizeParam = String(params.get("pageSize") ?? "20")
     .trim()
     .toLowerCase();
@@ -739,6 +779,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       status: status || undefined,
       detailedViolenceType: detailedViolenceType || undefined,
       procedureType: procedureType || undefined,
+      validationStatus:
+        !isSmifWorkflow && validationStatus ? validationStatus : undefined,
       page,
       pageSize: showAllRows ? "all" : pageSize,
     }),
@@ -748,6 +790,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       status,
       detailedViolenceType,
       procedureType,
+      validationStatus,
+      isSmifWorkflow,
       page,
       pageSize,
       showAllRows,
@@ -774,6 +818,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const pendingSummaryQuery = isSmifWorkflow
     ? smifPendingSummaryQuery
     : cpcaPendingSummaryQuery;
+  const validationSummaryQuery = useCpcaCaseValidationSummary(
+    filters,
+    canAccessByRole && canValidateCpcaCase,
+  );
   const cpcaLocalityOptionsQuery = useCpcaCaseLocalityOptions(
     canAccessByRole && !isSmifWorkflow,
   );
@@ -836,6 +884,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const [threadDrafts, setThreadDrafts] = useState<Record<string, string>>({});
   const [editingThreadId, setEditingThreadId] = useState("");
   const [focusedThreadId, setFocusedThreadId] = useState("");
+  const [validationModalOpen, setValidationModalOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [consistencyPopover, setConsistencyPopover] = useState<{
     anchorEl: HTMLElement | null;
@@ -879,6 +928,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const createCpcaCase = useCreateCpcaCase();
   const updateCpcaCase = useUpdateCpcaCase();
   const deleteCpcaCase = useDeleteCpcaCase();
+  const validateCpcaCase = useValidateCpcaCase();
   const markCpcaCaseSeen = useMarkCpcaCaseSeen();
   const createCpcaCipavdThread = useCreateCpcaCaseCipavdThread();
   const updateCpcaCipavdThread = useUpdateCpcaCaseCipavdThread();
@@ -918,9 +968,6 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const finalizeCipavdThread = isSmifWorkflow
     ? finalizeSmifCipavdThread
     : finalizeCpcaCipavdThread;
-  const canCreateCase = can(me, resourceKey, "create");
-  const canUpdateCase = can(me, resourceKey, "update");
-  const canDeleteCase = can(me, resourceKey, "delete");
   const workflowLabel = isSmifWorkflow ? "SMIF" : "CPCA";
 
   const isNationalScope = hasAnyRole(me, [
@@ -1010,6 +1057,28 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     0,
     Number(pendingSummaryData?.summary?.resolvedPendingCount ?? 0) || 0,
   );
+  const validationSummaryData = validationSummaryQuery.data as
+    | {
+        summary?: {
+          pendingValidationCount?: number | null;
+          validatedCount?: number | null;
+          totalCount?: number | null;
+        };
+        pendingItems?: any[];
+      }
+    | undefined;
+  const pendingValidationItems = (validationSummaryData?.pendingItems ??
+    []) as any[];
+  const pendingValidationCount = Math.max(
+    0,
+    Number(validationSummaryData?.summary?.pendingValidationCount ?? 0) || 0,
+  );
+  const validatedCount = Math.max(
+    0,
+    Number(validationSummaryData?.summary?.validatedCount ?? 0) || 0,
+  );
+  const selectedValidation = ((selectedCaseQuery.data as any)?.validation ??
+    null) as any;
   const summaryPrivacyHighlightSegments = useMemo(
     () =>
       summaryPrivacyReview
@@ -1159,6 +1228,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     status,
     detailedViolenceType,
     procedureType,
+    validationStatus,
     historyAction,
     historyActor,
     historyFrom,
@@ -1656,6 +1726,33 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       });
     } finally {
       setSummarySaveState("idle");
+    }
+  };
+
+  const validateSelectedCase = async () => {
+    if (!selectedId || !canValidateCpcaCase || isSmifWorkflow) {
+      toast.push({
+        message:
+          "Seu perfil ativo não possui permissão para validar denúncias.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    try {
+      const result = await validateCpcaCase.mutateAsync(selectedId);
+      toast.push({
+        message: result?.alreadyValidated
+          ? "Denúncia já estava validada."
+          : "Denúncia validada pela comissão.",
+        severity: "success",
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ?? "Erro ao validar a denúncia.",
+        severity: "error",
+      });
     }
   };
 
@@ -2933,6 +3030,105 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         </CardContent>
       </Card>
 
+      {canValidateCpcaCase && (
+        <Card
+          sx={{
+            mb: 2,
+            borderRadius: 4,
+            border: "1px solid",
+            borderColor:
+              pendingValidationCount > 0
+                ? "rgba(217, 119, 6, 0.35)"
+                : "rgba(22, 163, 74, 0.28)",
+            bgcolor:
+              pendingValidationCount > 0
+                ? "rgba(245, 158, 11, 0.06)"
+                : "rgba(34, 197, 94, 0.05)",
+            cursor: "pointer",
+          }}
+          role="button"
+          tabIndex={0}
+          onClick={() => setValidationModalOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setValidationModalOpen(true);
+            }
+          }}
+        >
+          <CardContent>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1.5}
+              justifyContent="space-between"
+              alignItems={{ xs: "flex-start", md: "center" }}
+            >
+              <Stack direction="row" spacing={1.25} alignItems="center">
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2,
+                    display: "grid",
+                    placeItems: "center",
+                    bgcolor:
+                      pendingValidationCount > 0
+                        ? "rgba(245, 158, 11, 0.16)"
+                        : "rgba(34, 197, 94, 0.14)",
+                    color:
+                      pendingValidationCount > 0 ? "#B45309" : "#166534",
+                  }}
+                >
+                  {pendingValidationCount > 0 ? (
+                    <PendingActionsIcon fontSize="small" />
+                  ) : (
+                    <FactCheckIcon fontSize="small" />
+                  )}
+                </Box>
+                <Box>
+                  <Typography variant="overline" color="text.secondary">
+                    Validação da comissão
+                  </Typography>
+                  <Typography variant="h4" fontWeight={800} lineHeight={1}>
+                    {validationSummaryQuery.isLoading
+                      ? "..."
+                      : pendingValidationCount}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5 }}
+                  >
+                    {pendingValidationCount === 1
+                      ? "denúncia aguardando validação"
+                      : "denúncias aguardando validação"}
+                  </Typography>
+                </Box>
+              </Stack>
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                alignItems={{ xs: "flex-start", sm: "center" }}
+              >
+                <Chip
+                  size="small"
+                  label={`${validatedCount} validada${validatedCount === 1 ? "" : "s"}`}
+                  sx={{
+                    fontWeight: 700,
+                    color: "#166534",
+                    bgcolor: "rgba(34, 197, 94, 0.12)",
+                    border: "1px solid rgba(34, 197, 94, 0.24)",
+                  }}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Clique para revisar a fila do filtro atual.
+                </Typography>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
+
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Stack
@@ -3013,6 +3209,22 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 </MenuItem>
               ))}
             </TextField>
+            {!isSmifWorkflow && (
+              <TextField
+                select
+                size="small"
+                label="Validação"
+                value={validationStatus}
+                onChange={(e) =>
+                  updateParam("validationStatus", e.target.value)
+                }
+                sx={{ minWidth: 170 }}
+              >
+                <MenuItem value="">Todas</MenuItem>
+                <MenuItem value="PENDING">A validar</MenuItem>
+                <MenuItem value="VALIDATED">Validadas</MenuItem>
+              </TextField>
+            )}
             <Button variant="text" onClick={clearFilters}>
               Limpar
             </Button>
@@ -3072,6 +3284,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                       showResolved: isNationalScope,
                     },
                   );
+                  const validation = item.validation ?? null;
 
                   return (
                     <TableRow
@@ -3108,6 +3321,15 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 item.caseNumber,
                               )}
                             </Typography>
+                            {!isSmifWorkflow && validation?.isValidated && (
+                              <Tooltip title={getValidationTooltip(validation)}>
+                                <CheckCircleIcon
+                                  color="success"
+                                  fontSize="small"
+                                  aria-label="Denúncia validada"
+                                />
+                              </Tooltip>
+                            )}
                             {item.isNewForViewer && (
                               <Chip
                                 size="small"
@@ -3155,6 +3377,21 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 />
                               ),
                             )}
+                            {!isSmifWorkflow &&
+                              canValidateCpcaCase &&
+                              !validation?.isValidated && (
+                                <Chip
+                                  size="small"
+                                  label="A validar"
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: "#B45309",
+                                    bgcolor: "rgba(245, 158, 11, 0.12)",
+                                    border:
+                                      "1px solid rgba(245, 158, 11, 0.24)",
+                                  }}
+                                />
+                              )}
                             {pendencyBadge && (
                               <Chip
                                 size="small"
@@ -3618,6 +3855,128 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
           {(isCreateMode || selectedCaseQuery.data) && (
             <Stack spacing={2}>
+              {!isCreateMode && !isSmifWorkflow && selectedCaseQuery.data && (
+                <Card
+                  sx={{
+                    border: "1px solid",
+                    borderColor: selectedValidation?.isValidated
+                      ? "rgba(34, 197, 94, 0.28)"
+                      : "rgba(245, 158, 11, 0.32)",
+                    bgcolor: selectedValidation?.isValidated
+                      ? "rgba(34, 197, 94, 0.04)"
+                      : "rgba(245, 158, 11, 0.05)",
+                  }}
+                >
+                  <CardContent sx={{ p: { xs: 2, md: 2.5 } }}>
+                    <Stack spacing={1.5}>
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        spacing={1.25}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", md: "center" }}
+                      >
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          {selectedValidation?.isValidated ? (
+                            <CheckCircleIcon color="success" />
+                          ) : (
+                            <PendingActionsIcon sx={{ color: "#B45309" }} />
+                          )}
+                          <Box>
+                            <Typography variant="subtitle1" fontWeight={800}>
+                              Validação da comissão
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {selectedValidation?.isValidated
+                                ? getValidationTooltip(selectedValidation)
+                                : "Esta denúncia precisa de validação após a última atualização."}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                          <Chip
+                            size="small"
+                            label={
+                              selectedValidation?.isValidated
+                                ? "Validada"
+                                : "A validar"
+                            }
+                            sx={{
+                              fontWeight: 700,
+                              color: selectedValidation?.isValidated
+                                ? "#166534"
+                                : "#B45309",
+                              bgcolor: selectedValidation?.isValidated
+                                ? "rgba(34, 197, 94, 0.12)"
+                                : "rgba(245, 158, 11, 0.12)",
+                              border: "1px solid",
+                              borderColor: selectedValidation?.isValidated
+                                ? "rgba(34, 197, 94, 0.24)"
+                                : "rgba(245, 158, 11, 0.24)",
+                            }}
+                          />
+                          {canValidateCpcaCase &&
+                            !selectedValidation?.isValidated && (
+                              <Button
+                                size="small"
+                                variant="contained"
+                                startIcon={
+                                  validateCpcaCase.isPending ? (
+                                    <CircularProgress
+                                      size={16}
+                                      color="inherit"
+                                    />
+                                  ) : (
+                                    <FactCheckIcon fontSize="small" />
+                                  )
+                                }
+                                onClick={() => {
+                                  void validateSelectedCase();
+                                }}
+                                disabled={validateCpcaCase.isPending}
+                              >
+                                Validar denúncia
+                              </Button>
+                            )}
+                        </Stack>
+                      </Stack>
+
+                      {(selectedValidation?.logs ?? []).length > 0 && (
+                        <Box>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: "block", mb: 0.75 }}
+                          >
+                            Log de validação
+                          </Typography>
+                          <Stack spacing={0.75}>
+                            {(selectedValidation.logs ?? [])
+                              .slice(0, 4)
+                              .map((log: any) => (
+                                <Box
+                                  key={log.id}
+                                  sx={{
+                                    p: 1,
+                                    borderRadius: 1,
+                                    border: "1px solid",
+                                    borderColor: "divider",
+                                    bgcolor: "background.paper",
+                                  }}
+                                >
+                                  <Typography variant="body2">
+                                    {getValidationActorName(log)} validou em{" "}
+                                    {formatDateTimePtBr(log.validatedAt)}
+                                  </Typography>
+                                </Box>
+                              ))}
+                          </Stack>
+                        </Box>
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              )}
+
               <Card>
                 <CardContent sx={{ p: { xs: 2, md: 3 } }}>
                   <Box sx={{ overflowX: "auto", pb: 1 }}>
@@ -4595,6 +4954,116 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setArchiveReasonDialog(null)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={validationModalOpen}
+        onClose={() => setValidationModalOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Denúncias para validação</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              A fila considera os filtros ativos e reúne denúncias criadas ou
+              atualizadas que ainda não receberam validação da comissão.
+            </Typography>
+
+            {validationSummaryQuery.isLoading ? (
+              <Typography variant="body2" color="text.secondary">
+                Carregando validações pendentes...
+              </Typography>
+            ) : pendingValidationItems.length === 0 ? (
+              <Alert severity="success">
+                Não há denúncias aguardando validação no filtro atual.
+              </Alert>
+            ) : (
+              <Stack spacing={1}>
+                {pendingValidationItems.map((item: any) => (
+                  <Box
+                    key={item.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      setValidationModalOpen(false);
+                      openDetails(item.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setValidationModalOpen(false);
+                        openDetails(item.id);
+                      }
+                    }}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2.5,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Stack spacing={0.75}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                        justifyContent="space-between"
+                      >
+                        <Typography fontWeight={700}>
+                          {formatComplaintCaseNumberForDisplay(
+                            item.caseNumber,
+                          )}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Atualizada em {formatDateTimePtBr(item.updatedAt)}
+                        </Typography>
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary">
+                        {formatOmLabel(item.locality)}
+                      </Typography>
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <Chip
+                          size="small"
+                          label={
+                            STATUS_OPTIONS.find(
+                              (entry) => entry.value === item.status,
+                            )?.label ?? item.status
+                          }
+                          sx={{ fontWeight: 700 }}
+                        />
+                        <Chip
+                          size="small"
+                          label="A validar"
+                          sx={{
+                            fontWeight: 700,
+                            color: "#B45309",
+                            bgcolor: "rgba(245, 158, 11, 0.12)",
+                            border: "1px solid rgba(245, 158, 11, 0.24)",
+                          }}
+                        />
+                      </Stack>
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setValidationModalOpen(false)}>Fechar</Button>
+          {pendingValidationCount > 0 && (
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setValidationModalOpen(false);
+                updateParam("validationStatus", "PENDING");
+              }}
+            >
+              Filtrar lista
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

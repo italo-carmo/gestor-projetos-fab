@@ -18,6 +18,9 @@ function createPrismaMock() {
     cpcComplaintStatusHistory: {
       create: jest.fn(),
     },
+    cpcComplaintValidationLog: {
+      create: jest.fn(),
+    },
   } as any;
 }
 
@@ -45,6 +48,14 @@ function makeUser() {
       { resource: 'smif_complaints', action: 'update', scope: 'NATIONAL' },
     ],
     moduleAccessOverrides: [],
+  };
+}
+
+function makeValidationUser() {
+  return {
+    ...makeUser(),
+    roles: [{ id: 'role-comgep', name: 'COMGEP', permissions: [] }],
+    allRoles: [{ id: 'role-comgep', name: 'COMGEP', permissions: [] }],
   };
 }
 
@@ -770,5 +781,162 @@ describe('CpcaService case mutations', () => {
     );
 
     expect(prisma.cpcComplaintCase.update).not.toHaveBeenCalled();
+  });
+
+  it('registra validação da denúncia por perfil autorizado da comissão', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-06-09T14:30:00.000Z'));
+
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+    const current = makeCurrentComplaint({
+      validationVersion: 0,
+      validatedAt: null,
+      validatedById: null,
+      updatedAt: new Date('2026-06-09T14:00:00.000Z'),
+      om: { id: 'om-1', code: 'BACG', name: 'Base Aérea' },
+      locality: null,
+      validationLogs: [],
+    });
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue(current);
+    prisma.cpcComplaintValidationLog.create.mockResolvedValue({
+      id: 'validation-1',
+    });
+    prisma.cpcComplaintCase.update.mockImplementation(async ({ data }: any) => ({
+      ...current,
+      ...data,
+      validationLogs: [
+        {
+          id: 'validation-1',
+          validationVersion: 0,
+          validatedById: 'user-1',
+          validatedByName: 'Usuário Teste',
+          validatedByEmail: 'user@test.mil.br',
+          validatedAt: data.validatedAt,
+          caseUpdatedAt: current.updatedAt,
+          validatedBy: {
+            id: 'user-1',
+            name: 'Usuário Teste',
+            email: 'user@test.mil.br',
+          },
+        },
+      ],
+    }));
+
+    jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+    jest.spyOn(service as any, 'assertCaseAccess').mockResolvedValue(undefined);
+
+    const result = await service.validateComplaintCase(
+      'case-1',
+      makeValidationUser() as any,
+    );
+
+    expect(prisma.cpcComplaintValidationLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        complaintCaseId: 'case-1',
+        validationVersion: 0,
+        validatedById: 'user-1',
+        validatedByName: 'Usuário Teste',
+        validatedByEmail: 'user@test.mil.br',
+        caseUpdatedAt: current.updatedAt,
+      }),
+    });
+    expect(prisma.cpcComplaintCase.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'case-1' },
+        data: expect.objectContaining({
+          validatedById: 'user-1',
+          validatedByName: 'Usuário Teste',
+          validatedByEmail: 'user@test.mil.br',
+        }),
+      }),
+    );
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        resource: 'cpca_cases',
+        action: 'validation',
+        entityId: 'case-1',
+      }),
+    );
+    expect(result.validation).toMatchObject({
+      isValidated: true,
+      validatedByName: 'Usuário Teste',
+    });
+    expect(result.validation.logs[0]).toMatchObject({
+      validatedByName: 'Usuário Teste',
+      validatedByEmail: 'user@test.mil.br',
+    });
+  });
+
+  it('remove validação atual quando denúncia validada sofre alteração real', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+    const current = makeCurrentComplaint({
+      validationVersion: 2,
+      validatedAt: new Date('2026-06-09T13:00:00.000Z'),
+      validatedById: 'validator-1',
+      validatedByName: 'Validador COMGEP',
+      validatedByEmail: 'validator@test.mil.br',
+      updatedAt: new Date('2026-06-09T13:00:00.000Z'),
+    });
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue(current);
+    prisma.cpcComplaintCase.update.mockImplementation(async ({ data }: any) => {
+      if (data.validationVersion) {
+        return makePersistedComplaintFromUpdate(
+          {},
+          {
+            ...current,
+            evidenceSummary: 'Resumo alterado.',
+            validationVersion: 3,
+            validatedAt: null,
+            validatedById: null,
+            validatedByName: null,
+            validatedByEmail: null,
+          },
+        );
+      }
+
+      return makePersistedComplaintFromUpdate(data, {
+        ...current,
+        evidenceSummary: data.evidenceSummary,
+      });
+    });
+
+    jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+    jest.spyOn(service as any, 'assertCaseAccess').mockResolvedValue(undefined);
+
+    const result = await service.update(
+      'case-1',
+      { evidenceSummary: 'Resumo alterado.' } as any,
+      makeUser() as any,
+    );
+
+    expect(prisma.cpcComplaintCase.update).toHaveBeenCalledTimes(2);
+    expect(prisma.cpcComplaintCase.update.mock.calls[1]?.[0].data).toEqual(
+      expect.objectContaining({
+        validationVersion: { increment: 1 },
+        validatedAt: null,
+        validatedById: null,
+        validatedByName: null,
+        validatedByEmail: null,
+      }),
+    );
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'update',
+        diffJson: expect.objectContaining({
+          validationInvalidated: true,
+          validationVersion: 3,
+        }),
+      }),
+    );
+    expect(result.validation).toMatchObject({
+      isValidated: false,
+      needsValidation: true,
+      validationVersion: 3,
+    });
   });
 });

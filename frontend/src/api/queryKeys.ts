@@ -146,6 +146,8 @@ export const qk = {
     ["cpcaCaseStats", filters] as const,
   cpcaCasePendingSummary: (filters: Record<string, any>) =>
     ["cpcaCasePendingSummary", filters] as const,
+  cpcaCaseValidationSummary: (filters: Record<string, any>) =>
+    ["cpcaCaseValidationSummary", filters] as const,
   cpcaCommissionOverview: (localityId: string) =>
     ["cpcaCommission", "overview", localityId] as const,
   cpcaChecklistLocality: (localityId: string) =>

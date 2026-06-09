@@ -73,6 +73,10 @@ const CIPAVD_MANAGEMENT_ROLES = [
   ROLE_COMANDANTE_COMGEP,
   ROLE_TI,
 ] as const;
+const CPCA_VALIDATION_ROLES = [
+  ROLE_COORDENACAO_CIPAVD,
+  ROLE_COMANDANTE_COMGEP,
+] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type ComplaintWorkflowScope = 'CPCA' | 'SMIF';
@@ -89,6 +93,7 @@ type ComplaintListFilters = {
   complaintType?: string;
   detailedViolenceType?: string;
   procedureType?: string;
+  validationStatus?: string;
   q?: string;
   page?: string;
   pageSize?: string;
@@ -701,6 +706,76 @@ export class CpcaService {
             this.serializePendingSummaryItem(item),
           )
         : [],
+    };
+  }
+
+  async validationSummary(
+    filters: ComplaintListFilters,
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    if (workflowContext.workflowScope !== 'CPCA') {
+      return {
+        summary: {
+          pendingValidationCount: 0,
+          validatedCount: 0,
+          totalCount: 0,
+        },
+        pendingItems: [],
+      };
+    }
+    this.assertCanValidateComplaint(user);
+    const where = await this.buildComplaintWhere(
+      { ...filters, validationStatus: undefined },
+      user,
+      workflowContext,
+    );
+    const complaintModel = (this.prisma as any).cpcComplaintCase;
+    const detailsLimit = 200;
+
+    const [pendingValidationCount, validatedCount, totalCount, pendingItems] =
+      await Promise.all([
+        complaintModel.count({
+          where: { ...where, validatedAt: null },
+        }),
+        complaintModel.count({
+          where: { ...where, validatedAt: { not: null } },
+        }),
+        complaintModel.count({ where }),
+        complaintModel.findMany({
+          where: { ...where, validatedAt: null },
+          orderBy: [{ updatedAt: 'desc' }, { reportedAt: 'desc' }],
+          include: {
+            om: { select: { id: true, code: true, name: true } },
+            locality: { select: { id: true, code: true, name: true } },
+          },
+          take: detailsLimit,
+        }),
+      ]);
+
+    return {
+      summary: {
+        pendingValidationCount: Number(pendingValidationCount ?? 0),
+        validatedCount: Number(validatedCount ?? 0),
+        totalCount: Number(totalCount ?? 0),
+      },
+      pendingItems: (pendingItems ?? []).map((item: any) => {
+        const serialized = this.serializeComplaint(item);
+        return {
+          id: serialized.id,
+          caseNumber: serialized.caseNumber,
+          status: serialized.status,
+          procedureType: serialized.procedureType,
+          complaintType: serialized.complaintType,
+          detailedViolenceType: serialized.detailedViolenceType,
+          reportedAt: serialized.reportedAt,
+          updatedAt: serialized.updatedAt,
+          localityId: serialized.localityId,
+          locality: serialized.locality,
+          validation: serialized.validation,
+        };
+      }),
     };
   }
 
@@ -1636,6 +1711,13 @@ export class CpcaService {
             changedBy: { select: { id: true, name: true, email: true } },
           },
         },
+        validationLogs: {
+          orderBy: { validatedAt: 'desc' },
+          take: 20,
+          include: {
+            validatedBy: { select: { id: true, name: true, email: true } },
+          },
+        },
       },
     });
 
@@ -1960,11 +2042,7 @@ export class CpcaService {
       },
     });
 
-    return {
-      ...created,
-      localityId: created.omId ?? created.localityId ?? null,
-      locality: created.om ?? created.locality ?? null,
-    };
+    return this.serializeComplaint(created);
   }
 
   async update(
@@ -2046,6 +2124,12 @@ export class CpcaService {
         retaliationRisk: true,
         retaliationNotes: true,
         archivedAt: true,
+        validationVersion: true,
+        validatedAt: true,
+        validatedById: true,
+        validatedByName: true,
+        validatedByEmail: true,
+        updatedAt: true,
       },
     });
     if (!current) throwError('NOT_FOUND');
@@ -2372,6 +2456,28 @@ export class CpcaService {
       },
     });
 
+    const changedFields = this.buildComplaintCaseAuditChanges(current, updated);
+    const shouldInvalidateValidation =
+      workflowContext.workflowScope === 'CPCA' &&
+      Boolean(current.validatedAt) &&
+      changedFields.length > 0;
+    const finalUpdated = shouldInvalidateValidation
+      ? await complaintModel.update({
+          where: { id },
+          data: {
+            validationVersion: { increment: 1 },
+            validatedAt: null,
+            validatedById: null,
+            validatedByName: null,
+            validatedByEmail: null,
+          },
+          include: {
+            om: { select: { id: true, code: true, name: true } },
+            locality: { select: { id: true, code: true, name: true } },
+          },
+        })
+      : updated;
+
     if (
       current.status !== nextStatus ||
       current.procedureType !== nextProcedure
@@ -2389,12 +2495,119 @@ export class CpcaService {
       });
     }
 
-    const changedFields = this.buildComplaintCaseAuditChanges(current, updated);
-
     await this.audit.log({
       userId: user?.id,
       resource: workflowContext.resource,
       action: 'update',
+      entityId: id,
+      diffJson: {
+        omId: finalUpdated.omId,
+        caseNumber: finalUpdated.caseNumber,
+        workflowScope: workflowContext.workflowScope,
+        status: finalUpdated.status,
+        procedureType: finalUpdated.procedureType,
+        complaintType: finalUpdated.complaintType,
+        detailedViolenceType: finalUpdated.detailedViolenceType,
+        changedFields,
+        validationInvalidated: shouldInvalidateValidation,
+        validationVersion: finalUpdated.validationVersion,
+        evidenceSummaryPrivacyOverride:
+          payload.evidenceSummaryPrivacyOverride ?? false,
+      },
+    });
+
+    return {
+      ...this.serializeComplaint(finalUpdated),
+    };
+  }
+
+  async validateComplaintCase(
+    id: string,
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    if (workflowContext.workflowScope !== 'CPCA') {
+      throwError('RBAC_FORBIDDEN');
+    }
+    this.assertCanValidateComplaint(user);
+    const actorId = this.requireUserId(user);
+    const complaintModel = (this.prisma as any).cpcComplaintCase;
+    const validationLogModel = (this.prisma as any).cpcComplaintValidationLog;
+
+    const current = await complaintModel.findUnique({
+      where: { id },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        locality: { select: { id: true, code: true, name: true } },
+        validationLogs: {
+          orderBy: { validatedAt: 'desc' },
+          take: 20,
+          include: {
+            validatedBy: { select: { id: true, name: true, email: true } },
+          },
+        },
+      },
+    });
+    if (!current) throwError('NOT_FOUND');
+    if (current.workflowScope !== workflowContext.workflowScope) {
+      throwError('NOT_FOUND');
+    }
+
+    await this.assertCaseAccess(
+      {
+        localityId: current.omId ?? current.localityId ?? '',
+        caseNumber: current.caseNumber,
+      },
+      user,
+      workflowContext,
+    );
+
+    if (current.validatedAt) {
+      return {
+        ...this.serializeComplaint(current),
+        alreadyValidated: true,
+      };
+    }
+
+    const validatedAt = new Date();
+    await validationLogModel.create({
+      data: {
+        complaintCaseId: id,
+        validationVersion: Number(current.validationVersion ?? 0),
+        validatedById: actorId,
+        validatedByName: String(user?.name ?? '').trim() || 'Militar',
+        validatedByEmail: this.normalizeEmail(user?.email),
+        validatedAt,
+        caseUpdatedAt: current.updatedAt ?? null,
+      },
+    });
+
+    const updated = await complaintModel.update({
+      where: { id },
+      data: {
+        validatedAt,
+        validatedById: actorId,
+        validatedByName: String(user?.name ?? '').trim() || 'Militar',
+        validatedByEmail: this.normalizeEmail(user?.email),
+      },
+      include: {
+        om: { select: { id: true, code: true, name: true } },
+        locality: { select: { id: true, code: true, name: true } },
+        validationLogs: {
+          orderBy: { validatedAt: 'desc' },
+          take: 20,
+          include: {
+            validatedBy: { select: { id: true, name: true, email: true } },
+          },
+        },
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: workflowContext.resource,
+      action: 'validation',
       entityId: id,
       diffJson: {
         omId: updated.omId,
@@ -2404,14 +2617,16 @@ export class CpcaService {
         procedureType: updated.procedureType,
         complaintType: updated.complaintType,
         detailedViolenceType: updated.detailedViolenceType,
-        changedFields,
-        evidenceSummaryPrivacyOverride:
-          payload.evidenceSummaryPrivacyOverride ?? false,
+        validationVersion: updated.validationVersion,
+        validatedAt,
+        validatedById: actorId,
+        validatedByName: String(user?.name ?? '').trim() || 'Militar',
       },
     });
 
     return {
       ...this.serializeComplaint(updated),
+      alreadyValidated: false,
     };
   }
 
@@ -3328,6 +3543,8 @@ export class CpcaService {
         return 'Pendência reaberta';
       case 'cipavd_pendency_finalize':
         return 'Pendência finalizada';
+      case 'validation':
+        return 'Validação da comissão';
       default:
         return action;
     }
@@ -3362,6 +3579,8 @@ export class CpcaService {
         return 'Pendência reaberta pela gestão.';
       case 'cipavd_pendency_delete':
         return 'Pendência removida da denúncia.';
+      case 'validation':
+        return 'Denúncia validada pela comissão.';
       default:
         return 'Movimentação registrada.';
     }
@@ -3510,6 +3729,16 @@ export class CpcaService {
       where.detailedViolenceType = filters.detailedViolenceType;
     }
     if (filters.procedureType) where.procedureType = filters.procedureType;
+    if (context.workflowScope === 'CPCA') {
+      const validationStatus = String(filters.validationStatus ?? '')
+        .trim()
+        .toUpperCase();
+      if (validationStatus === 'PENDING') {
+        where.validatedAt = null;
+      } else if (validationStatus === 'VALIDATED') {
+        where.validatedAt = { not: null };
+      }
+    }
     if (filters.q) {
       andConditions.push({
         caseNumber: { contains: filters.q.trim(), mode: 'insensitive' },
@@ -3961,6 +4190,12 @@ export class CpcaService {
     if (normalized === 'REOPEN') return 'Nova pendência';
     if (normalized === 'FINALIZATION') return 'Validação final';
     return 'Mensagem';
+  }
+
+  private assertCanValidateComplaint(user: RbacUser | undefined) {
+    if (!hasAnyRole(user, [...CPCA_VALIDATION_ROLES])) {
+      throwError('RBAC_FORBIDDEN');
+    }
   }
 
   private getScopeConstraints(
@@ -4433,6 +4668,7 @@ export class CpcaService {
   }
 
   private serializeComplaint(item: any) {
+    const workflowScope = String(item?.workflowScope ?? 'CPCA');
     return {
       ...item,
       status: syncWorkflowStatusWithProcedureSituation({
@@ -4441,6 +4677,55 @@ export class CpcaService {
       }),
       localityId: item?.omId ?? item?.localityId ?? null,
       locality: item?.om ?? item?.locality ?? null,
+      validation:
+        workflowScope === 'CPCA'
+          ? this.serializeComplaintValidation(item)
+          : null,
+      validationLogs: undefined,
+    };
+  }
+
+  private serializeComplaintValidation(item: any) {
+    const validatedAt = item?.validatedAt ?? null;
+    const logs = Array.isArray(item?.validationLogs)
+      ? item.validationLogs.map((log: any) =>
+          this.serializeComplaintValidationLog(log),
+        )
+      : undefined;
+
+    return {
+      isValidated: Boolean(validatedAt),
+      needsValidation: !validatedAt,
+      validatedAt: validatedAt ? new Date(validatedAt).toISOString() : null,
+      validatedById: item?.validatedById ?? null,
+      validatedByName: item?.validatedByName ?? null,
+      validatedByEmail: item?.validatedByEmail ?? null,
+      validationVersion: Number(item?.validationVersion ?? 0),
+      logs,
+    };
+  }
+
+  private serializeComplaintValidationLog(log: any) {
+    const validatedAt = log?.validatedAt ?? null;
+    const validatedBy = log?.validatedBy ?? null;
+    return {
+      id: log?.id,
+      validationVersion: Number(log?.validationVersion ?? 0),
+      validatedAt: validatedAt ? new Date(validatedAt).toISOString() : null,
+      caseUpdatedAt: log?.caseUpdatedAt
+        ? new Date(log.caseUpdatedAt).toISOString()
+        : null,
+      validatedById: log?.validatedById ?? null,
+      validatedByName:
+        log?.validatedByName ?? validatedBy?.name ?? 'Militar não informado',
+      validatedByEmail: log?.validatedByEmail ?? validatedBy?.email ?? null,
+      validatedBy: validatedBy
+        ? {
+            id: validatedBy.id,
+            name: validatedBy.name,
+            email: validatedBy.email,
+          }
+        : null,
     };
   }
 

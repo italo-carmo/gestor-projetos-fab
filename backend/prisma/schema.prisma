@@ -73,6 +73,8 @@ model User {
   biGsdEvaluationCardSettings             BiGsdEvaluationCardSetting[]     @relation("BiGsdEvaluationCardSettingUpdatedBy")
   cpcaCasesCreated                        CpcComplaintCase[]               @relation("CpcComplaintCaseCreatedBy")
   cpcaCasesUpdated                        CpcComplaintCase[]               @relation("CpcComplaintCaseUpdatedBy")
+  cpcaCasesValidated                      CpcComplaintCase[]               @relation("CpcComplaintCaseValidatedBy")
+  cpcaCaseValidationLogs                  CpcComplaintValidationLog[]       @relation("CpcComplaintValidationLogValidatedBy")
   cpcaCaseReads                           CpcComplaintCaseRead[]
   cpcaCaseComments                        CpcComplaintComment[]            @relation("CpcComplaintCommentAuthor")
   cpcaCaseCipavdThreadsCreated            CpcComplaintCipavdThread[]       @relation("CpcComplaintCipavdThreadCreatedBy")
@@ -1481,6 +1483,11 @@ model CpcComplaintCase {
   contractorReferralDate           DateTime?
   contractorFollowUpNotes          String?
   archivedAt                       DateTime?
+  validationVersion                 Int                       @default(0)
+  validatedAt                       DateTime?
+  validatedById                     String?
+  validatedByName                   String?
+  validatedByEmail                  String?
   createdById                      String
   updatedById                      String?
   createdAt                        DateTime                  @default(now())
@@ -1490,10 +1497,12 @@ model CpcComplaintCase {
   locality      Locality?                   @relation(fields: [localityId], references: [id])
   createdBy     User                        @relation("CpcComplaintCaseCreatedBy", fields: [createdById], references: [id])
   updatedBy     User?                       @relation("CpcComplaintCaseUpdatedBy", fields: [updatedById], references: [id])
+  validatedBy   User?                       @relation("CpcComplaintCaseValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
   comments      CpcComplaintComment[]
   cipavdThreads CpcComplaintCipavdThread[]
   statusHistory CpcComplaintStatusHistory[]
   reads         CpcComplaintCaseRead[]
+  validationLogs CpcComplaintValidationLog[]
 
   @@index([omId, status])
   @@index([localityId, status])
@@ -1503,6 +1512,25 @@ model CpcComplaintCase {
   @@index([procedureType])
   @@index([reportedAt])
   @@index([workflowScope, reportedAt])
+  @@index([workflowScope, validatedAt])
+  @@index([validatedById])
+}
+
+model CpcComplaintValidationLog {
+  id                String   @id @default(cuid())
+  complaintCaseId   String
+  validationVersion Int
+  validatedById     String?
+  validatedByName   String
+  validatedByEmail  String?
+  validatedAt       DateTime @default(now())
+  caseUpdatedAt     DateTime?
+
+  complaintCase CpcComplaintCase @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)
+  validatedBy   User?            @relation("CpcComplaintValidationLogValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
+
+  @@index([complaintCaseId, validatedAt])
+  @@index([validatedById, validatedAt])
 }
 
 model CpcComplaintCaseRead {
