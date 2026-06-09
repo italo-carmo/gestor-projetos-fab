@@ -3544,6 +3544,7 @@ export function useCreateCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseValidationSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
@@ -3566,6 +3567,7 @@ export function useUpdateCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseValidationSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
       qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
@@ -3607,6 +3609,7 @@ export function useResolveCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseValidationSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
       qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
@@ -3628,6 +3631,7 @@ export function useReopenCpcaCaseCipavdThread() {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCasePendingSummary"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseValidationSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
       qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });

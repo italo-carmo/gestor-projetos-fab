@@ -752,8 +752,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const canDeleteCase = can(me, resourceKey, "delete");
   const canValidateCpcaCaseByProfile =
     !isSmifWorkflow &&
-    hasAnyRole(me, [ROLE_COORDENACAO_CIPAVD, ROLE_COMANDANTE_COMGEP]);
-  const canValidateCpcaCase = canValidateCpcaCaseByProfile && canUpdateCase;
+    hasAnyRole(me, [ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+  const canValidateCpcaCase = canValidateCpcaCaseByProfile && canAccessByRole;
 
   const q = params.get("q") ?? "";
   const localityId = params.get("localityId") ?? "";
@@ -885,6 +885,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const [editingThreadId, setEditingThreadId] = useState("");
   const [focusedThreadId, setFocusedThreadId] = useState("");
   const [validationModalOpen, setValidationModalOpen] = useState(false);
+  const [confirmValidationOpen, setConfirmValidationOpen] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [consistencyPopover, setConsistencyPopover] = useState<{
     anchorEl: HTMLElement | null;
@@ -1396,6 +1397,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setIsCreateMode(true);
     setSelectedId("");
     setConfirmDeleteOpen(false);
+    setConfirmValidationOpen(false);
     setSummarySaveState("idle");
     setSummaryPrivacyReview(null);
     setForm({
@@ -1759,6 +1761,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
   const validateSelectedCase = async () => {
     await validateCaseById(selectedId);
+  };
+
+  const confirmSelectedCaseValidation = async () => {
+    await validateSelectedCase();
+    setConfirmValidationOpen(false);
   };
 
   const saveCipavdThread = async () => {
@@ -3487,27 +3494,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 <br />
                                 {formatDateTimePtBr(validation.validatedAt)}
                               </Typography>
-                            ) : canValidateCpcaCase ? (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                startIcon={<FactCheckIcon fontSize="small" />}
-                                disabled={validateCpcaCase.isPending}
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void validateCaseById(item.id);
-                                }}
-                              >
-                                Validar
-                              </Button>
-                            ) : (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                Abra com perfil COMGEP ou Coordenação CIPAVD
-                              </Typography>
-                            )}
+                            ) : null}
                           </Stack>
                         </TableCell>
                       )}
@@ -3993,7 +3980,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                   )
                                 }
                                 onClick={() => {
-                                  void validateSelectedCase();
+                                  setConfirmValidationOpen(true);
                                 }}
                                 disabled={validateCpcaCase.isPending}
                               >
@@ -4002,14 +3989,6 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                             )}
                         </Stack>
                       </Stack>
-
-                      {!selectedValidation?.isValidated &&
-                        !canValidateCpcaCase && (
-                          <Alert severity="info" sx={{ py: 0.75 }}>
-                            Para validar esta denúncia, altere o perfil ativo
-                            para COMGEP ou Coordenação CIPAVD.
-                          </Alert>
-                        )}
 
                       {(selectedValidation?.logs ?? []).length > 0 && (
                         <Box>
@@ -5370,6 +5349,31 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         confirmLabel={deleteCase.isPending ? "Excluindo..." : "Excluir"}
         severity="error"
         confirmLoading={deleteCase.isPending}
+      />
+
+      <ConfirmDialog
+        open={confirmValidationOpen}
+        onCancel={() => setConfirmValidationOpen(false)}
+        onConfirm={() => {
+          void confirmSelectedCaseValidation();
+        }}
+        title="Validar denúncia"
+        message="Confirma a validação desta denúncia pela comissão?"
+        highlightText={
+          selectedCaseQuery.data
+            ? `${formatComplaintCaseNumberForDisplay(
+                selectedCaseQuery.data.caseNumber,
+              )} • ${formatOmLabel(selectedCaseQuery.data.locality)}`
+            : undefined
+        }
+        note="O log registrará seu usuário, data e hora. Se a denúncia ou uma pendência for modificada depois, a validação será retirada."
+        confirmLabel={
+          validateCpcaCase.isPending ? "Validando..." : "Validar denúncia"
+        }
+        confirmLoading={validateCpcaCase.isPending}
+        disableConfirm={
+          !selectedId || Boolean(selectedValidation?.isValidated)
+        }
       />
 
       <ConfirmDialog

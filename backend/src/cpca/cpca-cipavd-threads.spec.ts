@@ -3,6 +3,9 @@ import { CpcaService, CPCA_WORKFLOW_CONTEXT } from './cpca.service';
 
 function createPrismaMock() {
   const tx = {
+    cpcComplaintCase: {
+      update: jest.fn(),
+    },
     cpcComplaintCipavdThread: {
       create: jest.fn(),
       update: jest.fn(),
@@ -180,6 +183,94 @@ describe('CpcaService CIPAVD threads', () => {
       expect.objectContaining({
         action: 'cipavd_pendency_create',
         entityId: 'case-1',
+      }),
+    );
+  });
+
+  it('remove validação atual quando a gestão abre pendência em denúncia validada', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+    const user = makeUser({
+      roleName: 'COMGEP',
+      scope: 'NATIONAL',
+    });
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue({
+      id: 'case-1',
+      omId: 'om-1',
+      localityId: 'om-1',
+      caseNumber: 'CPCA-2026-BACO-00001',
+      workflowScope: 'CPCA',
+      validationVersion: 2,
+      validatedAt: new Date('2026-06-09T13:00:00.000Z'),
+      validatedById: 'validator-1',
+      validatedByName: 'Validador',
+      validatedByEmail: 'validator@fab.mil.br',
+    });
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue(null);
+    prisma.__tx.cpcComplaintCipavdThread.create.mockResolvedValue({
+      id: 'thread-1',
+    });
+    prisma.__tx.cpcComplaintCipavdMessage.create.mockResolvedValue({
+      id: 'message-1',
+    });
+    prisma.__tx.cpcComplaintCase.update.mockResolvedValue({
+      id: 'case-1',
+      validationVersion: 3,
+      validatedAt: null,
+    });
+    prisma.__tx.cpcComplaintCipavdThread.findUnique.mockResolvedValue({
+      id: 'thread-1',
+      type: 'PENDENCY',
+      status: 'OPEN',
+      reopenedCount: 0,
+      createdAt: new Date('2026-06-09T14:00:00.000Z'),
+      resolvedAt: null,
+      closedAt: null,
+      lastMessageAt: new Date('2026-06-09T14:00:00.000Z'),
+      createdBy: { id: user.id, name: user.name, email: user.email },
+      resolvedBy: null,
+      closedBy: null,
+      messages: [
+        {
+          id: 'message-1',
+          body: 'Complementar resposta da comissão local.',
+          authorKind: 'MANAGEMENT',
+          type: 'MESSAGE',
+          createdAt: new Date('2026-06-09T14:00:00.000Z'),
+          createdBy: { id: user.id, name: user.name, email: user.email },
+        },
+      ],
+    });
+
+    await service.createCipavdThread(
+      'case-1',
+      {
+        text: 'Complementar resposta da comissão local.',
+        isPending: true,
+      },
+      user as any,
+      CPCA_WORKFLOW_CONTEXT,
+    );
+
+    expect(prisma.__tx.cpcComplaintCase.update).toHaveBeenCalledWith({
+      where: { id: 'case-1' },
+      data: {
+        validationVersion: { increment: 1 },
+        validatedAt: null,
+        validatedById: null,
+        validatedByName: null,
+        validatedByEmail: null,
+      },
+    });
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'cipavd_pendency_create',
+        entityId: 'case-1',
+        diffJson: expect.objectContaining({
+          validationInvalidated: true,
+        }),
       }),
     );
   });

@@ -74,8 +74,8 @@ const CIPAVD_MANAGEMENT_ROLES = [
   ROLE_TI,
 ] as const;
 const CPCA_VALIDATION_ROLES = [
-  ROLE_COORDENACAO_CIPAVD,
   ROLE_COMANDANTE_COMGEP,
+  ROLE_TI,
 ] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -2713,7 +2713,7 @@ export class CpcaService {
     const threadStatus = isPending ? 'OPEN' : 'CLOSED';
     const now = new Date();
 
-    const created = await this.prisma.$transaction(async (tx: any) => {
+    const transactionResult = await this.prisma.$transaction(async (tx: any) => {
       const thread = await tx.cpcComplaintCipavdThread.create({
         data: {
           complaintCaseId: complaint.id,
@@ -2734,7 +2734,14 @@ export class CpcaService {
         },
       });
 
-      return tx.cpcComplaintCipavdThread.findUnique({
+      const validationInvalidated = isPending
+        ? await this.invalidateComplaintValidationIfValidated(
+            complaint,
+            tx,
+          )
+        : false;
+
+      const createdThread = await tx.cpcComplaintCipavdThread.findUnique({
         where: { id: thread.id },
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
@@ -2748,7 +2755,13 @@ export class CpcaService {
           },
         },
       });
+
+      return {
+        thread: createdThread,
+        validationInvalidated,
+      };
     });
+    const created = transactionResult.thread;
 
     await this.audit.log({
       userId: user?.id,
@@ -2760,6 +2773,7 @@ export class CpcaService {
         threadId: created?.id,
         omId: complaint.omId,
         workflowScope: workflowContext.workflowScope,
+        validationInvalidated: transactionResult.validationInvalidated,
       },
     });
 
@@ -2814,7 +2828,7 @@ export class CpcaService {
 
     const actorId = this.requireUserId(user);
     const now = new Date();
-    const updated = await this.prisma.$transaction(async (tx: any) => {
+    const transactionResult = await this.prisma.$transaction(async (tx: any) => {
       await tx.cpcComplaintCipavdMessage.create({
         data: {
           threadId,
@@ -2835,7 +2849,10 @@ export class CpcaService {
         },
       });
 
-      return tx.cpcComplaintCipavdThread.findUnique({
+      const validationInvalidated =
+        await this.invalidateComplaintValidationIfValidated(complaint, tx);
+
+      const updatedThread = await tx.cpcComplaintCipavdThread.findUnique({
         where: { id: threadId },
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
@@ -2849,7 +2866,13 @@ export class CpcaService {
           },
         },
       });
+
+      return {
+        thread: updatedThread,
+        validationInvalidated,
+      };
     });
+    const updated = transactionResult.thread;
 
     await this.audit.log({
       userId: user?.id,
@@ -2861,6 +2884,7 @@ export class CpcaService {
         threadId,
         omId: complaint.omId,
         workflowScope: workflowContext.workflowScope,
+        validationInvalidated: transactionResult.validationInvalidated,
       },
     });
 
@@ -2924,13 +2948,18 @@ export class CpcaService {
       });
     }
 
-    const updated = await this.prisma.$transaction(async (tx: any) => {
+    const textChanged = this.cleanText(currentMessage.body) !== text;
+    const transactionResult = await this.prisma.$transaction(async (tx: any) => {
       await tx.cpcComplaintCipavdMessage.update({
         where: { id: currentMessage.id },
         data: { body: text },
       });
 
-      return tx.cpcComplaintCipavdThread.findUnique({
+      const validationInvalidated = textChanged
+        ? await this.invalidateComplaintValidationIfValidated(complaint, tx)
+        : false;
+
+      const updatedThread = await tx.cpcComplaintCipavdThread.findUnique({
         where: { id: threadId },
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
@@ -2944,7 +2973,13 @@ export class CpcaService {
           },
         },
       });
+
+      return {
+        thread: updatedThread,
+        validationInvalidated,
+      };
     });
+    const updated = transactionResult.thread;
 
     await this.audit.log({
       userId: user?.id,
@@ -2958,6 +2993,7 @@ export class CpcaService {
         workflowScope: workflowContext.workflowScope,
         previousText: currentMessage.body,
         nextText: text,
+        validationInvalidated: transactionResult.validationInvalidated,
       },
     });
 
@@ -3011,7 +3047,7 @@ export class CpcaService {
 
     const actorId = this.requireUserId(user);
     const now = new Date();
-    const updated = await this.prisma.$transaction(async (tx: any) => {
+    const transactionResult = await this.prisma.$transaction(async (tx: any) => {
       await tx.cpcComplaintCipavdMessage.create({
         data: {
           threadId,
@@ -3035,7 +3071,10 @@ export class CpcaService {
         },
       });
 
-      return tx.cpcComplaintCipavdThread.findUnique({
+      const validationInvalidated =
+        await this.invalidateComplaintValidationIfValidated(complaint, tx);
+
+      const updatedThread = await tx.cpcComplaintCipavdThread.findUnique({
         where: { id: threadId },
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
@@ -3049,7 +3088,13 @@ export class CpcaService {
           },
         },
       });
+
+      return {
+        thread: updatedThread,
+        validationInvalidated,
+      };
     });
+    const updated = transactionResult.thread;
 
     await this.audit.log({
       userId: user?.id,
@@ -3061,6 +3106,7 @@ export class CpcaService {
         threadId,
         omId: complaint.omId,
         workflowScope: workflowContext.workflowScope,
+        validationInvalidated: transactionResult.validationInvalidated,
       },
     });
 
@@ -4007,6 +4053,11 @@ export class CpcaService {
         localityId: true,
         caseNumber: true,
         workflowScope: true,
+        validationVersion: true,
+        validatedAt: true,
+        validatedById: true,
+        validatedByName: true,
+        validatedByEmail: true,
       },
     });
 
@@ -4025,6 +4076,33 @@ export class CpcaService {
     );
 
     return complaint;
+  }
+
+  private async invalidateComplaintValidationIfValidated(
+    complaint: {
+      id?: string | null;
+      workflowScope?: string | null;
+      validatedAt?: Date | string | null;
+    },
+    tx: any = this.prisma,
+  ) {
+    const complaintId = String(complaint?.id ?? '').trim();
+    if (!complaintId) return false;
+    if (String(complaint?.workflowScope ?? '') !== 'CPCA') return false;
+    if (!complaint?.validatedAt) return false;
+
+    await tx.cpcComplaintCase.update({
+      where: { id: complaintId },
+      data: {
+        validationVersion: { increment: 1 },
+        validatedAt: null,
+        validatedById: null,
+        validatedByName: null,
+        validatedByEmail: null,
+      },
+    });
+
+    return true;
   }
 
   private async findCipavdThreadForComplaint(

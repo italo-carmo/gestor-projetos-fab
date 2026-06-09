@@ -51,11 +51,11 @@ function makeUser() {
   };
 }
 
-function makeValidationUser() {
+function makeValidationUser(roleName = 'TI') {
   return {
     ...makeUser(),
-    roles: [{ id: 'role-comgep', name: 'COMGEP', permissions: [] }],
-    allRoles: [{ id: 'role-comgep', name: 'COMGEP', permissions: [] }],
+    roles: [{ id: 'role-validation', name: roleName, permissions: [] }],
+    allRoles: [{ id: 'role-validation', name: roleName, permissions: [] }],
   };
 }
 
@@ -783,7 +783,7 @@ describe('CpcaService case mutations', () => {
     expect(prisma.cpcComplaintCase.update).not.toHaveBeenCalled();
   });
 
-  it('registra validação da denúncia por perfil autorizado da comissão', async () => {
+  it('registra validação da denúncia por perfil TI autorizado', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-06-09T14:30:00.000Z'));
 
     const prisma = createPrismaMock();
@@ -867,6 +867,23 @@ describe('CpcaService case mutations', () => {
       validatedByName: 'Usuário Teste',
       validatedByEmail: 'user@test.mil.br',
     });
+  });
+
+  it('bloqueia validação da denúncia pelo perfil Coordenação CIPAVD', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+
+    await expectReason(
+      service.validateComplaintCase(
+        'case-1',
+        makeValidationUser('Coordenação CIPAVD') as any,
+      ),
+      'RBAC_FORBIDDEN',
+    );
+
+    expect(prisma.cpcComplaintCase.findUnique).not.toHaveBeenCalled();
+    expect(prisma.cpcComplaintValidationLog.create).not.toHaveBeenCalled();
   });
 
   it('remove validação atual quando denúncia validada sofre alteração real', async () => {
