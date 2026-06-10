@@ -12,6 +12,9 @@ function createPrismaMock() {
     cpcaCommissionPresident: {
       findFirst: jest.fn(),
     },
+    cpcaCommissionMember: {
+      findFirst: jest.fn(),
+    },
     cpcaChecklistItem: {
       findMany: jest.fn(),
       upsert: jest.fn(),
@@ -168,6 +171,42 @@ describe('CpcaChecklistService', () => {
     expect(
       result.checklist.items.every((item: any) => item.isCompleted === false),
     ).toBe(true);
+  });
+
+  it('permite ver checklist da comissão formal mesmo com OM LDAP diferente', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaChecklistService(prisma as any, audit as any);
+
+    prisma.om.findUnique.mockResolvedValue(om);
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+    });
+    prisma.cpcaChecklistItem.findMany.mockResolvedValue([]);
+    prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
+
+    const result = await service.getLocalityChecklist(
+      makeUser({
+        id: 'president-1',
+        omId: 'om-ldap',
+        permissions: [
+          { resource: 'cpca_cases', action: 'view', scope: 'LOCALITY' },
+          { resource: 'cpca_cases', action: 'update', scope: 'LOCALITY' },
+        ],
+      }) as any,
+      om.id,
+    );
+
+    expect(result.locality.id).toBe(om.id);
+    expect(result.userIsPresident).toBe(true);
+    expect(prisma.cpcaCommissionPresident.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          omId: om.id,
+          userId: 'president-1',
+        },
+      }),
+    );
   });
 
   it('impede atualização por usuário que não é o presidente atual', async () => {
@@ -352,6 +391,45 @@ describe('CpcaChecklistService', () => {
           completedAt: expect.any(Date),
           details: 'cpca@fab.mil.br',
         }),
+      }),
+    );
+  });
+
+  it('permite presidente atualizar checklist da comissão formal mesmo com OM LDAP diferente', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaChecklistService(prisma as any, audit as any);
+
+    prisma.om.findUnique.mockResolvedValue(om);
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
+      id: 'assignment-1',
+    });
+    prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
+    prisma.cpcaChecklistItem.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([]);
+
+    await service.updateLocalityChecklist(
+      {
+        localityId: om.id,
+        items: buildPayload(),
+      },
+      makeUser({
+        id: 'president-1',
+        omId: 'om-ldap',
+        permissions: [
+          { resource: 'cpca_cases', action: 'update', scope: 'LOCALITY' },
+        ],
+      }) as any,
+    );
+
+    expect(prisma.cpcaChecklistItem.upsert).toHaveBeenCalledTimes(
+      CPCA_CHECKLIST_ITEM_KEYS.length,
+    );
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'president-1',
+        localityId: om.id,
       }),
     );
   });

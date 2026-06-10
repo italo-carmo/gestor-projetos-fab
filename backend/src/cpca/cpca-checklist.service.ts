@@ -1047,6 +1047,8 @@ export class CpcaChecklistService {
     requestedLocalityId?: string,
   ) {
     const requested = String(requestedLocalityId ?? '').trim();
+    const userId = this.requireUserId(user);
+
     if (this.canViewAnyLocality(user)) {
       if (requested) return requested;
       const firstLocality = await this.prisma.om.findFirst({
@@ -1061,13 +1063,25 @@ export class CpcaChecklistService {
       return localityId;
     }
 
+    const commissionLocalityId = await this.resolveUserCommissionLocalityId(
+      userId,
+      requested,
+      { includeMembers: true },
+    );
+    if (commissionLocalityId) {
+      return commissionLocalityId;
+    }
+
     const userLocalityId = String(user?.omId ?? '').trim();
+    if (requested) {
+      if (requested === userLocalityId) return requested;
+      throwError('RBAC_FORBIDDEN');
+    }
+
     if (!userLocalityId) {
       throwError('RBAC_FORBIDDEN');
     }
-    if (requested && requested !== userLocalityId) {
-      throwError('RBAC_FORBIDDEN');
-    }
+
     return userLocalityId;
   }
 
@@ -1076,6 +1090,17 @@ export class CpcaChecklistService {
     requestedLocalityId?: string,
   ) {
     const requested = String(requestedLocalityId ?? '').trim();
+    const userId = this.requireUserId(user);
+
+    const presidentLocalityId = await this.resolveUserCommissionLocalityId(
+      userId,
+      requested,
+      { includeMembers: false },
+    );
+    if (presidentLocalityId) {
+      return presidentLocalityId;
+    }
+
     const userLocalityId = String(user?.omId ?? '').trim();
 
     if (requested && userLocalityId && requested !== userLocalityId) {
@@ -1087,6 +1112,62 @@ export class CpcaChecklistService {
       throwError('RBAC_FORBIDDEN');
     }
     return localityId;
+  }
+
+  private async resolveUserCommissionLocalityId(
+    userId: string,
+    requestedLocalityId?: string,
+    options: { includeMembers: boolean } = { includeMembers: true },
+  ) {
+    const requested = String(requestedLocalityId ?? '').trim();
+
+    if (requested) {
+      const president = await this.prisma.cpcaCommissionPresident.findFirst({
+        where: {
+          omId: requested,
+          userId,
+        },
+        select: { id: true },
+      });
+      if (president?.id) return requested;
+
+      if (options.includeMembers) {
+        const member = await this.prisma.cpcaCommissionMember.findFirst({
+          where: {
+            omId: requested,
+            userId,
+          },
+          select: { id: true },
+        });
+        if (member?.id) return requested;
+      }
+
+      return null;
+    }
+
+    const president = await this.prisma.cpcaCommissionPresident.findFirst({
+      where: {
+        userId,
+        omId: { not: null },
+      },
+      select: { omId: true },
+      orderBy: [{ assignedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+    if (president?.omId) return president.omId;
+
+    if (options.includeMembers) {
+      const member = await this.prisma.cpcaCommissionMember.findFirst({
+        where: {
+          userId,
+          omId: { not: null },
+        },
+        select: { omId: true },
+        orderBy: [{ createdAt: 'desc' }],
+      });
+      if (member?.omId) return member.omId;
+    }
+
+    return null;
   }
 
   private canViewAnyLocality(user: RbacUser | undefined) {

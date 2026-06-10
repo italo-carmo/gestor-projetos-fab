@@ -4289,10 +4289,10 @@ export class CpcaService {
     }
 
     if (this.hasLocalityScope(user, context)) {
-      if (!user.omId) {
+      if (!user.omId && !user.id) {
         throwError('RBAC_FORBIDDEN');
       }
-      return { localityId: user.omId };
+      return { localityId: user.omId ?? undefined, userId: user.id };
     }
 
     throwError('RBAC_FORBIDDEN');
@@ -4396,7 +4396,7 @@ export class CpcaService {
   }
 
   private async resolveCpcaManagerCaseMarker(
-    constraints: { localityId?: string },
+    constraints: { localityId?: string; userId?: string },
     context: ComplaintWorkflowContext,
   ) {
     if (context.workflowScope !== 'CPCA') {
@@ -4421,41 +4421,95 @@ export class CpcaService {
     if (context.workflowScope !== 'CPCA') {
       return null;
     }
-    const managerLocalityId = String(constraints.localityId ?? '').trim();
-    if (!managerLocalityId) {
+    const managerLocalityIds = await this.resolveCpcaManagerLocalityIds(
+      constraints,
+      context,
+    );
+    if (managerLocalityIds.length === 0) {
       return null;
     }
-    const managerLocality = await this.prisma.om.findUnique({
-      where: { id: managerLocalityId },
+
+    const managerLocality = await this.prisma.om.findFirst({
+      where: { id: { in: managerLocalityIds } },
       select: { code: true },
+      orderBy: { name: 'asc' },
     });
     return String(managerLocality?.code ?? '').trim() || null;
   }
 
   private async resolveCpcaScopedLocalityIds(
-    constraints: { localityId?: string },
+    constraints: { localityId?: string; userId?: string },
     context: ComplaintWorkflowContext,
   ) {
     if (context.workflowScope !== 'CPCA') {
       return null;
     }
 
-    const managerLocalityId = String(constraints.localityId ?? '').trim();
-    if (!managerLocalityId) {
+    const managerLocalityIds = await this.resolveCpcaManagerLocalityIds(
+      constraints,
+      context,
+    );
+    if (managerLocalityIds.length === 0) {
       return null;
     }
 
     const coverage = await this.prisma.cpcaCommissionCoverageOm.findMany({
-      where: { managerOmId: managerLocalityId },
+      where: { managerOmId: { in: managerLocalityIds } },
       select: { managedOmId: true },
     });
 
     return Array.from(
       new Set([
-        managerLocalityId,
+        ...managerLocalityIds,
         ...coverage.map((item) => String(item.managedOmId ?? '').trim()),
       ]),
     ).filter(Boolean);
+  }
+
+  private async resolveCpcaManagerLocalityIds(
+    constraints: { localityId?: string; userId?: string },
+    context: ComplaintWorkflowContext,
+  ) {
+    if (context.workflowScope !== 'CPCA') {
+      return [];
+    }
+
+    const explicitLocalityId = String(constraints.localityId ?? '').trim();
+    const userId = String(constraints.userId ?? '').trim();
+    const localityIds = new Set<string>();
+    if (explicitLocalityId) {
+      localityIds.add(explicitLocalityId);
+    }
+
+    if (userId) {
+      const [presidentAssignments, memberships] = await Promise.all([
+        this.prisma.cpcaCommissionPresident.findMany({
+          where: {
+            userId,
+            omId: { not: null },
+          },
+          select: { omId: true },
+        }),
+        this.prisma.cpcaCommissionMember.findMany({
+          where: {
+            userId,
+            omId: { not: null },
+          },
+          select: { omId: true },
+        }),
+      ]);
+
+      for (const item of presidentAssignments) {
+        const localityId = String(item.omId ?? '').trim();
+        if (localityId) localityIds.add(localityId);
+      }
+      for (const item of memberships) {
+        const localityId = String(item.omId ?? '').trim();
+        if (localityId) localityIds.add(localityId);
+      }
+    }
+
+    return Array.from(localityIds);
   }
 
   private normalizeCaseNumberLocalityToken(localityCode: string) {

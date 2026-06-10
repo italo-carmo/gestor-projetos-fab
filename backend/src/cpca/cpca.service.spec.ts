@@ -4,7 +4,13 @@ import { HttpException } from '@nestjs/common';
 function createPrismaMock() {
   return {
     cpcaCommissionCoverageOm: {
-      findMany: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    cpcaCommissionPresident: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    cpcaCommissionMember: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
     cpcComplaintCase: {
       findMany: jest.fn(),
@@ -74,6 +80,47 @@ describe('CpcaService security scope', () => {
     );
 
     expect(result).toEqual(['om-1', 'om-2', 'om-3']);
+  });
+
+  it('inclui a OM formal da comissão quando a OM LDAP é diferente', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+
+    prisma.cpcaCommissionPresident.findMany.mockResolvedValue([
+      { omId: 'om-formal' },
+    ]);
+    prisma.cpcaCommissionCoverageOm.findMany.mockResolvedValue([
+      { managedOmId: 'om-managed' },
+    ]);
+
+    const result = await (service as any).resolveCpcaScopedLocalityIds(
+      { localityId: 'om-ldap', userId: 'president-1' },
+      CPCA_WORKFLOW_CONTEXT,
+    );
+
+    expect(result).toEqual(['om-ldap', 'om-formal', 'om-managed']);
+    expect(prisma.cpcaCommissionCoverageOm.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { managerOmId: { in: ['om-ldap', 'om-formal'] } },
+      }),
+    );
+  });
+
+  it('permite acesso local ao caso da OM em que o usuário é presidente formal', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+
+    prisma.cpcaCommissionPresident.findMany.mockResolvedValue([
+      { omId: 'om-formal' },
+    ]);
+
+    await expect(
+      (service as any).assertCaseAccess(
+        { localityId: 'om-formal', caseNumber: 'CPCA-TESTE-1' },
+        makeCpcaUser({ id: 'president-1', omId: 'om-ldap' }),
+        CPCA_WORKFLOW_CONTEXT,
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it('bloqueia acesso de usuário CPCA local a caso fora da própria OM e das OMs geridas', async () => {
