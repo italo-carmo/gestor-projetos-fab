@@ -146,6 +146,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'president-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistItem.findMany.mockResolvedValue([]);
     prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
@@ -181,6 +182,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'assignment-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistItem.findMany.mockResolvedValue([]);
     prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
@@ -206,6 +208,29 @@ describe('CpcaChecklistService', () => {
           userId: 'president-1',
         },
       }),
+    );
+  });
+
+  it('não usa OM LDAP para liberar checklist sem vínculo formal CPCA', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaChecklistService(prisma as any, audit as any);
+
+    prisma.cpcaCommissionPresident.findFirst.mockResolvedValue(null);
+    prisma.cpcaCommissionMember.findFirst.mockResolvedValue(null);
+
+    await expectReason(
+      service.getLocalityChecklist(
+        makeUser({
+          id: 'cpca-1',
+          omId: om.id,
+          permissions: [
+            { resource: 'cpca_cases', action: 'view', scope: 'LOCALITY' },
+          ],
+        }) as any,
+        undefined,
+      ),
+      'RBAC_FORBIDDEN',
     );
   });
 
@@ -242,6 +267,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'president-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
 
@@ -277,6 +303,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'president-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
 
@@ -311,6 +338,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'president-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
 
@@ -345,6 +373,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'president-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
     prisma.cpcaChecklistItem.findMany
@@ -403,6 +432,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'assignment-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
     prisma.cpcaChecklistItem.findMany
@@ -442,6 +472,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'president-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
     prisma.cpcaChecklistItem.findMany.mockResolvedValue([
@@ -553,6 +584,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'president-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistItem.findMany.mockResolvedValue([]);
     prisma.cpcaChecklistHistoryEntry.findMany
@@ -620,6 +652,7 @@ describe('CpcaChecklistService', () => {
     prisma.om.findUnique.mockResolvedValue(om);
     prisma.cpcaCommissionPresident.findFirst.mockResolvedValue({
       id: 'president-1',
+      omId: om.id,
     });
     prisma.cpcaChecklistHistoryEntry.findMany.mockResolvedValue([]);
 

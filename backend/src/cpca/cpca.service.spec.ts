@@ -82,7 +82,7 @@ describe('CpcaService security scope', () => {
     expect(result).toEqual(['om-1', 'om-2', 'om-3']);
   });
 
-  it('inclui a OM formal da comissão quando a OM LDAP é diferente', async () => {
+  it('inclui somente a OM formal da comissão quando a OM LDAP é diferente', async () => {
     const prisma = createPrismaMock();
     const service = new CpcaService(prisma, createAuditMock() as any);
 
@@ -94,16 +94,29 @@ describe('CpcaService security scope', () => {
     ]);
 
     const result = await (service as any).resolveCpcaScopedLocalityIds(
-      { localityId: 'om-ldap', userId: 'president-1' },
+      { userId: 'president-1', cpcaCommissionScope: true },
       CPCA_WORKFLOW_CONTEXT,
     );
 
-    expect(result).toEqual(['om-ldap', 'om-formal', 'om-managed']);
+    expect(result).toEqual(['om-formal', 'om-managed']);
     expect(prisma.cpcaCommissionCoverageOm.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { managerOmId: { in: ['om-ldap', 'om-formal'] } },
+        where: { managerOmId: { in: ['om-formal'] } },
       }),
     );
+  });
+
+  it('não usa a OM LDAP quando o usuário CPCA não tem vínculo formal', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+
+    const result = await (service as any).resolveCpcaScopedLocalityIds(
+      { userId: 'president-1', cpcaCommissionScope: true },
+      CPCA_WORKFLOW_CONTEXT,
+    );
+
+    expect(result).toEqual([]);
+    expect(prisma.cpcaCommissionCoverageOm.findMany).not.toHaveBeenCalled();
   });
 
   it('permite acesso local ao caso da OM em que o usuário é presidente formal', async () => {
@@ -121,6 +134,46 @@ describe('CpcaService security scope', () => {
         CPCA_WORKFLOW_CONTEXT,
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('permite criar denúncia em OM gerenciada pela OM formal do usuário', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+
+    prisma.cpcaCommissionPresident.findMany.mockResolvedValue([
+      { omId: 'om-formal' },
+    ]);
+    prisma.cpcaCommissionCoverageOm.findMany.mockResolvedValue([
+      { managedOmId: 'om-managed' },
+    ]);
+
+    await expect(
+      (service as any).resolveTargetLocalityId(
+        'om-managed',
+        makeCpcaUser({ id: 'president-1', omId: 'om-ldap' }),
+        CPCA_WORKFLOW_CONTEXT,
+      ),
+    ).resolves.toBe('om-managed');
+  });
+
+  it('filtra denúncias pela OM formal e gerenciadas, sem incluir a OM LDAP', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+
+    prisma.cpcaCommissionPresident.findMany.mockResolvedValue([
+      { omId: 'om-formal' },
+    ]);
+    prisma.cpcaCommissionCoverageOm.findMany.mockResolvedValue([
+      { managedOmId: 'om-managed' },
+    ]);
+
+    const where = await (service as any).buildComplaintWhere(
+      {},
+      makeCpcaUser({ id: 'president-1', omId: 'om-ldap' }),
+      CPCA_WORKFLOW_CONTEXT,
+    );
+
+    expect(where.omId).toEqual({ in: ['om-formal', 'om-managed'] });
   });
 
   it('bloqueia acesso de usuário CPCA local a caso fora da própria OM e das OMs geridas', async () => {

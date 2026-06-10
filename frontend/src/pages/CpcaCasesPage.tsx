@@ -751,8 +751,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const canUpdateCase = can(me, resourceKey, "update");
   const canDeleteCase = can(me, resourceKey, "delete");
   const canValidateCpcaCaseByProfile =
-    !isSmifWorkflow &&
-    hasAnyRole(me, [ROLE_COMANDANTE_COMGEP, ROLE_TI]);
+    !isSmifWorkflow && hasAnyRole(me, [ROLE_COMANDANTE_COMGEP, ROLE_TI]);
   const canValidateCpcaCase = canValidateCpcaCaseByProfile && canAccessByRole;
 
   const q = params.get("q") ?? "";
@@ -1147,6 +1146,27 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       ),
     [localitiesQuery.data?.items],
   );
+  const localityOptionIds = useMemo(
+    () => new Set(localities.map((item: any) => String(item.id ?? ""))),
+    [localities],
+  );
+  const filteredLocalityIsAllowed =
+    Boolean(localityId) && localityOptionIds.has(localityId);
+  const defaultCpcaCreateLocalityId =
+    !isSmifWorkflow && !isNationalScope
+      ? filteredLocalityIsAllowed
+        ? localityId
+        : String(localities[0]?.id ?? "")
+      : "";
+  const defaultCreateLocalityId = isSmifWorkflow
+    ? isNationalScope
+      ? ""
+      : String(me?.omId ?? "")
+    : defaultCpcaCreateLocalityId;
+  const showLocalityFilter =
+    isNationalScope || (!isSmifWorkflow && localities.length > 1);
+  const canEditFormLocality =
+    isNationalScope || (!isSmifWorkflow && isCreateMode);
   const rankOptions: string[] = (postosQuery.data?.items ?? []).map(
     (item: any) => String(item.name),
   );
@@ -1238,14 +1258,16 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
   useEffect(() => {
     if (!isCreateMode || !drawerOpen) return;
-    setForm((prev) => ({
-      ...prev,
-      localityId:
-        isNationalScope || !isSmifWorkflow
-          ? prev.localityId
-          : String(me?.omId ?? ""),
-    }));
-  }, [drawerOpen, isCreateMode, isNationalScope, isSmifWorkflow, me?.omId]);
+    if (!defaultCreateLocalityId) return;
+    setForm((prev) =>
+      prev.localityId
+        ? prev
+        : {
+            ...prev,
+            localityId: defaultCreateLocalityId,
+          },
+    );
+  }, [defaultCreateLocalityId, drawerOpen, isCreateMode]);
 
   useEffect(() => {
     if (!selectedCaseQuery.data || isCreateMode) return;
@@ -1402,7 +1424,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setSummaryPrivacyReview(null);
     setForm({
       ...createDefaultForm(),
-      localityId: isNationalScope ? "" : String(me?.omId ?? ""),
+      localityId: defaultCreateLocalityId,
     });
     setCipavdDraft("");
     setCipavdDraftIsPending(true);
@@ -1752,8 +1774,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       });
     } catch (error) {
       toast.push({
-        message:
-          parseApiError(error).message ?? "Erro ao validar a denúncia.",
+        message: parseApiError(error).message ?? "Erro ao validar a denúncia.",
         severity: "error",
       });
     }
@@ -1940,12 +1961,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             onChange={(e) =>
               setForm((prev) => ({ ...prev, localityId: e.target.value }))
             }
-            disabled={!isNationalScope && (isSmifWorkflow || !isCreateMode)}
+            disabled={!canEditFormLocality}
             SelectProps={{ MenuProps: LONG_SELECT_MENU_PROPS }}
           >
-            {(isNationalScope || (!isSmifWorkflow && isCreateMode)) && (
-              <MenuItem value="">Selecionar</MenuItem>
-            )}
+            {canEditFormLocality && <MenuItem value="">Selecionar</MenuItem>}
             {localities.map((loc: any) => (
               <MenuItem key={loc.id} value={loc.id}>
                 {formatOmLabel(loc)}
@@ -3087,8 +3106,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                       pendingValidationCount > 0
                         ? "rgba(245, 158, 11, 0.16)"
                         : "rgba(34, 197, 94, 0.14)",
-                    color:
-                      pendingValidationCount > 0 ? "#B45309" : "#166534",
+                    color: pendingValidationCount > 0 ? "#B45309" : "#166534",
                   }}
                 >
                   {pendingValidationCount > 0 ? (
@@ -3155,7 +3173,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               onChange={(e) => updateParam("q", e.target.value)}
               sx={{ minWidth: 200 }}
             />
-            {isNationalScope && (
+            {showLocalityFilter && (
               <TextField
                 select
                 size="small"
@@ -5062,9 +5080,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                         justifyContent="space-between"
                       >
                         <Typography fontWeight={700}>
-                          {formatComplaintCaseNumberForDisplay(
-                            item.caseNumber,
-                          )}
+                          {formatComplaintCaseNumberForDisplay(item.caseNumber)}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           Atualizada em {formatDateTimePtBr(item.updatedAt)}
@@ -5371,9 +5387,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           validateCpcaCase.isPending ? "Validando..." : "Validar denúncia"
         }
         confirmLoading={validateCpcaCase.isPending}
-        disableConfirm={
-          !selectedId || Boolean(selectedValidation?.isValidated)
-        }
+        disableConfirm={!selectedId || Boolean(selectedValidation?.isValidated)}
       />
 
       <ConfirmDialog

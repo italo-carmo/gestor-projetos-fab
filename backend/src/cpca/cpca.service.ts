@@ -73,10 +73,7 @@ const CIPAVD_MANAGEMENT_ROLES = [
   ROLE_COMANDANTE_COMGEP,
   ROLE_TI,
 ] as const;
-const CPCA_VALIDATION_ROLES = [
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_TI,
-] as const;
+const CPCA_VALIDATION_ROLES = [ROLE_COMANDANTE_COMGEP, ROLE_TI] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type ComplaintWorkflowScope = 'CPCA' | 'SMIF';
@@ -104,6 +101,12 @@ type ComplaintHistoryFilters = ComplaintListFilters & {
   actor?: string;
   from?: string;
   to?: string;
+};
+
+type ScopeConstraints = {
+  localityId?: string;
+  userId?: string;
+  cpcaCommissionScope?: boolean;
 };
 
 type ComplaintHistoryChange = {
@@ -289,6 +292,9 @@ export class CpcaService {
       constraints,
       CPCA_WORKFLOW_CONTEXT,
     );
+    if (allowedLocalityIds && allowedLocalityIds.length === 0) {
+      return { items: [] };
+    }
     const items = await this.prisma.om.findMany({
       where: {
         ...(allowedLocalityIds ? { id: { in: allowedLocalityIds } } : {}),
@@ -423,12 +429,20 @@ export class CpcaService {
       constraints,
       workflowContext,
     );
-    const allowedLocalityIds = constraints.localityId
-      ? scopedLocalityIds?.length
-        ? scopedLocalityIds
-        : [constraints.localityId]
-      : null;
+    const allowedLocalityIds = this.resolveAllowedLocalityIdsFromScope(
+      constraints,
+      scopedLocalityIds,
+      workflowContext,
+    );
     const requestedLocalityId = String(filters.localityId ?? '').trim();
+
+    if (allowedLocalityIds && allowedLocalityIds.length === 0) {
+      const { page, pageSize } = parsePagination(
+        filters.page,
+        filters.pageSize,
+      );
+      return { items: [], page, pageSize, total: 0 };
+    }
 
     if (
       requestedLocalityId &&
@@ -462,7 +476,7 @@ export class CpcaService {
       whereClauses.push(Prisma.sql`al."action" NOT LIKE ${`${prefix}%`}`);
     }
 
-    if (allowedLocalityIds?.length) {
+    if (allowedLocalityIds) {
       whereClauses.push(
         Prisma.sql`${omExpression} IN (${Prisma.join(allowedLocalityIds)})`,
       );
@@ -802,18 +816,20 @@ export class CpcaService {
     if (filters.localityId) {
       where.omId = filters.localityId;
     }
-    if (constraints.localityId) {
+    if (this.hasRestrictedLocalityScope(constraints)) {
       if (workflowContext.workflowScope === 'CPCA') {
+        const allowedLocalityIds = cpcaScopedLocalityIds ?? [];
         if (
           filters.localityId &&
-          (!cpcaScopedLocalityIds ||
-            !cpcaScopedLocalityIds.includes(filters.localityId))
+          !allowedLocalityIds.includes(filters.localityId)
         ) {
           where.omId = '__none__';
-        } else if (cpcaScopedLocalityIds?.length) {
+        } else {
           where.omId = filters.localityId
             ? filters.localityId
-            : { in: cpcaScopedLocalityIds };
+            : allowedLocalityIds.length
+              ? { in: allowedLocalityIds }
+              : '__none__';
         }
       } else if (
         filters.localityId &&
@@ -2713,54 +2729,53 @@ export class CpcaService {
     const threadStatus = isPending ? 'OPEN' : 'CLOSED';
     const now = new Date();
 
-    const transactionResult = await this.prisma.$transaction(async (tx: any) => {
-      const thread = await tx.cpcComplaintCipavdThread.create({
-        data: {
-          complaintCaseId: complaint.id,
-          type: threadType,
-          status: threadStatus,
-          createdById: actorId,
-          lastMessageAt: now,
-        },
-      });
+    const transactionResult = await this.prisma.$transaction(
+      async (tx: any) => {
+        const thread = await tx.cpcComplaintCipavdThread.create({
+          data: {
+            complaintCaseId: complaint.id,
+            type: threadType,
+            status: threadStatus,
+            createdById: actorId,
+            lastMessageAt: now,
+          },
+        });
 
-      await tx.cpcComplaintCipavdMessage.create({
-        data: {
-          threadId: thread.id,
-          body: text,
-          createdById: actorId,
-          authorKind: 'MANAGEMENT',
-          type: 'MESSAGE',
-        },
-      });
+        await tx.cpcComplaintCipavdMessage.create({
+          data: {
+            threadId: thread.id,
+            body: text,
+            createdById: actorId,
+            authorKind: 'MANAGEMENT',
+            type: 'MESSAGE',
+          },
+        });
 
-      const validationInvalidated = isPending
-        ? await this.invalidateComplaintValidationIfValidated(
-            complaint,
-            tx,
-          )
-        : false;
+        const validationInvalidated = isPending
+          ? await this.invalidateComplaintValidationIfValidated(complaint, tx)
+          : false;
 
-      const createdThread = await tx.cpcComplaintCipavdThread.findUnique({
-        where: { id: thread.id },
-        include: {
-          createdBy: { select: { id: true, name: true, email: true } },
-          resolvedBy: { select: { id: true, name: true, email: true } },
-          closedBy: { select: { id: true, name: true, email: true } },
-          messages: {
-            orderBy: { createdAt: 'asc' },
-            include: {
-              createdBy: { select: { id: true, name: true, email: true } },
+        const createdThread = await tx.cpcComplaintCipavdThread.findUnique({
+          where: { id: thread.id },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+            resolvedBy: { select: { id: true, name: true, email: true } },
+            closedBy: { select: { id: true, name: true, email: true } },
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              include: {
+                createdBy: { select: { id: true, name: true, email: true } },
+              },
             },
           },
-        },
-      });
+        });
 
-      return {
-        thread: createdThread,
-        validationInvalidated,
-      };
-    });
+        return {
+          thread: createdThread,
+          validationInvalidated,
+        };
+      },
+    );
     const created = transactionResult.thread;
 
     await this.audit.log({
@@ -2828,50 +2843,52 @@ export class CpcaService {
 
     const actorId = this.requireUserId(user);
     const now = new Date();
-    const transactionResult = await this.prisma.$transaction(async (tx: any) => {
-      await tx.cpcComplaintCipavdMessage.create({
-        data: {
-          threadId,
-          body: text,
-          createdById: actorId,
-          authorKind: 'PRESIDENT',
-          type: 'RESOLUTION',
-        },
-      });
+    const transactionResult = await this.prisma.$transaction(
+      async (tx: any) => {
+        await tx.cpcComplaintCipavdMessage.create({
+          data: {
+            threadId,
+            body: text,
+            createdById: actorId,
+            authorKind: 'PRESIDENT',
+            type: 'RESOLUTION',
+          },
+        });
 
-      await tx.cpcComplaintCipavdThread.update({
-        where: { id: threadId },
-        data: {
-          status: 'RESOLVED',
-          resolvedById: actorId,
-          resolvedAt: now,
-          lastMessageAt: now,
-        },
-      });
+        await tx.cpcComplaintCipavdThread.update({
+          where: { id: threadId },
+          data: {
+            status: 'RESOLVED',
+            resolvedById: actorId,
+            resolvedAt: now,
+            lastMessageAt: now,
+          },
+        });
 
-      const validationInvalidated =
-        await this.invalidateComplaintValidationIfValidated(complaint, tx);
+        const validationInvalidated =
+          await this.invalidateComplaintValidationIfValidated(complaint, tx);
 
-      const updatedThread = await tx.cpcComplaintCipavdThread.findUnique({
-        where: { id: threadId },
-        include: {
-          createdBy: { select: { id: true, name: true, email: true } },
-          resolvedBy: { select: { id: true, name: true, email: true } },
-          closedBy: { select: { id: true, name: true, email: true } },
-          messages: {
-            orderBy: { createdAt: 'asc' },
-            include: {
-              createdBy: { select: { id: true, name: true, email: true } },
+        const updatedThread = await tx.cpcComplaintCipavdThread.findUnique({
+          where: { id: threadId },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+            resolvedBy: { select: { id: true, name: true, email: true } },
+            closedBy: { select: { id: true, name: true, email: true } },
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              include: {
+                createdBy: { select: { id: true, name: true, email: true } },
+              },
             },
           },
-        },
-      });
+        });
 
-      return {
-        thread: updatedThread,
-        validationInvalidated,
-      };
-    });
+        return {
+          thread: updatedThread,
+          validationInvalidated,
+        };
+      },
+    );
     const updated = transactionResult.thread;
 
     await this.audit.log({
@@ -2949,36 +2966,38 @@ export class CpcaService {
     }
 
     const textChanged = this.cleanText(currentMessage.body) !== text;
-    const transactionResult = await this.prisma.$transaction(async (tx: any) => {
-      await tx.cpcComplaintCipavdMessage.update({
-        where: { id: currentMessage.id },
-        data: { body: text },
-      });
+    const transactionResult = await this.prisma.$transaction(
+      async (tx: any) => {
+        await tx.cpcComplaintCipavdMessage.update({
+          where: { id: currentMessage.id },
+          data: { body: text },
+        });
 
-      const validationInvalidated = textChanged
-        ? await this.invalidateComplaintValidationIfValidated(complaint, tx)
-        : false;
+        const validationInvalidated = textChanged
+          ? await this.invalidateComplaintValidationIfValidated(complaint, tx)
+          : false;
 
-      const updatedThread = await tx.cpcComplaintCipavdThread.findUnique({
-        where: { id: threadId },
-        include: {
-          createdBy: { select: { id: true, name: true, email: true } },
-          resolvedBy: { select: { id: true, name: true, email: true } },
-          closedBy: { select: { id: true, name: true, email: true } },
-          messages: {
-            orderBy: { createdAt: 'asc' },
-            include: {
-              createdBy: { select: { id: true, name: true, email: true } },
+        const updatedThread = await tx.cpcComplaintCipavdThread.findUnique({
+          where: { id: threadId },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+            resolvedBy: { select: { id: true, name: true, email: true } },
+            closedBy: { select: { id: true, name: true, email: true } },
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              include: {
+                createdBy: { select: { id: true, name: true, email: true } },
+              },
             },
           },
-        },
-      });
+        });
 
-      return {
-        thread: updatedThread,
-        validationInvalidated,
-      };
-    });
+        return {
+          thread: updatedThread,
+          validationInvalidated,
+        };
+      },
+    );
     const updated = transactionResult.thread;
 
     await this.audit.log({
@@ -3047,53 +3066,55 @@ export class CpcaService {
 
     const actorId = this.requireUserId(user);
     const now = new Date();
-    const transactionResult = await this.prisma.$transaction(async (tx: any) => {
-      await tx.cpcComplaintCipavdMessage.create({
-        data: {
-          threadId,
-          body: text,
-          createdById: actorId,
-          authorKind: 'MANAGEMENT',
-          type: 'REOPEN',
-        },
-      });
+    const transactionResult = await this.prisma.$transaction(
+      async (tx: any) => {
+        await tx.cpcComplaintCipavdMessage.create({
+          data: {
+            threadId,
+            body: text,
+            createdById: actorId,
+            authorKind: 'MANAGEMENT',
+            type: 'REOPEN',
+          },
+        });
 
-      await tx.cpcComplaintCipavdThread.update({
-        where: { id: threadId },
-        data: {
-          status: 'OPEN',
-          resolvedById: null,
-          resolvedAt: null,
-          closedById: null,
-          closedAt: null,
-          reopenedCount: Number(thread.reopenedCount ?? 0) + 1,
-          lastMessageAt: now,
-        },
-      });
+        await tx.cpcComplaintCipavdThread.update({
+          where: { id: threadId },
+          data: {
+            status: 'OPEN',
+            resolvedById: null,
+            resolvedAt: null,
+            closedById: null,
+            closedAt: null,
+            reopenedCount: Number(thread.reopenedCount ?? 0) + 1,
+            lastMessageAt: now,
+          },
+        });
 
-      const validationInvalidated =
-        await this.invalidateComplaintValidationIfValidated(complaint, tx);
+        const validationInvalidated =
+          await this.invalidateComplaintValidationIfValidated(complaint, tx);
 
-      const updatedThread = await tx.cpcComplaintCipavdThread.findUnique({
-        where: { id: threadId },
-        include: {
-          createdBy: { select: { id: true, name: true, email: true } },
-          resolvedBy: { select: { id: true, name: true, email: true } },
-          closedBy: { select: { id: true, name: true, email: true } },
-          messages: {
-            orderBy: { createdAt: 'asc' },
-            include: {
-              createdBy: { select: { id: true, name: true, email: true } },
+        const updatedThread = await tx.cpcComplaintCipavdThread.findUnique({
+          where: { id: threadId },
+          include: {
+            createdBy: { select: { id: true, name: true, email: true } },
+            resolvedBy: { select: { id: true, name: true, email: true } },
+            closedBy: { select: { id: true, name: true, email: true } },
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              include: {
+                createdBy: { select: { id: true, name: true, email: true } },
+              },
             },
           },
-        },
-      });
+        });
 
-      return {
-        thread: updatedThread,
-        validationInvalidated,
-      };
-    });
+        return {
+          thread: updatedThread,
+          validationInvalidated,
+        };
+      },
+    );
     const updated = transactionResult.thread;
 
     await this.audit.log({
@@ -3746,18 +3767,20 @@ export class CpcaService {
     if (filters.localityId) {
       where.omId = filters.localityId;
     }
-    if (constraints.localityId) {
+    if (this.hasRestrictedLocalityScope(constraints)) {
       if (context.workflowScope === 'CPCA') {
+        const allowedLocalityIds = cpcaScopedLocalityIds ?? [];
         if (
           filters.localityId &&
-          (!cpcaScopedLocalityIds ||
-            !cpcaScopedLocalityIds.includes(filters.localityId))
+          !allowedLocalityIds.includes(filters.localityId)
         ) {
           where.omId = '__none__';
-        } else if (cpcaScopedLocalityIds?.length) {
+        } else {
           where.omId = filters.localityId
             ? filters.localityId
-            : { in: cpcaScopedLocalityIds };
+            : allowedLocalityIds.length
+              ? { in: allowedLocalityIds }
+              : '__none__';
         }
       } else if (
         filters.localityId &&
@@ -4279,7 +4302,7 @@ export class CpcaService {
   private getScopeConstraints(
     user: RbacUser | undefined,
     context: ComplaintWorkflowContext,
-  ) {
+  ): ScopeConstraints {
     if (!user) {
       throwError('RBAC_FORBIDDEN');
     }
@@ -4289,10 +4312,18 @@ export class CpcaService {
     }
 
     if (this.hasLocalityScope(user, context)) {
-      if (!user.omId && !user.id) {
+      if (context.workflowScope === 'CPCA') {
+        const userId = String(user.id ?? '').trim();
+        if (!userId) {
+          throwError('RBAC_FORBIDDEN');
+        }
+        return { userId, cpcaCommissionScope: true };
+      }
+
+      if (!user.omId) {
         throwError('RBAC_FORBIDDEN');
       }
-      return { localityId: user.omId ?? undefined, userId: user.id };
+      return { localityId: user.omId };
     }
 
     throwError('RBAC_FORBIDDEN');
@@ -4323,13 +4354,33 @@ export class CpcaService {
     return this.hasCasePermission(user, context, 'LOCALITY');
   }
 
+  private hasRestrictedLocalityScope(constraints: ScopeConstraints) {
+    return Boolean(constraints.localityId || constraints.cpcaCommissionScope);
+  }
+
+  private resolveAllowedLocalityIdsFromScope(
+    constraints: ScopeConstraints,
+    cpcaScopedLocalityIds: string[] | null,
+    context: ComplaintWorkflowContext,
+  ) {
+    if (!this.hasRestrictedLocalityScope(constraints)) {
+      return null;
+    }
+
+    if (context.workflowScope === 'CPCA') {
+      return cpcaScopedLocalityIds ?? [];
+    }
+
+    return constraints.localityId ? [constraints.localityId] : [];
+  }
+
   private async assertCaseAccess(
     item: { localityId: string; caseNumber?: string | null },
     user: RbacUser | undefined,
     context: ComplaintWorkflowContext,
   ) {
     const constraints = this.getScopeConstraints(user, context);
-    if (!constraints.localityId) {
+    if (!this.hasRestrictedLocalityScope(constraints)) {
       return;
     }
 
@@ -4341,6 +4392,7 @@ export class CpcaService {
       if (allowedLocalityIds?.includes(String(item.localityId ?? '').trim())) {
         return;
       }
+      throwError('RBAC_FORBIDDEN');
     }
 
     if (constraints.localityId !== item.localityId) {
@@ -4356,7 +4408,7 @@ export class CpcaService {
     const constraints = this.getScopeConstraints(user, context);
     const localityId = String(localityIdRaw ?? '').trim();
 
-    if (constraints.localityId) {
+    if (this.hasRestrictedLocalityScope(constraints)) {
       if (context.workflowScope === 'CPCA') {
         if (!localityId) {
           throwError('VALIDATION_ERROR', {
@@ -4368,7 +4420,7 @@ export class CpcaService {
           constraints,
           context,
         );
-        if (allowedLocalityIds && !allowedLocalityIds.includes(localityId)) {
+        if (!allowedLocalityIds?.includes(localityId)) {
           throwError('RBAC_FORBIDDEN');
         }
         return localityId;
@@ -4396,7 +4448,7 @@ export class CpcaService {
   }
 
   private async resolveCpcaManagerCaseMarker(
-    constraints: { localityId?: string; userId?: string },
+    constraints: ScopeConstraints,
     context: ComplaintWorkflowContext,
   ) {
     if (context.workflowScope !== 'CPCA') {
@@ -4415,7 +4467,7 @@ export class CpcaService {
   }
 
   private async resolveCpcaManagerLocalityCode(
-    constraints: { localityId?: string },
+    constraints: ScopeConstraints,
     context: ComplaintWorkflowContext,
   ) {
     if (context.workflowScope !== 'CPCA') {
@@ -4438,7 +4490,7 @@ export class CpcaService {
   }
 
   private async resolveCpcaScopedLocalityIds(
-    constraints: { localityId?: string; userId?: string },
+    constraints: ScopeConstraints,
     context: ComplaintWorkflowContext,
   ) {
     if (context.workflowScope !== 'CPCA') {
@@ -4450,7 +4502,7 @@ export class CpcaService {
       context,
     );
     if (managerLocalityIds.length === 0) {
-      return null;
+      return constraints.cpcaCommissionScope ? [] : null;
     }
 
     const coverage = await this.prisma.cpcaCommissionCoverageOm.findMany({
@@ -4467,7 +4519,7 @@ export class CpcaService {
   }
 
   private async resolveCpcaManagerLocalityIds(
-    constraints: { localityId?: string; userId?: string },
+    constraints: ScopeConstraints,
     context: ComplaintWorkflowContext,
   ) {
     if (context.workflowScope !== 'CPCA') {
@@ -4477,7 +4529,7 @@ export class CpcaService {
     const explicitLocalityId = String(constraints.localityId ?? '').trim();
     const userId = String(constraints.userId ?? '').trim();
     const localityIds = new Set<string>();
-    if (explicitLocalityId) {
+    if (explicitLocalityId && !constraints.cpcaCommissionScope) {
       localityIds.add(explicitLocalityId);
     }
 

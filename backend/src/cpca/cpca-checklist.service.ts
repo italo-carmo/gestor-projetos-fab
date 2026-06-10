@@ -1072,17 +1072,7 @@ export class CpcaChecklistService {
       return commissionLocalityId;
     }
 
-    const userLocalityId = String(user?.omId ?? '').trim();
-    if (requested) {
-      if (requested === userLocalityId) return requested;
-      throwError('RBAC_FORBIDDEN');
-    }
-
-    if (!userLocalityId) {
-      throwError('RBAC_FORBIDDEN');
-    }
-
-    return userLocalityId;
+    throwError('RBAC_FORBIDDEN');
   }
 
   private async resolveLocalityIdForUpdate(
@@ -1101,17 +1091,7 @@ export class CpcaChecklistService {
       return presidentLocalityId;
     }
 
-    const userLocalityId = String(user?.omId ?? '').trim();
-
-    if (requested && userLocalityId && requested !== userLocalityId) {
-      throwError('RBAC_FORBIDDEN');
-    }
-
-    const localityId = requested || userLocalityId;
-    if (!localityId) {
-      throwError('RBAC_FORBIDDEN');
-    }
-    return localityId;
+    throwError('RBAC_FORBIDDEN');
   }
 
   private async resolveUserCommissionLocalityId(

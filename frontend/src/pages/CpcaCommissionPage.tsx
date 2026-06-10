@@ -300,10 +300,6 @@ export function CpcaCommissionPage() {
       }
       return;
     }
-
-    if (ownLocalityId) {
-      setSelectedLocalityId(ownLocalityId);
-    }
   }, [cpcaLocalities, isApprover, me?.omId, ownLocalityId, selectedLocalityId]);
 
   const overviewQuery = useCpcaCommissionOverview(
@@ -428,12 +424,12 @@ export function CpcaCommissionPage() {
 
   useEffect(() => {
     if (isApprover) return;
-    const resolvedLocalityId = String(locality?.id ?? ownLocalityId).trim();
+    const resolvedLocalityId = String(locality?.id ?? "").trim();
     if (!resolvedLocalityId) return;
     if (resolvedLocalityId !== selectedLocalityId) {
       setSelectedLocalityId(resolvedLocalityId);
     }
-  }, [isApprover, locality?.id, ownLocalityId, selectedLocalityId]);
+  }, [isApprover, locality?.id, selectedLocalityId]);
 
   useEffect(() => {
     if (activeTab === "presidencia" && !canManagePresidentFlow) {
