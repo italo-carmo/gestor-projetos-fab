@@ -53,6 +53,39 @@ export type CpcaChecklistSnapshot = {
   items: CpcaChecklistItem[];
 };
 
+export type CpcaChecklistNationalRow = {
+  locality: {
+    id: string;
+    code: string;
+    name: string;
+    uf?: string | null;
+  };
+  currentPresident?: {
+    assignedAt: string;
+    designationBulletin?: string | null;
+    isSubstitution: boolean;
+    user: {
+      id: string;
+      name: string;
+      email?: string | null;
+    };
+  } | null;
+  checklist: CpcaChecklistSnapshot;
+};
+
+export type CpcaChecklistOmOption = {
+  id: string;
+  label: string;
+  uf?: string | null;
+};
+
+export type CpcaChecklistNationalOverviewSummary = {
+  totalCount: number;
+  completedCount: number;
+  inProgressCount: number;
+  notStartedCount: number;
+};
+
 export type CpcaChecklistDraftItem = {
   itemKey: CpcaChecklistItemKey;
   supportsHistory: boolean;
@@ -251,6 +284,50 @@ export function formatCpcaChecklistOmLabel(
   }
 
   return normalizedCode || normalizedName || "-";
+}
+
+export function buildCpcaChecklistOmOptions(
+  rows: CpcaChecklistNationalRow[],
+): CpcaChecklistOmOption[] {
+  return rows
+    .map((row) => ({
+      id: row.locality.id,
+      label: formatCpcaChecklistOmLabel(row.locality.code, row.locality.name),
+      uf: row.locality.uf ?? null,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label, "pt-BR"));
+}
+
+export function filterCpcaChecklistRowsBySelectedOms(
+  rows: CpcaChecklistNationalRow[],
+  selectedOmIds: string[],
+): CpcaChecklistNationalRow[] {
+  const selectedSet = new Set(selectedOmIds);
+  return rows.filter((row) => selectedSet.has(row.locality.id));
+}
+
+export function buildCpcaChecklistNationalOverviewSummary(
+  rows: CpcaChecklistNationalRow[],
+): CpcaChecklistNationalOverviewSummary {
+  return rows.reduce<CpcaChecklistNationalOverviewSummary>(
+    (summary, row) => {
+      summary.totalCount += 1;
+      if (row.checklist.summary.status === "COMPLETED") {
+        summary.completedCount += 1;
+      } else if (row.checklist.summary.status === "IN_PROGRESS") {
+        summary.inProgressCount += 1;
+      } else {
+        summary.notStartedCount += 1;
+      }
+      return summary;
+    },
+    {
+      totalCount: 0,
+      completedCount: 0,
+      inProgressCount: 0,
+      notStartedCount: 0,
+    },
+  );
 }
 
 export function getCpcaChecklistStatusTone(status: CpcaChecklistStatus) {

@@ -1,12 +1,15 @@
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
+  Autocomplete,
   Box,
   Card,
+  CardActionArea,
   CardContent,
   Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Divider,
+  IconButton,
   LinearProgress,
   MenuItem,
   Stack,
@@ -18,7 +21,7 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
 import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
-import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import GroupsRoundedIcon from "@mui/icons-material/GroupsRounded";
 import MailOutlineRoundedIcon from "@mui/icons-material/MailOutlineRounded";
 import RadioButtonUncheckedRoundedIcon from "@mui/icons-material/RadioButtonUncheckedRounded";
@@ -31,6 +34,9 @@ import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import {
+  buildCpcaChecklistNationalOverviewSummary,
+  buildCpcaChecklistOmOptions,
+  filterCpcaChecklistRowsBySelectedOms,
   formatCpcaChecklistOmLabel,
   formatCpcaChecklistDate,
   getCpcaChecklistFieldConfig,
@@ -38,31 +44,13 @@ import {
   getCpcaChecklistStatusTone,
   isCpcaChecklistBinaryQuestionItem,
   normalizeCpcaChecklistUrl,
+  type CpcaChecklistNationalRow,
   type CpcaChecklistItem,
   type CpcaChecklistItemKey,
-  type CpcaChecklistSnapshot,
   type CpcaChecklistStatus,
 } from "../features/cpcaChecklist";
 
-type NationalChecklistRow = {
-  locality: {
-    id: string;
-    code: string;
-    name: string;
-    uf?: string | null;
-  };
-  currentPresident?: {
-    assignedAt: string;
-    designationBulletin?: string | null;
-    isSubstitution: boolean;
-    user: {
-      id: string;
-      name: string;
-      email?: string | null;
-    };
-  } | null;
-  checklist: CpcaChecklistSnapshot;
-};
+const CPCA_OM_OPTIONS_FILTERS = {};
 
 const STATUS_OPTIONS: Array<{
   value: "ALL" | CpcaChecklistStatus;
@@ -133,7 +121,13 @@ function SummaryStatCard(props: {
   );
 }
 
-function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
+function ChecklistTile({
+  item,
+  full = false,
+}: {
+  item: CpcaChecklistItem;
+  full?: boolean;
+}) {
   const isCompleted = Boolean(item.isCompleted);
   const isBinaryQuestion = isCpcaChecklistBinaryQuestionItem(item.itemKey);
   const fieldConfig = getCpcaChecklistFieldConfig(item.itemKey);
@@ -142,7 +136,9 @@ function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
     isCompleted,
   );
   const historyEntries = item.historyEntries ?? [];
-  const visibleHistoryEntries = historyEntries.slice(0, 3);
+  const visibleHistoryEntries = full
+    ? historyEntries
+    : historyEntries.slice(0, 3);
   return (
     <Box
       sx={{
@@ -223,10 +219,11 @@ function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
         sx={{
           mt: 1,
           display: "-webkit-box",
-          WebkitLineClamp: 2,
+          WebkitLineClamp: full ? "unset" : 2,
           WebkitBoxOrient: "vertical",
           overflow: "hidden",
-          minHeight: 32,
+          minHeight: full ? 0 : 32,
+          whiteSpace: full ? "pre-wrap" : "normal",
         }}
       >
         {item.details || item.description}
@@ -302,7 +299,12 @@ function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
               <Typography
                 variant="caption"
                 color="text.secondary"
-                sx={{ display: "block", mt: 0.25, whiteSpace: "pre-wrap" }}
+                sx={{
+                  display: "block",
+                  mt: 0.25,
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                }}
               >
                 {entry.details || item.description}
               </Typography>
@@ -330,7 +332,166 @@ function ChecklistTile({ item }: { item: CpcaChecklistItem }) {
           ) : null}
         </Stack>
       ) : null}
+
+      {full ? (
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={0.75}
+          sx={{ mt: 1.25 }}
+        >
+          <Typography variant="caption" color="text.secondary">
+            Atualizado em:{" "}
+            <strong>{formatCpcaChecklistDate(item.updatedAt)}</strong>
+          </Typography>
+          {item.historyCount !== undefined ? (
+            <Typography variant="caption" color="text.secondary">
+              Histórico: <strong>{item.historyCount}</strong>
+            </Typography>
+          ) : null}
+        </Stack>
+      ) : null}
     </Box>
+  );
+}
+
+function ChecklistDetailsDialog({
+  row,
+  onClose,
+}: {
+  row: CpcaChecklistNationalRow | null;
+  onClose: () => void;
+}) {
+  const tone = row
+    ? getCpcaChecklistStatusTone(row.checklist.summary.status)
+    : null;
+  const omLabel = row
+    ? formatCpcaChecklistOmLabel(row.locality.code, row.locality.name)
+    : "";
+
+  return (
+    <Dialog open={Boolean(row)} onClose={onClose} maxWidth="lg" fullWidth>
+      {row && tone ? (
+        <>
+          <DialogTitle sx={{ pr: 7 }}>
+            <Stack spacing={0.75}>
+              <Typography variant="h6" fontWeight={900}>
+                {omLabel}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {row.currentPresident?.user?.name
+                  ? `Presidente: ${row.currentPresident.user.name}`
+                  : "Presidente ainda não designado"}
+                {row.currentPresident?.user?.email
+                  ? ` • ${row.currentPresident.user.email}`
+                  : ""}
+                {row.locality.uf ? ` • ${row.locality.uf}` : ""}
+              </Typography>
+            </Stack>
+            <IconButton
+              aria-label="Fechar"
+              onClick={onClose}
+              sx={{ position: "absolute", right: 12, top: 12 }}
+            >
+              <CloseRoundedIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers sx={{ p: { xs: 2, md: 3 } }}>
+            <Stack spacing={2.5}>
+              <Stack
+                direction={{ xs: "column", md: "row" }}
+                spacing={1}
+                alignItems={{ xs: "stretch", md: "center" }}
+                divider={<Divider flexItem orientation="vertical" />}
+              >
+                <Chip
+                  label={row.checklist.summary.statusLabel}
+                  color={tone.color}
+                  sx={{
+                    alignSelf: { xs: "flex-start", md: "center" },
+                    fontWeight: 700,
+                    background: tone.background,
+                  }}
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Concluídos:{" "}
+                  <strong>
+                    {row.checklist.summary.completedCount}/
+                    {row.checklist.summary.totalCount}
+                  </strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Última ação:{" "}
+                  <strong>
+                    {formatCpcaChecklistDate(
+                      row.checklist.summary.lastUpdatedAt,
+                    )}
+                  </strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Última entrega:{" "}
+                  <strong>
+                    {formatCpcaChecklistDate(
+                      row.checklist.summary.lastCompletedAt,
+                    )}
+                  </strong>
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Boletim:{" "}
+                  <strong>
+                    {row.currentPresident?.designationBulletin || "-"}
+                  </strong>
+                </Typography>
+              </Stack>
+
+              <Box>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 0.75 }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    Progresso do checklist
+                  </Typography>
+                  <Typography variant="caption" fontWeight={700}>
+                    {row.checklist.summary.completionRate}%
+                  </Typography>
+                </Stack>
+                <LinearProgress
+                  variant="determinate"
+                  value={row.checklist.summary.completionRate}
+                  color={tone.color === "default" ? "inherit" : tone.color}
+                  sx={{
+                    height: 10,
+                    borderRadius: 999,
+                    bgcolor: "action.hover",
+                  }}
+                />
+              </Box>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    md: "repeat(2, minmax(0, 1fr))",
+                  },
+                  gap: 1.25,
+                }}
+              >
+                {row.checklist.items.map((checklistItem) => (
+                  <ChecklistTile
+                    key={`${row.locality.id}-${checklistItem.itemKey}`}
+                    item={checklistItem}
+                    full
+                  />
+                ))}
+              </Box>
+            </Stack>
+          </DialogContent>
+        </>
+      ) : null}
+    </Dialog>
   );
 }
 
@@ -338,6 +499,8 @@ export function CpcaChecklistPage() {
   const [search, setSearch] = useState("");
   const [uf, setUf] = useState("");
   const [status, setStatus] = useState<"ALL" | CpcaChecklistStatus>("ALL");
+  const [selectedOmIds, setSelectedOmIds] = useState<string[] | null>(null);
+  const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   const filters = useMemo(
@@ -350,6 +513,49 @@ export function CpcaChecklistPage() {
   );
 
   const overviewQuery = useCpcaChecklistNational(filters, true);
+  const omOptionsQuery = useCpcaChecklistNational(
+    CPCA_OM_OPTIONS_FILTERS,
+    true,
+  );
+
+  const items = useMemo(
+    () => (overviewQuery.data?.items ?? []) as CpcaChecklistNationalRow[],
+    [overviewQuery.data?.items],
+  );
+  const omOptionItems = useMemo(
+    () =>
+      (omOptionsQuery.data?.items ??
+        overviewQuery.data?.items ??
+        []) as CpcaChecklistNationalRow[],
+    [omOptionsQuery.data?.items, overviewQuery.data?.items],
+  );
+  const omOptions = useMemo(
+    () => buildCpcaChecklistOmOptions(omOptionItems),
+    [omOptionItems],
+  );
+  const activeSelectedOmIds = useMemo(
+    () => selectedOmIds ?? omOptions.map((item) => item.id),
+    [omOptions, selectedOmIds],
+  );
+
+  const displayedItems = useMemo(
+    () => filterCpcaChecklistRowsBySelectedOms(items, activeSelectedOmIds),
+    [activeSelectedOmIds, items],
+  );
+
+  const selectedOmOptions = useMemo(() => {
+    const selectedSet = new Set(activeSelectedOmIds);
+    return omOptions.filter((option) => selectedSet.has(option.id));
+  }, [activeSelectedOmIds, omOptions]);
+
+  const selectedRow = useMemo(() => {
+    if (!selectedRowId) return null;
+    return (
+      displayedItems.find((item) => item.locality.id === selectedRowId) ??
+      omOptionItems.find((item) => item.locality.id === selectedRowId) ??
+      null
+    );
+  }, [displayedItems, omOptionItems, selectedRowId]);
 
   if (overviewQuery.isLoading) {
     return <SkeletonState />;
@@ -363,18 +569,7 @@ export function CpcaChecklistPage() {
     );
   }
 
-  const items = (overviewQuery.data?.items ?? []) as NationalChecklistRow[];
-  const summary = (overviewQuery.data?.summary ?? {
-    totalCount: 0,
-    completedCount: 0,
-    inProgressCount: 0,
-    notStartedCount: 0,
-  }) as {
-    totalCount: number;
-    completedCount: number;
-    inProgressCount: number;
-    notStartedCount: number;
-  };
+  const summary = buildCpcaChecklistNationalOverviewSummary(displayedItems);
   const availableUfs = (overviewQuery.data?.filters?.availableUfs ??
     []) as string[];
 
@@ -504,163 +699,190 @@ export function CpcaChecklistPage() {
                     </MenuItem>
                   ))}
                 </TextField>
+                <Autocomplete
+                  multiple
+                  size="small"
+                  options={omOptions}
+                  value={selectedOmOptions}
+                  onChange={(_event, value) => {
+                    setSelectedOmIds(value.map((option) => option.id));
+                  }}
+                  getOptionLabel={(option) =>
+                    option.uf ? `${option.label} (${option.uf})` : option.label
+                  }
+                  isOptionEqualToValue={(option, value) =>
+                    option.id === value.id
+                  }
+                  disableCloseOnSelect
+                  limitTags={2}
+                  noOptionsText="Nenhuma OM com CPCA"
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="OMs com CPCA"
+                      placeholder="Selecione OMs"
+                    />
+                  )}
+                  sx={{
+                    minWidth: { xs: "100%", lg: 320 },
+                    flex: { xs: "unset", lg: 1 },
+                    "& .MuiOutlinedInput-root": {
+                      bgcolor: "rgba(255,255,255,0.72)",
+                    },
+                  }}
+                />
               </Stack>
             </Stack>
           </CardContent>
         </Card>
 
-        {items.length === 0 ? (
+        {displayedItems.length === 0 ? (
           <EmptyState
             title="Nenhuma CPCA encontrada"
             description="Ajuste os filtros ou verifique se existem OMs com CPCA habilitada para acompanhamento."
           />
         ) : (
           <Stack spacing={1.5}>
-            {items.map((item) => {
+            {displayedItems.map((item) => {
               const tone = getCpcaChecklistStatusTone(
                 item.checklist.summary.status,
               );
               return (
-                <Accordion
+                <Card
                   key={item.locality.id}
-                  disableGutters
                   sx={{
                     overflow: "hidden",
                     borderRadius: 3.5,
                     border: "1px solid",
                     borderColor: "divider",
                     boxShadow: "none",
-                    "&:before": { display: "none" },
+                    transition:
+                      "border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease",
+                    "&:hover": {
+                      borderColor: "primary.light",
+                      boxShadow: "0 16px 36px rgba(15,23,42,0.10)",
+                      transform: "translateY(-1px)",
+                    },
                   }}
                 >
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreRoundedIcon />}
-                    sx={{ px: 2.5, py: 1.25 }}
+                  <CardActionArea
+                    onClick={() => setSelectedRowId(item.locality.id)}
+                    aria-label={`Abrir checklist completo de ${formatCpcaChecklistOmLabel(
+                      item.locality.code,
+                      item.locality.name,
+                    )}`}
+                    sx={{ alignItems: "stretch" }}
                   >
-                    <Stack spacing={1.5} sx={{ width: "100%" }}>
-                      <Stack
-                        direction={{ xs: "column", lg: "row" }}
-                        spacing={1.25}
-                        justifyContent="space-between"
-                        alignItems={{ xs: "flex-start", lg: "center" }}
-                      >
+                    <CardContent sx={{ px: 2.5, py: 2 }}>
+                      <Stack spacing={1.5} sx={{ width: "100%" }}>
+                        <Stack
+                          direction={{ xs: "column", lg: "row" }}
+                          spacing={1.25}
+                          justifyContent="space-between"
+                          alignItems={{ xs: "flex-start", lg: "center" }}
+                        >
+                          <Box>
+                            <Typography variant="h6" fontWeight={800}>
+                              {formatCpcaChecklistOmLabel(
+                                item.locality.code,
+                                item.locality.name,
+                              )}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {item.currentPresident?.user?.name
+                                ? `Presidente: ${item.currentPresident.user.name}`
+                                : "Presidente ainda não designado"}
+                              {item.locality.uf ? ` • ${item.locality.uf}` : ""}
+                            </Typography>
+                          </Box>
+                          <Stack direction="row" spacing={1} flexWrap="wrap">
+                            <Chip
+                              label={item.checklist.summary.statusLabel}
+                              color={tone.color}
+                              sx={{
+                                fontWeight: 700,
+                                background: tone.background,
+                              }}
+                            />
+                            <Chip
+                              label={`${item.checklist.summary.completedCount}/${item.checklist.summary.totalCount} concluídos`}
+                              variant="outlined"
+                            />
+                          </Stack>
+                        </Stack>
+
                         <Box>
-                          <Typography variant="h6" fontWeight={800}>
-                            {formatCpcaChecklistOmLabel(
-                              item.locality.code,
-                              item.locality.name,
-                            )}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {item.currentPresident?.user?.name
-                              ? `Presidente: ${item.currentPresident.user.name}`
-                              : "Presidente ainda não designado"}
-                            {item.locality.uf ? ` • ${item.locality.uf}` : ""}
-                          </Typography>
-                        </Box>
-                        <Stack direction="row" spacing={1} flexWrap="wrap">
-                          <Chip
-                            label={item.checklist.summary.statusLabel}
-                            color={tone.color}
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            alignItems="center"
+                            sx={{ mb: 0.75 }}
+                          >
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Progresso
+                            </Typography>
+                            <Typography variant="caption" fontWeight={700}>
+                              {item.checklist.summary.completionRate}%
+                            </Typography>
+                          </Stack>
+                          <LinearProgress
+                            variant="determinate"
+                            value={item.checklist.summary.completionRate}
+                            color={
+                              tone.color === "default" ? "inherit" : tone.color
+                            }
                             sx={{
-                              fontWeight: 700,
-                              background: tone.background,
+                              height: 10,
+                              borderRadius: 999,
+                              bgcolor: "action.hover",
                             }}
                           />
-                          <Chip
-                            label={`${item.checklist.summary.completedCount}/${item.checklist.summary.totalCount} concluídos`}
-                            variant="outlined"
-                          />
-                        </Stack>
-                      </Stack>
-
-                      <Box>
+                        </Box>
                         <Stack
-                          direction="row"
-                          justifyContent="space-between"
-                          alignItems="center"
-                          sx={{ mb: 0.75 }}
+                          direction={{ xs: "column", md: "row" }}
+                          spacing={1}
+                          divider={<Divider flexItem orientation="vertical" />}
                         >
                           <Typography variant="caption" color="text.secondary">
-                            Progresso
+                            Última ação:{" "}
+                            <strong>
+                              {formatCpcaChecklistDate(
+                                item.checklist.summary.lastUpdatedAt,
+                              )}
+                            </strong>
                           </Typography>
-                          <Typography variant="caption" fontWeight={700}>
-                            {item.checklist.summary.completionRate}%
+                          <Typography variant="caption" color="text.secondary">
+                            Última entrega:{" "}
+                            <strong>
+                              {formatCpcaChecklistDate(
+                                item.checklist.summary.lastCompletedAt,
+                              )}
+                            </strong>
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Boletim:{" "}
+                            <strong>
+                              {item.currentPresident?.designationBulletin ||
+                                "-"}
+                            </strong>
                           </Typography>
                         </Stack>
-                        <LinearProgress
-                          variant="determinate"
-                          value={item.checklist.summary.completionRate}
-                          color={
-                            tone.color === "default" ? "inherit" : tone.color
-                          }
-                          sx={{
-                            height: 10,
-                            borderRadius: 999,
-                            bgcolor: "action.hover",
-                          }}
-                        />
-                      </Box>
-                    </Stack>
-                  </AccordionSummary>
-
-                  <AccordionDetails sx={{ px: 2.5, pb: 2.5, pt: 0.5 }}>
-                    <Stack spacing={2}>
-                      <Stack
-                        direction={{ xs: "column", md: "row" }}
-                        spacing={1}
-                        divider={<Divider flexItem orientation="vertical" />}
-                      >
-                        <Typography variant="caption" color="text.secondary">
-                          Última ação:{" "}
-                          <strong>
-                            {formatCpcaChecklistDate(
-                              item.checklist.summary.lastUpdatedAt,
-                            )}
-                          </strong>
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Última entrega:{" "}
-                          <strong>
-                            {formatCpcaChecklistDate(
-                              item.checklist.summary.lastCompletedAt,
-                            )}
-                          </strong>
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Boletim:{" "}
-                          <strong>
-                            {item.currentPresident?.designationBulletin || "-"}
-                          </strong>
-                        </Typography>
                       </Stack>
-
-                      <Box
-                        sx={{
-                          display: "grid",
-                          gridTemplateColumns: {
-                            xs: "1fr",
-                            md: "repeat(2, minmax(0, 1fr))",
-                            xl: "repeat(3, minmax(0, 1fr))",
-                          },
-                          gap: 1.25,
-                        }}
-                      >
-                        {item.checklist.items.map((checklistItem) => (
-                          <ChecklistTile
-                            key={`${item.locality.id}-${checklistItem.itemKey}`}
-                            item={checklistItem}
-                          />
-                        ))}
-                      </Box>
-                    </Stack>
-                  </AccordionDetails>
-                </Accordion>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
               );
             })}
           </Stack>
         )}
       </Stack>
+      <ChecklistDetailsDialog
+        row={selectedRow}
+        onClose={() => setSelectedRowId(null)}
+      />
     </Box>
   );
 }

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   areCpcaChecklistDraftsEqual,
+  buildCpcaChecklistNationalOverviewSummary,
   buildCpcaChecklistDraft,
   buildCpcaChecklistDraftSummary,
+  buildCpcaChecklistOmOptions,
+  filterCpcaChecklistRowsBySelectedOms,
   formatCpcaChecklistOmLabel,
   formatCpcaChecklistDate,
   getCpcaChecklistFieldConfig,
@@ -13,7 +16,39 @@ import {
   normalizeCpcaChecklistUrl,
   normalizeCpcaChecklistOmCode,
   prepareCpcaChecklistSave,
+  type CpcaChecklistNationalRow,
+  type CpcaChecklistStatus,
 } from "./cpcaChecklist";
+
+function makeNationalRow(
+  id: string,
+  status: CpcaChecklistStatus,
+  code = id.toUpperCase(),
+): CpcaChecklistNationalRow {
+  return {
+    locality: {
+      id,
+      code,
+      name: code,
+      uf: "DF",
+    },
+    currentPresident: null,
+    checklist: {
+      summary: {
+        totalCount: 8,
+        completedCount:
+          status === "COMPLETED" ? 8 : status === "IN_PROGRESS" ? 3 : 0,
+        pendingCount:
+          status === "COMPLETED" ? 0 : status === "IN_PROGRESS" ? 5 : 8,
+        completionRate:
+          status === "COMPLETED" ? 100 : status === "IN_PROGRESS" ? 38 : 0,
+        status,
+        statusLabel: status,
+      },
+      items: [],
+    },
+  };
+}
 
 describe("cpcaChecklist helpers", () => {
   it("builds a full ordered draft even when the API returns a partial checklist", () => {
@@ -101,6 +136,36 @@ describe("cpcaChecklist helpers", () => {
     expect(formatCpcaChecklistOmLabel("BACO", "Base Aérea de Canoas")).toBe(
       "BACO - Base Aérea de Canoas",
     );
+  });
+
+  it("builds prefilled OM filter options and summarizes selected checklist rows", () => {
+    const rows = [
+      makeNationalRow("om-2", "IN_PROGRESS", "BACO"),
+      makeNationalRow("om-1", "COMPLETED", "ALA 1"),
+      makeNationalRow("om-3", "NOT_STARTED", "CINDACTA I"),
+    ];
+
+    expect(buildCpcaChecklistOmOptions(rows).map((item) => item.id)).toEqual([
+      "om-1",
+      "om-2",
+      "om-3",
+    ]);
+
+    const selectedRows = filterCpcaChecklistRowsBySelectedOms(rows, [
+      "om-1",
+      "om-3",
+    ]);
+
+    expect(selectedRows.map((item) => item.locality.id)).toEqual([
+      "om-1",
+      "om-3",
+    ]);
+    expect(buildCpcaChecklistNationalOverviewSummary(selectedRows)).toEqual({
+      totalCount: 2,
+      completedCount: 1,
+      inProgressCount: 0,
+      notStartedCount: 1,
+    });
   });
 
   it("exposes dedicated labels for binary checklist questions", () => {
