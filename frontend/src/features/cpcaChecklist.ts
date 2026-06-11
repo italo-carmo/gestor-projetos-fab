@@ -302,6 +302,7 @@ export function filterCpcaChecklistRowsBySelectedOms(
   rows: CpcaChecklistNationalRow[],
   selectedOmIds: string[],
 ): CpcaChecklistNationalRow[] {
+  if (selectedOmIds.length === 0) return rows;
   const selectedSet = new Set(selectedOmIds);
   return rows.filter((row) => selectedSet.has(row.locality.id));
 }

@@ -1,6 +1,7 @@
 import {
   Autocomplete,
   Box,
+  Button,
   Card,
   CardActionArea,
   CardContent,
@@ -499,7 +500,7 @@ export function CpcaChecklistPage() {
   const [search, setSearch] = useState("");
   const [uf, setUf] = useState("");
   const [status, setStatus] = useState<"ALL" | CpcaChecklistStatus>("ALL");
-  const [selectedOmIds, setSelectedOmIds] = useState<string[] | null>(null);
+  const [selectedOmIds, setSelectedOmIds] = useState<string[]>([]);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
@@ -533,20 +534,16 @@ export function CpcaChecklistPage() {
     () => buildCpcaChecklistOmOptions(omOptionItems),
     [omOptionItems],
   );
-  const activeSelectedOmIds = useMemo(
-    () => selectedOmIds ?? omOptions.map((item) => item.id),
-    [omOptions, selectedOmIds],
-  );
 
   const displayedItems = useMemo(
-    () => filterCpcaChecklistRowsBySelectedOms(items, activeSelectedOmIds),
-    [activeSelectedOmIds, items],
+    () => filterCpcaChecklistRowsBySelectedOms(items, selectedOmIds),
+    [items, selectedOmIds],
   );
 
   const selectedOmOptions = useMemo(() => {
-    const selectedSet = new Set(activeSelectedOmIds);
+    const selectedSet = new Set(selectedOmIds);
     return omOptions.filter((option) => selectedSet.has(option.id));
-  }, [activeSelectedOmIds, omOptions]);
+  }, [omOptions, selectedOmIds]);
 
   const selectedRow = useMemo(() => {
     if (!selectedRowId) return null;
@@ -639,100 +636,97 @@ export function CpcaChecklistPage() {
                   tone="default"
                 />
               </Stack>
-
-              <Stack
-                direction={{ xs: "column", lg: "row" }}
-                spacing={1.25}
-                alignItems={{ xs: "stretch", lg: "center" }}
-              >
-                <TextField
-                  label="Buscar OM ou presidente"
-                  size="small"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  fullWidth
-                  sx={{
-                    flex: 1,
-                    "& .MuiOutlinedInput-root": {
-                      bgcolor: "rgba(255,255,255,0.72)",
-                    },
-                  }}
-                />
-                <TextField
-                  select
-                  label="UF"
-                  size="small"
-                  value={uf}
-                  onChange={(event) => setUf(event.target.value)}
-                  sx={{
-                    minWidth: { xs: "100%", lg: 140 },
-                    "& .MuiOutlinedInput-root": {
-                      bgcolor: "rgba(255,255,255,0.72)",
-                    },
-                  }}
-                >
-                  <MenuItem value="">Todas</MenuItem>
-                  {availableUfs.map((item) => (
-                    <MenuItem key={item} value={item}>
-                      {item}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <TextField
-                  select
-                  label="Situação"
-                  size="small"
-                  value={status}
-                  onChange={(event) =>
-                    setStatus(event.target.value as "ALL" | CpcaChecklistStatus)
-                  }
-                  sx={{
-                    minWidth: { xs: "100%", lg: 190 },
-                    "& .MuiOutlinedInput-root": {
-                      bgcolor: "rgba(255,255,255,0.72)",
-                    },
-                  }}
-                >
-                  {STATUS_OPTIONS.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {option.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Autocomplete
-                  multiple
-                  size="small"
-                  options={omOptions}
-                  value={selectedOmOptions}
-                  onChange={(_event, value) => {
-                    setSelectedOmIds(value.map((option) => option.id));
-                  }}
-                  getOptionLabel={(option) =>
-                    option.uf ? `${option.label} (${option.uf})` : option.label
-                  }
-                  isOptionEqualToValue={(option, value) =>
-                    option.id === value.id
-                  }
-                  disableCloseOnSelect
-                  limitTags={2}
-                  noOptionsText="Nenhuma OM com CPCA"
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="OMs com CPCA"
-                      placeholder="Selecione OMs"
-                    />
-                  )}
-                  sx={{
-                    minWidth: { xs: "100%", lg: 320 },
-                    flex: { xs: "unset", lg: 1 },
-                    "& .MuiOutlinedInput-root": {
-                      bgcolor: "rgba(255,255,255,0.72)",
-                    },
-                  }}
-                />
-              </Stack>
             </Stack>
+          </CardContent>
+        </Card>
+
+        <Card sx={{ mb: 0 }}>
+          <CardContent>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1.2}>
+              <TextField
+                size="small"
+                label="Buscar OM ou presidente"
+                placeholder="Digite código, nome da OM ou presidente..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                sx={{ minWidth: 260 }}
+              />
+              <TextField
+                select
+                size="small"
+                label="UF"
+                value={uf}
+                onChange={(event) => setUf(event.target.value)}
+                sx={{ minWidth: { xs: "100%", md: 140 } }}
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {availableUfs.map((item) => (
+                  <MenuItem key={item} value={item}>
+                    {item}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                size="small"
+                label="Situação"
+                value={status}
+                onChange={(event) =>
+                  setStatus(event.target.value as "ALL" | CpcaChecklistStatus)
+                }
+                sx={{ minWidth: { xs: "100%", md: 190 } }}
+              >
+                {STATUS_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <Autocomplete
+                multiple
+                size="small"
+                options={omOptions}
+                value={selectedOmOptions}
+                onChange={(_event, value) => {
+                  setSelectedOmIds(value.map((option) => option.id));
+                }}
+                getOptionLabel={(option) =>
+                  option.uf ? `${option.label} (${option.uf})` : option.label
+                }
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                disableCloseOnSelect
+                limitTags={2}
+                noOptionsText="Nenhuma OM com CPCA"
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="OMs com CPCA"
+                    placeholder="Selecione OMs"
+                  />
+                )}
+                sx={{ minWidth: { xs: "100%", md: 320 }, flex: 1 }}
+              />
+              <Button variant="text" onClick={() => setSearch("")}>
+                Limpar busca
+              </Button>
+              <Button
+                variant="text"
+                onClick={() => {
+                  setUf("");
+                  setStatus("ALL");
+                  setSelectedOmIds([]);
+                }}
+              >
+                Limpar filtros
+              </Button>
+            </Stack>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ mt: 1.5, display: "block" }}
+            >
+              Sem OM selecionada, todas as OMs com CPCA permanecem visíveis.
+            </Typography>
           </CardContent>
         </Card>
 

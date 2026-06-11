@@ -150,6 +150,7 @@ describe("cpcaChecklist helpers", () => {
       "om-2",
       "om-3",
     ]);
+    expect(filterCpcaChecklistRowsBySelectedOms(rows, [])).toEqual(rows);
 
     const selectedRows = filterCpcaChecklistRowsBySelectedOms(rows, [
       "om-1",
