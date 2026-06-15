@@ -54,6 +54,7 @@ import {
   type CipavdReportFile,
 } from '../../api/hooks';
 import { ConfirmDialog } from '../dialogs/ConfirmDialog';
+import { AdminTableScroll } from './AdminTableScroll';
 import { EmptyState } from '../states/EmptyState';
 import { ErrorState } from '../states/ErrorState';
 import { SkeletonState } from '../states/SkeletonState';
@@ -431,11 +432,11 @@ export function KnowledgeBasesTab() {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', lg: '360px minmax(0, 1fr)' },
+            gridTemplateColumns: { xs: '1fr', xl: '320px minmax(0, 1fr)' },
             gap: 2,
           }}
         >
-          <Stack spacing={1.25}>
+          <Stack spacing={1.25} sx={{ minWidth: 0 }}>
             {knowledgeBases.map((item) => {
               const selected = item.id === selectedBaseId;
               const statusSummary = item.documentStatusSummary;
@@ -521,7 +522,7 @@ export function KnowledgeBasesTab() {
             })}
           </Stack>
 
-          <Paper variant="outlined" sx={{ borderRadius: 2.5, p: 2.25 }}>
+          <Paper variant="outlined" sx={{ borderRadius: 2.5, p: 2.25, minWidth: 0 }}>
             {!selectedBase ? (
               <EmptyState
                 title="Selecione uma base"
@@ -543,7 +544,7 @@ export function KnowledgeBasesTab() {
                       {selectedBase.description?.trim() || 'Base sem descrição.'}
                     </Typography>
                   </Box>
-                  <Stack direction="row" spacing={1}>
+                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                     <Button
                       variant="outlined"
                       startIcon={<RefreshRoundedIcon />}
@@ -572,7 +573,7 @@ export function KnowledgeBasesTab() {
                     <Typography variant="subtitle2" fontWeight={800}>
                       Enviar documento para a base
                     </Typography>
-                    <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.2}>
+                    <Stack direction={{ xs: 'column', xl: 'row' }} spacing={1.2}>
                       <TextField
                         size="small"
                         label="Título opcional"
@@ -580,7 +581,12 @@ export function KnowledgeBasesTab() {
                         onChange={(event) => setUploadTitle(event.target.value)}
                         fullWidth
                       />
-                      <Button variant="outlined" component="label" startIcon={<CloudUploadRoundedIcon />}>
+                      <Button
+                        variant="outlined"
+                        component="label"
+                        startIcon={<CloudUploadRoundedIcon />}
+                        sx={{ maxWidth: '100%', justifyContent: 'flex-start' }}
+                      >
                         {uploadFile ? uploadFile.name : 'Selecionar arquivo'}
                         <input
                           hidden
@@ -648,62 +654,64 @@ export function KnowledgeBasesTab() {
                         description="Envie arquivos no menu Acervo do bloco COMANDO para importá-los aqui."
                       />
                     ) : (
-                      <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell>Arquivo</TableCell>
-                            <TableCell>Origem</TableCell>
-                            <TableCell>Tamanho</TableCell>
-                            <TableCell>Título na base</TableCell>
-                            <TableCell align="right">Ação</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {cipavdReportFiles.slice(0, 8).map((report) => (
-                            <TableRow key={report.id} hover>
-                              <TableCell sx={{ minWidth: 220 }}>
-                                <Typography variant="body2" fontWeight={700}>
-                                  {report.name}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  Atualizado em {formatDateTime(report.updatedAt)}
-                                </Typography>
-                              </TableCell>
-                              <TableCell sx={{ maxWidth: 300 }}>
-                                <Typography variant="caption" color="text.secondary">
-                                  {report.folderPath ?? report.path ?? 'Acervo'}
-                                </Typography>
-                              </TableCell>
-                              <TableCell>{formatBytes(report.fileSize)}</TableCell>
-                              <TableCell sx={{ minWidth: 220 }}>
-                                <TextField
-                                  size="small"
-                                  placeholder="Usar nome do arquivo"
-                                  value={reportImportTitleDrafts[report.id] ?? ''}
-                                  onChange={(event) =>
-                                    setReportImportTitleDrafts((prev) => ({
-                                      ...prev,
-                                      [report.id]: event.target.value,
-                                    }))
-                                  }
-                                  fullWidth
-                                />
-                              </TableCell>
-                              <TableCell align="right">
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  startIcon={<DriveFileMoveRoundedIcon />}
-                                  onClick={() => void handleImportCipavdReport(report)}
-                                  disabled={importCipavdReport.isPending}
-                                >
-                                  Importar
-                                </Button>
-                              </TableCell>
+                      <AdminTableScroll minWidth={940}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Arquivo</TableCell>
+                              <TableCell>Origem</TableCell>
+                              <TableCell>Tamanho</TableCell>
+                              <TableCell>Título na base</TableCell>
+                              <TableCell align="right">Ação</TableCell>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHead>
+                          <TableBody>
+                            {cipavdReportFiles.slice(0, 8).map((report) => (
+                              <TableRow key={report.id} hover>
+                                <TableCell sx={{ minWidth: 220 }}>
+                                  <Typography variant="body2" fontWeight={700}>
+                                    {report.name}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Atualizado em {formatDateTime(report.updatedAt)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell sx={{ maxWidth: 300 }}>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {report.folderPath ?? report.path ?? 'Acervo'}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>{formatBytes(report.fileSize)}</TableCell>
+                                <TableCell sx={{ minWidth: 220 }}>
+                                  <TextField
+                                    size="small"
+                                    placeholder="Usar nome do arquivo"
+                                    value={reportImportTitleDrafts[report.id] ?? ''}
+                                    onChange={(event) =>
+                                      setReportImportTitleDrafts((prev) => ({
+                                        ...prev,
+                                        [report.id]: event.target.value,
+                                      }))
+                                    }
+                                    fullWidth
+                                  />
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<DriveFileMoveRoundedIcon />}
+                                    onClick={() => void handleImportCipavdReport(report)}
+                                    disabled={importCipavdReport.isPending}
+                                  >
+                                    Importar
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </AdminTableScroll>
                     )}
                   </Stack>
                 </Paper>
@@ -721,127 +729,129 @@ export function KnowledgeBasesTab() {
                     description="Envie o primeiro documento para iniciar a indexação vetorial desta base."
                   />
                 ) : (
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Documento</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Chunks</TableCell>
-                        <TableCell>Tamanho</TableCell>
-                        <TableCell>Última indexação</TableCell>
-                        <TableCell align="right">Ações</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {documents.map((document) => (
-                        <TableRow
-                          key={document.id}
-                          hover
-                          selected={highlightedDocumentId === document.id}
-                          sx={
-                            highlightedDocumentId === document.id
-                              ? {
-                                  '& td': {
-                                    bgcolor: (theme) =>
-                                      alpha(theme.palette.primary.main, 0.08),
-                                  },
-                                }
-                              : undefined
-                          }
-                        >
-                          <TableCell sx={{ minWidth: 280 }}>
-                            <Stack spacing={0.8}>
-                              <TextField
-                                size="small"
-                                value={titleDrafts[document.id] ?? document.title}
-                                onChange={(event) =>
-                                  setTitleDrafts((prev) => ({
-                                    ...prev,
-                                    [document.id]: event.target.value,
-                                  }))
-                                }
-                              />
-                              <Typography variant="caption" color="text.secondary">
-                                {document.fileName}
-                              </Typography>
-                              {document.indexError ? (
-                                <Typography variant="caption" color="error.main">
-                                  {document.indexError}
-                                </Typography>
-                              ) : null}
-                            </Stack>
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              size="small"
-                              color={statusColor(document.status) as any}
-                              variant={document.status === 'READY' ? 'filled' : 'outlined'}
-                              label={document.status}
-                            />
-                          </TableCell>
-                          <TableCell>{document._count?.chunks ?? document.chunkCount ?? 0}</TableCell>
-                          <TableCell>{formatBytes(document.fileSize)}</TableCell>
-                          <TableCell>{formatDateTime(document.lastIndexedAt ?? document.updatedAt)}</TableCell>
-                          <TableCell align="right">
-                            <Stack direction="row" spacing={0.4} justifyContent="flex-end">
-                              <Tooltip title="Salvar título">
-                                <span>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => void handleSaveDocumentTitle(document)}
-                                    disabled={updateDocument.isPending}
-                                  >
-                                    <SaveRoundedIcon fontSize="small" />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                              <Tooltip title="Baixar documento">
-                                <span>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() =>
-                                      void downloadDocument.mutateAsync({
-                                        id: document.id,
-                                        fileName: document.fileName,
-                                      })
-                                    }
-                                  >
-                                    <DownloadRoundedIcon fontSize="small" />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                              <Tooltip title="Reindexar documento">
-                                <span>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() =>
-                                      void reindexDocument.mutateAsync({
-                                        id: document.id,
-                                        knowledgeBaseId: document.knowledgeBaseId,
-                                      })
-                                    }
-                                    disabled={reindexDocument.isPending}
-                                  >
-                                    <RefreshRoundedIcon fontSize="small" />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                              <Tooltip title="Excluir documento">
-                                <span>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => setDocumentToDelete(document)}
-                                  >
-                                    <DeleteOutlineRoundedIcon fontSize="small" />
-                                  </IconButton>
-                                </span>
-                              </Tooltip>
-                            </Stack>
-                          </TableCell>
+                  <AdminTableScroll minWidth={920}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Documento</TableCell>
+                          <TableCell>Status</TableCell>
+                          <TableCell>Chunks</TableCell>
+                          <TableCell>Tamanho</TableCell>
+                          <TableCell>Última indexação</TableCell>
+                          <TableCell align="right">Ações</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHead>
+                      <TableBody>
+                        {documents.map((document) => (
+                          <TableRow
+                            key={document.id}
+                            hover
+                            selected={highlightedDocumentId === document.id}
+                            sx={
+                              highlightedDocumentId === document.id
+                                ? {
+                                    '& td': {
+                                      bgcolor: (theme) =>
+                                        alpha(theme.palette.primary.main, 0.08),
+                                    },
+                                  }
+                                : undefined
+                            }
+                          >
+                            <TableCell sx={{ minWidth: 280 }}>
+                              <Stack spacing={0.8}>
+                                <TextField
+                                  size="small"
+                                  value={titleDrafts[document.id] ?? document.title}
+                                  onChange={(event) =>
+                                    setTitleDrafts((prev) => ({
+                                      ...prev,
+                                      [document.id]: event.target.value,
+                                    }))
+                                  }
+                                />
+                                <Typography variant="caption" color="text.secondary">
+                                  {document.fileName}
+                                </Typography>
+                                {document.indexError ? (
+                                  <Typography variant="caption" color="error.main">
+                                    {document.indexError}
+                                  </Typography>
+                                ) : null}
+                              </Stack>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                color={statusColor(document.status) as any}
+                                variant={document.status === 'READY' ? 'filled' : 'outlined'}
+                                label={document.status}
+                              />
+                            </TableCell>
+                            <TableCell>{document._count?.chunks ?? document.chunkCount ?? 0}</TableCell>
+                            <TableCell>{formatBytes(document.fileSize)}</TableCell>
+                            <TableCell>{formatDateTime(document.lastIndexedAt ?? document.updatedAt)}</TableCell>
+                            <TableCell align="right">
+                              <Stack direction="row" spacing={0.4} justifyContent="flex-end">
+                                <Tooltip title="Salvar título">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => void handleSaveDocumentTitle(document)}
+                                      disabled={updateDocument.isPending}
+                                    >
+                                      <SaveRoundedIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                <Tooltip title="Baixar documento">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() =>
+                                        void downloadDocument.mutateAsync({
+                                          id: document.id,
+                                          fileName: document.fileName,
+                                        })
+                                      }
+                                    >
+                                      <DownloadRoundedIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                <Tooltip title="Reindexar documento">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() =>
+                                        void reindexDocument.mutateAsync({
+                                          id: document.id,
+                                          knowledgeBaseId: document.knowledgeBaseId,
+                                        })
+                                      }
+                                      disabled={reindexDocument.isPending}
+                                    >
+                                      <RefreshRoundedIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                <Tooltip title="Excluir documento">
+                                  <span>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => setDocumentToDelete(document)}
+                                    >
+                                      <DeleteOutlineRoundedIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </AdminTableScroll>
                 )}
               </Stack>
             )}

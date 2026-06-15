@@ -110,6 +110,7 @@ import { EmptyState } from '../components/states/EmptyState';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { useSearchParams } from 'react-router-dom';
 import { getTargetLocalityKey, selectTargetLocalities } from '../constants/localities';
+import { AdminTableScroll } from '../components/admin/AdminTableScroll';
 import { BiNormalizationTab } from '../components/admin/BiNormalizationTab';
 import { KnowledgeBasesTab } from '../components/admin/KnowledgeBasesTab';
 
@@ -519,35 +520,37 @@ function LocalitiesTab() {
               description="Crie uma localidade da SMIF para começar."
             />
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: 'primary.main' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 600, width: 160 }}>Sigla</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>UF</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
-                    Ações
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {items.map((item: any) => (
-                  <TableRow key={item.id} hover>
-                    <TableCell>{item.code}</TableCell>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.uf ?? '—'}</TableCell>
-                    <TableCell align="right">
-                      <Button size="small" onClick={() => openEdit(item)}>
-                        Editar
-                      </Button>
-                      <Button size="small" color="error" onClick={() => setDeleteId(item.id)}>
-                        Excluir
-                      </Button>
+            <AdminTableScroll minWidth={640}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ color: 'white', fontWeight: 600, width: 160 }}>Sigla</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>UF</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                      Ações
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {items.map((item: any) => (
+                    <TableRow key={item.id} hover>
+                      <TableCell>{item.code}</TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.uf ?? '—'}</TableCell>
+                      <TableCell align="right">
+                        <Button size="small" onClick={() => openEdit(item)}>
+                          Editar
+                        </Button>
+                        <Button size="small" color="error" onClick={() => setDeleteId(item.id)}>
+                          Excluir
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </AdminTableScroll>
           )}
         </CardContent>
       </Card>
@@ -749,47 +752,49 @@ function CipavdLocalitiesTab() {
               description="Crie uma localidade CIPAVD para habilitar seleção no módulo de atividades de campo CIPAVD."
             />
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: 'primary.main' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 600, width: 160 }}>Sigla</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>UF</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
-                    Ações
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {items.map((item: any) => (
-                  <TableRow key={item.id} hover>
-                    <TableCell>{item.code}</TableCell>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.uf ?? '—'}</TableCell>
-                    <TableCell align="right">
-                      {canManage ? (
-                        <>
-                          {canUpdateLocality && (
-                            <Button size="small" onClick={() => openEdit(item)}>
-                              Editar
-                            </Button>
-                          )}
-                          {canDeleteLocality && (
-                            <Button size="small" color="error" onClick={() => setDeleteId(item.id)}>
-                              Excluir
-                            </Button>
-                          )}
-                        </>
-                      ) : (
-                        <Typography variant="caption" color="text.secondary">
-                          Sem permissão de alteração
-                        </Typography>
-                      )}
+            <AdminTableScroll minWidth={640}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ color: 'white', fontWeight: 600, width: 160 }}>Sigla</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Localidade</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600, width: 80 }}>UF</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                      Ações
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {items.map((item: any) => (
+                    <TableRow key={item.id} hover>
+                      <TableCell>{item.code}</TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.uf ?? '—'}</TableCell>
+                      <TableCell align="right">
+                        {canManage ? (
+                          <>
+                            {canUpdateLocality && (
+                              <Button size="small" onClick={() => openEdit(item)}>
+                                Editar
+                              </Button>
+                            )}
+                            {canDeleteLocality && (
+                              <Button size="small" color="error" onClick={() => setDeleteId(item.id)}>
+                                Excluir
+                              </Button>
+                            )}
+                          </>
+                        ) : (
+                          <Typography variant="caption" color="text.secondary">
+                            Sem permissão de alteração
+                          </Typography>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </AdminTableScroll>
           )}
         </CardContent>
       </Card>
@@ -956,35 +961,37 @@ function PostosTab() {
               description="Crie postos para usar no fechamento de atividades externas (quantitativo de participantes por posto)."
             />
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: 'primary.main' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Código</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Nome</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ordem</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
-                    Ações
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {items.map((item: any) => (
-                  <TableRow key={item.id} hover>
-                    <TableCell>{item.code}</TableCell>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{item.sortOrder ?? 0}</TableCell>
-                    <TableCell align="right">
-                      <Button size="small" onClick={() => openEdit(item)}>
-                        Editar
-                      </Button>
-                      <Button size="small" color="error" onClick={() => setDeleteId(item.id)}>
-                        Excluir
-                      </Button>
+            <AdminTableScroll minWidth={560}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Código</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Nome</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ordem</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                      Ações
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {items.map((item: any) => (
+                    <TableRow key={item.id} hover>
+                      <TableCell>{item.code}</TableCell>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell>{item.sortOrder ?? 0}</TableCell>
+                      <TableCell align="right">
+                        <Button size="small" onClick={() => openEdit(item)}>
+                          Editar
+                        </Button>
+                        <Button size="small" color="error" onClick={() => setDeleteId(item.id)}>
+                          Excluir
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </AdminTableScroll>
           )}
         </CardContent>
       </Card>
@@ -1104,56 +1111,58 @@ function PhasesTab() {
 
       <Card>
         <CardContent>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.main' }}>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ordem</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Código técnico</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Nome padrão</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }}>Nome exibido</TableCell>
-                <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
-                  Ações
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {items.map((phase: any) => (
-                <TableRow key={phase.id} hover>
-                  <TableCell>{phase.order}</TableCell>
-                  <TableCell>{phase.code ?? phase.id}</TableCell>
-                  <TableCell>{phase.defaultName ?? phase.name}</TableCell>
-                  <TableCell sx={{ minWidth: 260 }}>
-                    <TextField
-                      size="small"
-                      fullWidth
-                      placeholder={phase.defaultName ?? phase.name}
-                      value={getDraft(phase)}
-                      onChange={(e) => setDrafts((prev) => ({ ...prev, [phase.id]: e.target.value }))}
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => setDrafts((prev) => ({ ...prev, [phase.id]: '' }))}
-                      sx={{ mr: 1 }}
-                    >
-                      Padrão
-                    </Button>
-                    <Button
-                      size="small"
-                      variant="contained"
-                      color="success"
-                      disabled={!isDirty(phase) || updatePhase.isPending}
-                      onClick={() => save(phase)}
-                    >
-                      Salvar
-                    </Button>
+          <AdminTableScroll minWidth={860}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ordem</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Código técnico</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Nome padrão</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Nome exibido</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                    Ações
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {items.map((phase: any) => (
+                  <TableRow key={phase.id} hover>
+                    <TableCell>{phase.order}</TableCell>
+                    <TableCell>{phase.code ?? phase.id}</TableCell>
+                    <TableCell>{phase.defaultName ?? phase.name}</TableCell>
+                    <TableCell sx={{ minWidth: 260 }}>
+                      <TextField
+                        size="small"
+                        fullWidth
+                        placeholder={phase.defaultName ?? phase.name}
+                        value={getDraft(phase)}
+                        onChange={(e) => setDrafts((prev) => ({ ...prev, [phase.id]: e.target.value }))}
+                      />
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => setDrafts((prev) => ({ ...prev, [phase.id]: '' }))}
+                        sx={{ mr: 1 }}
+                      >
+                        Padrão
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        color="success"
+                        disabled={!isDirty(phase) || updatePhase.isPending}
+                        onClick={() => save(phase)}
+                      >
+                        Salvar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </AdminTableScroll>
         </CardContent>
       </Card>
     </Box>
@@ -1244,35 +1253,37 @@ function EloRolesTab() {
               description="Crie os tipos de elo (Psicologia, SSO, Jurídico, etc.) para usar na matriz de elos e nas tarefas."
             />
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: 'primary.main' }}>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Código</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Nome</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ordem</TableCell>
-                  <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
-                    Ações
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {items.map((role: any) => (
-                  <TableRow key={role.id} hover>
-                    <TableCell>{role.code}</TableCell>
-                    <TableCell>{role.name}</TableCell>
-                    <TableCell>{role.sortOrder ?? 0}</TableCell>
-                    <TableCell align="right">
-                      <Button size="small" onClick={() => openEdit(role)}>
-                        Editar
-                      </Button>
-                      <Button size="small" color="error" onClick={() => setDeleteId(role.id)}>
-                        Excluir
-                      </Button>
+            <AdminTableScroll minWidth={560}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Código</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Nome</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }}>Ordem</TableCell>
+                    <TableCell sx={{ color: 'white', fontWeight: 600 }} align="right">
+                      Ações
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {items.map((role: any) => (
+                    <TableRow key={role.id} hover>
+                      <TableCell>{role.code}</TableCell>
+                      <TableCell>{role.name}</TableCell>
+                      <TableCell>{role.sortOrder ?? 0}</TableCell>
+                      <TableCell align="right">
+                        <Button size="small" onClick={() => openEdit(role)}>
+                          Editar
+                        </Button>
+                        <Button size="small" color="error" onClick={() => setDeleteId(role.id)}>
+                          Excluir
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </AdminTableScroll>
           )}
         </CardContent>
       </Card>
@@ -1583,45 +1594,47 @@ function InstitutionalMappingTab() {
               description="Crie a primeira dimensão para usar no checklist."
             />
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: 'primary.main' }}>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Área</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Dimensão</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Descrição auxiliar</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Ordem</TableCell>
-                  <TableCell sx={{ color: '#fff', fontWeight: 700 }} align="right">
-                    Ações
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {dimensions.map((dimension) => (
-                  <TableRow key={dimension.id} hover>
-                    <TableCell>{dimension.sectionTitle}</TableCell>
-                    <TableCell>{dimension.title}</TableCell>
-                    <TableCell sx={{ maxWidth: 420 }}>
-                      <Typography variant="body2" color="text.secondary" noWrap>
-                        {dimension.prompt || 'Sem descrição auxiliar'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{dimension.sortOrder}</TableCell>
-                    <TableCell align="right">
-                      <Button size="small" onClick={() => openEditDimension(dimension)}>
-                        Editar
-                      </Button>
-                      <Button
-                        size="small"
-                        color="error"
-                        onClick={() => setDeleteDimensionId(dimension.id)}
-                      >
-                        Excluir
-                      </Button>
+            <AdminTableScroll minWidth={900}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: 'primary.main' }}>
+                    <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Área</TableCell>
+                    <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Dimensão</TableCell>
+                    <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Descrição auxiliar</TableCell>
+                    <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Ordem</TableCell>
+                    <TableCell sx={{ color: '#fff', fontWeight: 700 }} align="right">
+                      Ações
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHead>
+                <TableBody>
+                  {dimensions.map((dimension) => (
+                    <TableRow key={dimension.id} hover>
+                      <TableCell>{dimension.sectionTitle}</TableCell>
+                      <TableCell>{dimension.title}</TableCell>
+                      <TableCell sx={{ maxWidth: 420 }}>
+                        <Typography variant="body2" color="text.secondary" noWrap>
+                          {dimension.prompt || 'Sem descrição auxiliar'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{dimension.sortOrder}</TableCell>
+                      <TableCell align="right">
+                        <Button size="small" onClick={() => openEditDimension(dimension)}>
+                          Editar
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          onClick={() => setDeleteDimensionId(dimension.id)}
+                        >
+                          Excluir
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </AdminTableScroll>
           )}
         </CardContent>
       </Card>
@@ -1631,76 +1644,78 @@ function InstitutionalMappingTab() {
           <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.2 }}>
             Classificações
           </Typography>
-          <Table size="small">
-            <TableHead>
-              <TableRow sx={{ bgcolor: 'primary.main' }}>
-                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Código</TableCell>
-                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Nome exibido</TableCell>
-                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Cor</TableCell>
-                <TableCell sx={{ color: '#fff', fontWeight: 700 }} align="right">
-                  Ações
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {classifications.map((classification) => {
-                const id = String(classification?.id ?? '');
-                const draft = draftById(classification);
-                return (
-                  <TableRow key={id} hover>
-                    <TableCell>{id}</TableCell>
-                    <TableCell sx={{ minWidth: 320 }}>
-                      <TextField
-                        size="small"
-                        fullWidth
-                        value={draft.label}
-                        onChange={(event) =>
-                          setClassificationDraft(id, { label: event.target.value })
-                        }
-                      />
-                    </TableCell>
-                    <TableCell sx={{ minWidth: 180 }}>
-                      <Stack direction="row" spacing={1} alignItems="center">
+          <AdminTableScroll minWidth={760}>
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Código</TableCell>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Nome exibido</TableCell>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Cor</TableCell>
+                  <TableCell sx={{ color: '#fff', fontWeight: 700 }} align="right">
+                    Ações
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {classifications.map((classification) => {
+                  const id = String(classification?.id ?? '');
+                  const draft = draftById(classification);
+                  return (
+                    <TableRow key={id} hover>
+                      <TableCell>{id}</TableCell>
+                      <TableCell sx={{ minWidth: 320 }}>
                         <TextField
                           size="small"
-                          type="color"
-                          value={draft.colorHex}
+                          fullWidth
+                          value={draft.label}
                           onChange={(event) =>
-                            setClassificationDraft(id, {
-                              colorHex: event.target.value.toUpperCase(),
-                            })
+                            setClassificationDraft(id, { label: event.target.value })
                           }
-                          sx={{ width: 86 }}
                         />
+                      </TableCell>
+                      <TableCell sx={{ minWidth: 180 }}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <TextField
+                            size="small"
+                            type="color"
+                            value={draft.colorHex}
+                            onChange={(event) =>
+                              setClassificationDraft(id, {
+                                colorHex: event.target.value.toUpperCase(),
+                              })
+                            }
+                            sx={{ width: 86 }}
+                          />
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() =>
+                              setClassificationDraft(id, { colorHex: '#FFFFFF' })
+                            }
+                          >
+                            Sem cor
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="right">
                         <Button
                           size="small"
-                          variant="outlined"
-                          onClick={() =>
-                            setClassificationDraft(id, { colorHex: '#FFFFFF' })
+                          variant="contained"
+                          onClick={() => saveClassification(classification)}
+                          disabled={
+                            !isClassificationDirty(classification) ||
+                            updateClassification.isPending
                           }
                         >
-                          Sem cor
+                          Salvar
                         </Button>
-                      </Stack>
-                    </TableCell>
-                    <TableCell align="right">
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={() => saveClassification(classification)}
-                        disabled={
-                          !isClassificationDirty(classification) ||
-                          updateClassification.isPending
-                        }
-                      >
-                        Salvar
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </AdminTableScroll>
         </CardContent>
       </Card>
 
@@ -2749,14 +2764,14 @@ function AiSettingsTab() {
                               <Box
                                 sx={{
                                   display: 'grid',
-                                  gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 0.95fr) minmax(0, 1.05fr)' },
+                                  gridTemplateColumns: { xs: '1fr', xl: 'minmax(0, 0.95fr) minmax(0, 1.05fr)' },
                                 }}
                               >
                                 <Box
                                   sx={{
                                     p: 2,
-                                    borderRight: { xs: 'none', lg: '1px solid #EEF2F7' },
-                                    borderBottom: { xs: '1px solid #EEF2F7', lg: 'none' },
+                                    borderRight: { xs: 'none', xl: '1px solid #EEF2F7' },
+                                    borderBottom: { xs: '1px solid #EEF2F7', xl: 'none' },
                                   }}
                                 >
                                   <Stack spacing={2}>
@@ -3788,77 +3803,79 @@ function EmailFailuresTab() {
           description="Não há registros para o filtro selecionado."
         />
       ) : (
-        <Box sx={{ overflowX: 'auto' }}>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Ocorrência</TableCell>
-                <TableCell>Destinatários</TableCell>
-                <TableCell>Assunto</TableCell>
-                <TableCell>Erro</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell align="right">Ações</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id} hover>
-                  <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                    {formatAdminDateTime(item.occurredAt)}
-                  </TableCell>
-                  <TableCell sx={{ minWidth: 220 }}>
-                    <Typography variant="body2">
-                      {formatEmailAddressList(item.to)}
-                    </Typography>
-                    {item.cc?.length ? (
-                      <Typography variant="caption" color="text.secondary">
-                        Cc: {formatEmailAddressList(item.cc)}
-                      </Typography>
-                    ) : null}
-                  </TableCell>
-                  <TableCell sx={{ minWidth: 220 }}>{item.subject}</TableCell>
-                  <TableCell sx={{ minWidth: 280 }}>
-                    <Typography variant="body2" color="error.main">
-                      {item.errorMessage}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      size="small"
-                      color={item.status === 'OPEN' ? 'error' : 'success'}
-                      label={item.status === 'OPEN' ? 'Aberta' : 'Verificada'}
-                    />
-                    {item.resolvedAt ? (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: 'block', mt: 0.5 }}
-                      >
-                        {formatAdminDateTime(item.resolvedAt)}
-                      </Typography>
-                    ) : null}
-                  </TableCell>
-                  <TableCell align="right">
-                    {item.status === 'OPEN' ? (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<CheckCircleRoundedIcon />}
-                        disabled={resolveFailure.isPending}
-                        onClick={() => {
-                          void handleResolve(item);
-                        }}
-                      >
-                        Verificada
-                      </Button>
-                    ) : (
-                      '-'
-                    )}
-                  </TableCell>
+        <Box>
+          <AdminTableScroll minWidth={1040}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Ocorrência</TableCell>
+                  <TableCell>Destinatários</TableCell>
+                  <TableCell>Assunto</TableCell>
+                  <TableCell>Erro</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Ações</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHead>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id} hover>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      {formatAdminDateTime(item.occurredAt)}
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 220 }}>
+                      <Typography variant="body2">
+                        {formatEmailAddressList(item.to)}
+                      </Typography>
+                      {item.cc?.length ? (
+                        <Typography variant="caption" color="text.secondary">
+                          Cc: {formatEmailAddressList(item.cc)}
+                        </Typography>
+                      ) : null}
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 220 }}>{item.subject}</TableCell>
+                    <TableCell sx={{ minWidth: 280 }}>
+                      <Typography variant="body2" color="error.main">
+                        {item.errorMessage}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        color={item.status === 'OPEN' ? 'error' : 'success'}
+                        label={item.status === 'OPEN' ? 'Aberta' : 'Verificada'}
+                      />
+                      {item.resolvedAt ? (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ display: 'block', mt: 0.5 }}
+                        >
+                          {formatAdminDateTime(item.resolvedAt)}
+                        </Typography>
+                      ) : null}
+                    </TableCell>
+                    <TableCell align="right">
+                      {item.status === 'OPEN' ? (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<CheckCircleRoundedIcon />}
+                          disabled={resolveFailure.isPending}
+                          onClick={() => {
+                            void handleResolve(item);
+                          }}
+                        >
+                          Verificada
+                        </Button>
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </AdminTableScroll>
           <TablePagination
             component="div"
             count={Number(failuresQuery.data?.total ?? 0)}
@@ -4020,7 +4037,11 @@ export function AdminPage() {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', lg: '280px minmax(0, 1fr)' },
+              gridTemplateColumns: {
+                xs: '1fr',
+                lg: '250px minmax(0, 1fr)',
+                xl: '280px minmax(0, 1fr)',
+              },
               gap: { xs: 2, lg: 2.5 },
               alignItems: 'start',
             }}
@@ -4090,7 +4111,7 @@ export function AdminPage() {
               </Stack>
             </Paper>
 
-            <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ minWidth: 0, width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
               {canViewSmifLocalities && currentTab === 'localities' && (
                 <LocalitiesTab />
               )}

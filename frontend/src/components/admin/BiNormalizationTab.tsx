@@ -47,6 +47,7 @@ import {
 import { parseApiError } from "../../app/apiErrors";
 import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from "../../app/roleAccess";
 import { useToast } from "../../app/toast";
+import { AdminTableScroll } from "./AdminTableScroll";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { ErrorState } from "../states/ErrorState";
 import { SkeletonState } from "../states/SkeletonState";
@@ -390,110 +391,112 @@ export function BiNormalizationTab() {
 
         <Card variant="outlined" sx={{ borderRadius: 3 }}>
           <CardContent>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Fonte</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell align="right">Cobertura</TableCell>
-                  <TableCell align="right">Prontas</TableCell>
-                  <TableCell align="right">Sem sugestão</TableCell>
-                  <TableCell align="right">Ação</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {sources.map((source: any) => {
-                  const reviewSource = reviewSources.find(
-                    (item: any) => item.sourceType === source.sourceType,
-                  );
-                  const coverage =
-                    typeof source?.coveragePercent === "number"
-                      ? Number(source.coveragePercent)
-                      : null;
-                  const supported = Boolean(source?.supported);
-                  return (
-                    <TableRow
-                      key={String(source?.sourceType ?? source?.label)}
-                      hover
-                    >
-                      <TableCell sx={{ minWidth: 240 }}>
-                        <Typography variant="subtitle2" fontWeight={700}>
-                          {String(source?.label ?? "Fonte BI")}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {String(source?.description ?? "")}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={supported ? "Suportada" : "Não aplicável"}
-                          color={supported ? "primary" : "default"}
-                          variant={supported ? "filled" : "outlined"}
-                        />
-                      </TableCell>
-                      <TableCell align="right" sx={{ minWidth: 180 }}>
-                        <Stack spacing={0.8} alignItems="stretch">
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            justifyContent="flex-end"
-                            alignItems="center"
-                          >
-                            <Typography variant="subtitle2" fontWeight={700}>
-                              {coverage === null
-                                ? "N/A"
-                                : `${coverage.toFixed(1)}%`}
-                            </Typography>
+            <AdminTableScroll minWidth={920}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Fonte</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Cobertura</TableCell>
+                    <TableCell align="right">Prontas</TableCell>
+                    <TableCell align="right">Sem sugestão</TableCell>
+                    <TableCell align="right">Ação</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sources.map((source: any) => {
+                    const reviewSource = reviewSources.find(
+                      (item: any) => item.sourceType === source.sourceType,
+                    );
+                    const coverage =
+                      typeof source?.coveragePercent === "number"
+                        ? Number(source.coveragePercent)
+                        : null;
+                    const supported = Boolean(source?.supported);
+                    return (
+                      <TableRow
+                        key={String(source?.sourceType ?? source?.label)}
+                        hover
+                      >
+                        <TableCell sx={{ minWidth: 240 }}>
+                          <Typography variant="subtitle2" fontWeight={700}>
+                            {String(source?.label ?? "Fonte BI")}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {String(source?.description ?? "")}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={supported ? "Suportada" : "Não aplicável"}
+                            color={supported ? "primary" : "default"}
+                            variant={supported ? "filled" : "outlined"}
+                          />
+                        </TableCell>
+                        <TableCell align="right" sx={{ minWidth: 180 }}>
+                          <Stack spacing={0.8} alignItems="stretch">
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              justifyContent="flex-end"
+                              alignItems="center"
+                            >
+                              <Typography variant="subtitle2" fontWeight={700}>
+                                {coverage === null
+                                  ? "N/A"
+                                  : `${coverage.toFixed(1)}%`}
+                              </Typography>
+                              {coverage !== null ? (
+                                <Chip
+                                  size="small"
+                                  color={resolveCoverageColor(coverage) as any}
+                                  label={
+                                    coverage >= 80
+                                      ? "Alta"
+                                      : coverage >= 50
+                                        ? "Parcial"
+                                        : "Baixa"
+                                  }
+                                />
+                              ) : null}
+                            </Stack>
                             {coverage !== null ? (
-                              <Chip
-                                size="small"
+                              <LinearProgress
+                                variant="determinate"
+                                value={Math.max(0, Math.min(100, coverage))}
                                 color={resolveCoverageColor(coverage) as any}
-                                label={
-                                  coverage >= 80
-                                    ? "Alta"
-                                    : coverage >= 50
-                                      ? "Parcial"
-                                      : "Baixa"
-                                }
+                                sx={{ height: 8, borderRadius: 999 }}
                               />
                             ) : null}
                           </Stack>
-                          {coverage !== null ? (
-                            <LinearProgress
-                              variant="determinate"
-                              value={Math.max(0, Math.min(100, coverage))}
-                              color={resolveCoverageColor(coverage) as any}
-                              sx={{ height: 8, borderRadius: 999 }}
-                            />
-                          ) : null}
-                        </Stack>
-                      </TableCell>
-                      <TableCell align="right">
-                        {Number(reviewSource?.readyRecords ?? 0)}
-                      </TableCell>
-                      <TableCell align="right">
-                        {Number(reviewSource?.unresolvedRecords ?? 0)}
-                      </TableCell>
-                      <TableCell align="right">
-                        <Button
-                          size="small"
-                          onClick={() =>
-                            setExpandedSource((current) =>
-                              current === source.sourceType
-                                ? false
-                                : source.sourceType,
-                            )
-                          }
-                        >
-                          Revisar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                        <TableCell align="right">
+                          {Number(reviewSource?.readyRecords ?? 0)}
+                        </TableCell>
+                        <TableCell align="right">
+                          {Number(reviewSource?.unresolvedRecords ?? 0)}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Button
+                            size="small"
+                            onClick={() =>
+                              setExpandedSource((current) =>
+                                current === source.sourceType
+                                  ? false
+                                  : source.sourceType,
+                              )
+                            }
+                          >
+                            Revisar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </AdminTableScroll>
           </CardContent>
         </Card>
 
@@ -606,7 +609,7 @@ export function BiNormalizationTab() {
                           <CardContent>
                             <Stack spacing={1.2}>
                               <Stack
-                                direction={{ xs: "column", lg: "row" }}
+                                direction={{ xs: "column", xl: "row" }}
                                 justifyContent="space-between"
                                 spacing={1.2}
                               >
@@ -706,10 +709,10 @@ export function BiNormalizationTab() {
                               </Stack>
 
                               <Stack
-                                direction={{ xs: "column", lg: "row" }}
+                                direction={{ xs: "column", xl: "row" }}
                                 spacing={1.2}
                                 justifyContent="space-between"
-                                alignItems={{ xs: "stretch", lg: "center" }}
+                                alignItems={{ xs: "stretch", xl: "center" }}
                               >
                                 <Box>
                                   <Typography
