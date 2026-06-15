@@ -28,6 +28,14 @@ import type { RbacUser } from '../rbac/rbac.types';
 import { BiPdfService } from './bi-pdf.service';
 import { BiRecruitsService } from './bi-recruits.service';
 
+function parseTruthyBodyFlag(value: unknown) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  return typeof value === 'string'
+    ? ['1', 'true', 'sim', 'yes'].includes(value.toLowerCase().trim())
+    : false;
+}
+
 @Controller('bi/recruits')
 @UseGuards(JwtAuthGuard, RbacGuard)
 export class BiRecruitsController {
@@ -214,6 +222,7 @@ export class BiRecruitsController {
   importResponses(
     @UploadedFile() file: Express.Multer.File,
     @Body('replace') replace: string | undefined,
+    @Body('preview') preview: string | undefined,
     @Req() req: Request & { fileValidationError?: string },
     @CurrentUser() user: RbacUser,
   ) {
@@ -226,13 +235,25 @@ export class BiRecruitsController {
       throwError('VALIDATION_ERROR', { reason: 'FILE_REQUIRED' });
     }
 
-    const replaceAll =
-      typeof replace === 'string'
-        ? ['1', 'true', 'sim', 'yes'].includes(replace.toLowerCase().trim())
-        : false;
-
     return this.biRecruits.importResponses(file, user, {
-      replaceAll,
+      replaceAll: parseTruthyBodyFlag(replace),
+      previewOnly: parseTruthyBodyFlag(preview),
+    });
+  }
+
+  @Post('import-api')
+  @RequirePermission('bi', 'upload')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  importResponsesFromApi(
+    @Body('replace') replace: unknown,
+    @Body('preview') preview: unknown,
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertRecruitsAccess(user);
+    return this.biRecruits.importResponsesFromApi(user, {
+      replaceAll: parseTruthyBodyFlag(replace),
+      previewOnly: parseTruthyBodyFlag(preview),
     });
   }
 

@@ -5482,6 +5482,33 @@ export function useImportBiRecruits() {
   });
 }
 
+export function useImportBiRecruitsApi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: BiConfirmedApiImportArgs) =>
+      (
+        await api.post("/bi/recruits/import-api", {
+          replace: args.replace,
+        })
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["biRecruits"] });
+    },
+  });
+}
+
+export function usePreviewImportBiRecruitsApi() {
+  return useMutation({
+    mutationFn: async (args: BiApiImportMutationArgs) =>
+      (
+        await api.post("/bi/recruits/import-api", {
+          replace: args.replace,
+          preview: true,
+        })
+      ).data,
+  });
+}
+
 export function useDeleteBiRecruitsResponses() {
   const qc = useQueryClient();
   return useMutation({

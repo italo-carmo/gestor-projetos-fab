@@ -41,10 +41,11 @@ import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { CipavdReportsPage } from "./pages/CipavdReportsPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
-import { can, canAccessAdminCatalog } from "./app/rbac";
+import { can } from "./app/rbac";
 import { PageEntryGate } from "./components/states/PageEntryGate";
 import {
   hasAnyRole,
+  canAccessAdministration,
   resolveHomePath,
   ROLE_COMGEP,
   ROLE_COORDENACAO_CIPAVD,
@@ -586,7 +587,7 @@ function App() {
                   path="/admin"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => canAccessAdminCatalog(user)}
+                      allow={(user) => canAccessAdministration(user)}
                     >
                       <AdminPage />
                     </RequireRoleAccess>

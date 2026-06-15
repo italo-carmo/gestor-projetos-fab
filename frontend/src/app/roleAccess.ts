@@ -53,6 +53,12 @@ export function hasAnyRole(user: MePayload | undefined, roleNames: string[]) {
   return roleNames.some((roleName) => hasRole(user, roleName));
 }
 
+export function canAccessAdministration(user: MePayload | undefined) {
+  return (
+    canAccessAdminCatalog(user) || hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])
+  );
+}
+
 export function isNationalCommissionMember(user: MePayload | undefined) {
   return hasAnyRole(user, [
     ROLE_COORDENACAO_CIPAVD,
@@ -125,7 +131,7 @@ export function resolveHomePath(user: MePayload | undefined) {
     can(user, "roles", "view") ||
     can(user, "roles", "permissions");
   const canSeeAudit = can(user, "audit_logs", "view");
-  const canSeeAdminCatalog = canAccessAdminCatalog(user);
+  const canSeeAdministration = canAccessAdministration(user);
 
   if (isCpcaProfile) {
     const cpcaHomeCandidates: Array<[boolean, string]> = [
@@ -178,7 +184,7 @@ export function resolveHomePath(user: MePayload | undefined) {
     [canSeeCpcaPresidentApprovals, "/cpca-president-approvals"],
     [canSeeAdminRbac, "/admin/rbac"],
     [canSeeAudit, "/audit"],
-    [canSeeAdminCatalog, "/admin"],
+    [canSeeAdministration, "/admin"],
   ];
 
   for (const [allowed, path] of homeCandidates) {

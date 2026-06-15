@@ -30,7 +30,10 @@ type RecruitsFilters = {
 
 type ImportRecruitsOptions = {
   replaceAll?: boolean;
+  previewOnly?: boolean;
 };
+
+type ImportRecruitsApiOptions = ImportRecruitsOptions;
 
 type RecruitsCardSettingInput = {
   title?: string;
@@ -38,6 +41,7 @@ type RecruitsCardSettingInput = {
 };
 
 type ParsedRecruitsRow = {
+  apiId: number | null;
   submittedAt: Date | null;
   education: string | null;
   gender: string | null;
@@ -54,6 +58,45 @@ type ParsedRecruitsRow = {
   sourceHash: string;
 };
 
+type RecruitsApiSchemaEntry = {
+  sheet?: string;
+  index?: number;
+  key?: string;
+  header?: string;
+};
+
+type RecruitsApiPage = {
+  ok?: boolean;
+  api_version?: string;
+  recurso?: string;
+  atualizado_em?: string;
+  since_id?: number | string;
+  limit?: number | string;
+  count?: number | string;
+  total_disponivel_no_filtro?: number | string;
+  has_more?: boolean;
+  next_since_id?: number | string;
+  last_id_available?: number | string;
+  sheets?: string[];
+  schema?: RecruitsApiSchemaEntry[];
+  dados?: unknown[];
+};
+
+type RecruitsApiFetchResult = {
+  pages: RecruitsApiPage[];
+  records: unknown[];
+  sync: {
+    sinceId: number;
+    nextSinceId: number | null;
+    lastIdAvailable: number | null;
+    hasMore: boolean;
+    fetchedRows: number;
+    pageCount: number;
+    updatedAt: string | null;
+    sheets: string[];
+  };
+};
+
 const YES_NO_PARTIAL_OPTIONS = ['Sim', 'Parcialmente', 'Não'] as const;
 const WILLINGNESS_OPTIONS = [
   'Seguro(a)',
@@ -68,6 +111,23 @@ const ENLISTMENT_DECISION_OPTIONS = [
   'Cumprimento do serviço obrigatório',
   'Estabilidade financeira',
 ] as const;
+
+const RECRUITS_DEFAULT_API_URL =
+  'https://script.google.com/macros/s/AKfycbxtSThQ4H61PTXXGf_x1dWTRpIu0porynRwph85dN71sH98ZsU22-Bfzo0UzZcXAXQiKQ/exec?token=api_b0233bf0798f4a1a83e6671f563ab0d45c871c38c59047188263e70149cd041f';
+
+const RECRUITS_API_KEYS = {
+  submittedAt: 'carimbo_de_data_hora',
+  education: 'escolaridade',
+  gender: 'genero',
+  identifyHarassment: 'identifica_assedio',
+  conductLimits: 'compreende_limites_conduta',
+  knowOrientation: 'sabe_recorrer_orientacao',
+  knowReportProcess: 'sabe_registrar_ocorrencia',
+  willingnessOrientation: 'disposicao_procurar_orientacao',
+  willingnessReport: 'disposicao_registrar_ocorrencia',
+  enlistmentDecisionInfluenceText: 'influencia_ingresso_fab',
+  suggestionComment: 'sugestao_comentario',
+} as const;
 
 const RECRUITS_CARD_IDS = new Set([
   'page-header',
@@ -109,6 +169,7 @@ export class BiRecruitsService {
     const format =
       extension === 'csv' ? BiImportFormat.CSV : BiImportFormat.XLSX;
     const replaceAll = options.replaceAll === true;
+    const previewOnly = options.previewOnly === true;
 
     const { sheetName, rows } = this.extractRows(file.buffer, format);
     if (rows.length === 0) {
@@ -130,6 +191,14 @@ export class BiRecruitsService {
         continue;
       }
       parsed.push(parsedRow.value);
+    }
+
+    if (previewOnly) {
+      return {
+        previewOnly: true,
+        importMode: replaceAll ? 'REPLACE' : 'APPEND',
+        preview: this.previewRows(parsed),
+      };
     }
 
     if (replaceAll) {
@@ -158,6 +227,7 @@ export class BiRecruitsService {
       const created = await this.prisma.biRecruitsResponse.createMany({
         data: parsed.map((item) => ({
           batchId: batch.id,
+          apiId: item.apiId,
           submittedAt: item.submittedAt,
           education: item.education,
           gender: item.gender,
@@ -200,16 +270,112 @@ export class BiRecruitsService {
 
     return {
       batch: updatedBatch,
-      preview: parsed.slice(0, 5).map((item) => ({
-        submittedAt: item.submittedAt,
-        education: item.education,
-        gender: item.gender,
-        identifyHarassment: item.identifyHarassment,
-        knowOrientation: item.knowOrientation,
-        knowReportProcess: item.knowReportProcess,
-        willingnessReport: item.willingnessReport,
-      })),
+      preview: this.previewRows(parsed),
       importMode: replaceAll ? 'REPLACE' : 'APPEND',
+    };
+  }
+
+  async importResponsesFromApi(
+    user?: RbacUser,
+    options: ImportRecruitsApiOptions = {},
+  ) {
+    const replaceAll = options.replaceAll === true;
+    const previewOnly = options.previewOnly === true;
+    const sinceId = replaceAll ? 0 : await this.resolveLastImportedApiId();
+    const apiResult = await this.fetchApiRecords(sinceId);
+    const { parsed, invalidRows } = this.parseApiRecords(apiResult.records);
+
+    if (previewOnly) {
+      return {
+        previewOnly: true,
+        importMode: replaceAll ? 'REPLACE' : 'INCREMENTAL',
+        sync: apiResult.sync,
+        preview: this.previewRows(parsed),
+      };
+    }
+
+    if (replaceAll) {
+      await this.prisma.$transaction([
+        this.prisma.biRecruitsResponse.deleteMany(),
+        this.prisma.biRecruitsImportBatch.deleteMany(),
+      ]);
+    }
+
+    const importModel = (this.prisma as any).biRecruitsImportBatch;
+    const responseModel = (this.prisma as any).biRecruitsResponse;
+
+    const batch = await importModel.create({
+      data: {
+        fileName: 'Google Sheets API - Recrutas',
+        format: BiImportFormat.API,
+        sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
+        totalRows: parsed.length,
+        insertedRows: 0,
+        duplicateRows: 0,
+        invalidRows,
+        importedById: user?.id ?? null,
+        apiSinceId: apiResult.sync.sinceId,
+        apiNextSinceId: apiResult.sync.nextSinceId,
+        apiLastIdAvailable: apiResult.sync.lastIdAvailable,
+        apiHasMore: apiResult.sync.hasMore,
+        apiUpdatedAt: apiResult.sync.updatedAt
+          ? new Date(apiResult.sync.updatedAt)
+          : null,
+      },
+    });
+
+    let insertedRows = 0;
+
+    if (parsed.length > 0) {
+      const created = await responseModel.createMany({
+        data: parsed.map((item) => ({
+          batchId: batch.id,
+          apiId: item.apiId,
+          submittedAt: item.submittedAt,
+          education: item.education,
+          gender: item.gender,
+          identifyHarassment: item.identifyHarassment,
+          conductLimits: item.conductLimits,
+          knowOrientation: item.knowOrientation,
+          knowReportProcess: item.knowReportProcess,
+          willingnessOrientation: item.willingnessOrientation,
+          willingnessReport: item.willingnessReport,
+          enlistmentDecisionInfluenceText: item.enlistmentDecisionInfluenceText,
+          suggestionComment: item.suggestionComment,
+          rawPayload: item.rawPayload,
+          sourceRow: item.sourceRow,
+          sourceHash: item.sourceHash,
+        })),
+        skipDuplicates: true,
+      });
+
+      insertedRows = created.count;
+    }
+
+    const duplicateRows = parsed.length - insertedRows;
+
+    const updatedBatch = await importModel.update({
+      where: { id: batch.id },
+      data: {
+        insertedRows,
+        duplicateRows,
+      },
+      include: {
+        importedBy: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    await this.normalization.rebuild({
+      sourceType: BI_NORMALIZATION_SOURCE_TYPES.RECRUITS,
+    });
+
+    return {
+      batch: updatedBatch,
+      sync: apiResult.sync,
+      preview: this.previewRows(parsed),
+      importMode: replaceAll ? 'REPLACE' : 'INCREMENTAL',
     };
   }
 
@@ -608,6 +774,21 @@ export class BiRecruitsService {
     };
   }
 
+  private previewRows(rows: ParsedRecruitsRow[]) {
+    return rows.slice(0, 5).map((item) => ({
+      apiId: item.apiId,
+      submittedAt: item.submittedAt,
+      education: item.education,
+      gender: item.gender,
+      identifyHarassment: item.identifyHarassment,
+      knowOrientation: item.knowOrientation,
+      knowReportProcess: item.knowReportProcess,
+      willingnessReport: item.willingnessReport,
+      enlistmentDecisionInfluenceText: item.enlistmentDecisionInfluenceText,
+      suggestionComment: item.suggestionComment,
+    }));
+  }
+
   private buildAvailableFilters(
     rows: Array<{
       education: string | null;
@@ -921,6 +1102,308 @@ export class BiRecruitsService {
     return date;
   }
 
+  private async resolveLastImportedApiId() {
+    const responseModel = (this.prisma as any).biRecruitsResponse;
+    const latest = await responseModel.findFirst({
+      where: { apiId: { not: null } },
+      orderBy: { apiId: 'desc' },
+      select: { apiId: true },
+    });
+
+    return latest?.apiId ?? 0;
+  }
+
+  private async fetchApiRecords(
+    initialSinceId: number,
+  ): Promise<RecruitsApiFetchResult> {
+    const pages: RecruitsApiPage[] = [];
+    const records: unknown[] = [];
+    const seenSinceIds = new Set<number>();
+    const configuredMaxPages =
+      this.parsePositiveInteger(process.env.BI_RECRUITS_API_MAX_PAGES) ?? 100;
+    const maxPages = configuredMaxPages > 0 ? configuredMaxPages : 100;
+
+    const sinceId = Math.max(0, Math.floor(initialSinceId));
+    let nextSinceId: number | null = sinceId;
+
+    while (nextSinceId !== null) {
+      if (seenSinceIds.has(nextSinceId)) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'recruits_api_sync_loop_detected',
+          sinceId: nextSinceId,
+        });
+      }
+      if (pages.length >= maxPages) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'recruits_api_max_pages_exceeded',
+          maxPages,
+        });
+      }
+
+      seenSinceIds.add(nextSinceId);
+      const page = await this.fetchApiPage(nextSinceId);
+      pages.push(page);
+      records.push(...(page.dados ?? []));
+
+      if (!page.has_more) {
+        nextSinceId = null;
+        break;
+      }
+
+      const parsedNext = this.parsePositiveInteger(page.next_since_id);
+      if (parsedNext === null || parsedNext <= nextSinceId) {
+        throwError('VALIDATION_ERROR', {
+          reason: 'recruits_api_invalid_next_since_id',
+          sinceId: nextSinceId,
+          nextSinceId: page.next_since_id,
+        });
+      }
+      nextSinceId = parsedNext;
+    }
+
+    const lastPage = pages[pages.length - 1] ?? null;
+    const updatedAt = this.parseApiDate(
+      [...pages].reverse().find((page) => page.atualizado_em)?.atualizado_em,
+    );
+    const sheets = [
+      ...new Set(
+        pages.flatMap((page) =>
+          Array.isArray(page.sheets) ? page.sheets.filter(Boolean) : [],
+        ),
+      ),
+    ];
+
+    return {
+      pages,
+      records,
+      sync: {
+        sinceId,
+        nextSinceId:
+          this.parsePositiveInteger(lastPage?.next_since_id) ??
+          this.maxApiIdFromRecords(records),
+        lastIdAvailable:
+          this.parsePositiveInteger(lastPage?.last_id_available) ??
+          this.maxApiIdFromRecords(records),
+        hasMore: Boolean(lastPage?.has_more),
+        fetchedRows: records.length,
+        pageCount: pages.length,
+        updatedAt: updatedAt?.toISOString() ?? null,
+        sheets,
+      },
+    };
+  }
+
+  private async fetchApiPage(sinceId: number): Promise<RecruitsApiPage> {
+    const url = this.buildApiUrl(sinceId);
+    const timeoutMs =
+      this.parsePositiveInteger(process.env.BI_RECRUITS_API_TIMEOUT_MS) ??
+      30_000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } catch (error) {
+      throwError('VALIDATION_ERROR', {
+        reason:
+          error instanceof Error && error.name === 'AbortError'
+            ? 'recruits_api_timeout'
+            : 'recruits_api_request_failed',
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'recruits_api_http_error',
+        status: response.status,
+      });
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throwError('VALIDATION_ERROR', {
+        reason: 'recruits_api_invalid_json',
+      });
+    }
+
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'recruits_api_invalid_payload',
+      });
+    }
+
+    const page = payload as RecruitsApiPage;
+    if (page.ok !== true || !Array.isArray(page.dados)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'recruits_api_unsuccessful_payload',
+      });
+    }
+
+    return page;
+  }
+
+  private buildApiUrl(sinceId: number) {
+    const configuredUrl = String(
+      process.env.BI_RECRUITS_API_URL || RECRUITS_DEFAULT_API_URL,
+    ).trim();
+    if (!configuredUrl) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'recruits_api_url_not_configured',
+      });
+    }
+
+    let url: URL;
+    try {
+      url = new URL(configuredUrl);
+    } catch {
+      throwError('VALIDATION_ERROR', {
+        reason: 'recruits_api_url_invalid',
+      });
+    }
+
+    const token = String(process.env.BI_RECRUITS_API_TOKEN ?? '').trim();
+    if (token) {
+      url.searchParams.set('token', token);
+    }
+    url.searchParams.set('since_id', String(Math.max(0, sinceId)));
+    return url.toString();
+  }
+
+  private parseApiRecords(records: unknown[]) {
+    const parsed: ParsedRecruitsRow[] = [];
+    let invalidRows = 0;
+
+    for (const record of records) {
+      const parsedRow = this.parseApiRecord(record);
+      if (parsedRow?.skip) continue;
+      if (!parsedRow?.value) {
+        invalidRows += 1;
+        continue;
+      }
+      parsed.push(parsedRow.value);
+    }
+
+    return { parsed, invalidRows };
+  }
+
+  private parseApiRecord(
+    record: unknown,
+  ):
+    | { skip: true; value?: undefined }
+    | { skip: false; value: ParsedRecruitsRow | null } {
+    if (!record || typeof record !== 'object' || Array.isArray(record)) {
+      return { skip: false, value: null };
+    }
+
+    const row = record as Record<string, unknown>;
+    const apiId = this.parsePositiveInteger(row.api_id ?? row.id);
+    if (apiId === null) {
+      return { skip: false, value: null };
+    }
+
+    const sourceRow =
+      this.parsePositiveInteger(row.linha) ??
+      this.parsePositiveInteger(row.id) ??
+      apiId;
+
+    const dataRow = [
+      this.cleanApiCell(row[RECRUITS_API_KEYS.submittedAt]),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.education]),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.gender]),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.identifyHarassment]),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.conductLimits]),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.knowOrientation]),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.knowReportProcess]),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.willingnessOrientation]),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.willingnessReport]),
+      this.cleanApiCell(
+        row[RECRUITS_API_KEYS.enlistmentDecisionInfluenceText],
+      ),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.suggestionComment]),
+    ];
+
+    const parsed = this.parseDataRow(
+      dataRow,
+      {
+        submittedAt: 0,
+        education: 1,
+        gender: 2,
+        identifyHarassment: 3,
+        conductLimits: 4,
+        knowOrientation: 5,
+        knowReportProcess: 6,
+        willingnessOrientation: 7,
+        willingnessReport: 8,
+        enlistmentDecisionInfluenceText: 9,
+        suggestionComment: 10,
+      },
+      sourceRow,
+    );
+
+    if (parsed.skip || !parsed.value) return parsed;
+
+    return {
+      skip: false,
+      value: {
+        ...parsed.value,
+        apiId,
+        rawPayload: row as Prisma.InputJsonValue,
+        sourceHash: this.buildApiSourceHash(apiId),
+      },
+    };
+  }
+
+  private buildApiSourceHash(apiId: number) {
+    return crypto
+      .createHash('sha256')
+      .update(JSON.stringify({ source: 'RECRUITS_API', apiId }))
+      .digest('hex');
+  }
+
+  private maxApiIdFromRecords(records: unknown[]) {
+    let max = 0;
+    for (const record of records) {
+      if (!record || typeof record !== 'object' || Array.isArray(record)) {
+        continue;
+      }
+      const apiId = this.parsePositiveInteger(
+        (record as Record<string, unknown>).api_id ??
+          (record as Record<string, unknown>).id,
+      );
+      if (apiId !== null && apiId > max) max = apiId;
+    }
+    return max || null;
+  }
+
+  private parseApiDate(value: string | null | undefined) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  }
+
+  private parsePositiveInteger(value: unknown) {
+    if (value === null || value === undefined || value === '') return null;
+    const numeric =
+      typeof value === 'number'
+        ? value
+        : Number.parseInt(String(value).trim(), 10);
+    if (!Number.isFinite(numeric) || numeric < 0) return null;
+    return Math.floor(numeric);
+  }
+
+  private cleanApiCell(value: unknown) {
+    if (value === null || value === undefined) return '';
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'boolean') return value ? 'SIM' : 'NAO';
+    return String(value).trim();
+  }
+
   private extractRows(buffer: Buffer, format: BiImportFormat) {
     const workbook = this.readWorkbook(buffer, format);
     const sheetNames = workbook.SheetNames ?? [];
@@ -1192,6 +1675,7 @@ export class BiRecruitsService {
     return {
       skip: false,
       value: {
+        apiId: null,
         submittedAt,
         education,
         gender,

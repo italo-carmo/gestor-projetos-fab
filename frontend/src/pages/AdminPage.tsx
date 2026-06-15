@@ -45,7 +45,7 @@ import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
-import { useCallback, useEffect, useMemo, useState, type ReactNode, type SyntheticEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   useAiSettings,
   useComgepScoringSettings,
@@ -99,7 +99,7 @@ import {
   useUpdateLocality,
   useUpdateEloRole,
 } from '../api/hooks';
-import { can } from '../app/rbac';
+import { can, canAccessAdminCatalog } from '../app/rbac';
 import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from '../app/roleAccess';
 import { normalizeEmailSettingDraft } from '../features/adminUsers';
 import { useToast } from '../app/toast';
@@ -3883,6 +3883,8 @@ export function AdminPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') || 'postos';
   const [currentTab, setCurrentTab] = useState(tabParam);
+  const canViewAdminCatalog = canAccessAdminCatalog(me);
+  const canViewSmifLocalities = can(me, 'localities', 'view') || canViewAdminCatalog;
   const canViewCipavdLocalities = can(me, 'localities_cipavd', 'view');
   const canViewAiSettings = hasAnyRole(me, [ROLE_TI]);
   const canViewEmailSettings = hasAnyRole(me, [ROLE_TI]);
@@ -3891,55 +3893,111 @@ export function AdminPage() {
   const canViewComgepSettings = canViewAiSettings;
   const canViewBiNormalization = hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
 
+  const adminTabGroups = useMemo(
+    () =>
+      [
+        {
+          label: 'Cadastros e estrutura',
+          description: 'Catálogos de apoio e desenho institucional.',
+          items: [
+            canViewSmifLocalities
+              ? { value: 'localities', label: 'Localidades SMIF' }
+              : null,
+            canViewCipavdLocalities
+              ? { value: 'localities-cipavd', label: 'Localidades CIPAVD' }
+              : null,
+            canViewAdminCatalog ? { value: 'postos', label: 'Postos' } : null,
+            canViewAdminCatalog ? { value: 'phases', label: 'Fases' } : null,
+            canViewAdminCatalog
+              ? { value: 'elo-roles', label: 'Papéis de Elo' }
+              : null,
+            canViewAdminCatalog
+              ? {
+                  value: 'institutional-mapping',
+                  label: 'Mapeamento Institucional',
+                }
+              : null,
+          ],
+        },
+        {
+          label: 'Dados e inteligência',
+          description: 'IA, BI, RAG e parâmetros executivos.',
+          items: [
+            canViewBiNormalization
+              ? { value: 'bi-normalization', label: 'Normalização BI' }
+              : null,
+            canViewKnowledgeBases
+              ? { value: 'knowledge-bases', label: 'Bases de Conhecimento' }
+              : null,
+            canViewComgepSettings
+              ? { value: 'comgep-settings', label: 'Configuração COMGEP' }
+              : null,
+            canViewAiSettings
+              ? { value: 'ai-settings', label: 'Configuração IA' }
+              : null,
+          ],
+        },
+        {
+          label: 'Sistema',
+          description: 'Infraestrutura operacional do sistema.',
+          items: [
+            canViewEmailSettings ? { value: 'emails', label: 'E-mails' } : null,
+            canViewEmailFailures
+              ? { value: 'email-failures', label: 'Falhas de E-mail' }
+              : null,
+          ],
+        },
+      ]
+        .map((group) => ({
+          ...group,
+          items: group.items.filter(Boolean) as Array<{
+            value: string;
+            label: string;
+          }>,
+        }))
+        .filter((group) => group.items.length > 0),
+    [
+      canViewAdminCatalog,
+      canViewAiSettings,
+      canViewBiNormalization,
+      canViewCipavdLocalities,
+      canViewComgepSettings,
+      canViewEmailFailures,
+      canViewEmailSettings,
+      canViewKnowledgeBases,
+      canViewSmifLocalities,
+    ],
+  );
+
+  const adminTabs = useMemo(
+    () => adminTabGroups.flatMap((group) => group.items),
+    [adminTabGroups],
+  );
+  const firstAvailableTab = adminTabs[0]?.value ?? 'postos';
+
   useEffect(() => {
     setCurrentTab(tabParam);
   }, [tabParam]);
 
   useEffect(() => {
-    if (currentTab !== 'localities-cipavd' || canViewCipavdLocalities) return;
+    if (adminTabs.length === 0) return;
+    if (adminTabs.some((item) => item.value === currentTab)) return;
     const params = new URLSearchParams(searchParams);
-    params.set('tab', 'postos');
+    params.set('tab', firstAvailableTab);
+    if (currentTab === 'knowledge-bases') {
+      params.delete('baseId');
+      params.delete('docId');
+    }
     setSearchParams(params, { replace: true });
-  }, [canViewCipavdLocalities, currentTab, searchParams, setSearchParams]);
+  }, [
+    adminTabs,
+    currentTab,
+    firstAvailableTab,
+    searchParams,
+    setSearchParams,
+  ]);
 
-  useEffect(() => {
-    if (currentTab !== 'bi-normalization' || canViewBiNormalization) return;
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', 'postos');
-    setSearchParams(params, { replace: true });
-  }, [canViewBiNormalization, currentTab, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    if (currentTab !== 'knowledge-bases' || canViewKnowledgeBases) return;
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', 'postos');
-    params.delete('baseId');
-    params.delete('docId');
-    setSearchParams(params, { replace: true });
-  }, [canViewKnowledgeBases, currentTab, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    if (currentTab !== 'comgep-settings' || canViewComgepSettings) return;
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', 'postos');
-    setSearchParams(params, { replace: true });
-  }, [canViewComgepSettings, currentTab, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    if (currentTab !== 'emails' || canViewEmailSettings) return;
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', 'postos');
-    setSearchParams(params, { replace: true });
-  }, [canViewEmailSettings, currentTab, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    if (currentTab !== 'email-failures' || canViewEmailFailures) return;
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', 'postos');
-    setSearchParams(params, { replace: true });
-  }, [canViewEmailFailures, currentTab, searchParams, setSearchParams]);
-
-  const handleTabChange = (_event: SyntheticEvent, newValue: string) => {
+  const handleAdminTabChange = (newValue: string) => {
     setCurrentTab(newValue);
     const params = new URLSearchParams(searchParams);
     params.set('tab', newValue);
@@ -3959,59 +4017,109 @@ export function AdminPage() {
 
       <Card>
         <CardContent>
-          <Tabs
-            value={currentTab}
-            onChange={handleTabChange}
-            sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: '280px minmax(0, 1fr)' },
+              gap: 2.5,
+              alignItems: 'start',
+            }}
           >
-            <Tab label="Localidades SMIF" value="localities" />
-            {canViewCipavdLocalities && (
-              <Tab label="Localidades CIPAVD" value="localities-cipavd" />
-            )}
-            <Tab label="Postos" value="postos" />
-            <Tab label="Fases" value="phases" />
-            <Tab label="Papéis de Elo" value="elo-roles" />
-            <Tab label="Mapeamento Institucional" value="institutional-mapping" />
-            {canViewBiNormalization && (
-              <Tab label="Normalização BI" value="bi-normalization" />
-            )}
-            {canViewKnowledgeBases && (
-              <Tab label="Bases de Conhecimento" value="knowledge-bases" />
-            )}
-            {canViewComgepSettings && (
-              <Tab label="Configuração COMGEP" value="comgep-settings" />
-            )}
-            {canViewEmailSettings && <Tab label="E-mails" value="emails" />}
-            {canViewEmailFailures && (
-              <Tab label="Falhas de E-mail" value="email-failures" />
-            )}
-            {canViewAiSettings && <Tab label="Configuração IA" value="ai-settings" />}
-          </Tabs>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 1.25,
+                borderRadius: 2.5,
+                bgcolor: '#F8FAFC',
+                position: { lg: 'sticky' },
+                top: { lg: 88 },
+              }}
+            >
+              <Stack spacing={1.5}>
+                {adminTabGroups.map((group) => (
+                  <Box key={group.label}>
+                    <Typography
+                      variant="caption"
+                      fontWeight={800}
+                      sx={{
+                        display: 'block',
+                        px: 1,
+                        color: 'text.secondary',
+                        textTransform: 'uppercase',
+                        letterSpacing: 0.4,
+                      }}
+                    >
+                      {group.label}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{ display: 'block', px: 1, mb: 0.75, color: 'text.secondary' }}
+                    >
+                      {group.description}
+                    </Typography>
+                    <Stack spacing={0.5}>
+                      {group.items.map((item) => {
+                        const selected = currentTab === item.value;
+                        return (
+                          <Button
+                            key={item.value}
+                            fullWidth
+                            variant={selected ? 'contained' : 'text'}
+                            color={selected ? 'primary' : 'inherit'}
+                            onClick={() => handleAdminTabChange(item.value)}
+                            sx={{
+                              justifyContent: 'flex-start',
+                              textTransform: 'none',
+                              minHeight: 38,
+                              borderRadius: 1.6,
+                              px: 1.2,
+                              whiteSpace: 'normal',
+                              textAlign: 'left',
+                              fontWeight: selected ? 800 : 600,
+                              color: selected ? undefined : 'text.primary',
+                            }}
+                          >
+                            {item.label}
+                          </Button>
+                        );
+                      })}
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            </Paper>
 
-          {currentTab === 'localities' && <LocalitiesTab />}
-          {canViewCipavdLocalities && currentTab === 'localities-cipavd' && (
-            <CipavdLocalitiesTab />
-          )}
-          {currentTab === 'postos' && <PostosTab />}
-          {currentTab === 'phases' && <PhasesTab />}
-          {currentTab === 'elo-roles' && <EloRolesTab />}
-          {currentTab === 'institutional-mapping' && <InstitutionalMappingTab />}
-          {canViewBiNormalization && currentTab === 'bi-normalization' && (
-            <BiNormalizationTab />
-          )}
-          {canViewKnowledgeBases && currentTab === 'knowledge-bases' && (
-            <KnowledgeBasesTab />
-          )}
-          {canViewComgepSettings && currentTab === 'comgep-settings' && (
-            <ComgepSettingsTab />
-          )}
-          {canViewEmailSettings && currentTab === 'emails' && (
-            <EmailSettingsTab />
-          )}
-          {canViewEmailFailures && currentTab === 'email-failures' && (
-            <EmailFailuresTab />
-          )}
-          {canViewAiSettings && currentTab === 'ai-settings' && <AiSettingsTab />}
+            <Box sx={{ minWidth: 0 }}>
+              {canViewSmifLocalities && currentTab === 'localities' && (
+                <LocalitiesTab />
+              )}
+              {canViewCipavdLocalities && currentTab === 'localities-cipavd' && (
+                <CipavdLocalitiesTab />
+              )}
+              {canViewAdminCatalog && currentTab === 'postos' && <PostosTab />}
+              {canViewAdminCatalog && currentTab === 'phases' && <PhasesTab />}
+              {canViewAdminCatalog && currentTab === 'elo-roles' && <EloRolesTab />}
+              {canViewAdminCatalog && currentTab === 'institutional-mapping' && (
+                <InstitutionalMappingTab />
+              )}
+              {canViewBiNormalization && currentTab === 'bi-normalization' && (
+                <BiNormalizationTab />
+              )}
+              {canViewKnowledgeBases && currentTab === 'knowledge-bases' && (
+                <KnowledgeBasesTab />
+              )}
+              {canViewComgepSettings && currentTab === 'comgep-settings' && (
+                <ComgepSettingsTab />
+              )}
+              {canViewEmailSettings && currentTab === 'emails' && (
+                <EmailSettingsTab />
+              )}
+              {canViewEmailFailures && currentTab === 'email-failures' && (
+                <EmailFailuresTab />
+              )}
+              {canViewAiSettings && currentTab === 'ai-settings' && <AiSettingsTab />}
+            </Box>
+          </Box>
         </CardContent>
       </Card>
     </Box>

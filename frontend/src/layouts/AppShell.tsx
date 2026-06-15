@@ -52,8 +52,9 @@ import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
-import { can, canAccessAdminCatalog } from "../app/rbac";
+import { can } from "../app/rbac";
 import {
+  canAccessAdministration,
   canonicalRoleName,
   hasAnyRole,
   normalizeRoleName,
@@ -565,7 +566,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, "cpca_coverage", "view");
     }
     if (item.to === "/admin") {
-      return canAccessAdminCatalog(me);
+      return canAccessAdministration(me);
     }
     if (
       item.to === "/admin/rbac" ||

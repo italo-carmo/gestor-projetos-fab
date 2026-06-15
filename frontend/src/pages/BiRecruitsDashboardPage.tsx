@@ -29,9 +29,9 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
-import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import AutoGraphRoundedIcon from "@mui/icons-material/AutoGraphRounded";
 import DownloadRoundedIcon from "@mui/icons-material/DownloadRounded";
+import SyncRoundedIcon from "@mui/icons-material/SyncRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FilterListRoundedIcon from "@mui/icons-material/FilterListRounded";
@@ -56,8 +56,9 @@ import {
   useDeleteBiRecruitsResponses,
   useExportBiDashboardPdf,
   useExportBiExecutiveNotebookPdf,
-  useImportBiRecruits,
+  useImportBiRecruitsApi,
   useMe,
+  usePreviewImportBiRecruitsApi,
   useUpdateBiRecruitsCardSetting,
 } from "../api/hooks";
 import { parseApiError } from "../app/apiErrors";
@@ -75,6 +76,11 @@ import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { countActiveBusinessIntelligenceFilters } from "../features/businessIntelligence";
 import { BI_RECRUITS_QUESTIONS } from "../features/biSurveyQuestions";
+import {
+  getBiRecruitsImportActionLabel,
+  getBiRecruitsImportModeLabel,
+  resolveBiRecruitsImportMode,
+} from "../features/biRecruitsImport";
 import { useSearchParams } from "react-router-dom";
 
 type MetricMode = "PERCENT" | "COUNT";
@@ -201,6 +207,28 @@ type PagedResponse<T> = {
   total: number;
 };
 
+type RecruitsApiImportPreview = {
+  previewOnly?: boolean;
+  importMode?: "INCREMENTAL" | "REPLACE";
+  sync?: {
+    sinceId?: number | null;
+    nextSinceId?: number | null;
+    lastIdAvailable?: number | null;
+    hasMore?: boolean;
+    fetchedRows?: number;
+    pageCount?: number;
+    updatedAt?: string | null;
+    sheets?: string[];
+  };
+  preview?: Array<{
+    apiId?: number | null;
+    submittedAt?: string | null;
+    education?: string | null;
+    gender?: string | null;
+    willingnessReport?: string | null;
+  }>;
+};
+
 type DistributionCardProps = {
   cardId: string;
   title: string;
@@ -269,9 +297,9 @@ const FIXED_CARD_DEFAULTS: Record<string, EditableCardText> = {
       "Painel estratégico da Pesquisa de Percepção Institucional com foco em leitura rápida para decisão de comando.",
   },
   "panel-ingestion": {
-    title: "Ingestão de base CSV/XLSX",
+    title: "Sincronização via API",
     description:
-      "Atualize o BI de Recrutas com a planilha oficial e escolha entre anexar ou substituir toda a base.",
+      "Atualize o BI de Recrutas a partir da API do formulário oficial, em modo incremental ou com base zerada.",
   },
   "panel-filters": {
     title: "Filtros analíticos",
@@ -547,8 +575,9 @@ export function BiRecruitsDashboardPage() {
     Boolean(responseIdFromUrl),
   );
   const [notebookDialogOpen, setNotebookDialogOpen] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [replaceOnImport, setReplaceOnImport] = useState(true);
+  const [replaceOnImport, setReplaceOnImport] = useState(false);
+  const [apiImportPreview, setApiImportPreview] =
+    useState<RecruitsApiImportPreview | null>(null);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
@@ -612,7 +641,8 @@ export function BiRecruitsDashboardPage() {
     pageSize: 25,
   });
   const importsQuery = useBiRecruitsImports({ page: 1, pageSize: 8 });
-  const importMutation = useImportBiRecruits();
+  const importMutation = useImportBiRecruitsApi();
+  const previewImportMutation = usePreviewImportBiRecruitsApi();
   const deleteResponsesMutation = useDeleteBiRecruitsResponses();
   const exportPdfMutation = useExportBiDashboardPdf(
     "/bi/recruits/dashboard/pdf",
@@ -640,6 +670,7 @@ export function BiRecruitsDashboardPage() {
 
   const canUpload = can(me, "bi", "upload");
   const canDelete = can(me, "bi", "delete");
+  const importMode = resolveBiRecruitsImportMode(replaceOnImport);
 
   const getDefaultCardText = (cardId: string): EditableCardText => {
     return (
@@ -771,30 +802,41 @@ export function BiRecruitsDashboardPage() {
   };
 
   const handleImport = async () => {
-    if (!file) {
+    try {
+      const result = (await previewImportMutation.mutateAsync({
+        replace: replaceOnImport,
+      })) as RecruitsApiImportPreview;
+      setApiImportPreview(result);
+    } catch (error) {
+      const payload = parseApiError(error);
       toast.push({
-        message: "Selecione um CSV/XLSX para importar.",
-        severity: "warning",
+        message: payload.message ?? "Falha ao sincronizar dados da API.",
+        severity: "error",
       });
-      return;
     }
+  };
 
+  const closeApiImportPreview = () => {
+    setApiImportPreview(null);
+  };
+
+  const confirmApiImport = async () => {
     try {
       const result = await importMutation.mutateAsync({
-        file,
         replace: replaceOnImport,
       });
-      setFile(null);
+      closeApiImportPreview();
       toast.push({
         message:
-          `Importação concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
-          `Duplicados: ${result?.batch?.duplicateRows ?? 0}. Inválidos: ${result?.batch?.invalidRows ?? 0}.`,
+          `Sincronização concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
+          `Duplicados: ${result?.batch?.duplicateRows ?? 0}. Inválidos: ${result?.batch?.invalidRows ?? 0}. ` +
+          `Buscados na API: ${result?.sync?.fetchedRows ?? 0}.`,
         severity: "success",
       });
     } catch (error) {
       const payload = parseApiError(error);
       toast.push({
-        message: payload.message ?? "Falha ao importar arquivo.",
+        message: payload.message ?? "Falha ao sincronizar dados da API.",
         severity: "error",
       });
     }
@@ -1099,17 +1141,15 @@ export function BiRecruitsDashboardPage() {
       <BiCollapsibleSection
         title={ingestionPanelText.title}
         description={ingestionPanelText.description}
-        icon={<UploadFileRoundedIcon fontSize="small" />}
+        icon={<SyncRoundedIcon fontSize="small" />}
         accentColor={RC_PALETTE.primary}
         summary={
           <Chip
             size="small"
             label={
-              file
-                ? "Arquivo pronto"
-                : dashboard.latestImport?.fileName
-                  ? "Base atual disponível"
-                  : "Sem importação"
+              dashboard.latestImport?.fileName
+                ? "Base atual disponível"
+                : "Sem importação"
             }
             variant="outlined"
             sx={{
@@ -1139,60 +1179,24 @@ export function BiRecruitsDashboardPage() {
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 <Button
                   size="small"
-                  variant="outlined"
-                  startIcon={<DownloadRoundedIcon />}
-                  component="a"
-                  href="/templates/bi-recruits-template.csv"
-                  download
-                  sx={{
-                    borderColor: alpha(RC_PALETTE.primary, 0.45),
-                    color: RC_PALETTE.primary,
-                    "&:hover": {
-                      borderColor: RC_PALETTE.primary,
-                      bgcolor: alpha(RC_PALETTE.primary, 0.08),
-                    },
-                  }}
-                >
-                  Baixar template
-                </Button>
-                <Button
-                  component="label"
-                  size="small"
-                  variant="outlined"
-                  startIcon={<UploadFileRoundedIcon />}
-                  disabled={!canUpload}
-                  sx={{
-                    borderColor: alpha(RC_PALETTE.primary, 0.45),
-                    color: RC_PALETTE.primary,
-                    "&:hover": {
-                      borderColor: RC_PALETTE.primary,
-                      bgcolor: alpha(RC_PALETTE.primary, 0.08),
-                    },
-                  }}
-                >
-                  Selecionar arquivo
-                  <input
-                    hidden
-                    type="file"
-                    accept=".csv,.xlsx,.xls"
-                    onChange={(event) => {
-                      const selected = event.target.files?.[0] ?? null;
-                      setFile(selected);
-                    }}
-                  />
-                </Button>
-
-                <Button
-                  size="small"
                   variant="contained"
+                  startIcon={<SyncRoundedIcon />}
                   onClick={handleImport}
-                  disabled={!canUpload || !file || importMutation.isPending}
+                  disabled={
+                    !canUpload ||
+                    importMutation.isPending ||
+                    previewImportMutation.isPending
+                  }
                   sx={{
                     bgcolor: RC_PALETTE.accent,
                     "&:hover": { bgcolor: "#D0761D" },
                   }}
                 >
-                  {importMutation.isPending ? "Importando..." : "Importar"}
+                  {previewImportMutation.isPending
+                    ? "Analisando..."
+                    : importMutation.isPending
+                      ? "Importando..."
+                      : getBiRecruitsImportActionLabel(importMode)}
                 </Button>
               </Stack>
 
@@ -1210,7 +1214,7 @@ export function BiRecruitsDashboardPage() {
                 >
                   <Chip
                     size="small"
-                    label={`Arquivo: ${file?.name ?? "Nenhum"}`}
+                    label={`Modo: ${getBiRecruitsImportModeLabel(importMode)}`}
                     variant="outlined"
                     sx={{
                       borderColor: alpha(RC_PALETTE.primary, 0.35),
@@ -1227,7 +1231,7 @@ export function BiRecruitsDashboardPage() {
                         disabled={!canUpload}
                       />
                     }
-                    label="Substituir base atual"
+                    label="Zerar base antes de importar"
                     sx={{
                       m: 0,
                       ".MuiFormControlLabel-label": {
@@ -1306,7 +1310,7 @@ export function BiRecruitsDashboardPage() {
               {dashboard.latestImport ? (
                 <Stack spacing={0.6} mt={1}>
                   <Typography variant="body2" sx={{ color: RC_PALETTE.muted }}>
-                    Arquivo: <strong>{dashboard.latestImport.fileName}</strong>
+                    Fonte: <strong>{dashboard.latestImport.fileName}</strong>
                   </Typography>
                   <Typography variant="body2" sx={{ color: RC_PALETTE.muted }}>
                     Data:{" "}
@@ -2272,6 +2276,23 @@ export function BiRecruitsDashboardPage() {
         accentColor={RC_PALETTE.primary}
         currentPanelKey="recruits"
         currentPanelFilters={dashboardFilters}
+      />
+
+      <ConfirmDialog
+        open={apiImportPreview !== null}
+        title="Confirmar sincronização"
+        message={`A prévia da API encontrou ${apiImportPreview?.sync?.fetchedRows ?? 0} registro(s) para o modo ${getBiRecruitsImportModeLabel(importMode).toLowerCase()}. Deseja confirmar a importação?`}
+        highlightText={`since_id: ${apiImportPreview?.sync?.sinceId ?? 0} | próximo: ${apiImportPreview?.sync?.nextSinceId ?? "-"} | páginas: ${apiImportPreview?.sync?.pageCount ?? 0}`}
+        note={
+          replaceOnImport
+            ? "A base atual de Recrutas será zerada antes da gravação dos registros retornados pela API."
+            : "Somente registros com id posterior ao maior apiId já importado serão buscados."
+        }
+        confirmLabel="Importar"
+        severity={replaceOnImport ? "warning" : "primary"}
+        confirmLoading={importMutation.isPending}
+        onConfirm={confirmApiImport}
+        onCancel={closeApiImportPreview}
       />
 
       <ConfirmDialog
