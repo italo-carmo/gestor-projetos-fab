@@ -50,6 +50,10 @@ export const qk = {
     ["lessonsLearned", filters] as const,
   lessonLearnedTypes: ["lessonLearnedTypes"] as const,
   library: (filters: Record<string, any>) => ["library", filters] as const,
+  cipavdReports: (filters: Record<string, any>) =>
+    ["cipavdReports", filters] as const,
+  cipavdReportFolderOptions: (excludeFolderId?: string | null) =>
+    ["cipavdReports", "folderOptions", excludeFolderId ?? ""] as const,
   meetings: (filters: Record<string, any>) => ["meetings", filters] as const,
   checklists: (filters: Record<string, any>) =>
     ["checklists", filters] as const,
@@ -169,6 +173,8 @@ export const qk = {
   knowledgeBasesSelectable: ["admin", "knowledgeBases", "selectable"] as const,
   knowledgeBaseDocuments: (knowledgeBaseId: string) =>
     ["admin", "knowledgeBases", knowledgeBaseId, "documents"] as const,
+  knowledgeBaseCipavdReportFiles: (q: string) =>
+    ["admin", "knowledgeBases", "cipavdReportFiles", q] as const,
   aiSettings: ["admin", "aiSettings"] as const,
   emailSettings: ["admin", "emailSettings"] as const,
   emailDeliveryFailures: (filters: Record<string, any>) =>

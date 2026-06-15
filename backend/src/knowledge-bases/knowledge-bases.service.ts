@@ -5,16 +5,20 @@ import {
   Prisma,
 } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, rm } from 'node:fs/promises';
+import { copyFile, readFile, rm } from 'node:fs/promises';
 import * as path from 'node:path';
 import * as XLSX from 'xlsx';
 import { AuditService } from '../audit/audit.service';
+import { CipavdReportsService } from '../cipavd-reports/cipavd-reports.service';
 import { throwError } from '../common/http-error';
 import { LitellmService } from '../llm/litellm.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { SettingsService } from '../settings/settings.service';
-import { resolveExistingKnowledgeBaseDocumentPath } from './knowledge-base-storage';
+import {
+  getKnowledgeBaseDocumentsDir,
+  resolveExistingKnowledgeBaseDocumentPath,
+} from './knowledge-base-storage';
 
 export type KnowledgeBaseRagHit = {
   chunkId: string;
@@ -58,6 +62,7 @@ export class KnowledgeBasesService {
     private readonly audit: AuditService,
     private readonly litellm: LitellmService,
     private readonly settings: SettingsService,
+    private readonly cipavdReports: CipavdReportsService,
   ) {}
 
   async listKnowledgeBases() {
@@ -311,6 +316,94 @@ export class KnowledgeBasesService {
     });
 
     await this.reindexDocument(document.id, user);
+    return this.getKnowledgeBaseDocumentById(document.id);
+  }
+
+  async listCipavdReportFilesForImport(
+    filters: { q?: string | null },
+    user?: RbacUser,
+  ) {
+    return this.cipavdReports.listKnowledgeBaseCandidates(filters, user);
+  }
+
+  async importCipavdReportDocument(
+    knowledgeBaseId: string,
+    payload: { fileId?: string | null; title?: string | null },
+    user?: RbacUser,
+  ) {
+    const knowledgeBase = await this.getKnowledgeBaseOrThrow(knowledgeBaseId);
+    const fileId = String(payload.fileId ?? '').trim();
+    if (!fileId) {
+      throwError('VALIDATION_ERROR', { field: 'fileId', reason: 'required' });
+    }
+
+    const reportFile = await this.cipavdReports.getFileForKnowledgeBaseImport(
+      fileId,
+      user,
+    );
+    const extension =
+      path.extname(reportFile.name || reportFile.fileName).toLowerCase() ||
+      '.bin';
+    const storageKey = `${Date.now()}-${randomUUID()}${extension}`;
+    const destinationPath = path.join(getKnowledgeBaseDocumentsDir(), storageKey);
+
+    await copyFile(reportFile.filePath, destinationPath);
+    const checksum = await this.computeFileChecksum(destinationPath);
+    const title =
+      this.nullishTrim(payload.title) ||
+      this.stripFileExtension(reportFile.name || reportFile.fileName) ||
+      'Relatório CIPAVD';
+
+    const document = await this.prisma.knowledgeBaseDocument.create({
+      data: {
+        knowledgeBaseId: knowledgeBase.id,
+        title,
+        fileName: reportFile.name || reportFile.fileName,
+        fileUrl: `/admin/knowledge-bases/documents/${encodeURIComponent(randomUUID())}/download`,
+        storageKey,
+        mimeType:
+          reportFile.mimeType ||
+          this.detectMimeType(reportFile.name || reportFile.fileName),
+        fileSize: reportFile.fileSize ?? null,
+        checksum,
+        status: KnowledgeBaseDocumentStatus.PENDING,
+        metadataJson: {
+          sourceType: 'cipavd_report',
+          sourceId: reportFile.id,
+          sourcePath: reportFile.path,
+          sourceFolderPath: reportFile.folderPath,
+          importedAt: new Date().toISOString(),
+          importedByUserId: user?.id ?? null,
+        },
+      },
+    });
+
+    await this.prisma.knowledgeBaseDocument.update({
+      where: { id: document.id },
+      data: {
+        fileUrl: `/admin/knowledge-bases/documents/${encodeURIComponent(document.id)}/download`,
+      },
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'admin_rbac',
+      action: 'import_cipavd_report_to_ai_knowledge_base',
+      entityId: document.id,
+      diffJson: {
+        knowledgeBaseId: knowledgeBase.id,
+        sourceFileId: reportFile.id,
+        sourcePath: reportFile.path,
+        title,
+        checksum,
+      },
+    });
+
+    try {
+      await this.reindexDocument(document.id, user);
+    } catch (error) {
+      throw error;
+    }
     return this.getKnowledgeBaseDocumentById(document.id);
   }
 

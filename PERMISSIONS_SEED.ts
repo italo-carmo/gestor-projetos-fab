@@ -2678,6 +2678,42 @@ export const PERMISSIONS: SeedPermission[] = [
     "action": "export",
     "scope": "OWN",
     "description": "export on audit_logs (OWN)"
+  },
+  {
+    "resource": "cipavd_reports",
+    "action": "view",
+    "scope": "NATIONAL",
+    "description": "view on cipavd_reports (NATIONAL)"
+  },
+  {
+    "resource": "cipavd_reports",
+    "action": "create",
+    "scope": "NATIONAL",
+    "description": "create on cipavd_reports (NATIONAL)"
+  },
+  {
+    "resource": "cipavd_reports",
+    "action": "update",
+    "scope": "NATIONAL",
+    "description": "update on cipavd_reports (NATIONAL)"
+  },
+  {
+    "resource": "cipavd_reports",
+    "action": "delete",
+    "scope": "NATIONAL",
+    "description": "delete on cipavd_reports (NATIONAL)"
+  },
+  {
+    "resource": "cipavd_reports",
+    "action": "upload",
+    "scope": "NATIONAL",
+    "description": "upload on cipavd_reports (NATIONAL)"
+  },
+  {
+    "resource": "cipavd_reports",
+    "action": "download",
+    "scope": "NATIONAL",
+    "description": "download on cipavd_reports (NATIONAL)"
   }
 ] as any;
 
@@ -3126,6 +3162,36 @@ export const ROLE_SUGGESTIONS: Record<string, SeedRolePermission[]> = {
     {
       "resource": "task_instances",
       "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "cipavd_reports",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "cipavd_reports",
+      "action": "create",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "cipavd_reports",
+      "action": "update",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "cipavd_reports",
+      "action": "delete",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "cipavd_reports",
+      "action": "upload",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "cipavd_reports",
+      "action": "download",
       "scope": "NATIONAL"
     },
     {

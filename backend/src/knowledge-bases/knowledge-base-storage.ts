@@ -1,9 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const persistentKnowledgeBaseDir =
-  process.env.KNOWLEDGE_BASE_DOCUMENTS_DIR?.trim() ||
-  '/opt/gestao-projetos-data/knowledge-bases';
+const defaultKnowledgeBaseDir = '/opt/gestao-projetos-data/knowledge-bases';
 
 const legacyKnowledgeBaseDirs = [
   path.resolve(process.cwd(), 'storage', 'knowledge-bases'),
@@ -12,6 +10,9 @@ const legacyKnowledgeBaseDirs = [
 ];
 
 export function getKnowledgeBaseDocumentsDir() {
+  const persistentKnowledgeBaseDir =
+    process.env.KNOWLEDGE_BASE_DOCUMENTS_DIR?.trim() ||
+    defaultKnowledgeBaseDir;
   if (!fs.existsSync(persistentKnowledgeBaseDir)) {
     fs.mkdirSync(persistentKnowledgeBaseDir, { recursive: true });
   }

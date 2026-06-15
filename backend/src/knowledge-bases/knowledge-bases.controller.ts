@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Res,
   UploadedFile,
   UseFilters,
@@ -51,6 +52,15 @@ export class KnowledgeBasesController {
   @RequirePermission('admin_rbac', 'update')
   listSelectableKnowledgeBases() {
     return this.knowledgeBases.listSelectableKnowledgeBases();
+  }
+
+  @Get('cipavd-report-files')
+  @RequirePermission('admin_rbac', 'update')
+  listCipavdReportFiles(
+    @Query('q') q: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.knowledgeBases.listCipavdReportFilesForImport({ q }, user);
   }
 
   @Post()
@@ -124,6 +134,16 @@ export class KnowledgeBasesController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.knowledgeBases.uploadDocument(id, file, body, user);
+  }
+
+  @Post(':id/documents/import-cipavd-report')
+  @RequirePermission('admin_rbac', 'update')
+  importCipavdReportDocument(
+    @Param('id') id: string,
+    @Body() body: { fileId?: string | null; title?: string | null },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.knowledgeBases.importCipavdReportDocument(id, body, user);
   }
 
   @Put('documents/:id')

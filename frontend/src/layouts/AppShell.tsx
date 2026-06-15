@@ -49,6 +49,7 @@ import PhotoLibraryRoundedIcon from "@mui/icons-material/PhotoLibraryRounded";
 import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
+import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can, canAccessAdminCatalog } from "../app/rbac";
@@ -246,6 +247,12 @@ const navSections: NavSection[] = [
         to: "/activities-cipavd",
         icon: <EventNoteIcon fontSize="small" />,
         menuKey: "activities_cipavd",
+      },
+      {
+        label: "Relatórios",
+        to: "/cipavd-reports",
+        icon: <DescriptionRoundedIcon fontSize="small" />,
+        menuKey: "cipavd_reports",
       },
       {
         label: "Avisos",
@@ -532,6 +539,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/activities" || item.to === "/activities-cipavd") {
       return can(me, "task_instances", "view");
+    }
+    if (item.to === "/cipavd-reports") {
+      return (
+        can(me, "cipavd_reports", "view") &&
+        hasAnyRole(me, [ROLE_TI, ROLE_COMGEP])
+      );
     }
     if (item.to === "/meetings") {
       return can(me, "meetings", "view");

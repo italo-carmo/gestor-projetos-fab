@@ -813,6 +813,36 @@
           "scope": "NATIONAL"
         },
         {
+          "resource": "cipavd_reports",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "cipavd_reports",
+          "action": "create",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "cipavd_reports",
+          "action": "update",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "cipavd_reports",
+          "action": "delete",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "cipavd_reports",
+          "action": "upload",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "cipavd_reports",
+          "action": "download",
+          "scope": "NATIONAL"
+        },
+        {
           "resource": "gantt",
           "action": "view",
           "scope": "NATIONAL"

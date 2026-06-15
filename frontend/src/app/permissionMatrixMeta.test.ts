@@ -22,4 +22,19 @@ describe("permissionMatrixMeta", () => {
 
     expect(meta.routeAliases).not.toContain("/admin/oms");
   });
+
+  it("declara o repositorio de relatorios CIPAVD na matriz", () => {
+    const meta = getPermissionResourceMeta("cipavd_reports");
+
+    expect(meta.route).toBe("/cipavd-reports");
+    expect(meta.sidebarItems).toContain("Relatorios");
+    expect(meta.expectedActions).toEqual([
+      "view",
+      "create",
+      "update",
+      "delete",
+      "upload",
+      "download",
+    ]);
+  });
 });

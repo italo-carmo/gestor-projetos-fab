@@ -74,7 +74,7 @@ model User {
   cpcaCasesCreated                        CpcComplaintCase[]               @relation("CpcComplaintCaseCreatedBy")
   cpcaCasesUpdated                        CpcComplaintCase[]               @relation("CpcComplaintCaseUpdatedBy")
   cpcaCasesValidated                      CpcComplaintCase[]               @relation("CpcComplaintCaseValidatedBy")
-  cpcaCaseValidationLogs                  CpcComplaintValidationLog[]       @relation("CpcComplaintValidationLogValidatedBy")
+  cpcaCaseValidationLogs                  CpcComplaintValidationLog[]      @relation("CpcComplaintValidationLogValidatedBy")
   cpcaCaseReads                           CpcComplaintCaseRead[]
   cpcaCaseComments                        CpcComplaintComment[]            @relation("CpcComplaintCommentAuthor")
   cpcaCaseCipavdThreadsCreated            CpcComplaintCipavdThread[]       @relation("CpcComplaintCipavdThreadCreatedBy")
@@ -98,6 +98,8 @@ model User {
   strategicRecommendationsCreated         StrategicRecommendation[]        @relation("StrategicRecommendationCreator")
   libraryPhotosCreated                    LibraryPhoto[]                   @relation("LibraryPhotoCreator")
   libraryDocumentsCreated                 LibraryDocument[]                @relation("LibraryDocumentCreator")
+  cipavdReportFoldersCreated              CipavdReportFolder[]             @relation("CipavdReportFolderCreator")
+  cipavdReportFilesCreated                CipavdReportFile[]               @relation("CipavdReportFileCreator")
   bestPracticesCreated                    BestPracticePost[]               @relation("BestPracticeCreator")
   lessonsLearnedCreated                   LessonLearnedPost[]              @relation("LessonLearnedCreator")
   smifComplaintsCreated                   SmifComplaint[]                  @relation("SmifComplaintCreatedBy")
@@ -1192,6 +1194,48 @@ model LibraryDocument {
   @@index([scope, createdAt])
 }
 
+model CipavdReportFolder {
+  id          String   @id @default(cuid())
+  name        String
+  parentId    String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent    CipavdReportFolder?  @relation("CipavdReportFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  CipavdReportFolder[] @relation("CipavdReportFolderTree")
+  files     CipavdReportFile[]
+  createdBy User?                @relation("CipavdReportFolderCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([parentId, name])
+  @@index([parentId, name])
+  @@index([createdAt])
+  @@index([createdById])
+}
+
+model CipavdReportFile {
+  id          String   @id @default(cuid())
+  name        String
+  folderId    String?
+  fileName    String
+  fileUrl     String
+  storageKey  String
+  mimeType    String?
+  fileSize    Int?
+  checksum    String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  folder    CipavdReportFolder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  createdBy User?               @relation("CipavdReportFileCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([folderId, name])
+  @@index([folderId, name])
+  @@index([createdAt])
+  @@index([createdById])
+}
+
 model LibrarySetting {
   id                      String   @id @default(cuid())
   carouselIntervalSeconds Int      @default(5)
@@ -1483,25 +1527,25 @@ model CpcComplaintCase {
   contractorReferralDate           DateTime?
   contractorFollowUpNotes          String?
   archivedAt                       DateTime?
-  validationVersion                 Int                       @default(0)
-  validatedAt                       DateTime?
-  validatedById                     String?
-  validatedByName                   String?
-  validatedByEmail                  String?
+  validationVersion                Int                       @default(0)
+  validatedAt                      DateTime?
+  validatedById                    String?
+  validatedByName                  String?
+  validatedByEmail                 String?
   createdById                      String
   updatedById                      String?
   createdAt                        DateTime                  @default(now())
   updatedAt                        DateTime                  @updatedAt
 
-  om            Om?                         @relation(fields: [omId], references: [id], onDelete: SetNull)
-  locality      Locality?                   @relation(fields: [localityId], references: [id])
-  createdBy     User                        @relation("CpcComplaintCaseCreatedBy", fields: [createdById], references: [id])
-  updatedBy     User?                       @relation("CpcComplaintCaseUpdatedBy", fields: [updatedById], references: [id])
-  validatedBy   User?                       @relation("CpcComplaintCaseValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
-  comments      CpcComplaintComment[]
-  cipavdThreads CpcComplaintCipavdThread[]
-  statusHistory CpcComplaintStatusHistory[]
-  reads         CpcComplaintCaseRead[]
+  om             Om?                         @relation(fields: [omId], references: [id], onDelete: SetNull)
+  locality       Locality?                   @relation(fields: [localityId], references: [id])
+  createdBy      User                        @relation("CpcComplaintCaseCreatedBy", fields: [createdById], references: [id])
+  updatedBy      User?                       @relation("CpcComplaintCaseUpdatedBy", fields: [updatedById], references: [id])
+  validatedBy    User?                       @relation("CpcComplaintCaseValidatedBy", fields: [validatedById], references: [id], onDelete: SetNull)
+  comments       CpcComplaintComment[]
+  cipavdThreads  CpcComplaintCipavdThread[]
+  statusHistory  CpcComplaintStatusHistory[]
+  reads          CpcComplaintCaseRead[]
   validationLogs CpcComplaintValidationLog[]
 
   @@index([omId, status])
@@ -1517,13 +1561,13 @@ model CpcComplaintCase {
 }
 
 model CpcComplaintValidationLog {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   complaintCaseId   String
   validationVersion Int
   validatedById     String?
   validatedByName   String
   validatedByEmail  String?
-  validatedAt       DateTime @default(now())
+  validatedAt       DateTime  @default(now())
   caseUpdatedAt     DateTime?
 
   complaintCase CpcComplaintCase @relation(fields: [complaintCaseId], references: [id], onDelete: Cascade)

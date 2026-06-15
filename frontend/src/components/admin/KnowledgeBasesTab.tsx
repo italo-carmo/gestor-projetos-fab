@@ -3,6 +3,7 @@ import AutoStoriesRoundedIcon from '@mui/icons-material/AutoStoriesRounded';
 import CloudUploadRoundedIcon from '@mui/icons-material/CloudUploadRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
+import DriveFileMoveRoundedIcon from '@mui/icons-material/DriveFileMoveRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import SettingsBackupRestoreRoundedIcon from '@mui/icons-material/SettingsBackupRestoreRounded';
@@ -38,7 +39,9 @@ import {
   useDeleteKnowledgeBase,
   useDeleteKnowledgeBaseDocument,
   useDownloadKnowledgeBaseDocument,
+  useImportCipavdReportToKnowledgeBase,
   useKnowledgeBaseDocuments,
+  useKnowledgeBaseCipavdReportFiles,
   useKnowledgeBases,
   useReindexKnowledgeBase,
   useReindexKnowledgeBaseDocument,
@@ -48,6 +51,7 @@ import {
   type AdminKnowledgeBase,
   type AdminKnowledgeBaseDocument,
   type AiKnowledgeBaseTheme,
+  type CipavdReportFile,
 } from '../../api/hooks';
 import { ConfirmDialog } from '../dialogs/ConfirmDialog';
 import { EmptyState } from '../states/EmptyState';
@@ -139,6 +143,7 @@ export function KnowledgeBasesTab() {
   const reindexKnowledgeBase = useReindexKnowledgeBase();
   const reindexDocument = useReindexKnowledgeBaseDocument();
   const downloadDocument = useDownloadKnowledgeBaseDocument();
+  const importCipavdReport = useImportCipavdReportToKnowledgeBase();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingBase, setEditingBase] = useState<AdminKnowledgeBase | null>(null);
@@ -148,6 +153,8 @@ export function KnowledgeBasesTab() {
   const [uploadTitle, setUploadTitle] = useState('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [titleDrafts, setTitleDrafts] = useState<Record<string, string>>({});
+  const [reportSearch, setReportSearch] = useState('');
+  const [reportImportTitleDrafts, setReportImportTitleDrafts] = useState<Record<string, string>>({});
 
   const knowledgeBases = useMemo(
     () => (knowledgeBasesQuery.data?.items ?? []) as AdminKnowledgeBase[],
@@ -198,6 +205,14 @@ export function KnowledgeBasesTab() {
   const documents = useMemo(
     () => (documentsQuery.data?.items ?? []) as AdminKnowledgeBaseDocument[],
     [documentsQuery.data],
+  );
+  const cipavdReportFilesQuery = useKnowledgeBaseCipavdReportFiles(
+    reportSearch,
+    Boolean(selectedBaseId),
+  );
+  const cipavdReportFiles = useMemo(
+    () => (cipavdReportFilesQuery.data?.items ?? []) as CipavdReportFile[],
+    [cipavdReportFilesQuery.data],
   );
 
   useEffect(() => {
@@ -306,6 +321,28 @@ export function KnowledgeBasesTab() {
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? 'Erro ao atualizar documento.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleImportCipavdReport = async (report: CipavdReportFile) => {
+    if (!selectedBase) return;
+    try {
+      await importCipavdReport.mutateAsync({
+        knowledgeBaseId: selectedBase.id,
+        fileId: report.id,
+        title: reportImportTitleDrafts[report.id]?.trim() || undefined,
+      });
+      setReportImportTitleDrafts((prev) => ({ ...prev, [report.id]: '' }));
+      toast.push({
+        message: 'Relatório importado e indexado na base.',
+        severity: 'success',
+      });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ?? 'Erro ao importar relatório CIPAVD.',
         severity: 'error',
       });
     }
@@ -563,6 +600,111 @@ export function KnowledgeBasesTab() {
                         {uploadDocument.isPending ? 'Processando...' : 'Enviar e indexar'}
                       </Button>
                     </Stack>
+                  </Stack>
+                </Paper>
+
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.6,
+                    borderRadius: 2,
+                    borderColor: '#DDE5EF',
+                  }}
+                >
+                  <Stack spacing={1.25}>
+                    <Stack
+                      direction={{ xs: 'column', md: 'row' }}
+                      justifyContent="space-between"
+                      spacing={1.2}
+                      alignItems={{ md: 'center' }}
+                    >
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={800}>
+                          Importar de Relatórios CIPAVD
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          PDFs e DOCX do repositório restrito podem virar documentos indexados desta base.
+                        </Typography>
+                      </Box>
+                      <TextField
+                        size="small"
+                        label="Buscar relatório"
+                        value={reportSearch}
+                        onChange={(event) => setReportSearch(event.target.value)}
+                        sx={{ minWidth: { md: 280 } }}
+                      />
+                    </Stack>
+
+                    {cipavdReportFilesQuery.isLoading ? (
+                      <SkeletonState />
+                    ) : cipavdReportFilesQuery.isError ? (
+                      <ErrorState
+                        error={cipavdReportFilesQuery.error}
+                        onRetry={() => cipavdReportFilesQuery.refetch()}
+                      />
+                    ) : cipavdReportFiles.length === 0 ? (
+                      <EmptyState
+                        title="Nenhum relatório disponível"
+                        description="Envie arquivos no menu Relatórios do bloco CIPAVD para importá-los aqui."
+                      />
+                    ) : (
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Relatório</TableCell>
+                            <TableCell>Origem</TableCell>
+                            <TableCell>Tamanho</TableCell>
+                            <TableCell>Título na base</TableCell>
+                            <TableCell align="right">Ação</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {cipavdReportFiles.slice(0, 8).map((report) => (
+                            <TableRow key={report.id} hover>
+                              <TableCell sx={{ minWidth: 220 }}>
+                                <Typography variant="body2" fontWeight={700}>
+                                  {report.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  Atualizado em {formatDateTime(report.updatedAt)}
+                                </Typography>
+                              </TableCell>
+                              <TableCell sx={{ maxWidth: 300 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                  {report.folderPath ?? report.path ?? 'Relatórios'}
+                                </Typography>
+                              </TableCell>
+                              <TableCell>{formatBytes(report.fileSize)}</TableCell>
+                              <TableCell sx={{ minWidth: 220 }}>
+                                <TextField
+                                  size="small"
+                                  placeholder="Usar nome do arquivo"
+                                  value={reportImportTitleDrafts[report.id] ?? ''}
+                                  onChange={(event) =>
+                                    setReportImportTitleDrafts((prev) => ({
+                                      ...prev,
+                                      [report.id]: event.target.value,
+                                    }))
+                                  }
+                                  fullWidth
+                                />
+                              </TableCell>
+                              <TableCell align="right">
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  startIcon={<DriveFileMoveRoundedIcon />}
+                                  onClick={() => void handleImportCipavdReport(report)}
+                                  disabled={importCipavdReport.isPending}
+                                >
+                                  Importar
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
                   </Stack>
                 </Paper>
 

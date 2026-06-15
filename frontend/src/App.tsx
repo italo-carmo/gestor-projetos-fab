@@ -38,6 +38,7 @@ import { SmifComplaintsPage } from "./pages/SmifComplaintsPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { BestPracticesPage } from "./pages/BestPracticesPage";
 import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
+import { CipavdReportsPage } from "./pages/CipavdReportsPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
 import { can, canAccessAdminCatalog } from "./app/rbac";
@@ -368,6 +369,24 @@ function App() {
                       allow={(user) => can(user, "task_instances", "view")}
                     >
                       <ActivitiesPage scope="cipavd" />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/cipavd-reports"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "cipavd_reports", "view") &&
+                        hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])
+                      }
+                    >
+                      <PageEntryGate
+                        title="Carregando Relatórios"
+                        description="Preparando pastas e arquivos do repositório CIPAVD."
+                      >
+                        <CipavdReportsPage />
+                      </PageEntryGate>
                     </RequireRoleAccess>
                   }
                 />

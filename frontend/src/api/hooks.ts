@@ -2823,6 +2823,184 @@ export function useDeleteLibraryDocument() {
   });
 }
 
+/** CIPAVD Reports Drive */
+export type CipavdReportUser = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+};
+
+export type CipavdReportFolder = {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: CipavdReportUser | null;
+  folderCount?: number;
+  fileCount?: number;
+};
+
+export type CipavdReportFile = {
+  id: string;
+  name: string;
+  folderId?: string | null;
+  fileName: string;
+  fileUrl: string;
+  storageKey?: string | null;
+  mimeType?: string | null;
+  fileSize?: number | null;
+  checksum?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: CipavdReportUser | null;
+  downloadUrl?: string;
+  path?: string;
+  folderPath?: string;
+};
+
+export type CipavdReportBreadcrumb = {
+  id: string | null;
+  name: string;
+};
+
+export type CipavdReportFolderOption = {
+  id: string | null;
+  name: string;
+  path: string;
+  depth: number;
+};
+
+export type CipavdReportsResponse = {
+  currentFolder: CipavdReportFolder | null;
+  breadcrumbs: CipavdReportBreadcrumb[];
+  folders: CipavdReportFolder[];
+  files: CipavdReportFile[];
+};
+
+export function useCipavdReports(filters: Record<string, any> = {}) {
+  return useQuery({
+    queryKey: qk.cipavdReports(filters),
+    queryFn: async () =>
+      (
+        await api.get<CipavdReportsResponse>("/cipavd-reports", {
+          params: filters,
+        })
+      ).data,
+    staleTime: 5_000,
+  });
+}
+
+export function useCipavdReportFolderOptions(
+  excludeFolderId?: string | null,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.cipavdReportFolderOptions(excludeFolderId),
+    queryFn: async () =>
+      (
+        await api.get<{ items: CipavdReportFolderOption[] }>(
+          "/cipavd-reports/folder-options",
+          { params: excludeFolderId ? { excludeFolderId } : undefined },
+        )
+      ).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCreateCipavdReportFolder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { name: string; parentId?: string | null }) =>
+      (await api.post("/cipavd-reports/folders", payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cipavdReports"] }),
+  });
+}
+
+export function useUpdateCipavdReportFolder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: { name?: string | null; parentId?: string | null };
+    }) => (await api.put(`/cipavd-reports/folders/${args.id}`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cipavdReports"] }),
+  });
+}
+
+export function useDeleteCipavdReportFolder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/cipavd-reports/folders/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cipavdReports"] }),
+  });
+}
+
+export function useUploadCipavdReportFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      file: File;
+      name?: string;
+      folderId?: string | null;
+    }) => {
+      const formData = new FormData();
+      formData.append("file", args.file);
+      if (args.name) formData.append("name", args.name);
+      if (args.folderId) formData.append("folderId", args.folderId);
+      return (
+        await api.post("/cipavd-reports/files/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        })
+      ).data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cipavdReports"] }),
+  });
+}
+
+export function useUpdateCipavdReportFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: { name?: string | null; folderId?: string | null };
+    }) => (await api.put(`/cipavd-reports/files/${args.id}`, args.payload)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cipavdReports"] }),
+  });
+}
+
+export function useDeleteCipavdReportFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/cipavd-reports/files/${id}`)).data,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cipavdReports"] }),
+  });
+}
+
+export function useDownloadCipavdReportFile() {
+  return useMutation({
+    mutationFn: async (args: { id: string; fileName: string }) => {
+      const response = await api.get(
+        `/cipavd-reports/files/${args.id}/download`,
+        { responseType: "blob" },
+      );
+      const blob = new Blob([response.data]);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = args.fileName || `relatorio-${args.id}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    },
+  });
+}
+
 /** Meetings */
 export function useMeetings(filters: Record<string, any>, enabled = true) {
   return useQuery({
@@ -6191,6 +6369,21 @@ export function useKnowledgeBaseDocuments(
   });
 }
 
+export function useKnowledgeBaseCipavdReportFiles(q: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.knowledgeBaseCipavdReportFiles(q),
+    queryFn: async () =>
+      (
+        await api.get<{ items: CipavdReportFile[] }>(
+          "/admin/knowledge-bases/cipavd-report-files",
+          { params: q ? { q } : undefined },
+        )
+      ).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useComgepScoringSettings() {
   return useQuery({
     queryKey: qk.comgepSettings,
@@ -6470,6 +6663,29 @@ export function useUploadKnowledgeBaseDocument() {
         )
       ).data;
     },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.knowledgeBases });
+      qc.invalidateQueries({
+        queryKey: qk.knowledgeBaseDocuments(variables.knowledgeBaseId),
+      });
+    },
+  });
+}
+
+export function useImportCipavdReportToKnowledgeBase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      knowledgeBaseId: string;
+      fileId: string;
+      title?: string | null;
+    }) =>
+      (
+        await api.post(
+          `/admin/knowledge-bases/${args.knowledgeBaseId}/documents/import-cipavd-report`,
+          { fileId: args.fileId, title: args.title ?? undefined },
+        )
+      ).data,
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: qk.knowledgeBases });
       qc.invalidateQueries({

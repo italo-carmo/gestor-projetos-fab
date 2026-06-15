@@ -1,4 +1,7 @@
 import { KnowledgeBaseTheme } from '@prisma/client';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
 import {
   KnowledgeBaseRagHit,
   KnowledgeBasesService,
@@ -26,6 +29,12 @@ describe('KnowledgeBasesService', () => {
   const prismaMock = {
     knowledgeBase: {
       findMany: jest.fn(),
+      findUnique: jest.fn(),
+    },
+    knowledgeBaseDocument: {
+      create: jest.fn(),
+      update: jest.fn(),
+      findUnique: jest.fn(),
     },
   } as any;
   const auditMock = { log: jest.fn() } as any;
@@ -35,17 +44,23 @@ describe('KnowledgeBasesService', () => {
   const settingsMock = {
     getEmbeddingModel: jest.fn(),
   } as any;
+  const cipavdReportsMock = {} as any;
 
   const service = new KnowledgeBasesService(
     prismaMock,
     auditMock,
     litellmMock,
     settingsMock,
+    cipavdReportsMock,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
     prismaMock.knowledgeBase.findMany.mockResolvedValue([{ id: 'kb-1' }]);
+    prismaMock.knowledgeBase.findUnique.mockReset();
+    prismaMock.knowledgeBaseDocument.create.mockReset();
+    prismaMock.knowledgeBaseDocument.update.mockReset();
+    prismaMock.knowledgeBaseDocument.findUnique.mockReset();
   });
 
   it('builds prompt context and deep links back to the knowledge base admin tab', () => {
@@ -189,5 +204,100 @@ describe('KnowledgeBasesService', () => {
     expect(() => (service as any).resolvePdfParseModule({})).toThrow(
       'pdf-parse não exportou uma API de parsing compatível.',
     );
+  });
+
+  it('imports a CIPAVD report into a knowledge base with source metadata', async () => {
+    const previousDir = process.env.KNOWLEDGE_BASE_DOCUMENTS_DIR;
+    const workdir = await mkdtemp(path.join(tmpdir(), 'kb-import-'));
+    process.env.KNOWLEDGE_BASE_DOCUMENTS_DIR = path.join(workdir, 'kb');
+    const sourcePath = path.join(workdir, 'relatorio.pdf');
+    await writeFile(sourcePath, Buffer.from('relatorio cipavd'));
+
+    prismaMock.knowledgeBase.findUnique.mockResolvedValue({
+      id: 'kb-1',
+      key: 'base-cipavd',
+      name: 'Base CIPAVD',
+      theme: KnowledgeBaseTheme.CIPAVD,
+    });
+    prismaMock.knowledgeBaseDocument.create.mockResolvedValue({
+      id: 'doc-1',
+    });
+    prismaMock.knowledgeBaseDocument.update.mockResolvedValue({
+      id: 'doc-1',
+    });
+    prismaMock.knowledgeBaseDocument.findUnique.mockResolvedValue({
+      id: 'doc-1',
+      knowledgeBaseId: 'kb-1',
+      title: 'Relatório importado',
+      fileName: 'relatorio.pdf',
+      fileUrl: '/admin/knowledge-bases/documents/doc-1/download',
+      storageKey: 'stored.pdf',
+      mimeType: 'application/pdf',
+      fileSize: 16,
+      checksum: 'sha',
+      status: 'READY',
+      contentText: null,
+      parsedAt: null,
+      lastIndexedAt: null,
+      chunkCount: 0,
+      indexError: null,
+      metadataJson: null,
+      createdAt: new Date('2026-06-01T00:00:00Z'),
+      updatedAt: new Date('2026-06-01T00:00:00Z'),
+      knowledgeBase: {
+        id: 'kb-1',
+        key: 'base-cipavd',
+        name: 'Base CIPAVD',
+        theme: KnowledgeBaseTheme.CIPAVD,
+      },
+      _count: { chunks: 0 },
+    });
+    cipavdReportsMock.getFileForKnowledgeBaseImport = jest
+      .fn()
+      .mockResolvedValue({
+        id: 'report-1',
+        name: 'relatorio.pdf',
+        fileName: 'relatorio.pdf',
+        filePath: sourcePath,
+        mimeType: 'application/pdf',
+        fileSize: 16,
+        path: 'Relatórios / 2026 / relatorio.pdf',
+        folderPath: 'Relatórios / 2026',
+      });
+    const reindexSpy = jest
+      .spyOn(service, 'reindexDocument')
+      .mockResolvedValue({} as any);
+
+    const result = await service.importCipavdReportDocument(
+      'kb-1',
+      { fileId: 'report-1', title: 'Relatório importado' },
+      { id: 'user-1' } as any,
+    );
+
+    const createCall = prismaMock.knowledgeBaseDocument.create.mock.calls[0][0];
+    expect(createCall.data.metadataJson).toMatchObject({
+      sourceType: 'cipavd_report',
+      sourceId: 'report-1',
+      sourcePath: 'Relatórios / 2026 / relatorio.pdf',
+      sourceFolderPath: 'Relatórios / 2026',
+      importedByUserId: 'user-1',
+    });
+    expect(reindexSpy).toHaveBeenCalledWith('doc-1', { id: 'user-1' });
+    await expect(
+      readFile(
+        path.join(
+          process.env.KNOWLEDGE_BASE_DOCUMENTS_DIR as string,
+          createCall.data.storageKey,
+        ),
+        'utf-8',
+      ),
+    ).resolves.toBe('relatorio cipavd');
+    expect(result.downloadUrl).toBe(
+      '/admin/knowledge-bases/documents/doc-1/download',
+    );
+
+    reindexSpy.mockRestore();
+    process.env.KNOWLEDGE_BASE_DOCUMENTS_DIR = previousDir;
+    await rm(workdir, { recursive: true, force: true });
   });
 });
