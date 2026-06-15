@@ -14,6 +14,7 @@ import {
 import { resolveExistingCipavdReportPath } from './cipavd-reports-storage';
 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx']);
+const ROOT_LABEL = 'Acervo';
 const ALLOWED_MIME_TYPES = new Set([
   '',
   'application/octet-stream',
@@ -104,7 +105,7 @@ export class CipavdReportsService {
     const excluded = new Set(excludedIds);
     const folderMap = new Map(folders.map((item) => [item.id, item]));
     const options: FolderOption[] = [
-      { id: null, name: 'Relatórios', path: 'Relatórios', depth: 0 },
+      { id: null, name: ROOT_LABEL, path: ROOT_LABEL, depth: 0 },
     ];
 
     for (const folder of folders) {
@@ -113,7 +114,7 @@ export class CipavdReportsService {
       options.push({
         id: folder.id,
         name: folder.name,
-        path: ['Relatórios', ...pathParts].join(' / '),
+        path: [ROOT_LABEL, ...pathParts].join(' / '),
         depth: pathParts.length,
       });
     }
@@ -641,7 +642,7 @@ export class CipavdReportsService {
       chain.push({ id: folder.id, name: folder.name });
       cursor = folder.parentId;
     }
-    return [{ id: null, name: 'Relatórios' }, ...chain.reverse()];
+    return [{ id: null, name: ROOT_LABEL }, ...chain.reverse()];
   }
 
   private buildFolderPathParts(
@@ -663,7 +664,7 @@ export class CipavdReportsService {
     folderId: string | null,
     folderMap: Map<string, { id: string; name: string; parentId: string | null }>,
   ) {
-    return ['Relatórios', ...this.buildFolderPathParts(folderId, folderMap)].join(
+    return [ROOT_LABEL, ...this.buildFolderPathParts(folderId, folderMap)].join(
       ' / ',
     );
   }

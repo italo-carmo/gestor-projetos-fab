@@ -231,13 +231,13 @@ export function CipavdReportsPage() {
   const folders = reportsQuery.data?.folders ?? [];
   const files = reportsQuery.data?.files ?? [];
   const breadcrumbs = reportsQuery.data?.breadcrumbs ?? [
-    { id: null, name: "Relatórios" },
+    { id: null, name: "Acervo" },
   ];
   const isEmpty = folders.length === 0 && files.length === 0;
 
   const currentFolderName = useMemo(() => {
     const last = breadcrumbs[breadcrumbs.length - 1];
-    return last?.name ?? "Relatórios";
+    return last?.name ?? "Acervo";
   }, [breadcrumbs]);
 
   useEffect(() => {
@@ -480,7 +480,7 @@ export function CipavdReportsPage() {
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="h4" fontWeight={800} sx={{ mb: 0.4 }}>
-              Relatórios
+              Acervo
             </Typography>
             <Breadcrumbs maxItems={5} aria-label="Caminho da pasta">
               {breadcrumbs.map((item, index) => {
@@ -592,7 +592,7 @@ export function CipavdReportsPage() {
               description={
                 search
                   ? "Ajuste o termo de busca para localizar outro relatório."
-                  : "Crie uma pasta ou envie PDFs e DOCX para organizar o repositório."
+                  : "Crie uma pasta ou envie PDFs e DOCX para organizar o acervo."
               }
               actionLabel={canUpload ? "Enviar arquivo" : undefined}
               onAction={

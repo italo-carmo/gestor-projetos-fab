@@ -23,11 +23,12 @@ describe("permissionMatrixMeta", () => {
     expect(meta.routeAliases).not.toContain("/admin/oms");
   });
 
-  it("declara o repositorio de relatorios CIPAVD na matriz", () => {
+  it("declara o acervo CIPAVD na matriz", () => {
     const meta = getPermissionResourceMeta("cipavd_reports");
 
     expect(meta.route).toBe("/cipavd-reports");
-    expect(meta.sidebarItems).toContain("Relatorios");
+    expect(meta.menu).toBe("Comando");
+    expect(meta.sidebarItems).toContain("Acervo");
     expect(meta.expectedActions).toEqual([
       "view",
       "create",

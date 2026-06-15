@@ -164,6 +164,12 @@ const navSections: NavSection[] = [
         icon: <PhotoLibraryRoundedIcon fontSize="small" />,
         menuKey: "library",
       },
+      {
+        label: "Acervo",
+        to: "/cipavd-reports",
+        icon: <DescriptionRoundedIcon fontSize="small" />,
+        menuKey: "cipavd_reports",
+      },
     ],
   },
   {
@@ -247,12 +253,6 @@ const navSections: NavSection[] = [
         to: "/activities-cipavd",
         icon: <EventNoteIcon fontSize="small" />,
         menuKey: "activities_cipavd",
-      },
-      {
-        label: "Relatórios",
-        to: "/cipavd-reports",
-        icon: <DescriptionRoundedIcon fontSize="small" />,
-        menuKey: "cipavd_reports",
       },
       {
         label: "Avisos",

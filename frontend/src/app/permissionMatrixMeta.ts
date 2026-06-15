@@ -159,12 +159,12 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     expectedActions: ["create", "update", "upload", "approve", "download"],
   },
   cipavd_reports: {
-    menu: "Operacoes",
+    menu: "Comando",
     menuOrder: 30,
-    title: "Relatorios CIPAVD",
-    description: "Repositorio restrito de PDFs e DOCX do bloco CIPAVD.",
+    title: "Acervo CIPAVD",
+    description: "Acervo restrito de PDFs e DOCX.",
     route: "/cipavd-reports",
-    sidebarItems: ["Relatorios"],
+    sidebarItems: ["Acervo"],
     expectedActions: ["view", "create", "update", "delete", "upload", "download"],
   },
   notices: {

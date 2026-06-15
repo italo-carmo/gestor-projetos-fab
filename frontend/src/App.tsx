@@ -382,8 +382,8 @@ function App() {
                       }
                     >
                       <PageEntryGate
-                        title="Carregando Relatórios"
-                        description="Preparando pastas e arquivos do repositório CIPAVD."
+                        title="Carregando Acervo"
+                        description="Preparando pastas e arquivos do acervo CIPAVD."
                       >
                         <CipavdReportsPage />
                       </PageEntryGate>

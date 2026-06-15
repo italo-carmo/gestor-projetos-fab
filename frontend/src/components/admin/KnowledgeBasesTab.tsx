@@ -620,15 +620,15 @@ export function KnowledgeBasesTab() {
                     >
                       <Box>
                         <Typography variant="subtitle2" fontWeight={800}>
-                          Importar de Relatórios CIPAVD
+                          Importar do Acervo CIPAVD
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          PDFs e DOCX do repositório restrito podem virar documentos indexados desta base.
+                          PDFs e DOCX do acervo restrito podem virar documentos indexados desta base.
                         </Typography>
                       </Box>
                       <TextField
                         size="small"
-                        label="Buscar relatório"
+                        label="Buscar arquivo"
                         value={reportSearch}
                         onChange={(event) => setReportSearch(event.target.value)}
                         sx={{ minWidth: { md: 280 } }}
@@ -644,14 +644,14 @@ export function KnowledgeBasesTab() {
                       />
                     ) : cipavdReportFiles.length === 0 ? (
                       <EmptyState
-                        title="Nenhum relatório disponível"
-                        description="Envie arquivos no menu Relatórios do bloco CIPAVD para importá-los aqui."
+                        title="Nenhum arquivo disponível"
+                        description="Envie arquivos no menu Acervo do bloco COMANDO para importá-los aqui."
                       />
                     ) : (
                       <Table size="small">
                         <TableHead>
                           <TableRow>
-                            <TableCell>Relatório</TableCell>
+                            <TableCell>Arquivo</TableCell>
                             <TableCell>Origem</TableCell>
                             <TableCell>Tamanho</TableCell>
                             <TableCell>Título na base</TableCell>
@@ -671,7 +671,7 @@ export function KnowledgeBasesTab() {
                               </TableCell>
                               <TableCell sx={{ maxWidth: 300 }}>
                                 <Typography variant="caption" color="text.secondary">
-                                  {report.folderPath ?? report.path ?? 'Relatórios'}
+                                  {report.folderPath ?? report.path ?? 'Acervo'}
                                 </Typography>
                               </TableCell>
                               <TableCell>{formatBytes(report.fileSize)}</TableCell>
