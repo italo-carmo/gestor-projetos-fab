@@ -4015,27 +4015,28 @@ export function AdminPage() {
         das configurações de IA e dos parâmetros executivos do COMGEP.
       </Typography>
 
-      <Card>
-        <CardContent>
+      <Card sx={{ overflow: 'visible' }}>
+        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
           <Box
             sx={{
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', lg: '280px minmax(0, 1fr)' },
-              gap: 2.5,
+              gap: { xs: 2, lg: 2.5 },
               alignItems: 'start',
             }}
           >
             <Paper
               variant="outlined"
               sx={{
-                p: 1.25,
-                borderRadius: 2.5,
+                alignSelf: 'start',
+                p: { xs: 1.5, lg: 1.75 },
+                borderRadius: { xs: 0, lg: '8px 0 0 8px' },
                 bgcolor: '#F8FAFC',
                 position: { lg: 'sticky' },
                 top: { lg: 88 },
               }}
             >
-              <Stack spacing={1.5}>
+              <Stack spacing={2.75}>
                 {adminTabGroups.map((group) => (
                   <Box key={group.label}>
                     <Typography
