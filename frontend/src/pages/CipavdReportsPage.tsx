@@ -1,10 +1,12 @@
 import {
+  Alert,
   Box,
   Breadcrumbs,
   Button,
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -28,6 +30,7 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import CloudUploadRoundedIcon from "@mui/icons-material/CloudUploadRounded";
 import CreateNewFolderRoundedIcon from "@mui/icons-material/CreateNewFolderRounded";
 import DeleteOutlineRoundedIcon from "@mui/icons-material/DeleteOutlineRounded";
@@ -42,7 +45,7 @@ import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import ViewListRoundedIcon from "@mui/icons-material/ViewListRounded";
 import ViewModuleRoundedIcon from "@mui/icons-material/ViewModuleRounded";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { parseApiError } from "../app/apiErrors";
 import { can } from "../app/rbac";
@@ -56,6 +59,7 @@ import {
   useDeleteCipavdReportFolder,
   useDownloadCipavdReportFile,
   useMe,
+  usePreviewCipavdReportPdf,
   useUpdateCipavdReportFile,
   useUpdateCipavdReportFolder,
   useUploadCipavdReportFile,
@@ -66,6 +70,10 @@ import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import {
+  canPreviewCipavdReportPdf,
+  getCipavdReportFileExtension,
+} from "../features/cipavdReports";
 
 type ViewMode = "list" | "grid";
 type DriveTarget =
@@ -90,18 +98,9 @@ function formatDate(value?: string | null) {
   });
 }
 
-function fileExtension(file: CipavdReportFile) {
-  return (
-    String(file.name || file.fileName)
-      .split(".")
-      .pop()
-      ?.toLowerCase() || ""
-  );
-}
-
 function FileIcon({ file }: { file: CipavdReportFile }) {
-  const extension = fileExtension(file);
-  if (extension === "pdf") {
+  const extension = getCipavdReportFileExtension(file);
+  if (canPreviewCipavdReportPdf(file)) {
     return <PictureAsPdfRoundedIcon sx={{ color: "#D93025" }} />;
   }
   if (extension === "docx") {
@@ -122,7 +121,12 @@ function Actions(props: {
 }) {
   const fileTarget = props.target.type === "file" ? props.target.item : null;
   return (
-    <Stack direction="row" spacing={0.25} justifyContent="flex-end">
+    <Stack
+      direction="row"
+      spacing={0.25}
+      justifyContent="flex-end"
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
       {fileTarget && props.canDownload ? (
         <Tooltip title="Baixar">
           <IconButton
@@ -195,6 +199,11 @@ export function CipavdReportsPage() {
   const [moveTarget, setMoveTarget] = useState<DriveTarget | null>(null);
   const [moveFolderId, setMoveFolderId] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<DriveTarget | null>(null);
+  const [previewFile, setPreviewFile] = useState<CipavdReportFile | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
+  const previewRequestIdRef = useRef(0);
 
   const reportsQuery = useCipavdReports({
     folderId: currentFolderId || undefined,
@@ -211,6 +220,7 @@ export function CipavdReportsPage() {
   const updateFile = useUpdateCipavdReportFile();
   const deleteFile = useDeleteCipavdReportFile();
   const downloadFile = useDownloadCipavdReportFile();
+  const previewPdf = usePreviewCipavdReportPdf();
 
   const canCreate = can(me, "cipavd_reports", "create");
   const canUpdate = can(me, "cipavd_reports", "update");
@@ -229,6 +239,31 @@ export function CipavdReportsPage() {
     const last = breadcrumbs[breadcrumbs.length - 1];
     return last?.name ?? "Relatórios";
   }, [breadcrumbs]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  const replacePreviewUrl = (nextUrl: string | null) => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+    }
+    previewUrlRef.current = nextUrl;
+    setPreviewUrl(nextUrl);
+  };
+
+  const closePreview = () => {
+    previewRequestIdRef.current += 1;
+    replacePreviewUrl(null);
+    setPreviewFile(null);
+    setPreviewError(null);
+    previewPdf.reset();
+  };
 
   const navigateToFolder = (folderId: string | null) => {
     const params = new URLSearchParams(searchParams);
@@ -380,6 +415,40 @@ export function CipavdReportsPage() {
         message: parseApiError(error).message ?? "Erro ao baixar arquivo.",
         severity: "error",
       });
+    }
+  };
+
+  const handlePreview = async (file: CipavdReportFile) => {
+    if (!canPreviewCipavdReportPdf(file)) {
+      toast.push({
+        message: "Visualização disponível apenas para PDFs.",
+        severity: "info",
+      });
+      return;
+    }
+    if (!canDownload) {
+      toast.push({
+        message: "Você não tem permissão para visualizar este arquivo.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    setPreviewFile(file);
+    setPreviewError(null);
+    replacePreviewUrl(null);
+    const requestId = previewRequestIdRef.current + 1;
+    previewRequestIdRef.current = requestId;
+
+    try {
+      const blob = await previewPdf.mutateAsync(file.id);
+      if (previewRequestIdRef.current !== requestId) return;
+      replacePreviewUrl(URL.createObjectURL(blob));
+    } catch (error) {
+      if (previewRequestIdRef.current !== requestId) return;
+      setPreviewError(
+        parseApiError(error).message ?? "Erro ao carregar visualização.",
+      );
     }
   };
 
@@ -587,7 +656,16 @@ export function CipavdReportsPage() {
                   </TableRow>
                 ))}
                 {files.map((file) => (
-                  <TableRow key={`file-${file.id}`} hover>
+                  <TableRow
+                    key={`file-${file.id}`}
+                    hover
+                    onDoubleClick={() => void handlePreview(file)}
+                    sx={{
+                      cursor: canPreviewCipavdReportPdf(file)
+                        ? "zoom-in"
+                        : "default",
+                    }}
+                  >
                     <TableCell>
                       <Stack direction="row" spacing={1.2} alignItems="center">
                         <FileIcon file={file} />
@@ -600,7 +678,10 @@ export function CipavdReportsPage() {
                       <Chip
                         size="small"
                         variant="outlined"
-                        label={fileExtension(file).toUpperCase() || "ARQ"}
+                        label={
+                          getCipavdReportFileExtension(file).toUpperCase() ||
+                          "ARQ"
+                        }
                       />
                     </TableCell>
                     <TableCell>{formatBytes(file.fileSize)}</TableCell>
@@ -679,8 +760,12 @@ export function CipavdReportsPage() {
                 <Card
                   key={`file-card-${file.id}`}
                   variant="outlined"
+                  onDoubleClick={() => void handlePreview(file)}
                   sx={{
                     borderRadius: 2,
+                    cursor: canPreviewCipavdReportPdf(file)
+                      ? "zoom-in"
+                      : "default",
                     borderColor: "#DADCE0",
                     "&:hover": {
                       borderColor: "#1A73E8",
@@ -795,6 +880,100 @@ export function CipavdReportsPage() {
             Mover
           </Button>
         </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(previewFile)}
+        onClose={closePreview}
+        fullWidth
+        maxWidth="lg"
+        PaperProps={{
+          sx: {
+            height: { xs: "92vh", md: "88vh" },
+            maxHeight: "calc(100vh - 24px)",
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            py: 1.2,
+            pr: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1.5,
+          }}
+        >
+          <Stack direction="row" spacing={1.2} alignItems="center" minWidth={0}>
+            <PictureAsPdfRoundedIcon sx={{ color: "#D93025" }} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="subtitle1" fontWeight={750} noWrap>
+                {previewFile?.name ?? "PDF"}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" noWrap>
+                PDF · {formatBytes(previewFile?.fileSize)} ·{" "}
+                {formatDate(previewFile?.updatedAt)}
+              </Typography>
+            </Box>
+          </Stack>
+          <Stack direction="row" spacing={0.5} alignItems="center">
+            {previewFile && canDownload ? (
+              <Tooltip title="Baixar">
+                <IconButton
+                  size="small"
+                  onClick={() => void handleDownload(previewFile)}
+                >
+                  <DownloadRoundedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
+            <Tooltip title="Fechar">
+              <IconButton size="small" onClick={closePreview}>
+                <CloseRoundedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </DialogTitle>
+        <DialogContent
+          dividers
+          sx={{
+            p: 0,
+            flex: 1,
+            display: "flex",
+            minHeight: 0,
+            bgcolor: "#F8FAFD",
+          }}
+        >
+          {previewPdf.isPending ? (
+            <Stack
+              spacing={1.5}
+              alignItems="center"
+              justifyContent="center"
+              sx={{ width: "100%", height: "100%" }}
+            >
+              <CircularProgress size={30} />
+              <Typography color="text.secondary">
+                Carregando visualização
+              </Typography>
+            </Stack>
+          ) : previewError ? (
+            <Box sx={{ width: "100%", p: 2 }}>
+              <Alert severity="error">{previewError}</Alert>
+            </Box>
+          ) : previewUrl ? (
+            <Box
+              component="iframe"
+              title={`Visualizador PDF - ${previewFile?.name ?? "relatorio"}`}
+              src={previewUrl}
+              sx={{
+                border: 0,
+                width: "100%",
+                height: "100%",
+                bgcolor: "background.paper",
+              }}
+            />
+          ) : null}
+        </DialogContent>
       </Dialog>
 
       <ConfirmDialog

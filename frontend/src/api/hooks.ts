@@ -3001,6 +3001,20 @@ export function useDownloadCipavdReportFile() {
   });
 }
 
+export function usePreviewCipavdReportPdf() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.get(`/cipavd-reports/files/${id}/download`, {
+        responseType: "blob",
+      });
+      const contentType = String(response.headers["content-type"] ?? "");
+      return new Blob([response.data], {
+        type: contentType.includes("pdf") ? contentType : "application/pdf",
+      });
+    },
+  });
+}
+
 /** Meetings */
 export function useMeetings(filters: Record<string, any>, enabled = true) {
   return useQuery({
