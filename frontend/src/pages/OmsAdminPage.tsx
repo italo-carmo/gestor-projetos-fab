@@ -12,6 +12,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -48,6 +49,19 @@ import {
   type OmCpcaPresidentFilter,
 } from "../features/omCpcaCoverage";
 
+type CpcaPresidentSummary = {
+  id: string;
+  designationBulletin?: string | null;
+  assignedAt?: string | null;
+  assignmentSourceLabel?: string | null;
+  assignedByUser?: { name?: string | null } | null;
+  user?: {
+    id?: string | null;
+    name?: string | null;
+    email?: string | null;
+  } | null;
+};
+
 type LocalityItem = {
   id: string;
   code: string;
@@ -56,6 +70,7 @@ type LocalityItem = {
   hasCpca?: boolean;
   notes?: string | null;
   cpcaMembersCount?: number | null;
+  cpcaMembers?: CpcaMemberSummary[];
   cpcaManagedByLocality?: {
     id: string;
     code: string;
@@ -69,16 +84,27 @@ type LocalityItem = {
     uf?: string | null;
     hasCpca?: boolean;
   }>;
-  currentPresident?: {
-    id: string;
-    assignedAt?: string | null;
-    user?: {
-      id: string;
-      name?: string | null;
-      email?: string | null;
-    } | null;
+  currentPresident?: CpcaPresidentSummary | null;
+};
+
+type CpcaMemberSummary = {
+  id: string;
+  createdAt?: string | null;
+  userId?: string | null;
+  user?: {
+    id?: string | null;
+    name?: string | null;
+    email?: string | null;
+    ldapUid?: string | null;
+  } | null;
+  addedByUser?: {
+    id?: string | null;
+    name?: string | null;
+    email?: string | null;
   } | null;
 };
+
+type DrawerMode = "create" | "view" | "edit";
 
 const UF_OPTIONS = [
   "AC",
@@ -240,6 +266,7 @@ export function OmsAdminPage() {
   const [presidentFilter, setPresidentFilter] =
     useState<OmCpcaPresidentFilter>("ALL");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>("create");
   const [editing, setEditing] = useState<LocalityItem | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState<OmsForm>(DEFAULT_FORM);
@@ -272,16 +299,30 @@ export function OmsAdminPage() {
       Boolean(editing?.hasCpca),
   );
   const currentPresident = cpcaOverviewQuery.data?.currentPresident as
-    | {
-        id: string;
-        designationBulletin?: string | null;
-        assignedAt?: string;
-        assignmentSourceLabel?: string | null;
-        assignedByUser?: { name?: string | null } | null;
-        user?: { name?: string | null; email?: string | null } | null;
-      }
+    | CpcaPresidentSummary
     | null
     | undefined;
+  const isViewMode = drawerMode === "view";
+  const drawerPresident = currentPresident ?? editing?.currentPresident ?? null;
+  const drawerCpcaMembers = useMemo(() => {
+    const overviewMembers = cpcaOverviewQuery.data?.members as
+      | CpcaMemberSummary[]
+      | undefined;
+    const sourceMembers = Array.isArray(overviewMembers)
+      ? overviewMembers
+      : (editing?.cpcaMembers ?? []);
+    const presidentUserId = String(drawerPresident?.user?.id ?? "").trim();
+    return sourceMembers.filter((member) => {
+      const memberUserId = String(
+        member.user?.id ?? member.userId ?? "",
+      ).trim();
+      return !presidentUserId || memberUserId !== presidentUserId;
+    });
+  }, [
+    cpcaOverviewQuery.data?.members,
+    drawerPresident?.user?.id,
+    editing?.cpcaMembers,
+  ]);
   const recentCommissionHistory = (
     (cpcaOverviewQuery.data?.history ?? []) as CpcaCommissionHistoryItem[]
   ).slice(0, 4);
@@ -379,20 +420,16 @@ export function OmsAdminPage() {
     setSelectedLocalityIds((prev) => prev.filter((id) => available.has(id)));
   }, [localities]);
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm(DEFAULT_FORM);
+  const resetPresidentDraft = () => {
     setManagedUfFilter("");
     setPresidentIdentifier("");
     setPresidentBulletin("");
     setPresidentCandidate(null);
     setPendingPresidentConfirm(null);
     setPendingPresidentOverwrite(null);
-    setDrawerOpen(true);
   };
 
-  const openEdit = (locality: LocalityItem) => {
-    setEditing(locality);
+  const fillFormFromLocality = (locality: LocalityItem) => {
     setForm({
       code: locality.code ?? "",
       name: locality.name ?? "",
@@ -401,25 +438,38 @@ export function OmsAdminPage() {
       notes: locality.notes ?? "",
       managedLocalityIds: locality.cpcaManagedLocalityIds ?? [],
     });
-    setManagedUfFilter("");
-    setPresidentIdentifier("");
-    setPresidentBulletin("");
-    setPresidentCandidate(null);
-    setPendingPresidentConfirm(null);
-    setPendingPresidentOverwrite(null);
+  };
+
+  const openCreate = () => {
+    setDrawerMode("create");
+    setEditing(null);
+    setForm(DEFAULT_FORM);
+    resetPresidentDraft();
+    setDrawerOpen(true);
+  };
+
+  const openView = (locality: LocalityItem) => {
+    setDrawerMode("view");
+    setEditing(locality);
+    fillFormFromLocality(locality);
+    resetPresidentDraft();
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (locality: LocalityItem) => {
+    setDrawerMode("edit");
+    setEditing(locality);
+    fillFormFromLocality(locality);
+    resetPresidentDraft();
     setDrawerOpen(true);
   };
 
   const closeDrawer = () => {
     setDrawerOpen(false);
+    setDrawerMode("create");
     setEditing(null);
     setForm(DEFAULT_FORM);
-    setManagedUfFilter("");
-    setPresidentIdentifier("");
-    setPresidentBulletin("");
-    setPresidentCandidate(null);
-    setPendingPresidentConfirm(null);
-    setPendingPresidentOverwrite(null);
+    resetPresidentDraft();
   };
 
   const toggleSelectVisible = (checked: boolean) => {
@@ -920,9 +970,25 @@ export function OmsAdminPage() {
                       Number(locality.cpcaMembersCount ?? 0),
                     );
                     return (
-                      <TableRow key={locality.id} hover>
+                      <TableRow
+                        key={locality.id}
+                        hover
+                        tabIndex={0}
+                        role="button"
+                        onClick={() => openView(locality)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            openView(locality);
+                          }
+                        }}
+                        sx={{ cursor: "pointer" }}
+                      >
                         {canUpdateOms ? (
-                          <TableCell padding="checkbox">
+                          <TableCell
+                            padding="checkbox"
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             <Checkbox
                               size="small"
                               checked={selectedIdSet.has(locality.id)}
@@ -1030,7 +1096,10 @@ export function OmsAdminPage() {
                             }}
                           />
                         </TableCell>
-                        <TableCell align="right">
+                        <TableCell
+                          align="right"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           {canUpdateOms ? (
                             <Button
                               size="small"
@@ -1072,9 +1141,36 @@ export function OmsAdminPage() {
           gap={2}
           sx={{ mt: { xs: 8, md: 9 } }}
         >
-          <Typography variant="h6">
-            {editing ? "Editar OM" : "Nova OM"}
-          </Typography>
+          <Stack
+            direction="row"
+            spacing={1}
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Box>
+              <Typography variant="h6">
+                {drawerMode === "create"
+                  ? "Nova OM"
+                  : isViewMode
+                    ? "Detalhes da OM"
+                    : "Editar OM"}
+              </Typography>
+              {editing ? (
+                <Typography variant="body2" color="text.secondary">
+                  {formatOmLabel(editing.code, editing.name)}
+                </Typography>
+              ) : null}
+            </Box>
+            {isViewMode && canUpdateOms ? (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => setDrawerMode("edit")}
+              >
+                Editar
+              </Button>
+            ) : null}
+          </Stack>
           <TextField
             size="small"
             label="Código"
@@ -1086,6 +1182,7 @@ export function OmsAdminPage() {
               }))
             }
             placeholder="Ex: BASV"
+            disabled={isViewMode}
           />
           <TextField
             size="small"
@@ -1095,6 +1192,7 @@ export function OmsAdminPage() {
               setForm((prev) => ({ ...prev, name: event.target.value }))
             }
             placeholder="Ex: Base Aérea de Salvador"
+            disabled={isViewMode}
           />
           <TextField
             size="small"
@@ -1105,6 +1203,7 @@ export function OmsAdminPage() {
             }
             select
             helperText="Sigla do estado para o Mapa Geográfico"
+            disabled={isViewMode}
           >
             <MenuItem value="">
               <em>Nenhum</em>
@@ -1126,6 +1225,7 @@ export function OmsAdminPage() {
                 hasCpca: event.target.value === "SIM",
               }))
             }
+            disabled={isViewMode}
           >
             <MenuItem value="SIM">Sim</MenuItem>
             <MenuItem value="NAO">Não</MenuItem>
@@ -1144,7 +1244,7 @@ export function OmsAdminPage() {
                   value={managedUfFilter}
                   onChange={(event) => setManagedUfFilter(event.target.value)}
                   sx={{ minWidth: { xs: "100%", md: 200 } }}
-                  disabled={!form.hasCpca}
+                  disabled={isViewMode || !form.hasCpca}
                   helperText={
                     form.hasCpca
                       ? "Filtra a lista de OMs disponíveis para vincular."
@@ -1172,7 +1272,9 @@ export function OmsAdminPage() {
                       color="primary"
                       variant="outlined"
                       label={`UF ${managedUfFilter}`}
-                      onDelete={() => setManagedUfFilter("")}
+                      onDelete={
+                        isViewMode ? undefined : () => setManagedUfFilter("")
+                      }
                     />
                   ) : null}
                 </Stack>
@@ -1212,7 +1314,7 @@ export function OmsAdminPage() {
                     ? `Nenhuma OM encontrada para a UF ${managedUfFilter}.`
                     : "Nenhuma OM disponível."
                 }
-                disabled={!form.hasCpca}
+                disabled={isViewMode || !form.hasCpca}
               />
             </Stack>
           ) : null}
@@ -1246,8 +1348,9 @@ export function OmsAdminPage() {
                 color="text.secondary"
                 sx={{ mb: 1.5 }}
               >
-                Pesquisa por e-mail/CPF no LDAP com confirmação antes da troca
-                do presidente.
+                {isViewMode
+                  ? "Dados atuais da presidência vinculada a esta CPCA."
+                  : "Pesquisa por e-mail/CPF no LDAP com confirmação antes da troca do presidente."}
               </Typography>
               <Stack spacing={1.2}>
                 {!editing?.hasCpca ? (
@@ -1256,56 +1359,62 @@ export function OmsAdminPage() {
                     permitir designação de presidente.
                   </Typography>
                 ) : null}
-                <TextField
-                  size="small"
-                  label="E-mail ou CPF (LDAP)"
-                  value={presidentIdentifier}
-                  onChange={(event) =>
-                    setPresidentIdentifier(event.target.value)
-                  }
-                />
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    void handleLookupPresident();
-                  }}
-                  disabled={
-                    !editing?.hasCpca ||
-                    !presidentIdentifier.trim() ||
-                    lookupPresidentCandidate.isPending
-                  }
-                >
-                  {lookupPresidentCandidate.isPending
-                    ? "Pesquisando..."
-                    : "Pesquisar"}
-                </Button>
-                <TextField
-                  size="small"
-                  label="Boletim de designação do presidente"
-                  value={presidentBulletin}
-                  onChange={(event) => setPresidentBulletin(event.target.value)}
-                  placeholder="Opcional"
-                />
+                {!isViewMode ? (
+                  <>
+                    <TextField
+                      size="small"
+                      label="E-mail ou CPF (LDAP)"
+                      value={presidentIdentifier}
+                      onChange={(event) =>
+                        setPresidentIdentifier(event.target.value)
+                      }
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        void handleLookupPresident();
+                      }}
+                      disabled={
+                        !editing?.hasCpca ||
+                        !presidentIdentifier.trim() ||
+                        lookupPresidentCandidate.isPending
+                      }
+                    >
+                      {lookupPresidentCandidate.isPending
+                        ? "Pesquisando..."
+                        : "Pesquisar"}
+                    </Button>
+                    <TextField
+                      size="small"
+                      label="Boletim de designação do presidente"
+                      value={presidentBulletin}
+                      onChange={(event) =>
+                        setPresidentBulletin(event.target.value)
+                      }
+                      placeholder="Opcional"
+                    />
+                  </>
+                ) : null}
 
                 <Typography variant="caption" color="text.secondary">
                   Presidente atual:{" "}
-                  {currentPresident?.user?.name ?? "Não designado"}
+                  {drawerPresident?.user?.name ?? "Não designado"}
                 </Typography>
-                {currentPresident ? (
+                {drawerPresident ? (
                   <Typography variant="caption" color="text.secondary">
-                    {currentPresident.assignmentSourceLabel ??
+                    {drawerPresident.assignmentSourceLabel ??
                       "Origem não identificada"}
-                    {currentPresident.assignedByUser?.name
-                      ? ` por ${currentPresident.assignedByUser.name}`
+                    {drawerPresident.assignedByUser?.name
+                      ? ` por ${drawerPresident.assignedByUser.name}`
                       : ""}
-                    {currentPresident.assignedAt
-                      ? ` em ${new Date(currentPresident.assignedAt).toLocaleString("pt-BR")}`
+                    {drawerPresident.assignedAt
+                      ? ` em ${new Date(drawerPresident.assignedAt).toLocaleString("pt-BR")}`
                       : ""}
                   </Typography>
                 ) : null}
                 <Typography variant="caption" color="text.secondary">
                   Boletim atual:{" "}
-                  {currentPresident?.designationBulletin || "Não informado"}
+                  {drawerPresident?.designationBulletin || "Não informado"}
                 </Typography>
 
                 <Box
@@ -1454,6 +1563,97 @@ export function OmsAdminPage() {
               </Stack>
             </Box>
           ) : null}
+          {editing ? (
+            <Box
+              sx={{
+                border: (theme) => `1px solid ${theme.palette.divider}`,
+                borderRadius: 2,
+                p: 1.5,
+              }}
+            >
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{ mb: 1 }}
+              >
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    Membros da CPCA
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Membros cadastrados na comissão, sem contar o presidente.
+                  </Typography>
+                </Box>
+                <Chip
+                  size="small"
+                  color={drawerCpcaMembers.length > 0 ? "primary" : "default"}
+                  variant={drawerCpcaMembers.length > 0 ? "filled" : "outlined"}
+                  label={drawerCpcaMembers.length}
+                  sx={{
+                    minWidth: 34,
+                    fontWeight: 800,
+                    "& .MuiChip-label": { px: 1 },
+                  }}
+                />
+              </Stack>
+              {!editing.hasCpca ? (
+                <Typography variant="body2" color="text.secondary">
+                  Esta OM não possui CPCA própria.{" "}
+                  {editing.cpcaManagedByLocality
+                    ? `A comissão responsável é ${formatOmLabel(
+                        editing.cpcaManagedByLocality.code,
+                        editing.cpcaManagedByLocality.name,
+                      )}.`
+                    : "Ela ainda não está vinculada a uma comissão responsável."}
+                </Typography>
+              ) : cpcaOverviewQuery.isLoading && canManagePresident ? (
+                <Typography variant="body2" color="text.secondary">
+                  Carregando membros...
+                </Typography>
+              ) : drawerCpcaMembers.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  Nenhum membro cadastrado nesta CPCA.
+                </Typography>
+              ) : (
+                <TableContainer
+                  sx={{
+                    border: (theme) => `1px solid ${theme.palette.divider}`,
+                    borderRadius: 1.5,
+                    maxHeight: 260,
+                  }}
+                >
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Militar</TableCell>
+                        <TableCell>E-mail</TableCell>
+                        <TableCell>UID</TableCell>
+                        <TableCell>Cadastrado por</TableCell>
+                        <TableCell>Em</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {drawerCpcaMembers.map((member) => (
+                        <TableRow key={member.id}>
+                          <TableCell>
+                            {member.user?.name || "Nome não informado"}
+                          </TableCell>
+                          <TableCell>{member.user?.email || "-"}</TableCell>
+                          <TableCell>{member.user?.ldapUid || "-"}</TableCell>
+                          <TableCell>
+                            {member.addedByUser?.name || "-"}
+                          </TableCell>
+                          <TableCell>{formatDateTime(member.createdAt)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+          ) : null}
           <TextField
             size="small"
             label="Observações"
@@ -1464,10 +1664,13 @@ export function OmsAdminPage() {
             multiline
             minRows={3}
             placeholder="Notas administrativas da OM"
+            disabled={isViewMode}
           />
           <Box display="flex" gap={1} justifyContent="flex-end">
-            <Button onClick={closeDrawer}>Cancelar</Button>
-            {(editing ? canUpdateOms : canCreateOms) ? (
+            <Button onClick={closeDrawer}>
+              {isViewMode ? "Fechar" : "Cancelar"}
+            </Button>
+            {!isViewMode && (editing ? canUpdateOms : canCreateOms) ? (
               <Button
                 variant="contained"
                 onClick={() => {
@@ -1521,7 +1724,7 @@ export function OmsAdminPage() {
         title="OM já possui presidente"
         message="Esta OM já possui presidente cadastrado. Deseja registrar ciência e prosseguir com a troca?"
         highlightText={
-          currentPresident?.user?.name ?? "Presidente atual já cadastrado"
+          drawerPresident?.user?.name ?? "Presidente atual já cadastrado"
         }
         severity="warning"
         confirmLabel="Prosseguir"

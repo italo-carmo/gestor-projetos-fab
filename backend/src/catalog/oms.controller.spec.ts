@@ -104,9 +104,46 @@ describe('OmsController permissions', () => {
           },
         },
         cpcaCommissionMembers: [
-          { userId: 'user-1' },
-          { userId: 'member-1' },
-          { userId: 'member-2' },
+          {
+            id: 'member-rel-president',
+            createdAt: new Date('2026-04-22T12:00:00.000Z'),
+            userId: 'user-1',
+            user: {
+              id: 'user-1',
+              name: 'CAP JOAO SILVA BASV',
+              email: 'joao.silva@fab.mil.br',
+              ldapUid: 'joao.silva',
+            },
+            addedByUser: null,
+          },
+          {
+            id: 'member-rel-1',
+            createdAt: new Date('2026-04-23T12:00:00.000Z'),
+            userId: 'member-1',
+            user: {
+              id: 'member-1',
+              name: 'TEN MARIA SOUZA',
+              email: 'maria.souza@fab.mil.br',
+              ldapUid: 'maria.souza',
+            },
+            addedByUser: {
+              id: 'user-1',
+              name: 'CAP JOAO SILVA BASV',
+              email: 'joao.silva@fab.mil.br',
+            },
+          },
+          {
+            id: 'member-rel-2',
+            createdAt: new Date('2026-04-24T12:00:00.000Z'),
+            userId: 'member-2',
+            user: {
+              id: 'member-2',
+              name: 'SGT ANA COSTA',
+              email: 'ana.costa@fab.mil.br',
+              ldapUid: 'ana.costa',
+            },
+            addedByUser: null,
+          },
         ],
         cpcaCoverageAsManager: [],
         cpcaCoverageAsManaged: [],
@@ -138,6 +175,24 @@ describe('OmsController permissions', () => {
         },
       },
       cpcaMembersCount: 2,
+      cpcaMembers: [
+        {
+          id: 'member-rel-1',
+          user: {
+            id: 'member-1',
+            name: 'TEN MARIA SOUZA',
+            email: 'maria.souza@fab.mil.br',
+          },
+        },
+        {
+          id: 'member-rel-2',
+          user: {
+            id: 'member-2',
+            name: 'SGT ANA COSTA',
+            email: 'ana.costa@fab.mil.br',
+          },
+        },
+      ],
     });
     expect(result.items[0].cpcaCommissionMembers).toBeUndefined();
   });

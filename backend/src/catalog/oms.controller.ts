@@ -65,8 +65,26 @@ export class OmsController {
         },
         cpcaCommissionMembers: {
           select: {
+            id: true,
+            createdAt: true,
             userId: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                ldapUid: true,
+              },
+            },
+            addedByUser: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
+          orderBy: { user: { name: 'asc' } },
         },
         cpcaCoverageAsManager: {
           select: {
@@ -101,10 +119,21 @@ export class OmsController {
         const cpcaMembersCount = (item.cpcaCommissionMembers ?? []).filter(
           (member) => String(member.userId ?? '').trim() !== presidentUserId,
         ).length;
+        const cpcaMembers = (item.cpcaCommissionMembers ?? [])
+          .filter(
+            (member) => String(member.userId ?? '').trim() !== presidentUserId,
+          )
+          .map((member) => ({
+            id: member.id,
+            createdAt: member.createdAt,
+            user: member.user,
+            addedByUser: member.addedByUser,
+          }));
 
         return {
           ...item,
           cpcaMembersCount,
+          cpcaMembers,
           cpcaManagedLocalities: item.cpcaCoverageAsManager.map((entry) => ({
             id: entry.managedOm.id,
             code: entry.managedOm.code,
