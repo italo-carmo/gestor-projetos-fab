@@ -55,6 +55,7 @@ type LocalityItem = {
   uf?: string | null;
   hasCpca?: boolean;
   notes?: string | null;
+  cpcaMembersCount?: number | null;
   cpcaManagedByLocality?: {
     id: string;
     code: string;
@@ -851,178 +852,209 @@ export function OmsAdminPage() {
               description="Ajuste o filtro de busca ou cadastre uma nova OM."
             />
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: "primary.main" }}>
-                  {canUpdateOms ? (
-                    <TableCell padding="checkbox" sx={{ color: "white" }}>
-                      <Checkbox
-                        size="small"
-                        checked={allVisibleSelected}
-                        indeterminate={someVisibleSelected}
-                        onChange={(_, checked) => toggleSelectVisible(checked)}
-                        sx={{
-                          color: "white",
-                          "&.Mui-checked": { color: "white" },
-                        }}
-                      />
+            <Box sx={{ overflowX: "auto" }}>
+              <Table size="small" sx={{ minWidth: canUpdateOms ? 1080 : 1020 }}>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "primary.main" }}>
+                    {canUpdateOms ? (
+                      <TableCell padding="checkbox" sx={{ color: "white" }}>
+                        <Checkbox
+                          size="small"
+                          checked={allVisibleSelected}
+                          indeterminate={someVisibleSelected}
+                          onChange={(_, checked) =>
+                            toggleSelectVisible(checked)
+                          }
+                          sx={{
+                            color: "white",
+                            "&.Mui-checked": { color: "white" },
+                          }}
+                        />
+                      </TableCell>
+                    ) : null}
+                    <TableCell sx={{ color: "white", fontWeight: 700 }}>
+                      Código
                     </TableCell>
-                  ) : null}
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>
-                    Código
-                  </TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>
-                    Nome
-                  </TableCell>
-                  <TableCell
-                    sx={{ color: "white", fontWeight: 700, width: 80 }}
-                  >
-                    UF
-                  </TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>
-                    Cobertura CPCA
-                  </TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>
-                    Comissão responsável
-                  </TableCell>
-                  <TableCell sx={{ color: "white", fontWeight: 700 }}>
-                    Presidente
-                  </TableCell>
-                  <TableCell
-                    sx={{ color: "white", fontWeight: 700 }}
-                    align="right"
-                  >
-                    Ações
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredLocalities.map((locality) => {
-                  const coverageStatus = resolveOmCpcaCoverageStatus(locality);
-                  const managedBy = locality.cpcaManagedByLocality;
-                  const president = locality.currentPresident;
-                  const presidentDisplay = formatOmCpcaPresidentBadgeLabel(
-                    president?.user?.name,
-                  );
-                  return (
-                    <TableRow key={locality.id} hover>
-                      {canUpdateOms ? (
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            size="small"
-                            checked={selectedIdSet.has(locality.id)}
-                            onChange={(_, checked) =>
-                              toggleSelectLocality(locality.id, checked)
-                            }
-                          />
+                    <TableCell sx={{ color: "white", fontWeight: 700 }}>
+                      Nome
+                    </TableCell>
+                    <TableCell
+                      sx={{ color: "white", fontWeight: 700, width: 80 }}
+                    >
+                      UF
+                    </TableCell>
+                    <TableCell sx={{ color: "white", fontWeight: 700 }}>
+                      Cobertura CPCA
+                    </TableCell>
+                    <TableCell sx={{ color: "white", fontWeight: 700 }}>
+                      Comissão responsável
+                    </TableCell>
+                    <TableCell sx={{ color: "white", fontWeight: 700 }}>
+                      Presidente
+                    </TableCell>
+                    <TableCell
+                      sx={{ color: "white", fontWeight: 700 }}
+                      align="center"
+                    >
+                      Membros
+                    </TableCell>
+                    <TableCell
+                      sx={{ color: "white", fontWeight: 700 }}
+                      align="right"
+                    >
+                      Ações
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredLocalities.map((locality) => {
+                    const coverageStatus =
+                      resolveOmCpcaCoverageStatus(locality);
+                    const managedBy = locality.cpcaManagedByLocality;
+                    const president = locality.currentPresident;
+                    const presidentDisplay = formatOmCpcaPresidentBadgeLabel(
+                      president?.user?.name,
+                    );
+                    const cpcaMembersCount = Math.max(
+                      0,
+                      Number(locality.cpcaMembersCount ?? 0),
+                    );
+                    return (
+                      <TableRow key={locality.id} hover>
+                        {canUpdateOms ? (
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              size="small"
+                              checked={selectedIdSet.has(locality.id)}
+                              onChange={(_, checked) =>
+                                toggleSelectLocality(locality.id, checked)
+                              }
+                            />
+                          </TableCell>
+                        ) : null}
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={700}>
+                            {locality.code}
+                          </Typography>
                         </TableCell>
-                      ) : null}
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={700}>
-                          {locality.code}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={600}>
-                          {locality.name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{locality.uf ?? "—"}</TableCell>
-                      <TableCell>
-                        {coverageStatus === "OWN_CPCA" ? (
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {locality.name}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{locality.uf ?? "—"}</TableCell>
+                        <TableCell>
+                          {coverageStatus === "OWN_CPCA" ? (
+                            <Chip
+                              size="small"
+                              color="success"
+                              label="CPCA própria"
+                            />
+                          ) : coverageStatus === "MANAGED_BY_OTHER" ? (
+                            <Chip
+                              size="small"
+                              color="info"
+                              label="Coberta por outra CPCA"
+                            />
+                          ) : (
+                            <Chip
+                              size="small"
+                              color="warning"
+                              variant="outlined"
+                              label="Sem cobertura"
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {coverageStatus === "OWN_CPCA" ? (
+                            <Chip
+                              size="small"
+                              color="success"
+                              variant="outlined"
+                              label="Própria OM"
+                            />
+                          ) : managedBy ? (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              color="info"
+                              label={managedBy.code}
+                              title={formatOmLabel(
+                                managedBy.code,
+                                managedBy.name,
+                              )}
+                            />
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {president && presidentDisplay.label ? (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              label={presidentDisplay.label}
+                              title={presidentDisplay.fullName || undefined}
+                              sx={{
+                                maxWidth: 180,
+                                fontWeight: 700,
+                                "& .MuiChip-label": {
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                },
+                              }}
+                            />
+                          ) : president ? (
+                            <Typography variant="body2" color="text.secondary">
+                              Nome não informado
+                            </Typography>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              Sem presidente
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="center">
                           <Chip
                             size="small"
-                            color="success"
-                            label="CPCA própria"
-                          />
-                        ) : coverageStatus === "MANAGED_BY_OTHER" ? (
-                          <Chip
-                            size="small"
-                            color="info"
-                            label="Coberta por outra CPCA"
-                          />
-                        ) : (
-                          <Chip
-                            size="small"
-                            color="warning"
-                            variant="outlined"
-                            label="Sem cobertura"
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {coverageStatus === "OWN_CPCA" ? (
-                          <Chip
-                            size="small"
-                            color="success"
-                            variant="outlined"
-                            label="Própria OM"
-                          />
-                        ) : managedBy ? (
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            color="info"
-                            label={managedBy.code}
-                            title={formatOmLabel(
-                              managedBy.code,
-                              managedBy.name,
-                            )}
-                          />
-                        ) : (
-                          "—"
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {president && presidentDisplay.label ? (
-                          <Chip
-                            size="small"
-                            variant="outlined"
-                            label={presidentDisplay.label}
-                            title={presidentDisplay.fullName || undefined}
+                            color={cpcaMembersCount > 0 ? "primary" : "default"}
+                            variant={
+                              cpcaMembersCount > 0 ? "filled" : "outlined"
+                            }
+                            label={cpcaMembersCount}
+                            title="Membros cadastrados na CPCA, sem contar o presidente"
                             sx={{
-                              maxWidth: 180,
-                              fontWeight: 700,
-                              "& .MuiChip-label": {
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                              },
+                              minWidth: 34,
+                              fontWeight: 800,
+                              "& .MuiChip-label": { px: 1 },
                             }}
                           />
-                        ) : president ? (
-                          <Typography variant="body2" color="text.secondary">
-                            Nome não informado
-                          </Typography>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            Sem presidente
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        {canUpdateOms ? (
-                          <Button
-                            size="small"
-                            onClick={() => openEdit(locality)}
-                          >
-                            Editar
-                          </Button>
-                        ) : null}
-                        {canDeleteOms ? (
-                          <Button
-                            size="small"
-                            color="error"
-                            onClick={() => setDeleteId(locality.id)}
-                          >
-                            Excluir
-                          </Button>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                        <TableCell align="right">
+                          {canUpdateOms ? (
+                            <Button
+                              size="small"
+                              onClick={() => openEdit(locality)}
+                            >
+                              Editar
+                            </Button>
+                          ) : null}
+                          {canDeleteOms ? (
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => setDeleteId(locality.id)}
+                            >
+                              Excluir
+                            </Button>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </Box>
           )}
         </CardContent>
       </Card>

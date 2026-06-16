@@ -63,6 +63,11 @@ export class OmsController {
             },
           },
         },
+        cpcaCommissionMembers: {
+          select: {
+            userId: true,
+          },
+        },
         cpcaCoverageAsManager: {
           select: {
             managedOm: {
@@ -89,53 +94,64 @@ export class OmsController {
     });
 
     return {
-      items: items.map((item) => ({
-        ...item,
-        cpcaManagedLocalities: item.cpcaCoverageAsManager.map((entry) => ({
-          id: entry.managedOm.id,
-          code: entry.managedOm.code,
-          name: entry.managedOm.name,
-          uf: entry.managedOm.uf,
-          hasCpca: entry.managedOm.hasCpca,
-        })),
-        cpcaManagedLocalityIds: item.cpcaCoverageAsManager.map(
-          (entry) => entry.managedOm.id,
-        ),
-        cpcaManagedByLocality: item.cpcaCoverageAsManaged[0]?.managerOm
-          ? {
-              id: item.cpcaCoverageAsManaged[0].managerOm.id,
-              code: item.cpcaCoverageAsManaged[0].managerOm.code,
-              name: item.cpcaCoverageAsManaged[0].managerOm.name,
-            }
-          : null,
-        cpcaManagedOms: item.cpcaCoverageAsManager.map((entry) => ({
-          id: entry.managedOm.id,
-          code: entry.managedOm.code,
-          name: entry.managedOm.name,
-          uf: entry.managedOm.uf,
-          hasCpca: entry.managedOm.hasCpca,
-        })),
-        cpcaManagedOmIds: item.cpcaCoverageAsManager.map(
-          (entry) => entry.managedOm.id,
-        ),
-        cpcaManagedByOm: item.cpcaCoverageAsManaged[0]?.managerOm
-          ? {
-              id: item.cpcaCoverageAsManaged[0].managerOm.id,
-              code: item.cpcaCoverageAsManaged[0].managerOm.code,
-              name: item.cpcaCoverageAsManaged[0].managerOm.name,
-            }
-          : null,
-        currentPresident: item.cpcaCommissionPresident
-          ? {
-              id: item.cpcaCommissionPresident.id,
-              assignedAt: item.cpcaCommissionPresident.assignedAt,
-              user: item.cpcaCommissionPresident.user,
-            }
-          : null,
-        cpcaCommissionPresident: undefined,
-        cpcaCoverageAsManager: undefined,
-        cpcaCoverageAsManaged: undefined,
-      })),
+      items: items.map((item) => {
+        const presidentUserId = String(
+          item.cpcaCommissionPresident?.user?.id ?? '',
+        ).trim();
+        const cpcaMembersCount = (item.cpcaCommissionMembers ?? []).filter(
+          (member) => String(member.userId ?? '').trim() !== presidentUserId,
+        ).length;
+
+        return {
+          ...item,
+          cpcaMembersCount,
+          cpcaManagedLocalities: item.cpcaCoverageAsManager.map((entry) => ({
+            id: entry.managedOm.id,
+            code: entry.managedOm.code,
+            name: entry.managedOm.name,
+            uf: entry.managedOm.uf,
+            hasCpca: entry.managedOm.hasCpca,
+          })),
+          cpcaManagedLocalityIds: item.cpcaCoverageAsManager.map(
+            (entry) => entry.managedOm.id,
+          ),
+          cpcaManagedByLocality: item.cpcaCoverageAsManaged[0]?.managerOm
+            ? {
+                id: item.cpcaCoverageAsManaged[0].managerOm.id,
+                code: item.cpcaCoverageAsManaged[0].managerOm.code,
+                name: item.cpcaCoverageAsManaged[0].managerOm.name,
+              }
+            : null,
+          cpcaManagedOms: item.cpcaCoverageAsManager.map((entry) => ({
+            id: entry.managedOm.id,
+            code: entry.managedOm.code,
+            name: entry.managedOm.name,
+            uf: entry.managedOm.uf,
+            hasCpca: entry.managedOm.hasCpca,
+          })),
+          cpcaManagedOmIds: item.cpcaCoverageAsManager.map(
+            (entry) => entry.managedOm.id,
+          ),
+          cpcaManagedByOm: item.cpcaCoverageAsManaged[0]?.managerOm
+            ? {
+                id: item.cpcaCoverageAsManaged[0].managerOm.id,
+                code: item.cpcaCoverageAsManaged[0].managerOm.code,
+                name: item.cpcaCoverageAsManaged[0].managerOm.name,
+              }
+            : null,
+          currentPresident: item.cpcaCommissionPresident
+            ? {
+                id: item.cpcaCommissionPresident.id,
+                assignedAt: item.cpcaCommissionPresident.assignedAt,
+                user: item.cpcaCommissionPresident.user,
+              }
+            : null,
+          cpcaCommissionPresident: undefined,
+          cpcaCommissionMembers: undefined,
+          cpcaCoverageAsManager: undefined,
+          cpcaCoverageAsManaged: undefined,
+        };
+      }),
     };
   }
 

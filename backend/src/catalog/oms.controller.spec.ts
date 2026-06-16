@@ -103,6 +103,11 @@ describe('OmsController permissions', () => {
             email: 'joao.silva@fab.mil.br',
           },
         },
+        cpcaCommissionMembers: [
+          { userId: 'user-1' },
+          { userId: 'member-1' },
+          { userId: 'member-2' },
+        ],
         cpcaCoverageAsManager: [],
         cpcaCoverageAsManaged: [],
       },
@@ -132,6 +137,8 @@ describe('OmsController permissions', () => {
           email: 'joao.silva@fab.mil.br',
         },
       },
+      cpcaMembersCount: 2,
     });
+    expect(result.items[0].cpcaCommissionMembers).toBeUndefined();
   });
 });

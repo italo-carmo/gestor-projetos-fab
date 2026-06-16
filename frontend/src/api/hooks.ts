@@ -3961,6 +3961,7 @@ export function useAssignCpcaPresident() {
         queryKey: ["cpcaCommission", "presidentRequests"],
       });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
+      qc.invalidateQueries({ queryKey: qk.oms });
       qc.invalidateQueries({ queryKey: qk.me });
     },
   });
@@ -3980,6 +3981,7 @@ export function useAddCpcaCommissionMember() {
       (await api.post("/cpca-commission/members", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: qk.oms });
       qc.invalidateQueries({ queryKey: qk.me });
     },
   });
@@ -4015,6 +4017,7 @@ export function useRemoveCpcaCommissionMember() {
       (await api.delete(`/cpca-commission/members/${memberId}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCommission"] });
+      qc.invalidateQueries({ queryKey: qk.oms });
       qc.invalidateQueries({ queryKey: qk.me });
     },
   });
