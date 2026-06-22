@@ -542,7 +542,7 @@ export class CertificatesService {
         continue;
       }
       const options = Array.isArray(question.optionsJson)
-        ? question.optionsJson.map((option) => String(option))
+        ? question.optionsJson.map((option: unknown) => String(option))
         : [];
       if (question.type === CertificateQuestionType.MULTIPLE_CHOICE) {
         const selected = sanitizeText(value, 300);
