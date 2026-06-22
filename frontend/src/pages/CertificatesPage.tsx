@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -130,6 +130,8 @@ const EMPTY_EVENT_DRAFT = {
   certificateTemplateId: "",
 };
 const VISUAL_EDITOR_STORAGE_KEY = "certificate-template-editor-v1";
+const CERTIFICATE_CANVAS_WIDTH = 1123;
+const CERTIFICATE_CANVAS_HEIGHT = 794;
 
 function todayInputValue() {
   return new Date().toISOString().slice(0, 10);
@@ -209,12 +211,30 @@ function CertificateLayoutPreview(props: {
   layoutJson: Record<string, unknown>;
   fullName?: string;
 }) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const [shellWidth, setShellWidth] = useState(0);
   const elements = readCertificateElements(props.layoutJson);
   const backgroundColor = String(props.layoutJson.backgroundColor ?? "#F8F4EC");
   const frameColor = String(props.layoutJson.frameColor ?? "#8E642A");
+  const scale =
+    shellWidth > 0 ? shellWidth / CERTIFICATE_CANVAS_WIDTH : 1;
+  const previewHeight = shellWidth
+    ? CERTIFICATE_CANVAS_HEIGHT * scale
+    : CERTIFICATE_CANVAS_HEIGHT;
+
+  useEffect(() => {
+    const node = shellRef.current;
+    if (!node) return;
+    const update = () => setShellWidth(node.clientWidth);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <Box
+      ref={shellRef}
       sx={{
         bgcolor: "#f6f7f8",
         border: "1px solid",
@@ -226,76 +246,162 @@ function CertificateLayoutPreview(props: {
       <Box
         sx={{
           position: "relative",
-          aspectRatio: "1123 / 794",
+          height: previewHeight,
           overflow: "hidden",
-          bgcolor: backgroundColor,
-          border: `2px solid ${frameColor}`,
-          boxShadow: "inset 0 0 0 10px rgba(255,255,255,0.55)",
+          minHeight: 1,
         }}
       >
-        {elements.map((rawElement, index) => {
-          const element = rawElement as Record<string, unknown>;
-          if (element.visible === false) return null;
-          const type = String(element.type ?? "");
-          const xPct = Number(element.xPct ?? 0);
-          const yPct = Number(element.yPct ?? 0);
-          const widthPct = Number(element.widthPct ?? 0.2);
-          const commonSx = {
+        <Box
+          sx={{
             position: "absolute",
-            left: `${xPct * 100}%`,
-            top: `${yPct * 100}%`,
-            width: `${widthPct * 100}%`,
-            opacity: Number(element.opacity ?? 1),
-            zIndex: Number(element.zIndex ?? index),
-          };
-          if (type === "image") {
-            return (
-              <Box
-                key={String(element.id ?? index)}
-                component="img"
-                src={String(element.src ?? "")}
-                alt={String(element.label ?? "Imagem")}
-                sx={{ ...commonSx, display: "block" }}
-              />
-            );
-          }
-          if (type === "line") {
+            top: 0,
+            left: 0,
+            width: CERTIFICATE_CANVAS_WIDTH,
+            height: CERTIFICATE_CANVAS_HEIGHT,
+            overflow: "hidden",
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+            background: `radial-gradient(circle at 50% 15%, rgba(255, 255, 255, 0.88), transparent 30%), linear-gradient(180deg, ${backgroundColor} 0%, #f1eee5 100%)`,
+            boxShadow: "0 18px 50px rgba(19, 44, 56, 0.22)",
+          }}
+        >
+          <Box
+            aria-hidden="true"
+            sx={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 0,
+              opacity: 0.32,
+              backgroundImage:
+                "linear-gradient(24deg, transparent 0 42%, rgba(91, 93, 84, 0.12) 43% 44%, transparent 45% 100%), linear-gradient(156deg, transparent 0 49%, rgba(91, 93, 84, 0.1) 50% 51%, transparent 52% 100%)",
+              backgroundSize: "38px 34px, 46px 40px",
+            }}
+          />
+          <Box
+            aria-hidden="true"
+            sx={{
+              position: "absolute",
+              inset: 35,
+              zIndex: 2,
+              border: "5px double rgba(154, 106, 40, 0.18)",
+              boxShadow:
+                "inset 0 0 0 10px rgba(154, 106, 40, 0.04), inset 0 0 0 15px rgba(255, 255, 255, 0.38)",
+            }}
+          />
+          <Box
+            aria-hidden="true"
+            sx={{
+              position: "absolute",
+              inset: 20,
+              zIndex: 3,
+              border: `2px solid ${frameColor}`,
+            }}
+          />
+          <Box
+            aria-hidden="true"
+            sx={{
+              position: "absolute",
+              inset: 31,
+              zIndex: 3,
+              border: "1px solid rgba(154, 106, 40, 0.46)",
+            }}
+          />
+          {[
+            { top: 13, left: 13 },
+            { top: 13, right: 13 },
+            { bottom: 13, left: 13 },
+            { right: 13, bottom: 13 },
+          ].map((position, index) => (
+            <Box
+              key={index}
+              aria-hidden="true"
+              sx={{
+                position: "absolute",
+                zIndex: 5,
+                width: 23,
+                height: 23,
+                border: `2px solid ${frameColor}`,
+                bgcolor: "rgba(247, 244, 236, 0.92)",
+                ...position,
+                "&::after": {
+                  content: '""',
+                  position: "absolute",
+                  inset: 4,
+                  border: `1px solid ${frameColor}`,
+                },
+              }}
+            />
+          ))}
+
+          {elements.map((rawElement, index) => {
+            const element = rawElement as Record<string, unknown>;
+            if (element.visible === false) return null;
+            const type = String(element.type ?? "");
+            const xPct = Number(element.xPct ?? 0);
+            const yPct = Number(element.yPct ?? 0);
+            const widthPct = Number(element.widthPct ?? 0.2);
+            const commonSx = {
+              position: "absolute",
+              left: xPct * CERTIFICATE_CANVAS_WIDTH,
+              top: yPct * CERTIFICATE_CANVAS_HEIGHT,
+              width: widthPct * CERTIFICATE_CANVAS_WIDTH,
+              opacity: Number(element.opacity ?? 1),
+              zIndex: Number(element.zIndex ?? index),
+            };
+            if (type === "image") {
+              return (
+                <Box
+                  key={String(element.id ?? index)}
+                  component="img"
+                  src={String(element.src ?? "")}
+                  alt={String(element.label ?? "Imagem")}
+                  sx={{
+                    ...commonSx,
+                    display: "block",
+                    height: "auto",
+                    mixBlendMode: String(element.mixBlendMode ?? "normal"),
+                  }}
+                />
+              );
+            }
+            if (type === "line") {
+              return (
+                <Box
+                  key={String(element.id ?? index)}
+                  sx={{
+                    ...commonSx,
+                    height: Math.max(1, Number(element.thicknessPx ?? 2)),
+                    bgcolor: String(element.colorHex ?? "#111"),
+                  }}
+                />
+              );
+            }
+            const text =
+              type === "variable" &&
+              String(element.variableKey ?? "") === "recipient_full_name"
+                ? props.fullName ?? "NOME COMPLETO DO PARTICIPANTE"
+                : String(element.text ?? "");
             return (
               <Box
                 key={String(element.id ?? index)}
                 sx={{
                   ...commonSx,
-                  borderTop: `${Number(element.thicknessPx ?? 2) * 0.45}px solid ${String(
-                    element.colorHex ?? "#111",
-                  )}`,
+                  color: String(element.colorHex ?? "#111"),
+                  fontFamily: String(element.fontFamily ?? "serif"),
+                  fontSize: `${Number(element.fontSizePx ?? 18)}px`,
+                  fontStyle: String(element.fontStyle ?? "normal"),
+                  fontWeight: Number(element.fontWeight ?? 400),
+                  lineHeight: Number(element.lineHeight ?? 1.2),
+                  textAlign: String(element.textAlign ?? "left"),
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
                 }}
-              />
+              >
+                {text}
+              </Box>
             );
-          }
-          const text =
-            type === "variable" &&
-            String(element.variableKey ?? "") === "recipient_full_name"
-              ? props.fullName ?? "NOME COMPLETO DO PARTICIPANTE"
-              : String(element.text ?? "");
-          return (
-            <Box
-              key={String(element.id ?? index)}
-              sx={{
-                ...commonSx,
-                color: String(element.colorHex ?? "#111"),
-                fontFamily: String(element.fontFamily ?? "serif"),
-                fontSize: `${Math.max(6, Number(element.fontSizePx ?? 18) * 0.24)}px`,
-                fontStyle: String(element.fontStyle ?? "normal"),
-                fontWeight: Number(element.fontWeight ?? 400),
-                lineHeight: Number(element.lineHeight ?? 1.2),
-                textAlign: String(element.textAlign ?? "left"),
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {text}
-            </Box>
-          );
-        })}
+          })}
+        </Box>
       </Box>
     </Box>
   );

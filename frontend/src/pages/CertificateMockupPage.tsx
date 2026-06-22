@@ -19,6 +19,7 @@ import TextFieldsRoundedIcon from "@mui/icons-material/TextFieldsRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import { useToast } from "../app/toast";
 import "./CertificateMockupPage.css";
 
 const COMGEP_LOGO_SRC = "/mockups/certificate/comgep.png";
@@ -497,6 +498,7 @@ function readFileAsDataUrl(file: File) {
 }
 
 export function CertificateMockupPage() {
+  const toast = useToast();
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const elementRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const dragStateRef = useRef<DragState | null>(null);
@@ -811,8 +813,16 @@ export function CertificateMockupPage() {
   };
 
   const saveTemplates = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
-    setDirty(false);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+      setDirty(false);
+      toast.push({ message: "Modelo salvo neste navegador.", severity: "success" });
+    } catch {
+      toast.push({
+        message: "Nao foi possivel salvar o modelo neste navegador.",
+        severity: "error",
+      });
+    }
   };
 
   const createTemplate = () => {
