@@ -6851,3 +6851,222 @@ export function useTestAiConnection() {
       },
   });
 }
+
+export function useCertificateTemplates() {
+  return useQuery({
+    queryKey: qk.certificateTemplates,
+    queryFn: async () => (await api.get("/certificates/templates")).data,
+  });
+}
+
+export function useCreateCertificateTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      description?: string | null;
+      layoutJson: Record<string, unknown>;
+    }) => (await api.post("/certificates/templates", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.certificateTemplates });
+      qc.invalidateQueries({ queryKey: qk.certificateEvents });
+    },
+  });
+}
+
+export function useUpdateCertificateTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        name?: string;
+        description?: string | null;
+        layoutJson?: Record<string, unknown>;
+        isActive?: boolean;
+      };
+    }) =>
+      (await api.put(`/certificates/templates/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.certificateTemplates });
+      qc.invalidateQueries({ queryKey: qk.certificateEvents });
+    },
+  });
+}
+
+export function useDeleteCertificateTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/certificates/templates/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.certificateTemplates });
+      qc.invalidateQueries({ queryKey: qk.certificateEvents });
+    },
+  });
+}
+
+export function useCertificateEvents() {
+  return useQuery({
+    queryKey: qk.certificateEvents,
+    queryFn: async () => (await api.get("/certificates/events")).data,
+  });
+}
+
+export function useCertificateEvent(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.certificateEvent(id),
+    enabled: enabled && Boolean(id),
+    queryFn: async () =>
+      (await api.get(`/certificates/events/${encodeURIComponent(id)}`)).data,
+  });
+}
+
+export function useCreateCertificateEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      location: string;
+      eventDate: string;
+      eventTime: string;
+      description?: string | null;
+      certificateTemplateId?: string | null;
+    }) => (await api.post("/certificates/events", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.certificateEvents });
+    },
+  });
+}
+
+export function useUpdateCertificateEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        name?: string;
+        location?: string;
+        eventDate?: string;
+        eventTime?: string;
+        description?: string | null;
+        certificateTemplateId?: string | null;
+      };
+    }) =>
+      (await api.put(`/certificates/events/${args.id}`, args.payload)).data,
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.certificateEvents });
+      qc.invalidateQueries({ queryKey: qk.certificateEvent(variables.id) });
+    },
+  });
+}
+
+export function useDeleteCertificateEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/certificates/events/${id}`)).data,
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: qk.certificateEvents });
+      qc.removeQueries({ queryKey: qk.certificateEvent(id) });
+    },
+  });
+}
+
+export function useUpdateCertificateForm() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      eventId: string;
+      payload: {
+        formTitle?: string | null;
+        formDescription?: string | null;
+        formIsPublished?: boolean;
+        questions?: Array<{
+          label: string;
+          type: "TEXT" | "MULTIPLE_CHOICE" | "CHECKBOXES";
+          required?: boolean;
+          options?: string[];
+        }>;
+      };
+    }) =>
+      (await api.put(`/certificates/events/${args.eventId}/form`, args.payload))
+        .data,
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.certificateEvents });
+      qc.invalidateQueries({ queryKey: qk.certificateEvent(variables.eventId) });
+    },
+  });
+}
+
+export function useSendCertificateEmails() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { eventId: string; responseIds?: string[] }) =>
+      (
+        await api.post(
+          `/certificates/events/${args.eventId}/send-certificates`,
+          { responseIds: args.responseIds ?? [] },
+        )
+      ).data,
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.certificateEvents });
+      qc.invalidateQueries({ queryKey: qk.certificateEvent(variables.eventId) });
+    },
+  });
+}
+
+export function useDownloadCertificatePdf() {
+  return useMutation({
+    mutationFn: async (args: {
+      eventId: string;
+      responseId: string;
+      fileName?: string;
+    }) => {
+      const response = await api.get(
+        `/certificates/events/${args.eventId}/responses/${args.responseId}/certificate.pdf`,
+        { responseType: "blob" },
+      );
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = args.fileName || `certificado-${args.responseId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
+    },
+  });
+}
+
+export function usePublicCertificateForm(slug: string) {
+  return useQuery({
+    queryKey: qk.publicCertificateForm(slug),
+    enabled: Boolean(slug),
+    queryFn: async () =>
+      (await api.get(`/public/certificates/forms/${encodeURIComponent(slug)}`))
+        .data,
+  });
+}
+
+export function useSubmitPublicCertificateForm(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      fullName: string;
+      email: string;
+      answers: Record<string, unknown>;
+    }) =>
+      (
+        await api.post(
+          `/public/certificates/forms/${encodeURIComponent(slug)}/responses`,
+          payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.publicCertificateForm(slug) });
+    },
+  });
+}

@@ -105,6 +105,8 @@ model User {
   smifComplaintsCreated                   SmifComplaint[]                  @relation("SmifComplaintCreatedBy")
   smifComplaintsUpdated                   SmifComplaint[]                  @relation("SmifComplaintUpdatedBy")
   emailDeliveryFailuresResolved           EmailDeliveryFailure[]           @relation("EmailDeliveryFailureResolvedBy")
+  certificateEventsCreated                CertificateEvent[]               @relation("CertificateEventCreator")
+  certificateTemplatesCreated             CertificateTemplate[]            @relation("CertificateTemplateCreator")
 }
 
 model Om {
@@ -479,6 +481,104 @@ model MissionBanner {
   mission Mission @relation(fields: [missionId], references: [id], onDelete: Cascade)
 
   @@index([missionId, eventDate, eventTime])
+}
+
+model CertificateTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  layoutJson  Json
+  isActive    Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User?              @relation("CertificateTemplateCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  events    CertificateEvent[]
+  deliveries CertificateEmailDelivery[]
+
+  @@index([isActive, updatedAt])
+  @@index([createdById])
+}
+
+model CertificateEvent {
+  id                    String   @id @default(cuid())
+  name                  String
+  location              String
+  eventDate             String
+  eventTime             String
+  description           String?
+  publicSlug            String   @unique
+  formTitle             String?
+  formDescription       String?
+  formIsPublished       Boolean  @default(false)
+  certificateTemplateId String?
+  createdById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  certificateTemplate CertificateTemplate?         @relation(fields: [certificateTemplateId], references: [id], onDelete: SetNull)
+  createdBy           User?                        @relation("CertificateEventCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  questions           CertificateFormQuestion[]
+  responses           CertificateFormResponse[]
+  deliveries          CertificateEmailDelivery[]
+
+  @@index([eventDate, eventTime])
+  @@index([certificateTemplateId])
+  @@index([createdById])
+}
+
+model CertificateFormQuestion {
+  id        String                  @id @default(cuid())
+  eventId   String
+  label     String
+  type      CertificateQuestionType
+  required  Boolean                 @default(false)
+  optionsJson Json?
+  sortOrder Int                     @default(0)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  event CertificateEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, sortOrder])
+}
+
+model CertificateFormResponse {
+  id           String   @id @default(cuid())
+  eventId      String
+  fullName     String
+  email        String
+  answersJson  Json
+  submittedAt  DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  event      CertificateEvent          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  deliveries CertificateEmailDelivery[]
+
+  @@index([eventId, submittedAt])
+  @@index([email])
+}
+
+model CertificateEmailDelivery {
+  id            String                         @id @default(cuid())
+  eventId       String
+  responseId    String
+  templateId    String?
+  email         String
+  fullName      String
+  status        CertificateEmailDeliveryStatus @default(QUEUED)
+  errorMessage  String?
+  sentAt        DateTime?
+  createdAt     DateTime                       @default(now())
+  updatedAt     DateTime                       @updatedAt
+
+  event    CertificateEvent        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  response CertificateFormResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  template CertificateTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, status, createdAt])
+  @@index([responseId, createdAt])
 }
 
 model MissionChecklistDimension {
@@ -2485,6 +2585,18 @@ enum PermissionScope {
   SPECIALTY
   LOCALITY_SPECIALTY
   OWN
+}
+
+enum CertificateQuestionType {
+  TEXT
+  MULTIPLE_CHOICE
+  CHECKBOXES
+}
+
+enum CertificateEmailDeliveryStatus {
+  QUEUED
+  SENT
+  FAILED
 }
 
 enum ActivityScope {

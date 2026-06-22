@@ -50,6 +50,7 @@ import LightbulbRoundedIcon from "@mui/icons-material/LightbulbRounded";
 import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
+import WorkspacePremiumRoundedIcon from "@mui/icons-material/WorkspacePremiumRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can } from "../app/rbac";
@@ -327,6 +328,12 @@ const navSections: NavSection[] = [
         icon: <InsightsRoundedIcon fontSize="small" />,
       },
       {
+        label: "Certificados",
+        to: "/ti-certificados",
+        icon: <WorkspacePremiumRoundedIcon fontSize="small" />,
+        menuKeys: ["certificate_events", "certificate_templates"],
+      },
+      {
         label: "Administração",
         to: "/admin",
         icon: <SettingsIcon fontSize="small" />,
@@ -582,6 +589,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/audit") {
       return can(me, "audit_logs", "view");
+    }
+    if (item.to === "/ti-certificados") {
+      return hasAnyRole(me, [ROLE_TI, ROLE_COMGEP]);
     }
     return true;
   };

@@ -11,6 +11,11 @@ export type MailSendOptions = {
   subject: string;
   html: string;
   text?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer | string;
+    contentType?: string;
+  }>;
   cc?: string | string[];
   bcc?: string | string[];
   replyTo?: string;
@@ -153,6 +158,24 @@ export class MailService {
       response: 'queued',
       queuedAt: task.queuedAt,
     };
+  }
+
+  async sendMailImmediate(options: MailSendOptions) {
+    const to = normalizeAddressList(options.to);
+    if (to.length === 0) {
+      throw new Error('MailService requires at least one recipient.');
+    }
+
+    const task: MailDeliveryTask = {
+      ...options,
+      id: randomUUID(),
+      to,
+      cc: normalizeAddressList(options.cc),
+      bcc: normalizeAddressList(options.bcc),
+      queuedAt: new Date(),
+    };
+
+    return this.deliver(task);
   }
 
   async waitForIdle(): Promise<void> {
@@ -322,7 +345,7 @@ export class MailService {
   private async deliver(task: MailDeliveryTask) {
     try {
       const runtime = this.resolveConfig();
-      await this.getTransporter(runtime).sendMail({
+      const result = await this.getTransporter(runtime).sendMail({
         from: {
           name: task.fromName ?? runtime.fromName,
           address: task.fromEmail ?? runtime.fromEmail,
@@ -334,11 +357,13 @@ export class MailService {
         subject: task.subject,
         html: task.html,
         text: task.text,
+        attachments: task.attachments,
       });
 
       this.logger.log(
         `Email enviado para ${task.to.join(', ')} com assunto "${task.subject}".`,
       );
+      return { ok: true as const, result };
     } catch (error) {
       const detail =
         error instanceof Error ? error.message : 'falha desconhecida';
@@ -346,6 +371,11 @@ export class MailService {
         `Falha ao enviar e-mail para ${task.to.join(', ')} com assunto "${task.subject}": ${detail}.`,
       );
       await this.recordDeliveryFailure(task, error);
+      return {
+        ok: false as const,
+        error,
+        message: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 

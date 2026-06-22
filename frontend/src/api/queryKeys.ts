@@ -19,6 +19,11 @@ export const qk = {
     ["missionBannerPreview", missionId, bannerId] as const,
   missionChecklist: (missionId: string) =>
     ["missionChecklist", missionId] as const,
+  certificateTemplates: ["certificates", "templates"] as const,
+  certificateEvents: ["certificates", "events"] as const,
+  certificateEvent: (id: string) => ["certificates", "events", id] as const,
+  publicCertificateForm: (slug: string) =>
+    ["publicCertificates", "forms", slug] as const,
   missionChecklistConfig: ["missionChecklistConfig"] as const,
   missionChecklistMapping: (filters: Record<string, any>) =>
     ["missionChecklistMapping", filters] as const,

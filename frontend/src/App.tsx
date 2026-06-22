@@ -22,6 +22,9 @@ import { OrgChartPage } from "./pages/OrgChartPage";
 import { AuditPage } from "./pages/AuditPage";
 import { TaskTemplatesPage } from "./pages/TaskTemplatesPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
+import { CertificateMockupPage } from "./pages/CertificateMockupPage";
+import { CertificatesPage } from "./pages/CertificatesPage";
+import { PublicCertificateFormPage } from "./pages/PublicCertificateFormPage";
 import { BusinessIntelligencePage } from "./pages/BusinessIntelligencePage";
 import { StrategicDashboardPage } from "./pages/StrategicDashboardPage";
 import { AiPage } from "./pages/AiPage";
@@ -77,6 +80,14 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/2fa-setup" element={<TwoFactorSetupPage />} />
+      <Route
+        path="/certificate-layout-preview"
+        element={<CertificateMockupPage />}
+      />
+      <Route
+        path="/certificados/forms/:slug"
+        element={<PublicCertificateFormPage />}
+      />
       <Route
         path="/*"
         element={
@@ -566,6 +577,16 @@ function App() {
                       allow={(user) => can(user, "audit_logs", "view")}
                     >
                       <AuditPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/ti-certificados"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) => hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])}
+                    >
+                      <CertificatesPage />
                     </RequireRoleAccess>
                   }
                 />

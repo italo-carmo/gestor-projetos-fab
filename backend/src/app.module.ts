@@ -39,6 +39,7 @@ import { KnowledgeBasesModule } from './knowledge-bases/knowledge-bases.module';
 import { ManualsModule } from './manuals/manuals.module';
 import { MailModule } from './mail/mail.module';
 import { CipavdReportsModule } from './cipavd-reports/cipavd-reports.module';
+import { CertificatesModule } from './certificates/certificates.module';
 
 @Module({
   imports: [
@@ -82,6 +83,7 @@ import { CipavdReportsModule } from './cipavd-reports/cipavd-reports.module';
     SettingsModule,
     MailModule,
     CipavdReportsModule,
+    CertificatesModule,
     KnowledgeBasesModule,
     ManualsModule,
     AiModule,
