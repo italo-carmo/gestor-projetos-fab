@@ -6,6 +6,7 @@ import sharp from 'sharp';
 const DEFAULT_WIDTH = 1123;
 const DEFAULT_HEIGHT = 794;
 const RECIPIENT_VARIABLE_KEY = 'recipient_full_name';
+const EVENT_NAME_VARIABLE_KEY = 'event_name';
 
 type CertificateLayout = {
   backgroundColor?: string;
@@ -41,6 +42,7 @@ type CertificateLayoutElement = {
 type RenderInput = {
   layoutJson: unknown;
   recipientFullName: string;
+  eventName?: string;
 };
 
 function escapeXml(value: unknown) {
@@ -161,23 +163,43 @@ async function loadImageDataUri(src: string) {
 function renderTextElement(
   element: CertificateLayoutElement,
   width: number,
-  recipientFullName: string,
+  variables: { recipientFullName: string; eventName?: string },
 ) {
   const x = clamp(asFiniteNumber(element.xPct, 0) * width, 0, width);
-  const y = clamp(asFiniteNumber(element.yPct, 0) * DEFAULT_HEIGHT, 0, DEFAULT_HEIGHT);
-  const elementWidth = clamp(asFiniteNumber(element.widthPct, 0.2) * width, 20, width);
+  const y = clamp(
+    asFiniteNumber(element.yPct, 0) * DEFAULT_HEIGHT,
+    0,
+    DEFAULT_HEIGHT,
+  );
+  const elementWidth = clamp(
+    asFiniteNumber(element.widthPct, 0.2) * width,
+    20,
+    width,
+  );
   const fontSize = clamp(asFiniteNumber(element.fontSizePx, 18), 6, 180);
   const lineHeight = clamp(asFiniteNumber(element.lineHeight, 1.2), 0.8, 2.4);
   const color = normalizeColor(element.colorHex, '#111111');
   const align = element.textAlign ?? 'left';
-  const anchor = align === 'center' ? 'middle' : align === 'right' ? 'end' : 'start';
-  const textX = align === 'center' ? x + elementWidth / 2 : align === 'right' ? x + elementWidth : x;
-  const rawText =
-    element.type === 'variable' && element.variableKey === RECIPIENT_VARIABLE_KEY
-      ? recipientFullName
-      : String(element.text ?? '');
+  const anchor =
+    align === 'center' ? 'middle' : align === 'right' ? 'end' : 'start';
+  const textX =
+    align === 'center'
+      ? x + elementWidth / 2
+      : align === 'right'
+        ? x + elementWidth
+        : x;
+  let rawText = String(element.text ?? '');
+  if (element.type === 'variable') {
+    if (element.variableKey === RECIPIENT_VARIABLE_KEY) {
+      rawText = variables.recipientFullName;
+    } else if (element.variableKey === EVENT_NAME_VARIABLE_KEY) {
+      rawText = variables.eventName || rawText;
+    }
+  }
   const lines = wrapText(rawText, elementWidth, fontSize);
-  const fontFamily = String(element.fontFamily ?? 'Arial, Helvetica, sans-serif')
+  const fontFamily = String(
+    element.fontFamily ?? 'Arial, Helvetica, sans-serif',
+  )
     .replace(/"/g, "'")
     .split(',')[0]
     .trim();
@@ -186,28 +208,49 @@ function renderTextElement(
   const dy = fontSize * lineHeight;
 
   return `<text x="${textX}" y="${y + fontSize}" fill="${color}" font-family="${escapeXml(fontFamily)}" font-size="${fontSize}" font-weight="${fontWeight}" font-style="${fontStyle}" text-anchor="${anchor}" opacity="${clamp(asFiniteNumber(element.opacity, 1), 0, 1)}">${lines
-    .map((line, index) =>
-      `<tspan x="${textX}" dy="${index === 0 ? 0 : dy}">${escapeXml(line)}</tspan>`,
+    .map(
+      (line, index) =>
+        `<tspan x="${textX}" dy="${index === 0 ? 0 : dy}">${escapeXml(line)}</tspan>`,
     )
     .join('')}</text>`;
 }
 
 function renderLineElement(element: CertificateLayoutElement, width: number) {
   const x = clamp(asFiniteNumber(element.xPct, 0) * width, 0, width);
-  const y = clamp(asFiniteNumber(element.yPct, 0) * DEFAULT_HEIGHT, 0, DEFAULT_HEIGHT);
-  const elementWidth = clamp(asFiniteNumber(element.widthPct, 0.2) * width, 4, width);
+  const y = clamp(
+    asFiniteNumber(element.yPct, 0) * DEFAULT_HEIGHT,
+    0,
+    DEFAULT_HEIGHT,
+  );
+  const elementWidth = clamp(
+    asFiniteNumber(element.widthPct, 0.2) * width,
+    4,
+    width,
+  );
   const color = normalizeColor(element.colorHex, '#111111');
   const thickness = clamp(asFiniteNumber(element.thicknessPx, 1), 1, 12);
   return `<line x1="${x}" y1="${y}" x2="${x + elementWidth}" y2="${y}" stroke="${color}" stroke-width="${thickness}" opacity="${clamp(asFiniteNumber(element.opacity, 1), 0, 1)}" />`;
 }
 
-async function renderImageElement(element: CertificateLayoutElement, width: number) {
+async function renderImageElement(
+  element: CertificateLayoutElement,
+  width: number,
+) {
   const image = await loadImageDataUri(String(element.src ?? ''));
   if (!image) return '';
   const x = clamp(asFiniteNumber(element.xPct, 0) * width, 0, width);
-  const y = clamp(asFiniteNumber(element.yPct, 0) * DEFAULT_HEIGHT, 0, DEFAULT_HEIGHT);
-  const elementWidth = clamp(asFiniteNumber(element.widthPct, 0.15) * width, 4, width);
-  const elementHeight = elementWidth * (image.height / Math.max(image.width, 1));
+  const y = clamp(
+    asFiniteNumber(element.yPct, 0) * DEFAULT_HEIGHT,
+    0,
+    DEFAULT_HEIGHT,
+  );
+  const elementWidth = clamp(
+    asFiniteNumber(element.widthPct, 0.15) * width,
+    4,
+    width,
+  );
+  const elementHeight =
+    elementWidth * (image.height / Math.max(image.width, 1));
   return `<image href="${image.dataUri}" x="${x}" y="${y}" width="${elementWidth}" height="${elementHeight}" preserveAspectRatio="xMidYMid meet" opacity="${clamp(asFiniteNumber(element.opacity, 1), 0, 1)}" />`;
 }
 
@@ -229,7 +272,12 @@ async function buildCertificateSvg(input: RenderInput) {
     } else if (element.type === 'line') {
       renderedElements.push(renderLineElement(element, width));
     } else if (element.type === 'text' || element.type === 'variable') {
-      renderedElements.push(renderTextElement(element, width, input.recipientFullName));
+      renderedElements.push(
+        renderTextElement(element, width, {
+          recipientFullName: input.recipientFullName,
+          eventName: input.eventName,
+        }),
+      );
     }
   }
 

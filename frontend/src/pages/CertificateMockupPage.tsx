@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  ChangeEvent,
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import AddPhotoAlternateRoundedIcon from "@mui/icons-material/AddPhotoAlternateRounded";
 import AddRoundedIcon from "@mui/icons-material/AddRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
@@ -22,6 +26,14 @@ import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import { api } from "../api/client";
 import { parseApiError } from "../app/apiErrors";
 import { useToast } from "../app/toast";
+import {
+  CERTIFICATE_VARIABLE_DEFINITIONS,
+  EVENT_NAME_VARIABLE_KEY,
+  getCertificateVariableDefinition,
+  getCertificateVariableSample,
+  RECIPIENT_VARIABLE_KEY,
+  type CertificateVariableKey,
+} from "../certificates/certificateVariables";
 import "./CertificateMockupPage.css";
 
 const COMGEP_LOGO_SRC = "/mockups/certificate/comgep.png";
@@ -31,8 +43,6 @@ const STORAGE_KEY = "certificate-template-editor-v1";
 const TEMPLATE_WIDTH = 1123;
 const TEMPLATE_HEIGHT = 794;
 const SNAP_TOLERANCE_PX = 8;
-const RECIPIENT_VARIABLE_KEY = "recipient_full_name";
-const RECIPIENT_SAMPLE = "NOME COMPLETO DO PARTICIPANTE";
 
 type CertificateElementType = "text" | "variable" | "image" | "line";
 type TextAlign = "left" | "center" | "right";
@@ -324,8 +334,8 @@ function createDefaultElements(): CertificateElement[] {
     {
       id: "recipient-name",
       type: "variable",
-      label: "Nome completo do lote",
-      text: RECIPIENT_SAMPLE,
+      label: "Nome do participante",
+      text: getCertificateVariableSample(RECIPIENT_VARIABLE_KEY),
       variableKey: RECIPIENT_VARIABLE_KEY,
       xPct: 0.18,
       yPct: 0.425,
@@ -346,7 +356,7 @@ function createDefaultElements(): CertificateElement[] {
       id: "body-details",
       type: "text",
       label: "Texto depois do nome",
-      text: "ministrou, no COMGEP, a palestra com o tema Assédio Sexual na FAB.",
+      text: "participou do evento",
       xPct: 0.18,
       yPct: 0.505,
       widthPct: 0.64,
@@ -361,6 +371,27 @@ function createDefaultElements(): CertificateElement[] {
       colorHex: "#111111",
       textAlign: "center",
       lineHeight: 1.28,
+    },
+    {
+      id: "event-name",
+      type: "variable",
+      label: "Nome do evento",
+      text: getCertificateVariableSample(EVENT_NAME_VARIABLE_KEY),
+      variableKey: EVENT_NAME_VARIABLE_KEY,
+      xPct: 0.18,
+      yPct: 0.565,
+      widthPct: 0.64,
+      zIndex: 11,
+      visible: true,
+      locked: false,
+      opacity: 1,
+      fontFamily: '"Sora", "Manrope", sans-serif',
+      fontSizePx: 24,
+      fontWeight: 800,
+      fontStyle: "normal",
+      colorHex: "#0C657E",
+      textAlign: "center",
+      lineHeight: 1.18,
     },
     {
       id: "signature",
@@ -454,11 +485,14 @@ function createDefaultElements(): CertificateElement[] {
   ];
 }
 
-function createDefaultTemplate(name = "Modelo clássico COMGEP"): CertificateTemplate {
+function createDefaultTemplate(
+  name = "Modelo clássico COMGEP",
+): CertificateTemplate {
   return {
     id: makeId("cert-template"),
     name,
-    description: "Modelo A4 paisagem com logos COMGEP e FAB, assinatura e campo de lote.",
+    description:
+      "Modelo A4 paisagem com logos COMGEP e FAB, assinatura e campo de lote.",
     backgroundColor: "#F8F4EC",
     frameColor: "#8E642A",
     elements: createDefaultElements(),
@@ -466,7 +500,10 @@ function createDefaultTemplate(name = "Modelo clássico COMGEP"): CertificateTem
   };
 }
 
-function cloneTemplate(template: CertificateTemplate, name: string): CertificateTemplate {
+function cloneTemplate(
+  template: CertificateTemplate,
+  name: string,
+): CertificateTemplate {
   return {
     ...template,
     id: makeId("cert-template"),
@@ -485,7 +522,8 @@ function loadTemplates() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [createDefaultTemplate()];
     const parsed = JSON.parse(raw) as CertificateTemplate[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return [createDefaultTemplate()];
+    if (!Array.isArray(parsed) || parsed.length === 0)
+      return [createDefaultTemplate()];
     return parsed;
   } catch {
     return [createDefaultTemplate()];
@@ -518,7 +556,9 @@ async function saveTemplateInBackend(template: CertificateTemplate) {
       await api.put(`/certificates/templates/${backendTemplateId}`, payload)
     ).data as { id?: string };
   } catch (error) {
-    if ((error as { response?: { status?: number } })?.response?.status !== 404) {
+    if (
+      (error as { response?: { status?: number } })?.response?.status !== 404
+    ) {
       throw error;
     }
     return (await api.post("/certificates/templates", payload)).data as {
@@ -543,7 +583,9 @@ export function CertificateMockupPage() {
   const dragStateRef = useRef<DragState | null>(null);
   const resizeStateRef = useRef<ResizeState | null>(null);
   const suppressNextClickRef = useRef(false);
-  const [templates, setTemplates] = useState<CertificateTemplate[]>(() => loadTemplates());
+  const [templates, setTemplates] = useState<CertificateTemplate[]>(() =>
+    loadTemplates(),
+  );
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [selectedElementId, setSelectedElementId] = useState("recipient-name");
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
@@ -561,8 +603,9 @@ export function CertificateMockupPage() {
 
   const selectedElement = useMemo(
     () =>
-      selectedTemplate.elements.find((element) => element.id === selectedElementId) ??
-      null,
+      selectedTemplate.elements.find(
+        (element) => element.id === selectedElementId,
+      ) ?? null,
     [selectedElementId, selectedTemplate.elements],
   );
 
@@ -638,7 +681,11 @@ export function CertificateMockupPage() {
   }, []);
 
   const resolveSnappedPlacement = useCallback(
-    (movingElement: CertificateElement, proposedXPct: number, proposedYPct: number) => {
+    (
+      movingElement: CertificateElement,
+      proposedXPct: number,
+      proposedYPct: number,
+    ) => {
       const movingMetrics = getElementMetrics(movingElement.id) ?? {
         widthPct: movingElement.widthPct,
         heightPct: 0.06,
@@ -661,7 +708,11 @@ export function CertificateMockupPage() {
         const distance = Math.abs(proposedReferencePct - targetReferencePct);
         if (distance <= toleranceXPct && distance < bestXDistance) {
           bestXDistance = distance;
-          snappedX = clamp(targetLeftPct, 0.015, 0.985 - movingMetrics.widthPct);
+          snappedX = clamp(
+            targetLeftPct,
+            0.015,
+            0.985 - movingMetrics.widthPct,
+          );
           bestXGuide = guide;
         }
       };
@@ -675,7 +726,11 @@ export function CertificateMockupPage() {
         const distance = Math.abs(proposedReferencePct - targetReferencePct);
         if (distance <= toleranceYPct && distance < bestYDistance) {
           bestYDistance = distance;
-          snappedY = clamp(targetTopPct, 0.015, 0.985 - movingMetrics.heightPct);
+          snappedY = clamp(
+            targetTopPct,
+            0.015,
+            0.985 - movingMetrics.heightPct,
+          );
           bestYGuide = guide;
         }
       };
@@ -707,25 +762,38 @@ export function CertificateMockupPage() {
         const bottom = element.yPct + metrics.heightPct;
         const centerY = element.yPct + metrics.heightPct / 2;
 
-        considerX(proposedXPct, left, left, { valuePct: left, kind: "element" });
+        considerX(proposedXPct, left, left, {
+          valuePct: left,
+          kind: "element",
+        });
         considerX(movingRight, right, right - movingMetrics.widthPct, {
           valuePct: right,
           kind: "element",
         });
-        considerX(movingCenterX, centerX, centerX - movingMetrics.widthPct / 2, {
-          valuePct: centerX,
-          kind: "element",
-        });
+        considerX(
+          movingCenterX,
+          centerX,
+          centerX - movingMetrics.widthPct / 2,
+          {
+            valuePct: centerX,
+            kind: "element",
+          },
+        );
 
         considerY(proposedYPct, top, top, { valuePct: top, kind: "element" });
         considerY(movingBottom, bottom, bottom - movingMetrics.heightPct, {
           valuePct: bottom,
           kind: "element",
         });
-        considerY(movingCenterY, centerY, centerY - movingMetrics.heightPct / 2, {
-          valuePct: centerY,
-          kind: "element",
-        });
+        considerY(
+          movingCenterY,
+          centerY,
+          centerY - movingMetrics.heightPct / 2,
+          {
+            valuePct: centerY,
+            kind: "element",
+          },
+        );
       }
 
       return {
@@ -737,7 +805,12 @@ export function CertificateMockupPage() {
         },
       };
     },
-    [canvasSize.height, canvasSize.width, getElementMetrics, selectedTemplate.elements],
+    [
+      canvasSize.height,
+      canvasSize.width,
+      getElementMetrics,
+      selectedTemplate.elements,
+    ],
   );
 
   useEffect(() => {
@@ -890,8 +963,8 @@ export function CertificateMockupPage() {
         message:
           status === 401 || status === 403
             ? "Modelo salvo neste navegador. Entre com perfil COMGEP ou TI para salvar no sistema."
-            : parseApiError(error).message ??
-              "Modelo salvo neste navegador, mas nao foi salvo no sistema.",
+            : (parseApiError(error).message ??
+              "Modelo salvo neste navegador, mas nao foi salvo no sistema."),
         severity: status === 401 || status === 403 ? "warning" : "error",
       });
     } finally {
@@ -920,7 +993,9 @@ export function CertificateMockupPage() {
 
   const deleteTemplate = () => {
     if (templates.length <= 1) return;
-    const nextTemplates = templates.filter((template) => template.id !== selectedTemplate.id);
+    const nextTemplates = templates.filter(
+      (template) => template.id !== selectedTemplate.id,
+    );
     setTemplates(nextTemplates);
     setSelectedTemplateId(nextTemplates[0]?.id ?? "");
     setSelectedElementId(nextTemplates[0]?.elements[0]?.id ?? "");
@@ -947,7 +1022,11 @@ export function CertificateMockupPage() {
       xPct: 0.38,
       yPct: 0.34,
       widthPct: 0.24,
-      zIndex: Math.max(...selectedTemplate.elements.map((element) => element.zIndex), 0) + 1,
+      zIndex:
+        Math.max(
+          ...selectedTemplate.elements.map((element) => element.zIndex),
+          0,
+        ) + 1,
       visible: true,
       locked: false,
       opacity: 1,
@@ -966,25 +1045,31 @@ export function CertificateMockupPage() {
     setSelectedElementId(next.id);
   };
 
-  const addRecipientVariable = () => {
+  const addVariableElement = (variableKey: CertificateVariableKey) => {
+    const variable = getCertificateVariableDefinition(variableKey);
     const next: CertificateTextElement = {
       id: makeId("variable"),
       type: "variable",
-      label: "Nome completo do lote",
-      text: RECIPIENT_SAMPLE,
-      variableKey: RECIPIENT_VARIABLE_KEY,
+      label: variable.label,
+      text: variable.sample,
+      variableKey: variable.key,
       xPct: 0.22,
-      yPct: 0.46,
+      yPct: variable.key === EVENT_NAME_VARIABLE_KEY ? 0.54 : 0.46,
       widthPct: 0.56,
-      zIndex: Math.max(...selectedTemplate.elements.map((element) => element.zIndex), 0) + 1,
+      zIndex:
+        Math.max(
+          ...selectedTemplate.elements.map((element) => element.zIndex),
+          0,
+        ) + 1,
       visible: true,
       locked: false,
       opacity: 1,
       fontFamily: '"Sora", "Manrope", sans-serif',
-      fontSizePx: 26,
+      fontSizePx: variable.key === EVENT_NAME_VARIABLE_KEY ? 24 : 26,
       fontWeight: 800,
       fontStyle: "normal",
-      colorHex: "#111111",
+      colorHex:
+        variable.key === EVENT_NAME_VARIABLE_KEY ? "#0C657E" : "#111111",
       textAlign: "center",
       lineHeight: 1.18,
     };
@@ -1009,7 +1094,11 @@ export function CertificateMockupPage() {
       xPct: 0.42,
       yPct: 0.42,
       widthPct: 0.16,
-      zIndex: Math.max(...selectedTemplate.elements.map((element) => element.zIndex), 0) + 1,
+      zIndex:
+        Math.max(
+          ...selectedTemplate.elements.map((element) => element.zIndex),
+          0,
+        ) + 1,
       visible: true,
       locked: false,
       opacity: 1,
@@ -1038,7 +1127,9 @@ export function CertificateMockupPage() {
     if (!selectedElement) return;
     updateSelectedTemplate((template) => ({
       ...template,
-      elements: template.elements.filter((element) => element.id !== selectedElement.id),
+      elements: template.elements.filter(
+        (element) => element.id !== selectedElement.id,
+      ),
     }));
     setSelectedElementId("");
   };
@@ -1051,7 +1142,11 @@ export function CertificateMockupPage() {
       label: `${selectedElement.label} - cópia`,
       xPct: clamp(selectedElement.xPct + 0.03, 0.015, 0.92),
       yPct: clamp(selectedElement.yPct + 0.03, 0.015, 0.92),
-      zIndex: Math.max(...selectedTemplate.elements.map((element) => element.zIndex), 0) + 1,
+      zIndex:
+        Math.max(
+          ...selectedTemplate.elements.map((element) => element.zIndex),
+          0,
+        ) + 1,
     } as CertificateElement;
     updateSelectedTemplate((template) => ({
       ...template,
@@ -1102,6 +1197,10 @@ export function CertificateMockupPage() {
   const renderElement = (element: CertificateElement) => {
     if (!element.visible) return null;
     const isSelected = element.id === selectedElementId;
+    const variableDefinition =
+      element.type === "variable"
+        ? getCertificateVariableDefinition(element.variableKey)
+        : null;
     const commonStyle: CSSProperties = {
       left: `${element.xPct * 100}%`,
       top: `${element.yPct * 100}%`,
@@ -1124,6 +1223,7 @@ export function CertificateMockupPage() {
         ]
           .filter(Boolean)
           .join(" ")}
+        data-variable-label={variableDefinition?.shortLabel}
         style={commonStyle}
         onPointerDown={(event) => startDrag(event, element)}
         onClick={(event) => {
@@ -1194,6 +1294,10 @@ export function CertificateMockupPage() {
           ? "Linha"
           : "Texto"
     : "Nenhum item";
+  const selectedVariableDefinition =
+    isTextElement(selectedElement) && selectedElement.type === "variable"
+      ? getCertificateVariableDefinition(selectedElement.variableKey)
+      : null;
 
   return (
     <main className="certificate-editor-page page-enter">
@@ -1202,9 +1306,9 @@ export function CertificateMockupPage() {
           <span className="certificate-page-kicker">Editor de certificado</span>
           <h1>Modelos dinâmicos de certificado</h1>
           <p>
-            Monte o certificado em formato A4 paisagem, personalize textos e imagens,
-            posicione o campo de nome completo para geração em lote e salve quantos
-            modelos forem necessários.
+            Monte o certificado em formato A4 paisagem, personalize textos e
+            imagens, posicione o campo de nome completo para geração em lote e
+            salve quantos modelos forem necessários.
           </p>
         </div>
         <button
@@ -1227,7 +1331,11 @@ export function CertificateMockupPage() {
                 {dirty ? "Alterações não salvas" : "Tudo salvo neste navegador"}
               </p>
             </div>
-            <button className="certificate-icon-button" type="button" onClick={createTemplate}>
+            <button
+              className="certificate-icon-button"
+              type="button"
+              onClick={createTemplate}
+            >
               <AddRoundedIcon fontSize="small" />
             </button>
           </div>
@@ -1254,7 +1362,11 @@ export function CertificateMockupPage() {
               <RestartAltRoundedIcon fontSize="small" />
               Resetar
             </button>
-            <button type="button" onClick={deleteTemplate} disabled={templates.length <= 1}>
+            <button
+              type="button"
+              onClick={deleteTemplate}
+              disabled={templates.length <= 1}
+            >
               <DeleteOutlineRoundedIcon fontSize="small" />
               Excluir
             </button>
@@ -1283,12 +1395,16 @@ export function CertificateMockupPage() {
           </div>
 
           <div className="certificate-variable-note">
-            <span>Campo do lote</span>
-            <strong>{"{{nome_completo}}"}</strong>
-            <p>
-              Esse item mostra exatamente onde o nome completo da pessoa será
-              inserido quando o certificado for gerado em lote.
-            </p>
+            <span>Campos automáticos</span>
+            {CERTIFICATE_VARIABLE_DEFINITIONS.map((definition) => (
+              <div
+                key={definition.key}
+                className="certificate-variable-note-item"
+              >
+                <strong>{definition.label}</strong>
+                <p>{definition.helper}</p>
+              </div>
+            ))}
           </div>
         </aside>
 
@@ -1298,9 +1414,19 @@ export function CertificateMockupPage() {
               <TextFieldsRoundedIcon fontSize="small" />
               Texto
             </button>
-            <button type="button" onClick={addRecipientVariable}>
+            <button
+              type="button"
+              onClick={() => addVariableElement(RECIPIENT_VARIABLE_KEY)}
+            >
               <AddRoundedIcon fontSize="small" />
-              Nome do lote
+              Nome participante
+            </button>
+            <button
+              type="button"
+              onClick={() => addVariableElement(EVENT_NAME_VARIABLE_KEY)}
+            >
+              <AddRoundedIcon fontSize="small" />
+              Nome evento
             </button>
             <label className="certificate-toolbar-upload">
               <AddPhotoAlternateRoundedIcon fontSize="small" />
@@ -1312,16 +1438,32 @@ export function CertificateMockupPage() {
               />
             </label>
             <span className="certificate-toolbar-divider" />
-            <button type="button" onClick={() => moveLayer("front")} disabled={!selectedElement}>
+            <button
+              type="button"
+              onClick={() => moveLayer("front")}
+              disabled={!selectedElement}
+            >
               Frente
             </button>
-            <button type="button" onClick={() => moveLayer("back")} disabled={!selectedElement}>
+            <button
+              type="button"
+              onClick={() => moveLayer("back")}
+              disabled={!selectedElement}
+            >
               Fundo
             </button>
-            <button type="button" onClick={duplicateSelectedElement} disabled={!selectedElement}>
+            <button
+              type="button"
+              onClick={duplicateSelectedElement}
+              disabled={!selectedElement}
+            >
               <ContentCopyRoundedIcon fontSize="small" />
             </button>
-            <button type="button" onClick={removeSelectedElement} disabled={!selectedElement}>
+            <button
+              type="button"
+              onClick={removeSelectedElement}
+              disabled={!selectedElement}
+            >
               <DeleteOutlineRoundedIcon fontSize="small" />
             </button>
           </div>
@@ -1333,12 +1475,16 @@ export function CertificateMockupPage() {
               style={
                 {
                   "--certificate-frame-color": selectedTemplate.frameColor,
-                  "--certificate-background-color": selectedTemplate.backgroundColor,
+                  "--certificate-background-color":
+                    selectedTemplate.backgroundColor,
                 } as CSSProperties
               }
               onClick={() => setSelectedElementId("")}
             >
-              <div className="certificate-editor-paper-texture" aria-hidden="true" />
+              <div
+                className="certificate-editor-paper-texture"
+                aria-hidden="true"
+              />
               <div className="certificate-editor-frame" aria-hidden="true" />
               <span className="certificate-editor-corner certificate-editor-corner--tl" />
               <span className="certificate-editor-corner certificate-editor-corner--tr" />
@@ -1398,7 +1544,9 @@ export function CertificateMockupPage() {
                 className="certificate-icon-button"
                 type="button"
                 onClick={() =>
-                  updateElement(selectedElement.id, { locked: !selectedElement.locked })
+                  updateElement(selectedElement.id, {
+                    locked: !selectedElement.locked,
+                  })
                 }
               >
                 {selectedElement.locked ? (
@@ -1421,7 +1569,9 @@ export function CertificateMockupPage() {
                 <input
                   value={selectedElement.label}
                   onChange={(event) =>
-                    updateElement(selectedElement.id, { label: event.target.value })
+                    updateElement(selectedElement.id, {
+                      label: event.target.value,
+                    })
                   }
                 />
               </label>
@@ -1434,7 +1584,11 @@ export function CertificateMockupPage() {
                     value={Math.round(selectedElement.xPct * 1000) / 10}
                     onChange={(event) =>
                       updateElement(selectedElement.id, {
-                        xPct: clamp(Number(event.target.value) / 100, 0.015, 0.98),
+                        xPct: clamp(
+                          Number(event.target.value) / 100,
+                          0.015,
+                          0.98,
+                        ),
                       })
                     }
                   />
@@ -1446,7 +1600,11 @@ export function CertificateMockupPage() {
                     value={Math.round(selectedElement.yPct * 1000) / 10}
                     onChange={(event) =>
                       updateElement(selectedElement.id, {
-                        yPct: clamp(Number(event.target.value) / 100, 0.015, 0.98),
+                        yPct: clamp(
+                          Number(event.target.value) / 100,
+                          0.015,
+                          0.98,
+                        ),
                       })
                     }
                   />
@@ -1458,7 +1616,11 @@ export function CertificateMockupPage() {
                     value={Math.round(selectedElement.widthPct * 1000) / 10}
                     onChange={(event) =>
                       updateElement(selectedElement.id, {
-                        widthPct: clamp(Number(event.target.value) / 100, 0.035, 0.9),
+                        widthPct: clamp(
+                          Number(event.target.value) / 100,
+                          0.035,
+                          0.9,
+                        ),
                       })
                     }
                   />
@@ -1513,16 +1675,28 @@ export function CertificateMockupPage() {
               </div>
 
               <div className="certificate-nudge-row">
-                <button type="button" onClick={() => nudgeSelectedElement(-0.005, 0)}>
+                <button
+                  type="button"
+                  onClick={() => nudgeSelectedElement(-0.005, 0)}
+                >
                   ←
                 </button>
-                <button type="button" onClick={() => nudgeSelectedElement(0, -0.005)}>
+                <button
+                  type="button"
+                  onClick={() => nudgeSelectedElement(0, -0.005)}
+                >
                   ↑
                 </button>
-                <button type="button" onClick={() => nudgeSelectedElement(0, 0.005)}>
+                <button
+                  type="button"
+                  onClick={() => nudgeSelectedElement(0, 0.005)}
+                >
                   ↓
                 </button>
-                <button type="button" onClick={() => nudgeSelectedElement(0.005, 0)}>
+                <button
+                  type="button"
+                  onClick={() => nudgeSelectedElement(0.005, 0)}
+                >
                   →
                 </button>
               </div>
@@ -1541,6 +1715,30 @@ export function CertificateMockupPage() {
               {isTextElement(selectedElement) ? (
                 <section className="certificate-property-section">
                   <span className="certificate-control-title">Texto</span>
+                  {selectedVariableDefinition ? (
+                    <label className="certificate-field">
+                      <span>Dado automático</span>
+                      <select
+                        value={selectedVariableDefinition.key}
+                        onChange={(event) => {
+                          const definition = getCertificateVariableDefinition(
+                            event.target.value as CertificateVariableKey,
+                          );
+                          updateTextElement({
+                            variableKey: definition.key,
+                            label: definition.label,
+                            text: definition.sample,
+                          });
+                        }}
+                      >
+                        {CERTIFICATE_VARIABLE_DEFINITIONS.map((definition) => (
+                          <option key={definition.key} value={definition.key}>
+                            {definition.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : null}
                   <label className="certificate-field">
                     <span>
                       {selectedElement.type === "variable"
@@ -1554,10 +1752,10 @@ export function CertificateMockupPage() {
                       }
                     />
                   </label>
-                  {selectedElement.type === "variable" ? (
+                  {selectedVariableDefinition ? (
                     <p className="certificate-helper-text">
-                      Variável vinculada a <strong>{"{{nome_completo}}"}</strong>.
-                      Na geração em lote, o exemplo será substituído pelo nome real.
+                      {selectedVariableDefinition.helper} O texto acima serve
+                      apenas como exemplo para posicionar o campo no modelo.
                     </p>
                   ) : null}
 
@@ -1582,7 +1780,11 @@ export function CertificateMockupPage() {
                       type="button"
                       onClick={() =>
                         updateTextElement({
-                          fontSizePx: clamp(selectedElement.fontSizePx - 1, 8, 160),
+                          fontSizePx: clamp(
+                            selectedElement.fontSizePx - 1,
+                            8,
+                            160,
+                          ),
                         })
                       }
                     >
@@ -1597,7 +1799,11 @@ export function CertificateMockupPage() {
                         value={selectedElement.fontSizePx}
                         onChange={(event) =>
                           updateTextElement({
-                            fontSizePx: clamp(Number(event.target.value), 8, 160),
+                            fontSizePx: clamp(
+                              Number(event.target.value),
+                              8,
+                              160,
+                            ),
                           })
                         }
                       />
@@ -1606,7 +1812,11 @@ export function CertificateMockupPage() {
                       type="button"
                       onClick={() =>
                         updateTextElement({
-                          fontSizePx: clamp(selectedElement.fontSizePx + 1, 8, 160),
+                          fontSizePx: clamp(
+                            selectedElement.fontSizePx + 1,
+                            8,
+                            160,
+                          ),
                         })
                       }
                     >
@@ -1617,10 +1827,13 @@ export function CertificateMockupPage() {
                   <div className="certificate-toggle-row">
                     <button
                       type="button"
-                      className={selectedElement.fontWeight >= 700 ? "is-active" : ""}
+                      className={
+                        selectedElement.fontWeight >= 700 ? "is-active" : ""
+                      }
                       onClick={() =>
                         updateTextElement({
-                          fontWeight: selectedElement.fontWeight >= 700 ? 400 : 800,
+                          fontWeight:
+                            selectedElement.fontWeight >= 700 ? 400 : 800,
                         })
                       }
                     >
@@ -1629,11 +1842,17 @@ export function CertificateMockupPage() {
                     </button>
                     <button
                       type="button"
-                      className={selectedElement.fontStyle === "italic" ? "is-active" : ""}
+                      className={
+                        selectedElement.fontStyle === "italic"
+                          ? "is-active"
+                          : ""
+                      }
                       onClick={() =>
                         updateTextElement({
                           fontStyle:
-                            selectedElement.fontStyle === "italic" ? "normal" : "italic",
+                            selectedElement.fontStyle === "italic"
+                              ? "normal"
+                              : "italic",
                         })
                       }
                     >
@@ -1645,8 +1864,14 @@ export function CertificateMockupPage() {
                   <div className="certificate-align-row">
                     {[
                       ["left", <FormatAlignLeftRoundedIcon fontSize="small" />],
-                      ["center", <FormatAlignCenterRoundedIcon fontSize="small" />],
-                      ["right", <FormatAlignRightRoundedIcon fontSize="small" />],
+                      [
+                        "center",
+                        <FormatAlignCenterRoundedIcon fontSize="small" />,
+                      ],
+                      [
+                        "right",
+                        <FormatAlignRightRoundedIcon fontSize="small" />,
+                      ],
                     ].map(([align, icon]) => (
                       <button
                         key={align as string}
@@ -1668,18 +1893,24 @@ export function CertificateMockupPage() {
                     <div className="certificate-color-input-row">
                       <input
                         type="color"
-                        value={normalizeHexColorInput(selectedElement.colorHex) ?? "#111111"}
+                        value={
+                          normalizeHexColorInput(selectedElement.colorHex) ??
+                          "#111111"
+                        }
                         onChange={(event) =>
                           updateTextElement({
                             colorHex:
-                              normalizeHexColorInput(event.target.value) ?? "#111111",
+                              normalizeHexColorInput(event.target.value) ??
+                              "#111111",
                           })
                         }
                       />
                       <input
                         value={selectedElement.colorHex}
                         onChange={(event) => {
-                          const normalized = normalizeHexColorInput(event.target.value);
+                          const normalized = normalizeHexColorInput(
+                            event.target.value,
+                          );
                           updateTextElement({
                             colorHex: normalized ?? selectedElement.colorHex,
                           });
@@ -1694,7 +1925,9 @@ export function CertificateMockupPage() {
                         type="button"
                         style={{ backgroundColor: color }}
                         className={
-                          selectedElement.colorHex.toUpperCase() === color ? "is-active" : ""
+                          selectedElement.colorHex.toUpperCase() === color
+                            ? "is-active"
+                            : ""
                         }
                         onClick={() => updateTextElement({ colorHex: color })}
                       />
@@ -1721,7 +1954,9 @@ export function CertificateMockupPage() {
                       value={selectedElement.mixBlendMode}
                       onChange={(event) =>
                         updateImageElement({
-                          mixBlendMode: event.target.value as "normal" | "multiply",
+                          mixBlendMode: event.target.value as
+                            | "normal"
+                            | "multiply",
                         })
                       }
                     >
@@ -1757,7 +1992,8 @@ export function CertificateMockupPage() {
                       onChange={(event) =>
                         updateLineElement({
                           colorHex:
-                            normalizeHexColorInput(event.target.value) ?? "#111111",
+                            normalizeHexColorInput(event.target.value) ??
+                            "#111111",
                         })
                       }
                     />

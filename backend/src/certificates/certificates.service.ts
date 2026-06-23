@@ -9,7 +9,10 @@ import { throwError } from '../common/http-error';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
-import { renderCertificatePdf, renderCertificatePng } from './certificate.renderer';
+import {
+  renderCertificatePdf,
+  renderCertificatePng,
+} from './certificate.renderer';
 import type {
   CertificateQuestionDto,
   CreateCertificateEventDto,
@@ -95,7 +98,10 @@ function normalizeQuestionType(value: unknown) {
   if (raw === 'TEXT') return CertificateQuestionType.TEXT;
   if (raw === 'MULTIPLE_CHOICE') return CertificateQuestionType.MULTIPLE_CHOICE;
   if (raw === 'CHECKBOXES') return CertificateQuestionType.CHECKBOXES;
-  throwError('VALIDATION_ERROR', { field: 'type', reason: 'INVALID_QUESTION_TYPE' });
+  throwError('VALIDATION_ERROR', {
+    field: 'type',
+    reason: 'INVALID_QUESTION_TYPE',
+  });
 }
 
 function normalizeOptions(question: CertificateQuestionDto) {
@@ -129,13 +135,15 @@ function serializeQuestion(question: any) {
 }
 
 function sanitizeFileName(value: string) {
-  return String(value ?? 'certificado')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/gi, '-')
-    .replace(/^-+|-+$/g, '')
-    .toLowerCase()
-    .slice(0, 100) || 'certificado';
+  return (
+    String(value ?? 'certificado')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase()
+      .slice(0, 100) || 'certificado'
+  );
 }
 
 @Injectable()
@@ -165,17 +173,19 @@ export class CertificatesService {
     return created;
   }
 
-  async updateTemplate(
-    id: string,
-    payload: UpdateCertificateTemplateDto,
-  ) {
+  async updateTemplate(id: string, payload: UpdateCertificateTemplateDto) {
     await this.ensureTemplate(id);
     return this.prisma.certificateTemplate.update({
       where: { id },
       data: {
-        name: payload.name === undefined ? undefined : this.required(payload.name, 'name'),
+        name:
+          payload.name === undefined
+            ? undefined
+            : this.required(payload.name, 'name'),
         description:
-          payload.description === undefined ? undefined : this.optional(payload.description),
+          payload.description === undefined
+            ? undefined
+            : this.optional(payload.description),
         layoutJson:
           payload.layoutJson === undefined
             ? undefined
@@ -194,13 +204,18 @@ export class CertificatesService {
     return { ok: true };
   }
 
-  async previewTemplate(id: string, fullNameRaw?: string) {
+  async previewTemplate(
+    id: string,
+    fullNameRaw?: string,
+    eventNameRaw?: string,
+  ) {
     const template = await this.ensureTemplate(id);
     return renderCertificatePng({
       layoutJson: template.layoutJson,
       recipientFullName: fullNameRaw
         ? normalizeCertificateFullName(fullNameRaw)
         : 'Nome Completo Do Participante',
+      eventName: sanitizeText(eventNameRaw, 240) || 'Nome Do Evento',
     });
   }
 
@@ -261,7 +276,10 @@ export class CertificatesService {
     await this.prisma.certificateEvent.update({
       where: { id },
       data: {
-        name: payload.name === undefined ? undefined : this.required(payload.name, 'name'),
+        name:
+          payload.name === undefined
+            ? undefined
+            : this.required(payload.name, 'name'),
         location:
           payload.location === undefined
             ? undefined
@@ -275,7 +293,9 @@ export class CertificatesService {
             ? undefined
             : normalizeTime(payload.eventTime),
         description:
-          payload.description === undefined ? undefined : this.optional(payload.description),
+          payload.description === undefined
+            ? undefined
+            : this.optional(payload.description),
         certificateTemplateId:
           payload.certificateTemplateId === undefined
             ? undefined
@@ -312,7 +332,10 @@ export class CertificatesService {
       if (payload.questions) {
         await tx.certificateFormQuestion.deleteMany({ where: { eventId: id } });
         for (const [index, question] of questions.entries()) {
-          const label = this.required(question.label, `questions.${index}.label`);
+          const label = this.required(
+            question.label,
+            `questions.${index}.label`,
+          );
           const type = normalizeQuestionType(question.type);
           await tx.certificateFormQuestion.create({
             data: {
@@ -360,7 +383,10 @@ export class CertificatesService {
     if (!event || !event.formIsPublished) throwError('NOT_FOUND');
     const fullName = normalizeCertificateFullName(payload.fullName);
     const email = normalizeEmail(payload.email);
-    const answers = this.normalizeAnswers(event.questions, payload.answers ?? {});
+    const answers = this.normalizeAnswers(
+      event.questions,
+      payload.answers ?? {},
+    );
     const created = await this.prisma.certificateFormResponse.create({
       data: {
         eventId: event.id,
@@ -394,7 +420,9 @@ export class CertificatesService {
       });
     }
     const requestedIds = new Set(
-      (payload.responseIds ?? []).map((id) => String(id ?? '').trim()).filter(Boolean),
+      (payload.responseIds ?? [])
+        .map((id) => String(id ?? '').trim())
+        .filter(Boolean),
     );
     const responses = requestedIds.size
       ? event.responses.filter((response) => requestedIds.has(response.id))
@@ -420,6 +448,7 @@ export class CertificatesService {
         const pdf = await renderCertificatePdf({
           layoutJson: event.certificateTemplate.layoutJson,
           recipientFullName: response.fullName,
+          eventName: event.name,
         });
         const fileName = `${sanitizeFileName(event.name)}-${sanitizeFileName(response.fullName)}.pdf`;
         const sent = await this.mail.sendMailImmediate({
@@ -464,8 +493,12 @@ export class CertificatesService {
 
     return {
       ok: true,
-      sent: results.filter((item) => item.status === CertificateEmailDeliveryStatus.SENT).length,
-      failed: results.filter((item) => item.status === CertificateEmailDeliveryStatus.FAILED).length,
+      sent: results.filter(
+        (item) => item.status === CertificateEmailDeliveryStatus.SENT,
+      ).length,
+      failed: results.filter(
+        (item) => item.status === CertificateEmailDeliveryStatus.FAILED,
+      ).length,
       items: results,
     };
   }
@@ -484,6 +517,7 @@ export class CertificatesService {
     return renderCertificatePdf({
       layoutJson: event.certificateTemplate.layoutJson,
       recipientFullName: event.responses[0].fullName,
+      eventName: event.name,
     });
   }
 
@@ -529,14 +563,20 @@ export class CertificatesService {
     };
   }
 
-  private normalizeAnswers(questions: any[], rawAnswers: Record<string, unknown>) {
+  private normalizeAnswers(
+    questions: any[],
+    rawAnswers: Record<string, unknown>,
+  ) {
     const result: Record<string, unknown> = {};
     for (const question of questions) {
       const value = rawAnswers[question.id];
       if (question.type === CertificateQuestionType.TEXT) {
         const text = sanitizeLongText(value, 2000);
         if (question.required && !text) {
-          throwError('VALIDATION_ERROR', { field: question.id, reason: 'REQUIRED' });
+          throwError('VALIDATION_ERROR', {
+            field: question.id,
+            reason: 'REQUIRED',
+          });
         }
         result[question.id] = text;
         continue;
@@ -547,10 +587,16 @@ export class CertificatesService {
       if (question.type === CertificateQuestionType.MULTIPLE_CHOICE) {
         const selected = sanitizeText(value, 300);
         if (question.required && !selected) {
-          throwError('VALIDATION_ERROR', { field: question.id, reason: 'REQUIRED' });
+          throwError('VALIDATION_ERROR', {
+            field: question.id,
+            reason: 'REQUIRED',
+          });
         }
         if (selected && !options.includes(selected)) {
-          throwError('VALIDATION_ERROR', { field: question.id, reason: 'INVALID_OPTION' });
+          throwError('VALIDATION_ERROR', {
+            field: question.id,
+            reason: 'INVALID_OPTION',
+          });
         }
         result[question.id] = selected;
         continue;
@@ -559,10 +605,16 @@ export class CertificatesService {
         ? value.map((item) => sanitizeText(item, 300)).filter(Boolean)
         : [];
       if (question.required && selectedValues.length === 0) {
-        throwError('VALIDATION_ERROR', { field: question.id, reason: 'REQUIRED' });
+        throwError('VALIDATION_ERROR', {
+          field: question.id,
+          reason: 'REQUIRED',
+        });
       }
       if (selectedValues.some((item) => !options.includes(item))) {
-        throwError('VALIDATION_ERROR', { field: question.id, reason: 'INVALID_OPTION' });
+        throwError('VALIDATION_ERROR', {
+          field: question.id,
+          reason: 'INVALID_OPTION',
+        });
       }
       result[question.id] = selectedValues;
     }
@@ -578,14 +630,17 @@ export class CertificatesService {
   }
 
   private async ensureEvent(id: string) {
-    const event = await this.prisma.certificateEvent.findUnique({ where: { id } });
+    const event = await this.prisma.certificateEvent.findUnique({
+      where: { id },
+    });
     if (!event) throwError('NOT_FOUND');
     return event;
   }
 
   private async createUniqueSlug(seed: string) {
     const base =
-      sanitizeFileName(seed).slice(0, 48) || `evento-${Date.now().toString(36)}`;
+      sanitizeFileName(seed).slice(0, 48) ||
+      `evento-${Date.now().toString(36)}`;
     for (let index = 0; index < 6; index += 1) {
       const suffix = randomUUID().slice(0, 8);
       const slug = `${base}-${suffix}`;

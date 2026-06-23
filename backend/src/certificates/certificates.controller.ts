@@ -68,9 +68,14 @@ export class CertificatesController {
   async previewTemplate(
     @Param('id') id: string,
     @Query('fullName') fullName: string | undefined,
+    @Query('eventName') eventName: string | undefined,
     @Res() res: Response,
   ) {
-    const buffer = await this.certificates.previewTemplate(id, fullName);
+    const buffer = await this.certificates.previewTemplate(
+      id,
+      fullName,
+      eventName,
+    );
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'private, max-age=30');
     return res.send(buffer);
@@ -133,7 +138,10 @@ export class CertificatesController {
   ) {
     const buffer = await this.certificates.buildCertificatePdf(id, responseId);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'attachment; filename="certificado.pdf"');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="certificado.pdf"',
+    );
     return res.send(buffer);
   }
 }

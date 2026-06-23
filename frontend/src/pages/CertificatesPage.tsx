@@ -57,6 +57,11 @@ import {
   formatCertificateDateTime,
   type CertificateQuestionType,
 } from "../certificates/certificateHelpers";
+import {
+  EVENT_NAME_VARIABLE_KEY,
+  getCertificateVariableSample,
+  RECIPIENT_VARIABLE_KEY,
+} from "../certificates/certificateVariables";
 import { createDefaultCertificateLayout } from "../certificates/defaultCertificateLayout";
 
 type CertificateTemplateItem = {
@@ -209,17 +214,34 @@ function readCertificateElements(layoutJson: Record<string, unknown>) {
   return Array.isArray(raw) ? raw : [];
 }
 
+function resolveCertificateVariablePreviewText(
+  variableKey: string,
+  props: { fullName?: string; eventName?: string },
+) {
+  if (variableKey === RECIPIENT_VARIABLE_KEY) {
+    return (
+      props.fullName ?? getCertificateVariableSample(RECIPIENT_VARIABLE_KEY)
+    );
+  }
+  if (variableKey === EVENT_NAME_VARIABLE_KEY) {
+    return (
+      props.eventName ?? getCertificateVariableSample(EVENT_NAME_VARIABLE_KEY)
+    );
+  }
+  return "";
+}
+
 function CertificateLayoutPreview(props: {
   layoutJson: Record<string, unknown>;
   fullName?: string;
+  eventName?: string;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const [shellWidth, setShellWidth] = useState(0);
   const elements = readCertificateElements(props.layoutJson);
   const backgroundColor = String(props.layoutJson.backgroundColor ?? "#F8F4EC");
   const frameColor = String(props.layoutJson.frameColor ?? "#8E642A");
-  const scale =
-    shellWidth > 0 ? shellWidth / CERTIFICATE_CANVAS_WIDTH : 1;
+  const scale = shellWidth > 0 ? shellWidth / CERTIFICATE_CANVAS_WIDTH : 1;
   const previewHeight = shellWidth
     ? CERTIFICATE_CANVAS_HEIGHT * scale
     : CERTIFICATE_CANVAS_HEIGHT;
@@ -384,9 +406,11 @@ function CertificateLayoutPreview(props: {
               );
             }
             const text =
-              type === "variable" &&
-              String(element.variableKey ?? "") === "recipient_full_name"
-                ? props.fullName ?? "NOME COMPLETO DO PARTICIPANTE"
+              type === "variable"
+                ? resolveCertificateVariablePreviewText(
+                    String(element.variableKey ?? ""),
+                    props,
+                  ) || String(element.text ?? "")
                 : String(element.text ?? "");
             return (
               <Box
@@ -567,7 +591,12 @@ export function CertificatesPage() {
     try {
       const preview = await api.get(
         `/certificates/templates/${activeTemplate.id}/preview`,
-        { responseType: "blob" },
+        {
+          responseType: "blob",
+          params: selectedEvent?.name
+            ? { eventName: selectedEvent.name }
+            : undefined,
+        },
       );
       const blob = new Blob([preview.data], { type: "image/png" });
       const url = URL.createObjectURL(blob);
@@ -945,7 +974,9 @@ export function CertificatesPage() {
                   {events.map((event) => (
                     <Button
                       key={event.id}
-                      variant={event.id === activeEventId ? "contained" : "outlined"}
+                      variant={
+                        event.id === activeEventId ? "contained" : "outlined"
+                      }
                       color={event.id === activeEventId ? "primary" : "inherit"}
                       onClick={() => setSelectedEventId(event.id)}
                       sx={{
@@ -955,10 +986,13 @@ export function CertificatesPage() {
                       }}
                     >
                       <Box>
-                        <Typography variant="subtitle2">{event.name}</Typography>
+                        <Typography variant="subtitle2">
+                          {event.name}
+                        </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {formatCertificateDate(event.eventDate)} as{" "}
-                          {event.eventTime} · {event.responsesCount ?? 0} resposta(s)
+                          {event.eventTime} · {event.responsesCount ?? 0}{" "}
+                          resposta(s)
                         </Typography>
                       </Box>
                     </Button>
@@ -979,7 +1013,9 @@ export function CertificatesPage() {
                       justifyContent="space-between"
                     >
                       <Box>
-                        <Typography variant="h6">Administracao do evento</Typography>
+                        <Typography variant="h6">
+                          Administracao do evento
+                        </Typography>
                         <Typography color="text.secondary">
                           {responses.length} resposta(s) recebida(s)
                         </Typography>
@@ -1120,7 +1156,9 @@ export function CertificatesPage() {
                       </Button>
                     </Stack>
 
-                    <Alert severity={formDraft.formIsPublished ? "success" : "info"}>
+                    <Alert
+                      severity={formDraft.formIsPublished ? "success" : "info"}
+                    >
                       {formDraft.formIsPublished
                         ? "Formulario publicado."
                         : "Formulario salvo como rascunho."}
@@ -1245,7 +1283,10 @@ export function CertificatesPage() {
                               }
                               fullWidth
                             />
-                            <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                            <Stack
+                              direction={{ xs: "column", md: "row" }}
+                              spacing={1}
+                            >
                               <TextField
                                 label="Tipo de resposta"
                                 value={question.type}
@@ -1265,13 +1306,13 @@ export function CertificatesPage() {
                                 select
                                 fullWidth
                               >
-                                {Object.entries(CERTIFICATE_QUESTION_TYPE_LABELS).map(
-                                  ([value, label]) => (
-                                    <MenuItem key={value} value={value}>
-                                      {label}
-                                    </MenuItem>
-                                  ),
-                                )}
+                                {Object.entries(
+                                  CERTIFICATE_QUESTION_TYPE_LABELS,
+                                ).map(([value, label]) => (
+                                  <MenuItem key={value} value={value}>
+                                    {label}
+                                  </MenuItem>
+                                ))}
                               </TextField>
                               <FormControlLabel
                                 control={
@@ -1302,7 +1343,10 @@ export function CertificatesPage() {
                                   setQuestionDrafts((current) =>
                                     current.map((item) =>
                                       item.localId === question.localId
-                                        ? { ...item, optionsText: event.target.value }
+                                        ? {
+                                            ...item,
+                                            optionsText: event.target.value,
+                                          }
                                         : item,
                                     ),
                                   )
@@ -1321,7 +1365,10 @@ export function CertificatesPage() {
 
                     <Stack spacing={1}>
                       <Typography variant="subtitle1">Link aberto</Typography>
-                      <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                      <Stack
+                        direction={{ xs: "column", md: "row" }}
+                        spacing={1}
+                      >
                         <TextField value={publicFormLink} fullWidth disabled />
                         <Button
                           startIcon={<LinkRoundedIcon />}
@@ -1435,7 +1482,9 @@ export function CertificatesPage() {
                               <TableRow key={response.id} hover>
                                 <TableCell padding="checkbox">
                                   <Checkbox
-                                    checked={selectedResponseIds.has(response.id)}
+                                    checked={selectedResponseIds.has(
+                                      response.id,
+                                    )}
                                     onChange={() =>
                                       toggleResponseSelection(response.id)
                                     }
@@ -1444,18 +1493,25 @@ export function CertificatesPage() {
                                 <TableCell>{response.fullName}</TableCell>
                                 <TableCell>{response.email}</TableCell>
                                 <TableCell>
-                                  {formatCertificateDateTime(response.submittedAt)}
+                                  {formatCertificateDateTime(
+                                    response.submittedAt,
+                                  )}
                                 </TableCell>
                                 <TableCell>
                                   <Tooltip
                                     title={
-                                      response.latestDelivery?.errorMessage ?? ""
+                                      response.latestDelivery?.errorMessage ??
+                                      ""
                                     }
                                   >
                                     <Chip
                                       size="small"
-                                      label={certificateDeliveryStatusLabel(status)}
-                                      color={certificateDeliveryStatusColor(status)}
+                                      label={certificateDeliveryStatusLabel(
+                                        status,
+                                      )}
+                                      color={certificateDeliveryStatusColor(
+                                        status,
+                                      )}
                                     />
                                   </Tooltip>
                                 </TableCell>
@@ -1463,7 +1519,9 @@ export function CertificatesPage() {
                                   <Tooltip title="Baixar certificado">
                                     <span>
                                       <IconButton
-                                        onClick={() => handleDownloadPdf(response)}
+                                        onClick={() =>
+                                          handleDownloadPdf(response)
+                                        }
                                         disabled={
                                           downloadPdf.isPending ||
                                           !selectedEvent.certificateTemplateId
@@ -1573,7 +1631,10 @@ export function CertificatesPage() {
                             <Typography variant="subtitle2">
                               {template.name}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
                               {template.description || "Sem descricao"}
                             </Typography>
                           </Box>
@@ -1609,15 +1670,21 @@ export function CertificatesPage() {
             <CardContent>
               <Stack spacing={2}>
                 <Box>
-                  <Typography variant="h6">Pre-visualizacao do modelo</Typography>
+                  <Typography variant="h6">
+                    Pre-visualizacao do modelo
+                  </Typography>
                   <Typography color="text.secondary">
-                    O campo do lote aparece como{" "}
-                    <MuiLink underline="hover">NOME COMPLETO DO PARTICIPANTE</MuiLink>{" "}
-                    e sera substituido pelo nome informado no forms.
+                    Os campos automaticos aparecem como{" "}
+                    <MuiLink underline="hover">
+                      NOME COMPLETO DO PARTICIPANTE
+                    </MuiLink>{" "}
+                    e <MuiLink underline="hover">NOME DO EVENTO</MuiLink>; na
+                    geracao, eles sao substituidos pelos dados reais.
                   </Typography>
                 </Box>
                 <CertificateLayoutPreview
                   layoutJson={normalizeLayoutJson(activeTemplate?.layoutJson)}
+                  eventName={selectedEvent?.name}
                 />
                 <Alert severity="info">
                   Para ajustar posicao, fontes, cores e imagens, use o editor

@@ -1,3 +1,9 @@
+import {
+  EVENT_NAME_VARIABLE_KEY,
+  getCertificateVariableSample,
+  RECIPIENT_VARIABLE_KEY,
+} from "./certificateVariables";
+
 export function createDefaultCertificateLayout() {
   return {
     backgroundColor: "#F8F4EC",
@@ -99,9 +105,9 @@ export function createDefaultCertificateLayout() {
       {
         id: "recipient-name",
         type: "variable",
-        label: "Nome completo do lote",
-        text: "NOME COMPLETO DO PARTICIPANTE",
-        variableKey: "recipient_full_name",
+        label: "Nome do participante",
+        text: getCertificateVariableSample(RECIPIENT_VARIABLE_KEY),
+        variableKey: RECIPIENT_VARIABLE_KEY,
         xPct: 0.18,
         yPct: 0.425,
         widthPct: 0.64,
@@ -120,7 +126,7 @@ export function createDefaultCertificateLayout() {
         id: "body-details",
         type: "text",
         label: "Texto depois do nome",
-        text: "ministrou, no COMGEP, a palestra com o tema Assédio Sexual na FAB.",
+        text: "participou do evento",
         xPct: 0.18,
         yPct: 0.505,
         widthPct: 0.64,
@@ -134,6 +140,26 @@ export function createDefaultCertificateLayout() {
         colorHex: "#111111",
         textAlign: "center",
         lineHeight: 1.28,
+      },
+      {
+        id: "event-name",
+        type: "variable",
+        label: "Nome do evento",
+        text: getCertificateVariableSample(EVENT_NAME_VARIABLE_KEY),
+        variableKey: EVENT_NAME_VARIABLE_KEY,
+        xPct: 0.18,
+        yPct: 0.565,
+        widthPct: 0.64,
+        zIndex: 11,
+        visible: true,
+        opacity: 1,
+        fontFamily: '"Sora", "Manrope", sans-serif',
+        fontSizePx: 24,
+        fontWeight: 800,
+        fontStyle: "normal",
+        colorHex: "#0C657E",
+        textAlign: "center",
+        lineHeight: 1.18,
       },
       {
         id: "signature",
