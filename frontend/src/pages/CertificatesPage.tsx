@@ -131,6 +131,10 @@ const EMPTY_EVENT_DRAFT = {
 const CERTIFICATE_CANVAS_WIDTH = 1123;
 const CERTIFICATE_CANVAS_HEIGHT = 794;
 
+function px(value: number) {
+  return `${value}px`;
+}
+
 function todayInputValue() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -244,9 +248,9 @@ function CertificateLayoutPreview(props: {
       <Box
         sx={{
           position: "relative",
-          height: previewHeight,
+          height: px(previewHeight),
           overflow: "hidden",
-          minHeight: 1,
+          minHeight: "1px",
         }}
       >
         <Box
@@ -254,8 +258,8 @@ function CertificateLayoutPreview(props: {
             position: "absolute",
             top: 0,
             left: 0,
-            width: CERTIFICATE_CANVAS_WIDTH,
-            height: CERTIFICATE_CANVAS_HEIGHT,
+            width: px(CERTIFICATE_CANVAS_WIDTH),
+            height: px(CERTIFICATE_CANVAS_HEIGHT),
             overflow: "hidden",
             transform: `scale(${scale})`,
             transformOrigin: "top left",
@@ -279,7 +283,7 @@ function CertificateLayoutPreview(props: {
             aria-hidden="true"
             sx={{
               position: "absolute",
-              inset: 35,
+              inset: "35px",
               zIndex: 2,
               border: "5px double rgba(154, 106, 40, 0.18)",
               boxShadow:
@@ -290,7 +294,7 @@ function CertificateLayoutPreview(props: {
             aria-hidden="true"
             sx={{
               position: "absolute",
-              inset: 20,
+              inset: "20px",
               zIndex: 3,
               border: `2px solid ${frameColor}`,
             }}
@@ -299,7 +303,7 @@ function CertificateLayoutPreview(props: {
             aria-hidden="true"
             sx={{
               position: "absolute",
-              inset: 31,
+              inset: "31px",
               zIndex: 3,
               border: "1px solid rgba(154, 106, 40, 0.46)",
             }}
@@ -316,15 +320,20 @@ function CertificateLayoutPreview(props: {
               sx={{
                 position: "absolute",
                 zIndex: 5,
-                width: 23,
-                height: 23,
+                width: "23px",
+                height: "23px",
                 border: `2px solid ${frameColor}`,
                 bgcolor: "rgba(247, 244, 236, 0.92)",
-                ...position,
+                ...Object.fromEntries(
+                  Object.entries(position).map(([key, value]) => [
+                    key,
+                    px(value),
+                  ]),
+                ),
                 "&::after": {
                   content: '""',
                   position: "absolute",
-                  inset: 4,
+                  inset: "4px",
                   border: `1px solid ${frameColor}`,
                 },
               }}
@@ -340,9 +349,9 @@ function CertificateLayoutPreview(props: {
             const widthPct = Number(element.widthPct ?? 0.2);
             const commonSx = {
               position: "absolute",
-              left: xPct * CERTIFICATE_CANVAS_WIDTH,
-              top: yPct * CERTIFICATE_CANVAS_HEIGHT,
-              width: widthPct * CERTIFICATE_CANVAS_WIDTH,
+              left: px(xPct * CERTIFICATE_CANVAS_WIDTH),
+              top: px(yPct * CERTIFICATE_CANVAS_HEIGHT),
+              width: px(widthPct * CERTIFICATE_CANVAS_WIDTH),
               opacity: Number(element.opacity ?? 1),
               zIndex: Number(element.zIndex ?? index),
             };
@@ -368,7 +377,7 @@ function CertificateLayoutPreview(props: {
                   key={String(element.id ?? index)}
                   sx={{
                     ...commonSx,
-                    height: Math.max(1, Number(element.thicknessPx ?? 2)),
+                    height: px(Math.max(1, Number(element.thicknessPx ?? 2))),
                     bgcolor: String(element.colorHex ?? "#111"),
                   }}
                 />
