@@ -19,6 +19,8 @@ import TextFieldsRoundedIcon from "@mui/icons-material/TextFieldsRounded";
 import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import VisibilityOffRoundedIcon from "@mui/icons-material/VisibilityOffRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import { api } from "../api/client";
+import { parseApiError } from "../app/apiErrors";
 import { useToast } from "../app/toast";
 import "./CertificateMockupPage.css";
 
@@ -81,6 +83,7 @@ type CertificateElement =
 
 type CertificateTemplate = {
   id: string;
+  backendTemplateId?: string | null;
   name: string;
   description: string;
   backgroundColor: string;
@@ -467,6 +470,7 @@ function cloneTemplate(template: CertificateTemplate, name: string): Certificate
   return {
     ...template,
     id: makeId("cert-template"),
+    backendTemplateId: null,
     name,
     elements: template.elements.map((element) => ({
       ...element,
@@ -485,6 +489,41 @@ function loadTemplates() {
     return parsed;
   } catch {
     return [createDefaultTemplate()];
+  }
+}
+
+function buildBackendTemplatePayload(template: CertificateTemplate) {
+  return {
+    name: template.name.trim() || "Modelo sem nome",
+    description: template.description.trim() || null,
+    layoutJson: {
+      backgroundColor: template.backgroundColor,
+      frameColor: template.frameColor,
+      elements: template.elements,
+    },
+  };
+}
+
+async function saveTemplateInBackend(template: CertificateTemplate) {
+  const payload = buildBackendTemplatePayload(template);
+  const backendTemplateId = String(template.backendTemplateId ?? "").trim();
+  if (!backendTemplateId) {
+    return (await api.post("/certificates/templates", payload)).data as {
+      id?: string;
+    };
+  }
+
+  try {
+    return (
+      await api.put(`/certificates/templates/${backendTemplateId}`, payload)
+    ).data as { id?: string };
+  } catch (error) {
+    if ((error as { response?: { status?: number } })?.response?.status !== 404) {
+      throw error;
+    }
+    return (await api.post("/certificates/templates", payload)).data as {
+      id?: string;
+    };
   }
 }
 
@@ -510,6 +549,7 @@ export function CertificateMockupPage() {
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [snapGuides, setSnapGuides] = useState<SnapGuides>({});
   const [dirty, setDirty] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const selectedTemplate = useMemo(
     () =>
@@ -812,16 +852,50 @@ export function CertificateMockupPage() {
     };
   };
 
-  const saveTemplates = () => {
+  const saveTemplates = async () => {
+    setSavingTemplate(true);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
-      setDirty(false);
-      toast.push({ message: "Modelo salvo neste navegador.", severity: "success" });
     } catch {
       toast.push({
         message: "Nao foi possivel salvar o modelo neste navegador.",
         severity: "error",
       });
+      setSavingTemplate(false);
+      return;
+    }
+
+    try {
+      const saved = await saveTemplateInBackend(selectedTemplate);
+      const backendTemplateId = String(saved?.id ?? "").trim();
+      if (backendTemplateId) {
+        const nextTemplates = templates.map((template) =>
+          template.id === selectedTemplate.id
+            ? { ...template, backendTemplateId }
+            : template,
+        );
+        setTemplates(nextTemplates);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(nextTemplates));
+      }
+      setDirty(false);
+      toast.push({
+        message: "Modelo salvo no sistema e disponível em TI - Certificados.",
+        severity: "success",
+      });
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response
+        ?.status;
+      setDirty(false);
+      toast.push({
+        message:
+          status === 401 || status === 403
+            ? "Modelo salvo neste navegador. Entre com perfil COMGEP ou TI para salvar no sistema."
+            : parseApiError(error).message ??
+              "Modelo salvo neste navegador, mas nao foi salvo no sistema.",
+        severity: status === 401 || status === 403 ? "warning" : "error",
+      });
+    } finally {
+      setSavingTemplate(false);
     }
   };
 
@@ -1133,9 +1207,14 @@ export function CertificateMockupPage() {
             modelos forem necessários.
           </p>
         </div>
-        <button className="certificate-primary-button" type="button" onClick={saveTemplates}>
+        <button
+          className="certificate-primary-button"
+          type="button"
+          onClick={saveTemplates}
+          disabled={savingTemplate}
+        >
           <SaveRoundedIcon fontSize="small" />
-          Salvar modelo
+          {savingTemplate ? "Salvando..." : "Salvar modelo"}
         </button>
       </header>
 
