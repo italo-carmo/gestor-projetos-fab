@@ -33,7 +33,6 @@ import EmailRoundedIcon from "@mui/icons-material/EmailRounded";
 import LinkRoundedIcon from "@mui/icons-material/LinkRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
-import UploadFileRoundedIcon from "@mui/icons-material/UploadFileRounded";
 import { api } from "../api/client";
 import {
   useCertificateEvent,
@@ -129,7 +128,6 @@ const EMPTY_EVENT_DRAFT = {
   description: "",
   certificateTemplateId: "",
 };
-const VISUAL_EDITOR_STORAGE_KEY = "certificate-template-editor-v1";
 const CERTIFICATE_CANVAS_WIDTH = 1123;
 const CERTIFICATE_CANVAS_HEIGHT = 794;
 
@@ -172,17 +170,6 @@ function normalizeLayoutJson(value: unknown): Record<string, unknown> {
     : (createDefaultCertificateLayout() as Record<string, unknown>);
 }
 
-function extractEditorTemplateLayout(
-  value: Record<string, unknown>,
-): Record<string, unknown> | null {
-  if (!Array.isArray(value.elements)) return null;
-  return {
-    backgroundColor: value.backgroundColor ?? "#F8F4EC",
-    frameColor: value.frameColor ?? "#8E642A",
-    elements: value.elements,
-  };
-}
-
 function buildPublicFormLink(slug: string | null | undefined) {
   const normalized = String(slug ?? "").trim();
   if (!normalized) return "";
@@ -200,6 +187,17 @@ function formatPdfFileName(eventName: string, fullName: string) {
       .replace(/^-+|-+$/g, "")
       .toLowerCase();
   return `certificado-${normalize(eventName)}-${normalize(fullName)}.pdf`;
+}
+
+function formatTemplatePngFileName(templateName: string) {
+  const normalized =
+    String(templateName ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase() || "modelo";
+  return `modelo-certificado-${normalized}.png`;
 }
 
 function readCertificateElements(layoutJson: Record<string, unknown>) {
@@ -541,69 +539,6 @@ export function CertificatesPage() {
     }
   };
 
-  const handleImportEditorTemplates = async () => {
-    if (typeof window === "undefined") return;
-    const raw = window.localStorage.getItem(VISUAL_EDITOR_STORAGE_KEY);
-    if (!raw) {
-      toast.push({
-        message: "Nenhum modelo salvo no editor visual deste navegador.",
-        severity: "warning",
-      });
-      return;
-    }
-
-    let parsed: Array<Record<string, unknown>>;
-    try {
-      parsed = JSON.parse(raw) as Array<Record<string, unknown>>;
-    } catch {
-      toast.push({
-        message: "Nao foi possivel ler os modelos do editor visual.",
-        severity: "error",
-      });
-      return;
-    }
-
-    const importable = parsed
-      .map((item) => ({
-        name: String(item.name ?? "Modelo importado").trim() || "Modelo importado",
-        description:
-          String(item.description ?? "").trim() ||
-          "Importado do editor visual de certificados.",
-        layoutJson: extractEditorTemplateLayout(item),
-      }))
-      .filter((item) => item.layoutJson);
-
-    if (importable.length === 0) {
-      toast.push({
-        message: "Nenhum layout valido foi encontrado no editor visual.",
-        severity: "warning",
-      });
-      return;
-    }
-
-    try {
-      let lastCreatedId = "";
-      for (const item of importable) {
-        const created = (await createTemplate.mutateAsync({
-          name: item.name,
-          description: item.description,
-          layoutJson: item.layoutJson as Record<string, unknown>,
-        })) as CertificateTemplateItem;
-        lastCreatedId = created.id;
-      }
-      setSelectedTemplateId(lastCreatedId);
-      toast.push({
-        message: `${importable.length} modelo(s) importado(s).`,
-        severity: "success",
-      });
-    } catch (error) {
-      toast.push({
-        message: parseApiError(error).message ?? "Erro ao importar modelos.",
-        severity: "error",
-      });
-    }
-  };
-
   const handleDeleteTemplate = async (template: CertificateTemplateItem) => {
     if (!window.confirm(`Inativar o modelo "${template.name}"?`)) return;
     try {
@@ -613,6 +548,30 @@ export function CertificatesPage() {
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? "Erro ao inativar modelo.",
+        severity: "error",
+      });
+    }
+  };
+
+  const handleDownloadTemplatePng = async () => {
+    if (!activeTemplate) return;
+    try {
+      const preview = await api.get(
+        `/certificates/templates/${activeTemplate.id}/preview`,
+        { responseType: "blob" },
+      );
+      const blob = new Blob([preview.data], { type: "image/png" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = formatTemplatePngFileName(activeTemplate.name);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.push({
+        message: parseApiError(error).message ?? "Erro ao baixar modelo PNG.",
         severity: "error",
       });
     }
@@ -1565,13 +1524,6 @@ export function CertificatesPage() {
                   >
                     Salvar modelo
                   </Button>
-                  <Button
-                    startIcon={<UploadFileRoundedIcon />}
-                    onClick={handleImportEditorTemplates}
-                    disabled={createTemplate.isPending}
-                  >
-                    Importar do editor visual
-                  </Button>
                 </Stack>
               </CardContent>
             </Card>
@@ -1674,28 +1626,11 @@ export function CertificatesPage() {
                   Abrir editor visual em nova aba
                 </Button>
                 <Button
-                  onClick={async () => {
-                    if (!activeTemplate) return;
-                    try {
-                      const preview = await api.get(
-                        `/certificates/templates/${activeTemplate.id}/preview`,
-                        { responseType: "blob" },
-                      );
-                      const url = URL.createObjectURL(new Blob([preview.data]));
-                      window.open(url, "_blank", "noopener,noreferrer");
-                      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-                    } catch (error) {
-                      toast.push({
-                        message:
-                          parseApiError(error).message ??
-                          "Erro ao gerar pre-visualizacao.",
-                        severity: "error",
-                      });
-                    }
-                  }}
+                  startIcon={<DownloadRoundedIcon />}
+                  onClick={handleDownloadTemplatePng}
                   disabled={!activeTemplate}
                 >
-                  Abrir PNG gerado pelo backend
+                  Baixar modelo PNG
                 </Button>
               </Stack>
             </CardContent>
