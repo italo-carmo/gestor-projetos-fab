@@ -23,6 +23,24 @@ const user = {
   roles: [],
 } as any;
 
+const admMissionsUser = {
+  ...user,
+  permissions: [
+    { resource: 'missions', action: 'view', scope: 'NATIONAL' },
+    { resource: 'missions', action: 'create', scope: 'NATIONAL' },
+    { resource: 'missions', action: 'update', scope: 'NATIONAL' },
+    { resource: 'missions', action: 'download', scope: 'NATIONAL' },
+  ],
+  roles: [
+    {
+      id: 'role-adm-missoes',
+      name: 'Adm Missões',
+      wildcard: false,
+      permissions: [],
+    },
+  ],
+} as any;
+
 function buildPrismaMock() {
   const tx = {
     activity: {
@@ -47,6 +65,8 @@ function buildPrismaMock() {
   };
   return {
     mission: {
+      count: jest.fn(),
+      findMany: jest.fn(),
       findUnique: jest.fn(),
     },
     missionReport: {
@@ -74,7 +94,9 @@ function buildPrismaMock() {
       findMany: jest.fn(),
       findUnique: jest.fn(),
     },
-    $transaction: jest.fn(async (callback: any) => callback(tx)),
+    $transaction: jest.fn(async (input: any) =>
+      Array.isArray(input) ? Promise.all(input) : input(tx),
+    ),
     __tx: tx,
   } as any;
 }
@@ -346,6 +368,118 @@ describe('MissionsService schedule field activities', () => {
       }),
     });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('MissionsService Adm Missões access', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('strips report data from the mission list', async () => {
+    const prisma = buildPrismaMock();
+    prisma.mission.findMany.mockResolvedValue([
+      {
+        id: 'mission-1',
+        title: 'Missão CIPAVD',
+        scope: ActivityScope.CIPAVD,
+        localityId: 'loc-1',
+        participants: [],
+        scheduleItems: [{ id: 'schedule-1' }],
+        report: {
+          id: 'report-1',
+          contentHtml: '<p>Relatório reservado</p>',
+          contentText: 'Relatório reservado',
+          signatures: [{ id: 'sig-1' }],
+        },
+      },
+    ]);
+    prisma.mission.count.mockResolvedValue(1);
+
+    const service = new MissionsService(prisma, auditMock, fabLdapMock);
+
+    await expect(
+      service.list({ scope: 'CIPAVD' }, admMissionsUser),
+    ).resolves.toMatchObject({
+      items: [
+        {
+          id: 'mission-1',
+          report: null,
+          reportFilled: false,
+          reportSignaturesCount: 0,
+        },
+      ],
+      total: 1,
+    });
+  });
+
+  it('strips report and field-activity links from mission details', async () => {
+    const prisma = buildPrismaMock();
+    prisma.mission.findUnique.mockResolvedValue({
+      ...buildMissionForReport(),
+      participants: [],
+      banners: [],
+      scheduleItems: [
+        {
+          id: 'schedule-1',
+          title: 'Palestra base',
+          activity: { id: 'activity-1', title: 'Atividade vinculada' },
+          activityLinks: [
+            {
+              activity: {
+                id: 'activity-1',
+                title: 'Atividade vinculada',
+              },
+            },
+          ],
+        },
+      ],
+      report: {
+        id: 'report-1',
+        contentHtml: '<p>Relatório reservado</p>',
+        contentText: 'Relatório reservado',
+        signatures: [{ id: 'sig-1', removedAt: null }],
+      },
+    });
+
+    const service = new MissionsService(prisma, auditMock, fabLdapMock);
+    const result = await service.getById('mission-1', admMissionsUser);
+
+    expect(result).toMatchObject({
+      id: 'mission-1',
+      report: null,
+      reportFilled: false,
+      reportSignaturesCount: 0,
+    });
+    expect(result.scheduleItems[0]).toMatchObject({
+      id: 'schedule-1',
+      activity: null,
+      activityLinks: [],
+    });
+  });
+
+  it('blocks advanced mission tabs even with missions update permission', async () => {
+    const service = new MissionsService(
+      buildPrismaMock(),
+      auditMock,
+      fabLdapMock,
+    );
+
+    await expect(
+      service.upsertReport(
+        'mission-1',
+        { contentHtml: '<p>Relatório</p>', contentText: 'Relatório' },
+        admMissionsUser,
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'RBAC_FORBIDDEN' }),
+    });
+
+    await expect(
+      service.getChecklist('mission-1', admMissionsUser),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'RBAC_FORBIDDEN' }),
+    });
   });
 });
 

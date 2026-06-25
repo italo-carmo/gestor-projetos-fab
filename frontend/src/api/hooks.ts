@@ -388,7 +388,7 @@ export function useActivity(id: string, enabled = true) {
 export function useActivityResponsibleUsers(filters: {
   localityId?: string;
   specialtyId?: string;
-}) {
+}, enabled = true) {
   const normalized = {
     localityId: filters.localityId || undefined,
     specialtyId: filters.specialtyId || undefined,
@@ -399,10 +399,11 @@ export function useActivityResponsibleUsers(filters: {
       (await api.get("/activities/responsible-users", { params: normalized }))
         .data,
     staleTime: 15_000,
+    enabled,
   });
 }
 
-export function useActivityTypes(scope: string) {
+export function useActivityTypes(scope: string, enabled = true) {
   const normalizedScope = scope === "CIPAVD" ? "CIPAVD" : "SMIF";
   return useQuery({
     queryKey: qk.activityTypes(normalizedScope),
@@ -413,6 +414,7 @@ export function useActivityTypes(scope: string) {
         })
       ).data,
     staleTime: 60_000,
+    enabled,
   });
 }
 

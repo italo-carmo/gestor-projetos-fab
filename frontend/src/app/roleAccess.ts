@@ -8,6 +8,7 @@ export const ROLE_COMANDANTE_COMGEP = ROLE_COMGEP;
 export const ROLE_TI = "TI";
 export const ROLE_CPCA = "CPCA";
 export const ROLE_GSD_LOCALIDADE = "GSD Localidade";
+export const ROLE_ADM_MISSOES = "Adm Missões";
 
 const COMGEP_ROLE_ALIASES = new Set(["comgep", "comandante comgep"]);
 
@@ -54,6 +55,7 @@ export function hasAnyRole(user: MePayload | undefined, roleNames: string[]) {
 }
 
 export function canAccessAdministration(user: MePayload | undefined) {
+  if (hasRole(user, ROLE_ADM_MISSOES)) return false;
   return (
     canAccessAdminCatalog(user) || hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])
   );

@@ -2714,6 +2714,30 @@ export const PERMISSIONS: SeedPermission[] = [
     "action": "download",
     "scope": "NATIONAL",
     "description": "download on cipavd_reports (NATIONAL)"
+  },
+  {
+    "resource": "missions",
+    "action": "view",
+    "scope": "NATIONAL",
+    "description": "view on missions (NATIONAL)"
+  },
+  {
+    "resource": "missions",
+    "action": "create",
+    "scope": "NATIONAL",
+    "description": "create on missions (NATIONAL)"
+  },
+  {
+    "resource": "missions",
+    "action": "update",
+    "scope": "NATIONAL",
+    "description": "update on missions (NATIONAL)"
+  },
+  {
+    "resource": "missions",
+    "action": "download",
+    "scope": "NATIONAL",
+    "description": "download on missions (NATIONAL)"
   }
 ] as any;
 
@@ -2722,6 +2746,28 @@ export const ROLE_SUGGESTIONS: Record<string, SeedRolePermission[]> = {
     {
       "resource": "*",
       "action": "*",
+      "scope": "NATIONAL"
+    }
+  ],
+  "Adm Missões": [
+    {
+      "resource": "missions",
+      "action": "view",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "missions",
+      "action": "create",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "missions",
+      "action": "update",
+      "scope": "NATIONAL"
+    },
+    {
+      "resource": "missions",
+      "action": "download",
       "scope": "NATIONAL"
     }
   ],
@@ -3222,6 +3268,7 @@ export async function seedRbac(prisma: PrismaClient) {
     { name: "TI", description: "Administração geral do sistema", isSystemRole: true },
     { name: "Coordenação CIPAVD", description: "Coordenação nacional do programa", isSystemRole: true },
     { name: "CIPAVD", description: "Operação do bloco CIPAVD", isSystemRole: true },
+    { name: "Adm Missões", description: "Administração restrita de missões CIPAVD e SMIF", isSystemRole: true },
     { name: "Admin Especialidade Local", description: "Administra especialidade dentro da localidade", isSystemRole: true },
     { name: "GSD Localidade", description: "Gestão local do programa", isSystemRole: true },
     { name: "COMGEP", description: "Visão executiva/gerencial (sem PII)", isSystemRole: true },

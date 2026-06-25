@@ -9,6 +9,7 @@ export const ROLE_COMANDANTE_COMGEP = ROLE_COMGEP;
 export const ROLE_TI = 'TI';
 export const ROLE_CPCA = 'CPCA';
 export const ROLE_GSD_LOCALIDADE = 'GSD Localidade';
+export const ROLE_ADM_MISSOES = 'Adm Missões';
 export const ROLE_ADMIN_ESPECIALIDADE_LOCAL = 'Admin Especialidade Local';
 export const ROLE_ADMIN_ESPECIALIDADE_NACIONAL = 'Admin Especialidade Nacional';
 export const ROLE_ADMIN_LOCALIDADE = 'Admin Localidade';

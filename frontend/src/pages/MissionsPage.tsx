@@ -97,7 +97,7 @@ import {
   MISSIONS_STATS_SECTION_DEFAULTS,
   persistMissionsPageUiSettings,
 } from '../app/missionsPageUiSettings';
-import { hasAnyRole, ROLE_TI } from '../app/roleAccess';
+import { hasAnyRole, ROLE_ADM_MISSOES, ROLE_TI } from '../app/roleAccess';
 import { toMilitaryDisplayName } from '../app/militaryName';
 import { useToast } from '../app/toast';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
@@ -922,14 +922,28 @@ export function MissionsPage() {
     scope: missionScope,
   });
   const statisticsQuery = useMissionStatistics(missionScope);
-  const activityTypesQuery = useActivityTypes(missionScope);
+  const { data: me } = useMe();
+  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
+  const isAdmMissionsProfile = hasAnyRole(me, [ROLE_ADM_MISSOES]);
+  const canCreateMissions = can(me, 'missions', 'create');
+  const canUpdateMissions = can(me, 'missions', 'update');
+  const canDeleteMissions = can(me, 'missions', 'delete');
+  const canViewFieldActivities = can(me, 'task_instances', 'view');
+  const canCreateFieldActivities = can(me, 'task_instances', 'create');
+  const canLinkFieldActivities = can(me, 'task_instances', 'update');
+  const canManageScheduleFieldActivities = canCreateFieldActivities || canLinkFieldActivities;
+  const showScheduleFieldActivityColumn = canViewFieldActivities && !isAdmMissionsProfile;
+  const showScheduleFieldActivityTools = canManageScheduleFieldActivities && !isAdmMissionsProfile;
+  const canSelectScheduleItems = showScheduleFieldActivityTools || canDeleteMissions;
+  const showSystemUserParticipantTab = !isAdmMissionsProfile;
+  const activityTypesQuery = useActivityTypes(missionScope, showScheduleFieldActivityTools);
   const activitiesForLinkQuery = useActivities({
     scope: missionScope,
     localityId: missionDetailQuery.data?.localityId || undefined,
     pageSize: 'all',
-  }, Boolean(missionDetailQuery.data?.localityId));
-  const responsibleUsersQuery = useActivityResponsibleUsers({});
-  const specialtiesQuery = useSpecialties();
+  }, showScheduleFieldActivityTools && Boolean(missionDetailQuery.data?.localityId));
+  const responsibleUsersQuery = useActivityResponsibleUsers({}, showScheduleFieldActivityTools);
+  const specialtiesQuery = useSpecialties(showScheduleFieldActivityTools);
 
   const createMission = useCreateMission();
   const updateMission = useUpdateMission();
@@ -937,7 +951,7 @@ export function MissionsPage() {
   const addParticipantLdap = useAddMissionParticipantFromLdap();
   const addParticipantUser = useAddMissionParticipantFromUser();
   const removeParticipant = useRemoveMissionParticipant();
-  const usersQuery = useUsers();
+  const usersQuery = useUsers(!isAdmMissionsProfile);
   const createMissionBanner = useCreateMissionBanner();
   const updateMissionBanner = useUpdateMissionBanner();
   const deleteMissionBanner = useDeleteMissionBanner();
@@ -1012,12 +1026,6 @@ export function MissionsPage() {
     participantsByMission: false,
   });
 
-  const { data: me } = useMe();
-  const isTiProfile = hasAnyRole(me, [ROLE_TI]);
-  const canUpdateMissions = can(me, 'missions', 'update');
-  const canCreateFieldActivities = can(me, 'task_instances', 'create');
-  const canLinkFieldActivities = can(me, 'task_instances', 'update');
-  const canManageScheduleFieldActivities = canCreateFieldActivities || canLinkFieldActivities;
   const [missionsUiSettings, setMissionsUiSettings] = useState(() =>
     loadMissionsPageUiSettings(),
   );
@@ -1094,7 +1102,8 @@ export function MissionsPage() {
 
   const items = missionsQuery.data?.items ?? [];
   const selectedMission = missionDetailQuery.data ?? null;
-  const showMissionReportTab = missionScope === 'CIPAVD';
+  const showMissionReportTab = missionScope === 'CIPAVD' && !isAdmMissionsProfile;
+  const showMissionChecklistTab = !isAdmMissionsProfile;
   const missionReportTabIndex = showMissionReportTab ? 3 : -1;
   const missionChecklistTabIndex = showMissionReportTab ? 4 : 3;
   const missionReport = selectedMission?.report ?? null;
@@ -1143,7 +1152,7 @@ export function MissionsPage() {
   );
   const missionChecklistQuery = useMissionChecklist(
     String(selectedMission?.id ?? ''),
-    Boolean(selectedMission?.id) && !isCreateMode,
+    Boolean(selectedMission?.id) && !isCreateMode && showMissionChecklistTab,
   );
   const missionChecklistSections = useMemo(() => {
     const sectionsRaw = Array.isArray((missionChecklistQuery.data as any)?.sections)
@@ -1291,6 +1300,11 @@ export function MissionsPage() {
       .map((item: any) => String(item.title ?? 'Item de cronograma').trim() || 'Item de cronograma');
   }, [missionScheduleItems, scheduleDeleteTarget]);
   const selectedScheduleCount = selectedScheduleItemIds.length;
+  const scheduleSelectionHelpText = showScheduleFieldActivityTools
+    ? canDeleteMissions
+      ? 'Selecione um ou mais itens para gerar atividades de campo, relacionar atividades existentes ou excluir em lote.'
+      : 'Selecione um ou mais itens para gerar atividades de campo ou relacionar atividades existentes.'
+    : 'Selecione um ou mais itens para excluir em lote.';
   const allScheduleItemsSelected =
     allScheduleItemIds.length > 0 &&
     selectedScheduleItemIds.length === allScheduleItemIds.length;
@@ -1348,6 +1362,18 @@ export function MissionsPage() {
   }, [allScheduleItemIds]);
 
   useEffect(() => {
+    if (canSelectScheduleItems) return;
+    setSelectedScheduleItemIds([]);
+    setScheduleDeleteTarget(null);
+  }, [canSelectScheduleItems]);
+
+  useEffect(() => {
+    if (showScheduleFieldActivityTools) return;
+    setFieldActivityDialogOpen(false);
+    setFieldActivityDrafts([]);
+  }, [showScheduleFieldActivityTools]);
+
+  useEffect(() => {
     if (!selectedMission) return;
     setMissionForm({
       title: selectedMission.title ?? '',
@@ -1359,10 +1385,20 @@ export function MissionsPage() {
   }, [selectedMission]);
 
   useEffect(() => {
+    if (!showMissionChecklistTab && missionTab > 2) {
+      setMissionTab(0);
+      return;
+    }
     if (!showMissionReportTab && missionTab === 4) {
       setMissionTab(0);
     }
-  }, [missionTab, showMissionReportTab]);
+  }, [missionTab, showMissionChecklistTab, showMissionReportTab]);
+
+  useEffect(() => {
+    if (!showSystemUserParticipantTab && participantTab !== 0) {
+      setParticipantTab(0);
+    }
+  }, [participantTab, showSystemUserParticipantTab]);
 
   useEffect(() => {
     const nextHtml = String(selectedMission?.report?.contentHtml ?? '');
@@ -1955,7 +1991,7 @@ export function MissionsPage() {
   };
 
   const openFieldActivityDialog = () => {
-    if (!selectedMission || !selectedScheduleItemIds.length) return;
+    if (!showScheduleFieldActivityTools || !selectedMission || !selectedScheduleItemIds.length) return;
     const drafts = buildMissionFieldActivityDrafts(
       missionScheduleItems,
       selectedScheduleItemIds,
@@ -2016,6 +2052,7 @@ export function MissionsPage() {
   };
 
   const handleSubmitFieldActivities = async () => {
+    if (!showScheduleFieldActivityTools) return;
     if (!selectedMission || !fieldActivityDrafts.length) return;
     const invalidDraft = fieldActivityDrafts.find((draft) =>
       getMissionFieldActivityValidationMessage(draft),
@@ -2403,9 +2440,11 @@ export function MissionsPage() {
             {scopeSubtitle}
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={openCreate}>
-          Nova missão
-        </Button>
+        {canCreateMissions ? (
+          <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={openCreate}>
+            Nova missão
+          </Button>
+        ) : null}
       </Stack>
 
       <Tabs value={missionScope} onChange={handleScopeTabChange} sx={{ mb: 2 }}>
@@ -2761,7 +2800,9 @@ export function MissionsPage() {
                   {showMissionReportTab ? (
                     <TableCell sx={{ color: '#fff', fontWeight: 700, width: 110 }}>Relatório</TableCell>
                   ) : null}
-                  <TableCell sx={{ color: '#fff', fontWeight: 700, width: 90 }}>Ações</TableCell>
+                  {canDeleteMissions ? (
+                    <TableCell sx={{ color: '#fff', fontWeight: 700, width: 90 }}>Ações</TableCell>
+                  ) : null}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -2821,20 +2862,22 @@ export function MissionsPage() {
                         </Tooltip>
                       </TableCell>
                     ) : null}
-                    <TableCell onClick={(event) => event.stopPropagation()}>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() =>
-                          setMissionDeleteTarget({
-                            id: String(mission.id),
-                            title: String(mission.title ?? 'Missão'),
-                          })
-                        }
-                      >
-                        <DeleteOutlineIcon fontSize="small" />
-                      </IconButton>
-                    </TableCell>
+                    {canDeleteMissions ? (
+                      <TableCell onClick={(event) => event.stopPropagation()}>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() =>
+                            setMissionDeleteTarget({
+                              id: String(mission.id),
+                              title: String(mission.title ?? 'Missão'),
+                            })
+                          }
+                        >
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
@@ -2855,7 +2898,7 @@ export function MissionsPage() {
               {isCreateMode ? `Nova missão (${scopeLabel})` : `Detalhes da missão (${scopeLabel})`}
             </Typography>
             <Stack direction="row" spacing={1}>
-              {!isCreateMode && selectedMission && (
+              {!isCreateMode && selectedMission && canDeleteMissions && (
                 <Button
                   color="error"
                   variant="outlined"
@@ -2957,7 +3000,12 @@ export function MissionsPage() {
                       <Button
                         variant="contained"
                         onClick={handleSaveMission}
-                        disabled={createMission.isPending || updateMission.isPending || createScheduleItem.isPending}
+                        disabled={
+                          (isCreateMode ? !canCreateMissions : !canUpdateMissions) ||
+                          createMission.isPending ||
+                          updateMission.isPending ||
+                          createScheduleItem.isPending
+                        }
                       >
                         {isCreateMode ? 'Criar missão' : 'Salvar missão'}
                       </Button>
@@ -2979,7 +3027,9 @@ export function MissionsPage() {
                         <Tab label="Cronograma" />
                         <Tab label="Banners" />
                         {showMissionReportTab ? <Tab label="Relatório" /> : null}
-                        <Tab label="Mapeamento Institucional" />
+                        {showMissionChecklistTab ? (
+                          <Tab label="Mapeamento Institucional" />
+                        ) : null}
                       </Tabs>
                     </CardContent>
                   </Card>
@@ -2993,7 +3043,9 @@ export function MissionsPage() {
 
                       <Tabs value={participantTab} onChange={(_, newValue) => setParticipantTab(newValue)} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
                         <Tab label="LDAP" />
-                        <Tab label="Usuários do Sistema" />
+                        {showSystemUserParticipantTab ? (
+                          <Tab label="Usuários do Sistema" />
+                        ) : null}
                       </Tabs>
 
                       {participantTab === 0 && (
@@ -3030,7 +3082,7 @@ export function MissionsPage() {
                         </Stack>
                       )}
 
-                      {participantTab === 1 && (
+                      {showSystemUserParticipantTab && participantTab === 1 && (
                         <Stack spacing={1.5}>
                           <Autocomplete
                             size="small"
@@ -3216,53 +3268,59 @@ export function MissionsPage() {
                         </Typography>
                       ) : (
                         <Stack spacing={1}>
-                          <Stack
-                            direction={{ xs: 'column', sm: 'row' }}
-                            spacing={1}
-                            justifyContent="space-between"
-                            alignItems={{ sm: 'center' }}
-                          >
-                            <Typography variant="body2" color="text.secondary">
-                              Selecione um ou mais itens para gerar atividades de campo, relacionar atividades existentes ou excluir em lote.
-                            </Typography>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              {selectedScheduleCount > 0 ? (
-                                <Chip
-                                  size="small"
-                                  color="primary"
-                                  variant="outlined"
-                                  label={`${selectedScheduleCount} selecionado(s)`}
-                                />
-                              ) : null}
-                              <Button
-                                variant="contained"
-                                color="success"
-                                startIcon={<LinkRoundedIcon />}
-                                onClick={openFieldActivityDialog}
-                                disabled={selectedScheduleCount === 0 || !canManageScheduleFieldActivities || upsertScheduleFieldActivities.isPending}
-                              >
-                                Gerar/vincular atividades
-                              </Button>
-                              <Button
-                                variant="text"
-                                color="inherit"
-                                onClick={() => setSelectedScheduleItemIds([])}
-                                disabled={selectedScheduleCount === 0}
-                              >
-                                Desfazer seleção
-                              </Button>
-                              <Button
-                                variant="outlined"
-                                color="error"
-                                startIcon={<DeleteOutlineIcon />}
-                                onClick={handleDeleteSelectedScheduleItems}
-                                disabled={selectedScheduleCount === 0 || deleteScheduleItem.isPending}
-                              >
-                                Excluir selecionados
-                              </Button>
+                          {canSelectScheduleItems ? (
+                            <Stack
+                              direction={{ xs: 'column', sm: 'row' }}
+                              spacing={1}
+                              justifyContent="space-between"
+                              alignItems={{ sm: 'center' }}
+                            >
+                              <Typography variant="body2" color="text.secondary">
+                                {scheduleSelectionHelpText}
+                              </Typography>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                {selectedScheduleCount > 0 ? (
+                                  <Chip
+                                    size="small"
+                                    color="primary"
+                                    variant="outlined"
+                                    label={`${selectedScheduleCount} selecionado(s)`}
+                                  />
+                                ) : null}
+                                {showScheduleFieldActivityTools ? (
+                                  <Button
+                                    variant="contained"
+                                    color="success"
+                                    startIcon={<LinkRoundedIcon />}
+                                    onClick={openFieldActivityDialog}
+                                    disabled={selectedScheduleCount === 0 || upsertScheduleFieldActivities.isPending}
+                                  >
+                                    Gerar/vincular atividades
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  variant="text"
+                                  color="inherit"
+                                  onClick={() => setSelectedScheduleItemIds([])}
+                                  disabled={selectedScheduleCount === 0}
+                                >
+                                  Desfazer seleção
+                                </Button>
+                                {canDeleteMissions ? (
+                                  <Button
+                                    variant="outlined"
+                                    color="error"
+                                    startIcon={<DeleteOutlineIcon />}
+                                    onClick={handleDeleteSelectedScheduleItems}
+                                    disabled={selectedScheduleCount === 0 || deleteScheduleItem.isPending}
+                                  >
+                                    Excluir selecionados
+                                  </Button>
+                                ) : null}
+                              </Stack>
                             </Stack>
-                          </Stack>
-                          {scheduleDayOptions.length > 0 ? (
+                          ) : null}
+                          {canSelectScheduleItems && scheduleDayOptions.length > 0 ? (
                             <Stack
                               direction={{ xs: 'column', md: 'row' }}
                               spacing={1}
@@ -3290,25 +3348,29 @@ export function MissionsPage() {
                           <Table size="small">
                             <TableHead>
                               <TableRow sx={{ bgcolor: 'primary.main' }}>
-                                <TableCell padding="checkbox" sx={{ color: '#fff' }}>
-                                  <Checkbox
-                                    size="small"
-                                    checked={allScheduleItemsSelected}
-                                    indeterminate={someScheduleItemsSelected}
-                                    onChange={handleToggleAllScheduleItems}
-                                    sx={{
-                                      color: '#fff',
-                                      '&.Mui-checked': { color: '#fff' },
-                                      '&.MuiCheckbox-indeterminate': { color: '#fff' },
-                                    }}
-                                  />
-                                </TableCell>
+                                {canSelectScheduleItems ? (
+                                  <TableCell padding="checkbox" sx={{ color: '#fff' }}>
+                                    <Checkbox
+                                      size="small"
+                                      checked={allScheduleItemsSelected}
+                                      indeterminate={someScheduleItemsSelected}
+                                      onChange={handleToggleAllScheduleItems}
+                                      sx={{
+                                        color: '#fff',
+                                        '&.Mui-checked': { color: '#fff' },
+                                        '&.MuiCheckbox-indeterminate': { color: '#fff' },
+                                      }}
+                                    />
+                                  </TableCell>
+                                ) : null}
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Horário</TableCell>
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Atividade</TableCell>
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Local</TableCell>
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Responsável</TableCell>
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Participantes</TableCell>
-                                <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Atividade de campo</TableCell>
+                                {showScheduleFieldActivityColumn ? (
+                                  <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Atividade de campo</TableCell>
+                                ) : null}
                                 <TableCell sx={{ color: '#fff', fontWeight: 700 }}>Ações</TableCell>
                               </TableRow>
                             </TableHead>
@@ -3319,13 +3381,15 @@ export function MissionsPage() {
                                 const linkedActivities = getMissionScheduleItemLinkedActivities(item);
                                 return (
                                   <TableRow key={item.id} selected={checked}>
-                                    <TableCell padding="checkbox">
-                                      <Checkbox
-                                        size="small"
-                                        checked={checked}
-                                        onChange={() => handleToggleScheduleItemSelection(itemId)}
-                                      />
-                                    </TableCell>
+                                    {canSelectScheduleItems ? (
+                                      <TableCell padding="checkbox">
+                                        <Checkbox
+                                          size="small"
+                                          checked={checked}
+                                          onChange={() => handleToggleScheduleItemSelection(itemId)}
+                                        />
+                                      </TableCell>
+                                    ) : null}
                                     <TableCell>
                                       {new Date(item.startAt).toLocaleString('pt-BR', {
                                         day: '2-digit',
@@ -3341,32 +3405,34 @@ export function MissionsPage() {
                                     <TableCell>{item.location}</TableCell>
                                     <TableCell>{item.responsible}</TableCell>
                                     <TableCell sx={{ maxWidth: 220, whiteSpace: 'pre-wrap' }}>{item.participants}</TableCell>
-                                    <TableCell sx={{ minWidth: 190 }}>
-                                      {linkedActivities.length > 0 ? (
-                                        <Stack spacing={0.5} alignItems="flex-start">
-                                          <Chip
-                                            size="small"
-                                            color="success"
-                                            variant="outlined"
-                                            label={`${linkedActivities.length} vinculada(s)`}
-                                          />
-                                          {linkedActivities.map((activity: any) => (
-                                            <Button
-                                              key={String(activity.id)}
+                                    {showScheduleFieldActivityColumn ? (
+                                      <TableCell sx={{ minWidth: 190 }}>
+                                        {linkedActivities.length > 0 ? (
+                                          <Stack spacing={0.5} alignItems="flex-start">
+                                            <Chip
                                               size="small"
-                                              variant="text"
-                                              endIcon={<OpenInNewRoundedIcon fontSize="small" />}
-                                              href={`${missionScope === 'CIPAVD' ? '/activities-cipavd' : '/activities'}?activityId=${encodeURIComponent(String(activity.id))}`}
-                                              sx={{ px: 0, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', lineHeight: 1.2 }}
-                                            >
-                                              {activity.title ?? 'Abrir atividade'}
-                                            </Button>
-                                          ))}
-                                        </Stack>
-                                      ) : (
-                                        <Chip size="small" label="Sem vínculo" variant="outlined" />
-                                      )}
-                                    </TableCell>
+                                              color="success"
+                                              variant="outlined"
+                                              label={`${linkedActivities.length} vinculada(s)`}
+                                            />
+                                            {linkedActivities.map((activity: any) => (
+                                              <Button
+                                                key={String(activity.id)}
+                                                size="small"
+                                                variant="text"
+                                                endIcon={<OpenInNewRoundedIcon fontSize="small" />}
+                                                href={`${missionScope === 'CIPAVD' ? '/activities-cipavd' : '/activities'}?activityId=${encodeURIComponent(String(activity.id))}`}
+                                                sx={{ px: 0, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', lineHeight: 1.2 }}
+                                              >
+                                                {activity.title ?? 'Abrir atividade'}
+                                              </Button>
+                                            ))}
+                                          </Stack>
+                                        ) : (
+                                          <Chip size="small" label="Sem vínculo" variant="outlined" />
+                                        )}
+                                      </TableCell>
+                                    ) : null}
                                     <TableCell>
                                       <IconButton
                                         size="small"
@@ -3384,9 +3450,11 @@ export function MissionsPage() {
                                       >
                                         <EditOutlinedIcon fontSize="small" />
                                       </IconButton>
-                                      <IconButton size="small" color="error" onClick={() => handleDeleteScheduleItem(itemId, item.title ?? 'Item de cronograma')}>
-                                        <DeleteOutlineIcon fontSize="small" />
-                                      </IconButton>
+                                      {canDeleteMissions ? (
+                                        <IconButton size="small" color="error" onClick={() => handleDeleteScheduleItem(itemId, item.title ?? 'Item de cronograma')}>
+                                          <DeleteOutlineIcon fontSize="small" />
+                                        </IconButton>
+                                      ) : null}
                                     </TableCell>
                                   </TableRow>
                                 );
@@ -3633,15 +3701,17 @@ export function MissionsPage() {
                                                 >
                                                   PDF
                                                 </Button>
-                                                <Button
-                                                  size="small"
-                                                  color="error"
-                                                  variant="outlined"
-                                                  startIcon={<DeleteOutlineIcon />}
-                                                  onClick={() => handleDeleteBanner(banner)}
-                                                >
-                                                  Excluir
-                                                </Button>
+                                                {canDeleteMissions ? (
+                                                  <Button
+                                                    size="small"
+                                                    color="error"
+                                                    variant="outlined"
+                                                    startIcon={<DeleteOutlineIcon />}
+                                                    onClick={() => handleDeleteBanner(banner)}
+                                                  >
+                                                    Excluir
+                                                  </Button>
+                                                ) : null}
                                               </Stack>
                                             </Stack>
                                           </CardContent>
@@ -3830,7 +3900,7 @@ export function MissionsPage() {
                     </Card>
                   )}
 
-                  {missionTab === missionChecklistTabIndex && (
+                  {showMissionChecklistTab && missionTab === missionChecklistTabIndex && (
                     <Card>
                       <CardContent>
                         <Stack
@@ -4105,7 +4175,7 @@ export function MissionsPage() {
       </Drawer>
 
       <Dialog
-        open={fieldActivityDialogOpen}
+        open={showScheduleFieldActivityTools && fieldActivityDialogOpen}
         onClose={() => setFieldActivityDialogOpen(false)}
         fullWidth
         maxWidth="lg"

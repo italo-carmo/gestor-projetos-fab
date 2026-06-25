@@ -15,6 +15,34 @@
       ]
     },
     {
+      "name": "Adm Missões",
+      "description": "Administração restrita de missões CIPAVD e SMIF",
+      "isSystemRole": true,
+      "wildcard": false,
+      "permissions": [
+        {
+          "resource": "missions",
+          "action": "view",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "missions",
+          "action": "create",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "missions",
+          "action": "update",
+          "scope": "NATIONAL"
+        },
+        {
+          "resource": "missions",
+          "action": "download",
+          "scope": "NATIONAL"
+        }
+      ]
+    },
+    {
       "name": "Coordenação CIPAVD",
       "isSystemRole": true,
       "wildcard": false,

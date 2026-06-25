@@ -9,7 +9,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
-import { hasAnyPermission, hasPermission } from '../rbac/role-access';
+import {
+  hasAnyPermission,
+  hasAnyRole,
+  hasPermission,
+  ROLE_ADM_MISSOES,
+} from '../rbac/role-access';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
 import { FabLdapService } from '../ldap/fab-ldap.service';
@@ -306,13 +311,25 @@ export class MissionsService {
     ]);
 
     return {
-      items: items.map((mission) => ({
-        ...mission,
-        participantsCount: mission.participants.length,
-        scheduleItemsCount: mission.scheduleItems.length,
-        reportFilled: this.isMissionReportFilled(mission.report),
-        reportSignaturesCount: mission.report?.signatures.length ?? 0,
-      })),
+      items: items.map((mission) => {
+        if (this.isAdmMissionsProfile(user)) {
+          return {
+            ...mission,
+            report: null,
+            participantsCount: mission.participants.length,
+            scheduleItemsCount: mission.scheduleItems.length,
+            reportFilled: false,
+            reportSignaturesCount: 0,
+          };
+        }
+        return {
+          ...mission,
+          participantsCount: mission.participants.length,
+          scheduleItemsCount: mission.scheduleItems.length,
+          reportFilled: this.isMissionReportFilled(mission.report),
+          reportSignaturesCount: mission.report?.signatures.length ?? 0,
+        };
+      }),
       page,
       pageSize,
       total,
@@ -465,6 +482,7 @@ export class MissionsService {
     },
     user?: RbacUser,
   ) {
+    this.assertMissionAdvancedTabAccess(user);
     this.assertMissionAccess(user);
     const selectedOmId = String(filters.localityId ?? '').trim() || null;
     const scope = this.normalizeMissionScope(filters.scope);
@@ -686,6 +704,7 @@ export class MissionsService {
   }
 
   async getChecklistConfig(user?: RbacUser) {
+    this.assertMissionAdvancedTabAccess(user);
     this.assertMissionAccess(user);
     const checklistConfig = await this.getMissionChecklistConfig();
     return {
@@ -1035,6 +1054,17 @@ export class MissionsService {
 
     if (!mission) throwError('NOT_FOUND');
     await this.assertMissionLocalityAllowed(mission);
+    if (this.isAdmMissionsProfile(user)) {
+      return {
+        ...mission,
+        scheduleItems: this.stripMissionScheduleActivityLinks(
+          mission.scheduleItems,
+        ),
+        report: null,
+        reportFilled: false,
+        reportSignaturesCount: 0,
+      };
+    }
     return {
       ...mission,
       reportFilled: this.isMissionReportFilled(mission.report),
@@ -1320,6 +1350,7 @@ export class MissionsService {
   }
 
   async getChecklist(id: string, user?: RbacUser) {
+    this.assertMissionAdvancedTabAccess(user);
     this.assertMissionAccess(user);
     const checklistConfig = await this.getMissionChecklistConfig();
 
@@ -1927,7 +1958,9 @@ export class MissionsService {
         endDate: mission.endDate,
         locality: mission.locality,
       },
-      items: mission.scheduleItems,
+      items: this.isAdmMissionsProfile(user)
+        ? this.stripMissionScheduleActivityLinks(mission.scheduleItems)
+        : mission.scheduleItems,
     };
   }
 
@@ -3908,10 +3941,31 @@ export class MissionsService {
   }
 
   private assertMissionReportEditAccess(user?: RbacUser) {
+    this.assertMissionAdvancedTabAccess(user);
     if (hasPermission(user, 'missions', 'update')) {
       return;
     }
     throwError('RBAC_FORBIDDEN');
+  }
+
+  private assertMissionAdvancedTabAccess(user?: RbacUser) {
+    if (this.isAdmMissionsProfile(user)) {
+      throwError('RBAC_FORBIDDEN');
+    }
+  }
+
+  private isAdmMissionsProfile(user?: RbacUser) {
+    return hasAnyRole(user, [ROLE_ADM_MISSOES]);
+  }
+
+  private stripMissionScheduleActivityLinks<
+    T extends { activity?: unknown; activityLinks?: unknown },
+  >(items: T[]) {
+    return items.map((item) => ({
+      ...item,
+      activity: null,
+      activityLinks: [],
+    }));
   }
 
   private getConfigValue(key: string) {
@@ -3935,6 +3989,7 @@ export class MissionsService {
   }
 
   private assertMissionChecklistEditAccess(user?: RbacUser) {
+    this.assertMissionAdvancedTabAccess(user);
     if (
       hasAnyPermission(user, [
         { resource: 'missions', action: 'update' },
@@ -3957,6 +4012,7 @@ export class MissionsService {
   }
 
   private assertMissionChecklistConfigAccess(user?: RbacUser) {
+    this.assertMissionAdvancedTabAccess(user);
     if (hasPermission(user, 'missions', 'update')) {
       return;
     }
