@@ -2926,7 +2926,8 @@ export function useUpdateCipavdReportFolder() {
     mutationFn: async (args: {
       id: string;
       payload: { name?: string | null; parentId?: string | null };
-    }) => (await api.put(`/cipavd-reports/folders/${args.id}`, args.payload)).data,
+    }) =>
+      (await api.put(`/cipavd-reports/folders/${args.id}`, args.payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cipavdReports"] }),
   });
 }
@@ -2968,7 +2969,8 @@ export function useUpdateCipavdReportFile() {
     mutationFn: async (args: {
       id: string;
       payload: { name?: string | null; folderId?: string | null };
-    }) => (await api.put(`/cipavd-reports/files/${args.id}`, args.payload)).data,
+    }) =>
+      (await api.put(`/cipavd-reports/files/${args.id}`, args.payload)).data,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cipavdReports"] }),
   });
 }
@@ -4878,6 +4880,65 @@ export function useDocumentContent(id: string) {
   });
 }
 
+export function useCreateOnlineDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      title: string;
+      category: string;
+      subcategoryId?: string | null;
+      localityId?: string | null;
+      sourcePath?: string;
+    }) => (await api.post("/documents/online", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["search"] });
+    },
+  });
+}
+
+export function useOnlineDocument(id: string) {
+  return useQuery({
+    queryKey: qk.onlineDocument(id),
+    queryFn: async () => (await api.get(`/documents/${id}/editor`)).data,
+    enabled: Boolean(id),
+    staleTime: 5_000,
+  });
+}
+
+export function useSaveOnlineDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        contentJson: Record<string, unknown>;
+        plainText?: string | null;
+        pageSettingsJson?: Record<string, unknown> | null;
+        versionTitle?: string | null;
+      };
+    }) => (await api.put(`/documents/${args.id}/editor`, args.payload)).data,
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.onlineDocument(variables.id) });
+      qc.invalidateQueries({
+        queryKey: qk.onlineDocumentVersions(variables.id),
+      });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["search"] });
+    },
+  });
+}
+
+export function useOnlineDocumentVersions(id: string) {
+  return useQuery({
+    queryKey: qk.onlineDocumentVersions(id),
+    queryFn: async () =>
+      (await api.get(`/documents/${id}/editor/versions`)).data,
+    enabled: Boolean(id),
+    staleTime: 10_000,
+  });
+}
+
 export function useDocumentLinks(filters: {
   documentId?: string;
   entityType?: string;
@@ -6455,9 +6516,11 @@ export function useCpcaEmailRecipients(enabled = true) {
     queryKey: qk.cpcaEmailRecipients,
     queryFn: async () =>
       (
-        await api.get<{ items: CpcaEmailRecipient[]; total: number; note: string }>(
-          "/cpca-emails/recipients",
-        )
+        await api.get<{
+          items: CpcaEmailRecipient[];
+          total: number;
+          note: string;
+        }>("/cpca-emails/recipients")
       ).data,
     enabled,
     staleTime: 20_000,
@@ -7170,8 +7233,7 @@ export function useUpdateCertificateEvent() {
         description?: string | null;
         certificateTemplateId?: string | null;
       };
-    }) =>
-      (await api.put(`/certificates/events/${args.id}`, args.payload)).data,
+    }) => (await api.put(`/certificates/events/${args.id}`, args.payload)).data,
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: qk.certificateEvents });
       qc.invalidateQueries({ queryKey: qk.certificateEvent(variables.id) });
@@ -7212,7 +7274,9 @@ export function useUpdateCertificateForm() {
         .data,
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: qk.certificateEvents });
-      qc.invalidateQueries({ queryKey: qk.certificateEvent(variables.eventId) });
+      qc.invalidateQueries({
+        queryKey: qk.certificateEvent(variables.eventId),
+      });
     },
   });
 }
@@ -7229,7 +7293,9 @@ export function useSendCertificateEmails() {
       ).data,
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: qk.certificateEvents });
-      qc.invalidateQueries({ queryKey: qk.certificateEvent(variables.eventId) });
+      qc.invalidateQueries({
+        queryKey: qk.certificateEvent(variables.eventId),
+      });
     },
   });
 }

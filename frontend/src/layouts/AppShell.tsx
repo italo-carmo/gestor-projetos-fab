@@ -173,6 +173,12 @@ const navSections: NavSection[] = [
         icon: <DescriptionRoundedIcon fontSize="small" />,
         menuKey: "cipavd_reports",
       },
+      {
+        label: "Acervo de Documentos",
+        to: "/documents",
+        icon: <DescriptionRoundedIcon fontSize="small" />,
+        menuKey: "documents",
+      },
     ],
   },
   {
@@ -566,6 +572,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         can(me, "cipavd_reports", "view") &&
         hasAnyRole(me, [ROLE_TI, ROLE_COMGEP])
       );
+    }
+    if (item.to === "/documents") {
+      return can(me, "documents", "view");
     }
     if (item.to === "/meetings") {
       return can(me, "meetings", "view");

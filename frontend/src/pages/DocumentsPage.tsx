@@ -32,10 +32,13 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import CreateNewFolderRoundedIcon from '@mui/icons-material/CreateNewFolderRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import { useMemo, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import {
   useCreateDocumentSubcategory,
+  useCreateOnlineDocument,
   useCreateDocumentLink,
   useDeleteDocumentLink,
   useDeleteDocumentSubcategory,
@@ -45,6 +48,7 @@ import {
   useDocumentsCoverage,
   useDocumentSubcategories,
   useDownloadDocument,
+  useMe,
   useLocalities,
   useUpdateDocumentLink,
   useUpdateDocument,
@@ -56,6 +60,7 @@ import { SkeletonState } from '../components/states/SkeletonState';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
+import { can } from '../app/rbac';
 
 const CATEGORY_LABELS: Record<string, string> = {
   GENERAL: 'Geral',
@@ -107,6 +112,7 @@ type DocumentSubcategory = {
 type DocumentRow = {
   id: string;
   title: string;
+  assetType?: string;
   category: string;
   subcategoryId?: string | null;
   subcategory?: { id: string; name: string; category: string; parentId?: string | null } | null;
@@ -200,6 +206,9 @@ export function DocumentsPage() {
   const [editingLinkId, setEditingLinkId] = useState('');
   const [editingLinkLabel, setEditingLinkLabel] = useState('');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [createOnlineDialogOpen, setCreateOnlineDialogOpen] = useState(false);
+  const [onlineDocumentTitle, setOnlineDocumentTitle] = useState('');
+  const [onlineDocumentCategory, setOnlineDocumentCategory] = useState('');
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveDocIds, setMoveDocIds] = useState<string[]>([]);
   const [folderDeleteTarget, setFolderDeleteTarget] = useState<DocumentSubcategory | null>(null);
@@ -218,6 +227,7 @@ export function DocumentsPage() {
   const toast = useToast();
   const hasValidCategory = CATEGORY_KEYS.has(category);
 
+  const meQuery = useMe();
   const filters = useMemo(
     () => ({
       q: q.trim() || undefined,
@@ -238,6 +248,7 @@ export function DocumentsPage() {
   const createSubcategory = useCreateDocumentSubcategory();
   const updateSubcategory = useUpdateDocumentSubcategory();
   const deleteSubcategory = useDeleteDocumentSubcategory();
+  const createOnlineDocument = useCreateOnlineDocument();
   const createDocumentLink = useCreateDocumentLink();
   const updateDocumentLink = useUpdateDocumentLink();
   const deleteDocumentLink = useDeleteDocumentLink();
@@ -266,6 +277,7 @@ export function DocumentsPage() {
   const moveDocument = moveDocuments[0] ?? null;
   const documentContent = contentQuery.data as DocumentContentResponse | undefined;
   const linkCandidates = (linkCandidatesQuery.data?.items ?? []) as DocumentLinkCandidateItem[];
+  const canCreateDocument = can(meQuery.data, 'documents', 'create');
 
   const subcategoriesById = useMemo(() => {
     const map = new Map<string, DocumentSubcategory>();
@@ -389,6 +401,45 @@ export function DocumentsPage() {
     setEditingLinkId('');
     setEditingLinkLabel('');
     setDrawerOpen(true);
+  };
+
+  const openOnlineEditor = (docId: string) => {
+    window.open(`/documents/editor/${encodeURIComponent(docId)}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const openCreateOnlineDialog = () => {
+    setOnlineDocumentTitle('Documento sem titulo');
+    setOnlineDocumentCategory(hasValidCategory ? category : 'GENERAL');
+    setCreateOnlineDialogOpen(true);
+  };
+
+  const handleCreateOnlineDocument = async () => {
+    const title = onlineDocumentTitle.trim();
+    const targetCategory = onlineDocumentCategory || (hasValidCategory ? category : 'GENERAL');
+    if (!title) {
+      toast.push({ message: 'Informe o titulo do documento.', severity: 'warning' });
+      return;
+    }
+    if (!CATEGORY_KEYS.has(targetCategory)) {
+      toast.push({ message: 'Selecione uma categoria valida.', severity: 'warning' });
+      return;
+    }
+    const subcategoryId = hasValidCategory && targetCategory === category ? currentFolderId || null : null;
+    try {
+      const created = await createOnlineDocument.mutateAsync({
+        title,
+        category: targetCategory,
+        subcategoryId,
+        localityId: localityId || null,
+      });
+      setCreateOnlineDialogOpen(false);
+      setOnlineDocumentTitle('');
+      if (created?.id) openOnlineEditor(created.id);
+      toast.push({ message: 'Documento online criado.', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao criar documento online.', severity: 'error' });
+    }
   };
 
   const handleSave = async () => {
@@ -679,17 +730,27 @@ export function DocumentsPage() {
             Estrutura em pastas e subpastas (multi-nivel), com navegacao tipo drive e vinculos detalhados por arquivo.
           </Typography>
         </Box>
-        <Button
-          variant="text"
-          onClick={() => {
-            setQ('');
-            setCategory('');
-            setCurrentFolderId('');
-            setLocalityId('');
-          }}
-        >
-          Limpar filtros
-        </Button>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Button
+            variant="contained"
+            startIcon={<AddRoundedIcon />}
+            onClick={openCreateOnlineDialog}
+            disabled={!canCreateDocument}
+          >
+            Novo documento
+          </Button>
+          <Button
+            variant="text"
+            onClick={() => {
+              setQ('');
+              setCategory('');
+              setCurrentFolderId('');
+              setLocalityId('');
+            }}
+          >
+            Limpar filtros
+          </Button>
+        </Stack>
       </Stack>
 
       <Card sx={{ mb: 2 }}>
@@ -1078,6 +1139,7 @@ export function DocumentsPage() {
                         const sameTitleCount = titleCountInCurrentFolder.get(key) ?? 1;
                         const hasVariants = sameTitleCount > 1;
                         const ext = getFileExtension(doc.fileName);
+                        const isOnlineDocument = doc.assetType === 'ONLINE_DOC';
                         return (
                           <>
                             <Typography variant="body2" fontWeight={700}>
@@ -1087,6 +1149,7 @@ export function DocumentsPage() {
                               {doc.fileName} • {formatFileSize(doc.fileSize)}
                             </Typography>
                             <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap sx={{ mt: 0.4 }}>
+                              {isOnlineDocument && <Chip size="small" color="primary" label="DOC online" />}
                               {ext && <Chip size="small" variant="outlined" color="info" label={ext} />}
                               {hasVariants && <Chip size="small" variant="outlined" label={`${sameTitleCount} versoes`} />}
                             </Stack>
@@ -1124,29 +1187,36 @@ export function DocumentsPage() {
                       <Stack direction="row" spacing={0.8} justifyContent="flex-end">
                         <Button
                           size="small"
-                          variant="outlined"
+                          variant={doc.assetType === 'ONLINE_DOC' ? 'contained' : 'outlined'}
+                          startIcon={doc.assetType === 'ONLINE_DOC' ? <OpenInNewRoundedIcon /> : undefined}
                           onClick={(event) => {
                             event.stopPropagation();
+                            if (doc.assetType === 'ONLINE_DOC') {
+                              openOnlineEditor(doc.id);
+                              return;
+                            }
                             openDetails(doc);
                           }}
                         >
-                          Abrir
+                          {doc.assetType === 'ONLINE_DOC' ? 'Editar' : 'Abrir'}
                         </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={async (event) => {
-                            event.stopPropagation();
-                            try {
-                              await downloadDocument.mutateAsync({ id: doc.id, fileName: doc.fileName });
-                            } catch (error) {
-                              const payload = parseApiError(error);
-                              toast.push({ message: payload.message ?? 'Erro ao baixar documento.', severity: 'error' });
-                            }
-                          }}
-                        >
-                          Baixar
-                        </Button>
+                        {doc.assetType !== 'ONLINE_DOC' && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={async (event) => {
+                              event.stopPropagation();
+                              try {
+                                await downloadDocument.mutateAsync({ id: doc.id, fileName: doc.fileName });
+                              } catch (error) {
+                                const payload = parseApiError(error);
+                                toast.push({ message: payload.message ?? 'Erro ao baixar documento.', severity: 'error' });
+                              }
+                            }}
+                          >
+                            Baixar
+                          </Button>
+                        )}
                         <Button
                           size="small"
                           variant="contained"
@@ -1477,19 +1547,29 @@ export function DocumentsPage() {
               </Card>
 
               <Stack direction="row" spacing={1} justifyContent="flex-end">
-                <Button
-                  variant="outlined"
-                  onClick={async () => {
-                    try {
-                      await downloadDocument.mutateAsync({ id: selected.id, fileName: selected.fileName });
-                    } catch (error) {
-                      const payload = parseApiError(error);
-                      toast.push({ message: payload.message ?? 'Erro ao baixar documento.', severity: 'error' });
-                    }
-                  }}
-                >
-                  Baixar
-                </Button>
+                {selected.assetType === 'ONLINE_DOC' ? (
+                  <Button
+                    variant="outlined"
+                    startIcon={<OpenInNewRoundedIcon />}
+                    onClick={() => openOnlineEditor(selected.id)}
+                  >
+                    Abrir editor
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outlined"
+                    onClick={async () => {
+                      try {
+                        await downloadDocument.mutateAsync({ id: selected.id, fileName: selected.fileName });
+                      } catch (error) {
+                        const payload = parseApiError(error);
+                        toast.push({ message: payload.message ?? 'Erro ao baixar documento.', severity: 'error' });
+                      }
+                    }}
+                  >
+                    Baixar
+                  </Button>
+                )}
                 <Button
                   variant="contained"
                   onClick={handleSave}
@@ -1502,6 +1582,56 @@ export function DocumentsPage() {
           )}
         </Box>
       </Drawer>
+
+      <Dialog
+        open={createOnlineDialogOpen}
+        onClose={() => setCreateOnlineDialogOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Novo documento</DialogTitle>
+        <DialogContent sx={{ display: 'grid', gap: 1.3, pt: '12px !important' }}>
+          <TextField
+            size="small"
+            label="Titulo"
+            value={onlineDocumentTitle}
+            onChange={(e) => setOnlineDocumentTitle(e.target.value)}
+            autoFocus
+            fullWidth
+          />
+          <TextField
+            select
+            size="small"
+            label="Categoria"
+            value={onlineDocumentCategory}
+            onChange={(e) => setOnlineDocumentCategory(e.target.value)}
+            fullWidth
+          >
+            {CATEGORY_OPTIONS.map(([key, label]) => (
+              <MenuItem key={key} value={key}>
+                {label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Typography variant="caption" color="text.secondary">
+            {hasValidCategory && onlineDocumentCategory === category
+              ? `Sera criado em ${selectedPathLabel || 'raiz da categoria'}.`
+              : 'Sera criado na raiz da categoria selecionada.'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateOnlineDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              void handleCreateOnlineDocument();
+            }}
+            disabled={createOnlineDocument.isPending}
+          >
+            Criar e abrir
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={moveDialogOpen}

@@ -90,6 +90,9 @@ export const qk = {
     ["documents", "subcategories", filters] as const,
   documentCoverage: ["documents", "coverage"] as const,
   documentContent: (id: string) => ["documents", id, "content"] as const,
+  onlineDocument: (id: string) => ["documents", id, "editor"] as const,
+  onlineDocumentVersions: (id: string) =>
+    ["documents", id, "editor", "versions"] as const,
   documentLinks: (filters: Record<string, any>) =>
     ["documents", "links", filters] as const,
   documentLinkCandidates: (filters: Record<string, any>) =>

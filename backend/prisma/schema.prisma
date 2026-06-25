@@ -900,8 +900,9 @@ model Report {
 }
 
 model DocumentAsset {
-  id            String           @id @default(cuid())
+  id            String            @id @default(cuid())
   title         String
+  assetType     DocumentAssetType @default(FILE)
   category      DocumentCategory
   subcategoryId String?
   sourcePath    String
@@ -915,16 +916,19 @@ model DocumentAsset {
   activityId    String?
   meetingId     String?
   tagsJson      Json?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
 
-  locality    Locality?            @relation(fields: [localityId], references: [id])
-  subcategory DocumentSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
-  activity    Activity?            @relation(fields: [activityId], references: [id], onDelete: SetNull)
-  meeting     Meeting?             @relation(fields: [meetingId], references: [id], onDelete: SetNull)
-  content     DocumentContent?
-  links       DocumentLink[]
+  locality       Locality?               @relation(fields: [localityId], references: [id])
+  subcategory    DocumentSubcategory?    @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  activity       Activity?               @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  meeting        Meeting?                @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  content        DocumentContent?
+  onlineContent  DocumentOnlineContent?
+  onlineVersions DocumentOnlineVersion[]
+  links          DocumentLink[]
 
+  @@index([assetType, createdAt])
   @@index([category, localityId, createdAt])
   @@index([category, subcategoryId, createdAt])
   @@index([activityId])
@@ -961,6 +965,41 @@ model DocumentContent {
   document DocumentAsset @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([parseStatus, parsedAt])
+}
+
+model DocumentOnlineContent {
+  id                 String    @id @default(cuid())
+  documentId         String    @unique
+  contentJson        Json
+  plainText          String?
+  pageSettingsJson   Json?
+  ydocState          Bytes?
+  ydocStateUpdatedAt DateTime?
+  savedRevision      Int       @default(0)
+  lastSavedById      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  document DocumentAsset @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([updatedAt])
+}
+
+model DocumentOnlineVersion {
+  id               String   @id @default(cuid())
+  documentId       String
+  revision         Int
+  title            String?
+  contentJson      Json
+  plainText        String?
+  pageSettingsJson Json?
+  createdById      String?
+  createdAt        DateTime @default(now())
+
+  document DocumentAsset @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, revision])
+  @@index([documentId, createdAt])
 }
 
 model DocumentLink {
@@ -2502,6 +2541,11 @@ enum DocumentCategory {
   RESEARCH
   SMIF
   VISUAL_IDENTITY
+}
+
+enum DocumentAssetType {
+  FILE
+  ONLINE_DOC
 }
 
 enum DocumentParseStatus {

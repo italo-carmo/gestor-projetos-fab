@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import {
+  DocumentAssetType,
   DocumentCategory,
   DocumentLinkEntity,
+  DocumentParseStatus,
   PermissionScope,
   Prisma,
 } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import type { RbacUser } from '../rbac/rbac.types';
@@ -13,6 +16,22 @@ import { AuditService } from '../audit/audit.service';
 import { CreateDocumentSubcategoryDto } from './dto/create-document-subcategory.dto';
 import { UpdateDocumentSubcategoryDto } from './dto/update-document-subcategory.dto';
 import { UpdateDocumentDto } from './dto/update-document.dto';
+import { CreateOnlineDocumentDto } from './dto/create-online-document.dto';
+import { UpdateOnlineDocumentContentDto } from './dto/update-online-document-content.dto';
+
+const INITIAL_ONLINE_DOCUMENT_CONTENT = {
+  type: 'doc',
+  content: [{ type: 'paragraph' }],
+};
+
+const DEFAULT_ONLINE_DOCUMENT_PAGE_SETTINGS = {
+  marginTopCm: 2.5,
+  marginRightCm: 2.5,
+  marginBottomCm: 2.5,
+  marginLeftCm: 2.5,
+};
+
+const ONLINE_DOCUMENT_MIME_TYPE = 'application/vnd.gestor.online-document+json';
 
 @Injectable()
 export class DocumentsService {
@@ -388,6 +407,466 @@ export class DocumentsService {
       deletedFolders: deleted.count,
       unlinkedDocuments: unlinked.count,
     };
+  }
+
+  async createOnlineDocument(
+    payload: CreateOnlineDocumentDto,
+    user?: RbacUser,
+  ) {
+    const title = payload.title?.trim();
+    if (!title) {
+      throwError('VALIDATION_ERROR', { field: 'title', reason: 'required' });
+    }
+
+    const normalizedLocalityId =
+      payload.localityId === undefined ||
+      payload.localityId === null ||
+      payload.localityId === ''
+        ? null
+        : payload.localityId;
+
+    if (normalizedLocalityId) {
+      const locality = await this.prisma.locality.findUnique({
+        where: { id: normalizedLocalityId },
+        select: { id: true },
+      });
+      if (!locality) throwError('NOT_FOUND');
+    }
+
+    if (
+      this.shouldApplyLocalityScope(user) &&
+      normalizedLocalityId &&
+      normalizedLocalityId !== user?.localityId
+    ) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const normalizedSubcategoryId =
+      payload.subcategoryId === undefined ||
+      payload.subcategoryId === null ||
+      payload.subcategoryId === ''
+        ? null
+        : payload.subcategoryId.trim();
+
+    if (normalizedSubcategoryId) {
+      const subcategory = await this.prisma.documentSubcategory.findUnique({
+        where: { id: normalizedSubcategoryId },
+        select: { id: true, category: true },
+      });
+      if (!subcategory) throwError('NOT_FOUND');
+      if (subcategory.category !== payload.category) {
+        throwError('VALIDATION_ERROR', {
+          field: 'subcategoryId',
+          reason: 'subcategory_category_mismatch',
+          expectedCategory: payload.category,
+        });
+      }
+    }
+
+    const id = randomUUID();
+    const sourcePath =
+      payload.sourcePath?.trim() ||
+      this.buildOnlineDocumentSourcePath(payload.category, title);
+    const fileName = `${this.sanitizeOnlineDocumentFileBase(title)}.docx`;
+    const contentJson =
+      INITIAL_ONLINE_DOCUMENT_CONTENT as Prisma.InputJsonValue;
+    const pageSettingsJson =
+      DEFAULT_ONLINE_DOCUMENT_PAGE_SETTINGS as Prisma.InputJsonValue;
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const document = await tx.documentAsset.create({
+        data: {
+          id,
+          title,
+          assetType: DocumentAssetType.ONLINE_DOC,
+          category: payload.category,
+          subcategoryId: normalizedSubcategoryId,
+          sourcePath,
+          fileName,
+          fileUrl: `/documents/editor/${encodeURIComponent(id)}`,
+          mimeType: ONLINE_DOCUMENT_MIME_TYPE,
+          localityId: normalizedLocalityId,
+          tagsJson: {
+            kind: 'online_document',
+            createdById: user?.id ?? null,
+            createdByEmail: user?.email ?? null,
+          },
+          content: {
+            create: {
+              parseStatus: DocumentParseStatus.EXTRACTED,
+              textContent: '',
+              parsedAt: new Date(),
+              metadataJson: { source: 'online_document' },
+            },
+          },
+          onlineContent: {
+            create: {
+              contentJson,
+              plainText: '',
+              pageSettingsJson,
+              savedRevision: 1,
+              lastSavedById: user?.id,
+            },
+          },
+          onlineVersions: {
+            create: {
+              revision: 1,
+              title: 'Criacao do documento',
+              contentJson,
+              plainText: '',
+              pageSettingsJson,
+              createdById: user?.id,
+            },
+          },
+        },
+        include: this.documentInclude(),
+      });
+      return document;
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'documents',
+      action: 'create_online_document',
+      entityId: created.id,
+      localityId: created.localityId ?? undefined,
+      diffJson: {
+        title: created.title,
+        category: created.category,
+        subcategoryId: created.subcategoryId ?? null,
+      },
+    });
+
+    return this.mapDocumentWithAccess(created, user);
+  }
+
+  async getOnlineDocument(id: string, user?: RbacUser) {
+    const document = await this.prisma.documentAsset.findUnique({
+      where: { id },
+      include: {
+        ...this.documentInclude(),
+        onlineContent: true,
+      },
+    });
+    if (!document) throwError('NOT_FOUND');
+    this.assertOnlineDocument(document);
+    this.assertDocumentScope(document, user);
+
+    return {
+      document: this.mapDocumentWithAccess(document, user),
+      content: document.onlineContent ?? {
+        contentJson: INITIAL_ONLINE_DOCUMENT_CONTENT,
+        plainText: '',
+        pageSettingsJson: DEFAULT_ONLINE_DOCUMENT_PAGE_SETTINGS,
+        savedRevision: 0,
+        updatedAt: document.updatedAt,
+      },
+    };
+  }
+
+  async saveOnlineDocument(
+    id: string,
+    payload: UpdateOnlineDocumentContentDto,
+    user?: RbacUser,
+  ) {
+    const document = await this.prisma.documentAsset.findUnique({
+      where: { id },
+      include: {
+        ...this.documentInclude(),
+        onlineContent: true,
+      },
+    });
+    if (!document) throwError('NOT_FOUND');
+    this.assertOnlineDocument(document);
+    this.assertDocumentScope(document, user);
+    if (!this.canEdit(document, user)) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const contentJson = payload.contentJson as Prisma.InputJsonValue;
+    const plainText = String(payload.plainText ?? '').slice(0, 500_000);
+    const pageSettingsJson = payload.pageSettingsJson
+      ? (payload.pageSettingsJson as Prisma.InputJsonValue)
+      : (DEFAULT_ONLINE_DOCUMENT_PAGE_SETTINGS as Prisma.InputJsonValue);
+    const nextRevision = (document.onlineContent?.savedRevision ?? 0) + 1;
+    const versionTitle = payload.versionTitle?.trim();
+    const shouldCreateVersion =
+      nextRevision === 1 || nextRevision % 10 === 0 || Boolean(versionTitle);
+
+    const saved = await this.prisma.$transaction(async (tx) => {
+      const onlineContent = await tx.documentOnlineContent.upsert({
+        where: { documentId: id },
+        create: {
+          documentId: id,
+          contentJson,
+          plainText,
+          pageSettingsJson,
+          savedRevision: nextRevision,
+          lastSavedById: user?.id,
+        },
+        update: {
+          contentJson,
+          plainText,
+          pageSettingsJson,
+          savedRevision: nextRevision,
+          lastSavedById: user?.id,
+        },
+      });
+
+      await tx.documentContent.upsert({
+        where: { documentId: id },
+        create: {
+          documentId: id,
+          parseStatus: DocumentParseStatus.EXTRACTED,
+          textContent: plainText,
+          parsedAt: new Date(),
+          metadataJson: { source: 'online_document' },
+        },
+        update: {
+          parseStatus: DocumentParseStatus.EXTRACTED,
+          textContent: plainText,
+          parsedAt: new Date(),
+          metadataJson: { source: 'online_document' },
+        },
+      });
+
+      await tx.documentAsset.update({
+        where: { id },
+        data: { updatedAt: new Date() },
+      });
+
+      if (shouldCreateVersion) {
+        await tx.documentOnlineVersion.upsert({
+          where: {
+            documentId_revision: {
+              documentId: id,
+              revision: nextRevision,
+            },
+          },
+          create: {
+            documentId: id,
+            revision: nextRevision,
+            title: versionTitle || `Salvamento ${nextRevision}`,
+            contentJson,
+            plainText,
+            pageSettingsJson,
+            createdById: user?.id,
+          },
+          update: {
+            title: versionTitle || `Salvamento ${nextRevision}`,
+            contentJson,
+            plainText,
+            pageSettingsJson,
+            createdById: user?.id,
+          },
+        });
+      }
+
+      return onlineContent;
+    });
+
+    return {
+      content: saved,
+      createdVersion: shouldCreateVersion,
+    };
+  }
+
+  async listOnlineVersions(id: string, user?: RbacUser) {
+    const document = await this.prisma.documentAsset.findUnique({
+      where: { id },
+      select: { id: true, assetType: true, localityId: true },
+    });
+    if (!document) throwError('NOT_FOUND');
+    this.assertOnlineDocument(document);
+    this.assertDocumentScope(document, user);
+
+    const versions = await this.prisma.documentOnlineVersion.findMany({
+      where: { documentId: id },
+      orderBy: { revision: 'desc' },
+      take: 80,
+    });
+    const userIds = Array.from(
+      new Set(versions.map((item) => item.createdById).filter(Boolean)),
+    ) as string[];
+    const users =
+      userIds.length > 0
+        ? await this.prisma.user.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true, email: true },
+          })
+        : [];
+    const userById = new Map(users.map((item) => [item.id, item]));
+
+    return {
+      items: versions.map((version) => ({
+        id: version.id,
+        revision: version.revision,
+        title: version.title,
+        plainText: version.plainText,
+        createdAt: version.createdAt,
+        createdBy: version.createdById
+          ? (userById.get(version.createdById) ?? null)
+          : null,
+      })),
+    };
+  }
+
+  async getOnlineDocumentCollaborationState(id: string, user: RbacUser) {
+    const document = await this.prisma.documentAsset.findUnique({
+      where: { id },
+      include: {
+        ...this.documentInclude(),
+        onlineContent: true,
+      },
+    });
+    if (!document) throwError('NOT_FOUND');
+    this.assertOnlineDocument(document);
+    this.assertDocumentScope(document, user);
+
+    return {
+      document: this.mapDocumentWithAccess(document, user),
+      content: document.onlineContent ?? {
+        contentJson: INITIAL_ONLINE_DOCUMENT_CONTENT,
+        plainText: '',
+        pageSettingsJson: DEFAULT_ONLINE_DOCUMENT_PAGE_SETTINGS,
+        savedRevision: 0,
+        updatedAt: document.updatedAt,
+        ydocState: null,
+        ydocStateUpdatedAt: null,
+      },
+      canEdit: this.canEdit(document, user),
+    };
+  }
+
+  async persistOnlineDocumentYDocState(
+    id: string,
+    ydocState: Uint8Array,
+    user?: RbacUser,
+  ) {
+    const document = await this.prisma.documentAsset.findUnique({
+      where: { id },
+      select: { id: true, assetType: true, localityId: true },
+    });
+    if (!document) throwError('NOT_FOUND');
+    this.assertOnlineDocument(document);
+    this.assertDocumentScope(document, user);
+
+    await this.prisma.documentOnlineContent.update({
+      where: { documentId: id },
+      data: {
+        ydocState: Buffer.from(ydocState),
+        ydocStateUpdatedAt: new Date(),
+      },
+    });
+  }
+
+  async storeOnlineDocumentCollaborationSnapshot(
+    id: string,
+    payload: {
+      ydocState: Uint8Array;
+      contentJson: unknown;
+      plainText?: string | null;
+      user?: RbacUser;
+    },
+  ) {
+    const document = await this.prisma.documentAsset.findUnique({
+      where: { id },
+      include: {
+        ...this.documentInclude(),
+        onlineContent: true,
+      },
+    });
+    if (!document) throwError('NOT_FOUND');
+    this.assertOnlineDocument(document);
+    this.assertDocumentScope(document, payload.user);
+    if (payload.user && !this.canEdit(document, payload.user)) {
+      throwError('RBAC_FORBIDDEN');
+    }
+
+    const contentJson = payload.contentJson as Prisma.InputJsonValue;
+    const plainText = String(
+      payload.plainText ?? this.extractPlainTextFromJson(payload.contentJson),
+    ).slice(0, 500_000);
+    const pageSettingsJson =
+      (document.onlineContent?.pageSettingsJson as Prisma.InputJsonValue) ??
+      (DEFAULT_ONLINE_DOCUMENT_PAGE_SETTINGS as Prisma.InputJsonValue);
+    const nextRevision = (document.onlineContent?.savedRevision ?? 0) + 1;
+    const shouldCreateVersion = nextRevision === 1 || nextRevision % 10 === 0;
+
+    return this.prisma.$transaction(async (tx) => {
+      const onlineContent = await tx.documentOnlineContent.upsert({
+        where: { documentId: id },
+        create: {
+          documentId: id,
+          contentJson,
+          plainText,
+          pageSettingsJson,
+          ydocState: Buffer.from(payload.ydocState),
+          ydocStateUpdatedAt: new Date(),
+          savedRevision: nextRevision,
+          lastSavedById: payload.user?.id,
+        },
+        update: {
+          contentJson,
+          plainText,
+          ydocState: Buffer.from(payload.ydocState),
+          ydocStateUpdatedAt: new Date(),
+          savedRevision: nextRevision,
+          lastSavedById: payload.user?.id,
+        },
+      });
+
+      await tx.documentContent.upsert({
+        where: { documentId: id },
+        create: {
+          documentId: id,
+          parseStatus: DocumentParseStatus.EXTRACTED,
+          textContent: plainText,
+          parsedAt: new Date(),
+          metadataJson: { source: 'online_document_collaboration' },
+        },
+        update: {
+          parseStatus: DocumentParseStatus.EXTRACTED,
+          textContent: plainText,
+          parsedAt: new Date(),
+          metadataJson: { source: 'online_document_collaboration' },
+        },
+      });
+
+      await tx.documentAsset.update({
+        where: { id },
+        data: { updatedAt: new Date() },
+      });
+
+      if (shouldCreateVersion) {
+        await tx.documentOnlineVersion.upsert({
+          where: {
+            documentId_revision: {
+              documentId: id,
+              revision: nextRevision,
+            },
+          },
+          create: {
+            documentId: id,
+            revision: nextRevision,
+            title: `Colaboracao ${nextRevision}`,
+            contentJson,
+            plainText,
+            pageSettingsJson,
+            createdById: payload.user?.id,
+          },
+          update: {
+            title: `Colaboracao ${nextRevision}`,
+            contentJson,
+            plainText,
+            pageSettingsJson,
+            createdById: payload.user?.id,
+          },
+        });
+      }
+
+      return onlineContent;
+    });
   }
 
   async getById(id: string, user?: RbacUser) {
@@ -1213,6 +1692,61 @@ export class DocumentsService {
         link.label ??
         link.entityId,
     }));
+  }
+
+  private assertOnlineDocument(document: { assetType?: DocumentAssetType }) {
+    if (document.assetType !== DocumentAssetType.ONLINE_DOC) {
+      throwError('VALIDATION_ERROR', {
+        field: 'documentId',
+        reason: 'not_online_document',
+      });
+    }
+  }
+
+  private buildOnlineDocumentSourcePath(
+    category: DocumentCategory,
+    title: string,
+  ) {
+    return `Acervo online/${category}/${title}`;
+  }
+
+  private sanitizeOnlineDocumentFileBase(value: string) {
+    const normalized = value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 120);
+    return normalized || 'documento-online';
+  }
+
+  private extractPlainTextFromJson(value: unknown): string {
+    const chunks: string[] = [];
+    const walk = (node: unknown) => {
+      if (!node || typeof node !== 'object') return;
+      const current = node as {
+        type?: unknown;
+        text?: unknown;
+        content?: unknown;
+      };
+      if (typeof current.text === 'string') {
+        chunks.push(current.text);
+      }
+      if (Array.isArray(current.content)) {
+        for (const child of current.content) {
+          walk(child);
+        }
+      }
+      if (
+        current.type === 'paragraph' ||
+        current.type === 'heading' ||
+        current.type === 'listItem'
+      ) {
+        chunks.push('\n');
+      }
+    };
+    walk(value);
+    return chunks.join('').replace(/\n{3,}/g, '\n\n').trim();
   }
 
   private mapDocumentWithAccess(document: any, user?: RbacUser) {

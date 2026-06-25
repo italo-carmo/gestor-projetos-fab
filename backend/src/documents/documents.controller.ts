@@ -25,6 +25,8 @@ import { UpdateDocumentSubcategoryDto } from './dto/update-document-subcategory.
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CreateDocumentLinkDto } from './dto/create-document-link.dto';
 import { UpdateDocumentLinkDto } from './dto/update-document-link.dto';
+import { CreateOnlineDocumentDto } from './dto/create-online-document.dto';
+import { UpdateOnlineDocumentContentDto } from './dto/update-online-document-content.dto';
 
 const documentsDir = path.resolve(process.cwd(), 'storage', 'documents');
 if (!fs.existsSync(documentsDir)) {
@@ -69,6 +71,15 @@ export class DocumentsController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.documents.createSubcategory(dto, user);
+  }
+
+  @Post('online')
+  @RequirePermission('documents', 'create')
+  createOnlineDocument(
+    @Body() dto: CreateOnlineDocumentDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.documents.createOnlineDocument(dto, user);
   }
 
   @Put('subcategories/:id')
@@ -142,6 +153,28 @@ export class DocumentsController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.documents.listLinkCandidates({ entityType, q, pageSize }, user);
+  }
+
+  @Get(':id/editor')
+  @RequirePermission('documents', 'view')
+  getOnlineDocument(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.documents.getOnlineDocument(id, user);
+  }
+
+  @Put(':id/editor')
+  @RequirePermission('documents', 'update')
+  saveOnlineDocument(
+    @Param('id') id: string,
+    @Body() dto: UpdateOnlineDocumentContentDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.documents.saveOnlineDocument(id, dto, user);
+  }
+
+  @Get(':id/editor/versions')
+  @RequirePermission('documents', 'view')
+  listOnlineVersions(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.documents.listOnlineVersions(id, user);
   }
 
   @Get(':id/content')

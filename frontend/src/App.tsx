@@ -22,6 +22,7 @@ import { OrgChartPage } from "./pages/OrgChartPage";
 import { AuditPage } from "./pages/AuditPage";
 import { TaskTemplatesPage } from "./pages/TaskTemplatesPage";
 import { DocumentsPage } from "./pages/DocumentsPage";
+import { DocumentEditorPage } from "./pages/DocumentEditorPage";
 import { CertificateMockupPage } from "./pages/CertificateMockupPage";
 import { CertificatesPage } from "./pages/CertificatesPage";
 import { PublicCertificateFormPage } from "./pages/PublicCertificateFormPage";
@@ -88,6 +89,16 @@ function App() {
       <Route
         path="/certificados/forms/:slug"
         element={<PublicCertificateFormPage />}
+      />
+      <Route
+        path="/documents/editor/:id"
+        element={
+          <RequireAuth>
+            <RequireRoleAccess allow={(user) => can(user, "documents", "view")}>
+              <DocumentEditorPage />
+            </RequireRoleAccess>
+          </RequireAuth>
+        }
       />
       <Route
         path="/*"
