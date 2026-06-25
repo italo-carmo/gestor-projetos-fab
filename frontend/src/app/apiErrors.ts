@@ -67,6 +67,16 @@ const REASON_MESSAGES: Record<string, string> = {
     "Informe o detalhamento da palestra antes de salvar o checklist.",
   CPCA_CHECKLIST_HISTORY_DETAILS_REQUIRED:
     "Informe a descrição do registro antes de salvar o checklist.",
+  CPCA_EMAIL_ATTACHMENT_REQUIRED:
+    "Selecione um arquivo para anexar ao modelo de e-mail.",
+  CPCA_EMAIL_ATTACHMENT_EXTENSION_INVALID:
+    "Este tipo de anexo não é permitido para envio por e-mail.",
+  CPCA_EMAIL_ATTACHMENT_TOO_LARGE:
+    "O anexo excede o tamanho permitido para envio por e-mail.",
+  CPCA_EMAIL_ATTACHMENT_FILE_UNAVAILABLE:
+    "Um anexo do modelo não está mais disponível no servidor.",
+  CPCA_EMAIL_RECIPIENTS_REQUIRED:
+    "Selecione ao menos um presidente CPCA antes de enviar.",
   CPCA_CHECKLIST_PALESTRA_SPEAKER_REQUIRED:
     "Informe quem ministrou a palestra antes de salvar o checklist.",
   CPCA_CHECKLIST_ITEMS_REQUIRED:

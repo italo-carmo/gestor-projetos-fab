@@ -126,6 +126,9 @@ export function resolveHomePath(user: MePayload | undefined) {
       ROLE_COORDENACAO_CIPAVD,
       ROLE_CIPAVD,
     ]);
+  const canSeeCpcaEmails =
+    can(user, "cpca_emails", "view", "NATIONAL") &&
+    hasAnyRole(user, [ROLE_TI, ROLE_COMGEP]);
   const canSeeAdminRbac =
     can(user, "users", "view") ||
     can(user, "roles", "view") ||
@@ -182,6 +185,7 @@ export function resolveHomePath(user: MePayload | undefined) {
     [canSeeCpcaCoverage, "/cpca-coverage"],
     [canSeeCpcaChecklist, "/cpca-checklist"],
     [canSeeCpcaPresidentApprovals, "/cpca-president-approvals"],
+    [canSeeCpcaEmails, "/cpca-emails"],
     [canSeeAdminRbac, "/admin/rbac"],
     [canSeeAudit, "/audit"],
     [canSeeAdministration, "/admin"],

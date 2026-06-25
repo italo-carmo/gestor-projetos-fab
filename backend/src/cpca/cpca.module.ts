@@ -6,6 +6,8 @@ import { CpcaChecklistController } from './cpca-checklist.controller';
 import { CpcaChecklistService } from './cpca-checklist.service';
 import { CpcaCommissionController } from './cpca-commission.controller';
 import { CpcaCommissionService } from './cpca-commission.service';
+import { CpcaEmailController } from './cpca-email.controller';
+import { CpcaEmailService } from './cpca-email.service';
 import { CpcaController } from './cpca.controller';
 import { ComplaintSummaryPrivacyService } from './complaint-summary-privacy.service';
 import { CpcaService } from './cpca.service';
@@ -16,17 +18,20 @@ import { CpcaService } from './cpca.service';
     CpcaController,
     CpcaCommissionController,
     CpcaChecklistController,
+    CpcaEmailController,
   ],
   providers: [
     CpcaService,
     CpcaCommissionService,
     CpcaChecklistService,
+    CpcaEmailService,
     ComplaintSummaryPrivacyService,
   ],
   exports: [
     CpcaService,
     CpcaCommissionService,
     CpcaChecklistService,
+    CpcaEmailService,
     ComplaintSummaryPrivacyService,
   ],
 })

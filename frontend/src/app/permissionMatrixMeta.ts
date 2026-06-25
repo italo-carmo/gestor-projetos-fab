@@ -281,6 +281,16 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     sidebarItems: ["Cobertura"],
     expectedActions: CRUD,
   },
+  cpca_emails: {
+    menu: "CPCA",
+    menuOrder: 60,
+    title: "Enviar E-mails CPCA",
+    description:
+      "Criação de modelos, anexos e disparos para presidentes CPCA cadastrados.",
+    route: "/cpca-emails",
+    sidebarItems: ["Enviar E-mails"],
+    expectedActions: ["view", "create", "update", "delete", "send"],
+  },
   smif_complaints: {
     menu: "CPCA",
     menuOrder: 60,

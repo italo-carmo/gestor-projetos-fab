@@ -6281,6 +6281,70 @@ export type EmailDeliveryFailuresResponse = {
   openCount: number;
 };
 
+export type CpcaEmailAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  fileSize: number;
+  createdAt: string;
+};
+
+export type CpcaEmailTemplate = {
+  id: string;
+  name: string;
+  subject: string;
+  bodyHtml: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: { id: string; name: string | null; email: string | null } | null;
+  updatedBy?: { id: string; name: string | null; email: string | null } | null;
+  attachments: CpcaEmailAttachment[];
+};
+
+export type CpcaEmailRecipient = {
+  omId: string;
+  omCode: string;
+  omName: string;
+  omUf?: string | null;
+  presidentUserId: string;
+  presidentName: string;
+  presidentEmail: string;
+};
+
+export type CpcaEmailDeliveryStatus = "QUEUED" | "SENT" | "FAILED";
+export type CpcaEmailDispatchStatus = "QUEUED" | "SENT" | "PARTIAL" | "FAILED";
+
+export type CpcaEmailDelivery = {
+  id: string;
+  omId?: string | null;
+  presidentUserId?: string | null;
+  omCode: string;
+  omName: string;
+  recipientName: string;
+  recipientEmail: string;
+  status: CpcaEmailDeliveryStatus;
+  errorMessage?: string | null;
+  sentAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CpcaEmailDispatch = {
+  id: string;
+  templateId?: string | null;
+  template?: { id: string; name: string } | null;
+  subject: string;
+  bodyHtml: string;
+  status: CpcaEmailDispatchStatus;
+  totalRecipients: number;
+  sentCount: number;
+  failedCount: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: { id: string; name: string | null; email: string | null } | null;
+  deliveries: CpcaEmailDelivery[];
+};
+
 export type ComgepScoringWeightKey =
   | "riskOpenCases"
   | "riskRetaliationCases"
@@ -6370,6 +6434,49 @@ export function useEmailDeliveryFailures(
       ).data,
     enabled,
     staleTime: 10_000,
+  });
+}
+
+export function useCpcaEmailTemplates(enabled = true) {
+  return useQuery({
+    queryKey: qk.cpcaEmailTemplates,
+    queryFn: async () =>
+      (await api.get<{ items: CpcaEmailTemplate[] }>("/cpca-emails/templates"))
+        .data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
+export function useCpcaEmailRecipients(enabled = true) {
+  return useQuery({
+    queryKey: qk.cpcaEmailRecipients,
+    queryFn: async () =>
+      (
+        await api.get<{ items: CpcaEmailRecipient[]; total: number; note: string }>(
+          "/cpca-emails/recipients",
+        )
+      ).data,
+    enabled,
+    staleTime: 20_000,
+  });
+}
+
+export function useCpcaEmailDispatches(
+  filters: { limit?: number } = { limit: 12 },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.cpcaEmailDispatches(filters),
+    queryFn: async () =>
+      (
+        await api.get<{ items: CpcaEmailDispatch[] }>(
+          "/cpca-emails/dispatches",
+          { params: filters },
+        )
+      ).data,
+    enabled,
+    staleTime: 5_000,
   });
 }
 
@@ -6608,6 +6715,115 @@ export function useUpdateEmailSettings() {
       (await api.put("/admin/email-settings", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.emailSettings });
+    },
+  });
+}
+
+export function useCreateCpcaEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      name: string;
+      subject: string;
+      bodyHtml: string;
+    }) =>
+      (
+        await api.post<{ item: CpcaEmailTemplate }>(
+          "/cpca-emails/templates",
+          payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.cpcaEmailTemplates });
+    },
+  });
+}
+
+export function useUpdateCpcaEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: { name?: string; subject?: string; bodyHtml?: string };
+    }) =>
+      (
+        await api.put<{ item: CpcaEmailTemplate }>(
+          `/cpca-emails/templates/${encodeURIComponent(args.id)}`,
+          args.payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.cpcaEmailTemplates });
+      qc.invalidateQueries({ queryKey: ["cpcaEmails", "dispatches"] });
+    },
+  });
+}
+
+export function useDeleteCpcaEmailTemplate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await api.delete(`/cpca-emails/templates/${encodeURIComponent(id)}`))
+        .data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.cpcaEmailTemplates });
+      qc.invalidateQueries({ queryKey: ["cpcaEmails", "dispatches"] });
+    },
+  });
+}
+
+export function useUploadCpcaEmailAttachment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { templateId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append("file", args.file);
+      return (
+        await api.post<{ item: CpcaEmailAttachment }>(
+          `/cpca-emails/templates/${encodeURIComponent(args.templateId)}/attachments`,
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } },
+        )
+      ).data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.cpcaEmailTemplates });
+    },
+  });
+}
+
+export function useDeleteCpcaEmailAttachment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { templateId: string; attachmentId: string }) =>
+      (
+        await api.delete(
+          `/cpca-emails/templates/${encodeURIComponent(args.templateId)}/attachments/${encodeURIComponent(args.attachmentId)}`,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.cpcaEmailTemplates });
+    },
+  });
+}
+
+export function useSendCpcaEmail() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: {
+      templateId: string;
+      all?: boolean;
+      recipientOmIds?: string[];
+    }) =>
+      (
+        await api.post<{ item: CpcaEmailDispatch }>(
+          "/cpca-emails/send",
+          payload,
+        )
+      ).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cpcaEmails", "dispatches"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaEmailRecipients });
     },
   });
 }

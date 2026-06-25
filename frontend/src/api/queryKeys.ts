@@ -169,6 +169,10 @@ export const qk = {
     ["cpcaCommission", "presidentRequests", "pendingCount"] as const,
   cpcaSelfRegistrationLocalities: () =>
     ["cpcaCommission", "selfRegistration", "localities"] as const,
+  cpcaEmailTemplates: ["cpcaEmails", "templates"] as const,
+  cpcaEmailRecipients: ["cpcaEmails", "recipients"] as const,
+  cpcaEmailDispatches: (filters: Record<string, any>) =>
+    ["cpcaEmails", "dispatches", filters] as const,
   smifComplaints: (filters: Record<string, any>) =>
     ["smifComplaints", filters] as const,
   smifComplaintCase: (id: string) => ["smifComplaintCase", id] as const,

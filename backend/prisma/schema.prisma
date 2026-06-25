@@ -105,6 +105,10 @@ model User {
   smifComplaintsCreated                   SmifComplaint[]                  @relation("SmifComplaintCreatedBy")
   smifComplaintsUpdated                   SmifComplaint[]                  @relation("SmifComplaintUpdatedBy")
   emailDeliveryFailuresResolved           EmailDeliveryFailure[]           @relation("EmailDeliveryFailureResolvedBy")
+  cpcaEmailTemplatesCreated               CpcaEmailTemplate[]              @relation("CpcaEmailTemplateCreatedBy")
+  cpcaEmailTemplatesUpdated               CpcaEmailTemplate[]              @relation("CpcaEmailTemplateUpdatedBy")
+  cpcaEmailDispatchesCreated              CpcaEmailDispatch[]              @relation("CpcaEmailDispatchCreatedBy")
+  cpcaEmailDeliveriesReceived             CpcaEmailDelivery[]              @relation("CpcaEmailDeliveryPresidentUser")
   certificateEventsCreated                CertificateEvent[]               @relation("CertificateEventCreator")
   certificateTemplatesCreated             CertificateTemplate[]            @relation("CertificateTemplateCreator")
 }
@@ -132,6 +136,7 @@ model Om {
   cpcaCoverageAsManaged           CpcaCommissionCoverageOm[]       @relation("CpcaCoverageOmManaged")
   biNormalizationLinks            BiNormalizationLink[]
   strategicRecommendations        StrategicRecommendation[]
+  cpcaEmailDeliveries             CpcaEmailDelivery[]
 
   @@index([hasCpca])
   @@index([uf])
@@ -1126,6 +1131,92 @@ model EmailDeliveryFailure {
 
   @@index([status, occurredAt])
   @@index([resolvedById])
+}
+
+model CpcaEmailTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  subject     String
+  bodyHtml    String
+  createdById String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy   User?                         @relation("CpcaEmailTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy   User?                         @relation("CpcaEmailTemplateUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  attachments CpcaEmailTemplateAttachment[]
+  dispatches  CpcaEmailDispatch[]
+  deliveries  CpcaEmailDelivery[]
+
+  @@index([updatedAt])
+  @@index([createdById])
+  @@index([updatedById])
+}
+
+model CpcaEmailTemplateAttachment {
+  id         String   @id @default(cuid())
+  templateId String
+  fileName   String
+  storageKey String   @unique
+  mimeType   String
+  fileSize   Int
+  createdAt  DateTime @default(now())
+
+  template CpcaEmailTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
+model CpcaEmailDispatch {
+  id              String                  @id @default(cuid())
+  templateId      String?
+  subject         String
+  bodyHtml        String
+  status          CpcaEmailDispatchStatus @default(QUEUED)
+  totalRecipients Int                     @default(0)
+  sentCount       Int                     @default(0)
+  failedCount     Int                     @default(0)
+  createdById     String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  template   CpcaEmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  createdBy  User?              @relation("CpcaEmailDispatchCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  deliveries CpcaEmailDelivery[]
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([templateId])
+  @@index([createdById])
+}
+
+model CpcaEmailDelivery {
+  id              String                  @id @default(cuid())
+  dispatchId      String
+  templateId      String?
+  omId            String?
+  presidentUserId String?
+  omCode          String
+  omName          String
+  recipientName   String
+  recipientEmail  String
+  status          CpcaEmailDeliveryStatus @default(QUEUED)
+  errorMessage    String?
+  sentAt          DateTime?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  dispatch      CpcaEmailDispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  template      CpcaEmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  om            Om?                @relation(fields: [omId], references: [id], onDelete: SetNull)
+  presidentUser User?              @relation("CpcaEmailDeliveryPresidentUser", fields: [presidentUserId], references: [id], onDelete: SetNull)
+
+  @@index([dispatchId, status])
+  @@index([templateId])
+  @@index([omId])
+  @@index([presidentUserId])
+  @@index([recipientEmail])
 }
 
 model Kpi {
@@ -2471,6 +2562,19 @@ enum MeetingStatus {
 enum EmailDeliveryFailureStatus {
   OPEN
   RESOLVED
+}
+
+enum CpcaEmailDispatchStatus {
+  QUEUED
+  SENT
+  PARTIAL
+  FAILED
+}
+
+enum CpcaEmailDeliveryStatus {
+  QUEUED
+  SENT
+  FAILED
 }
 
 enum KpiVisibility {

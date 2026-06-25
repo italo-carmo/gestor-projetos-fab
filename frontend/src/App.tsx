@@ -37,6 +37,7 @@ import { CpcaChecklistPage } from "./pages/CpcaChecklistPage";
 import { CpcaCommissionPage } from "./pages/CpcaCommissionPage";
 import { CpcaPresidentApprovalsPage } from "./pages/CpcaPresidentApprovalsPage";
 import { CpcaStatsPage } from "./pages/CpcaStatsPage";
+import { CpcaEmailsPage } from "./pages/CpcaEmailsPage";
 import { SmifComplaintsPage } from "./pages/SmifComplaintsPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { BestPracticesPage } from "./pages/BestPracticesPage";
@@ -341,6 +342,19 @@ function App() {
                       }
                     >
                       <CpcaPresidentApprovalsPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/cpca-emails"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "cpca_emails", "view", "NATIONAL") &&
+                        hasAnyRole(user, [ROLE_TI, ROLE_COMGEP])
+                      }
+                    >
+                      <CpcaEmailsPage />
                     </RequireRoleAccess>
                   }
                 />

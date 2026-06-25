@@ -51,6 +51,7 @@ import AutoAwesomeRoundedIcon from "@mui/icons-material/AutoAwesomeRounded";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import DescriptionRoundedIcon from "@mui/icons-material/DescriptionRounded";
 import WorkspacePremiumRoundedIcon from "@mui/icons-material/WorkspacePremiumRounded";
+import EmailRoundedIcon from "@mui/icons-material/EmailRounded";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { useDebounce } from "../app/useDebounce";
 import { can } from "../app/rbac";
@@ -310,6 +311,12 @@ const navSections: NavSection[] = [
         icon: <ShieldRoundedIcon fontSize="small" />,
         menuKey: "cpca_president_approvals",
       },
+      {
+        label: "Enviar E-mails",
+        to: "/cpca-emails",
+        icon: <EmailRoundedIcon fontSize="small" />,
+        menuKey: "cpca_emails",
+      },
     ],
   },
   {
@@ -522,6 +529,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === "/cpca-president-approvals") {
       return (
         can(me, "cpca_cases", "view") && hasAnyRole(me, [ROLE_TI, ROLE_COMGEP])
+      );
+    }
+    if (item.to === "/cpca-emails") {
+      return (
+        can(me, "cpca_emails", "view", "NATIONAL") &&
+        hasAnyRole(me, [ROLE_TI, ROLE_COMGEP])
       );
     }
     if (item.to === "/cpca-stats") {
