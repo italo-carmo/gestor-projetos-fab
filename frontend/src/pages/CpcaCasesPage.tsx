@@ -134,6 +134,10 @@ const CPCA_HISTORY_ACTION_OPTIONS = [
   { value: "validation", label: "Validação da comissão" },
 ];
 
+const PENDING_VALIDATION_ROW_BG = "rgba(245, 158, 11, 0.12)";
+const PENDING_VALIDATION_ROW_HOVER_BG = "rgba(245, 158, 11, 0.18)";
+const PENDING_VALIDATION_ROW_BORDER = "rgba(245, 158, 11, 0.35)";
+
 const STATUS_CHIP_STYLES: Record<
   string,
   { bgcolor: string; color: string; borderColor: string }
@@ -3270,300 +3274,289 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               description={`Registre a primeira ocorrência de ${workflowLabel} para iniciar o acompanhamento.`}
             />
           ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow sx={{ bgcolor: "primary.main" }}>
-                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                    Caso
-                  </TableCell>
-                  {!isSmifWorkflow && (
+            <>
+              {!isSmifWorkflow && (
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  sx={{ mb: 1.5 }}
+                >
+                  <Box
+                    sx={{
+                      width: 28,
+                      height: 14,
+                      borderRadius: 0.75,
+                      bgcolor: PENDING_VALIDATION_ROW_BG,
+                      border: "1px solid",
+                      borderColor: PENDING_VALIDATION_ROW_BORDER,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    Linhas nesta cor indicam denúncias a serem validadas.
+                  </Typography>
+                </Stack>
+              )}
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "primary.main" }}>
                     <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                      Validação
+                      Caso
                     </TableCell>
-                  )}
-                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                    OM
-                  </TableCell>
-                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                    Tipo
-                  </TableCell>
-                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                    Status
-                  </TableCell>
-                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                    Procedimento administrativo
-                  </TableCell>
-                  <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                    Recebimento
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {items.map((item: any) => {
-                  const inconsistencies = isSmifWorkflow
-                    ? []
-                    : Array.isArray(item.inconsistencies)
-                      ? item.inconsistencies
-                      : getCpcaCaseInconsistencies(item);
-                  const archiveBadge = getComplaintArchiveReasonMeta({
-                    status: item.status,
-                    procedureCurrentSituation: item.procedureCurrentSituation,
-                    archiveReason: item.archiveReason,
-                  });
-                  const cipavdSummary = normalizeComplaintCipavdSummary(
-                    item.cipavdCommentsSummary,
-                  );
-                  const pendencyBadge = getComplaintPendencyBadge(
-                    cipavdSummary,
-                    {
-                      showResolved: isNationalScope,
-                    },
-                  );
-                  const validation = item.validation ?? null;
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                      OM
+                    </TableCell>
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                      Tipo
+                    </TableCell>
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                      Status
+                    </TableCell>
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                      Procedimento administrativo
+                    </TableCell>
+                    <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
+                      Recebimento
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {items.map((item: any) => {
+                    const inconsistencies = isSmifWorkflow
+                      ? []
+                      : Array.isArray(item.inconsistencies)
+                        ? item.inconsistencies
+                        : getCpcaCaseInconsistencies(item);
+                    const archiveBadge = getComplaintArchiveReasonMeta({
+                      status: item.status,
+                      procedureCurrentSituation: item.procedureCurrentSituation,
+                      archiveReason: item.archiveReason,
+                    });
+                    const cipavdSummary = normalizeComplaintCipavdSummary(
+                      item.cipavdCommentsSummary,
+                    );
+                    const pendencyBadge = getComplaintPendencyBadge(
+                      cipavdSummary,
+                      {
+                        showResolved: isNationalScope,
+                      },
+                    );
+                    const validation = item.validation ?? null;
+                    const isPendingValidation =
+                      !isSmifWorkflow && !validation?.isValidated;
 
-                  return (
-                    <TableRow
-                      key={item.id}
-                      hover
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => openDetails(item.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          openDetails(item.id);
-                        }
-                      }}
-                      sx={{ cursor: "pointer" }}
-                    >
-                      <TableCell sx={{ minWidth: 320, maxWidth: 440 }}>
-                        <Stack spacing={0.6}>
-                          <Stack
-                            direction="row"
-                            spacing={0.75}
-                            useFlexGap
-                            flexWrap="wrap"
-                            alignItems="center"
-                          >
-                            <Typography
-                              fontWeight={700}
-                              sx={{
-                                overflowWrap: "anywhere",
-                                wordBreak: "break-word",
-                              }}
-                            >
-                              {formatComplaintCaseNumberForDisplay(
-                                item.caseNumber,
-                              )}
-                            </Typography>
-                            {!isSmifWorkflow && validation?.isValidated && (
-                              <Tooltip title={getValidationTooltip(validation)}>
-                                <CheckCircleIcon
-                                  color="success"
-                                  fontSize="small"
-                                  aria-label="Denúncia validada"
-                                />
-                              </Tooltip>
-                            )}
-                            {item.isNewForViewer && (
-                              <Chip
-                                size="small"
-                                label="Novo"
-                                sx={{
-                                  height: 22,
-                                  fontWeight: 800,
-                                  color: "#075985",
-                                  bgcolor: "rgba(14, 165, 233, 0.14)",
-                                  border: "1px solid rgba(14, 165, 233, 0.28)",
-                                }}
-                              />
-                            )}
-                            {inconsistencies.map(
-                              (inconsistency: CpcaCaseInconsistency) => (
-                                <Chip
-                                  key={`${item.id}-${inconsistency.code}`}
-                                  size="small"
-                                  variant="outlined"
-                                  clickable
-                                  label={inconsistency.badgeLabel}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setConsistencyPopover({
-                                      anchorEl: event.currentTarget,
-                                      inconsistency,
-                                    });
-                                  }}
-                                  sx={{
-                                    fontWeight: 700,
-                                    borderStyle: "dashed",
-                                    borderColor:
-                                      inconsistency.tone === "warning"
-                                        ? "rgba(245, 124, 0, 0.4)"
-                                        : "rgba(2, 136, 209, 0.35)",
-                                    bgcolor:
-                                      inconsistency.tone === "warning"
-                                        ? "rgba(245, 124, 0, 0.08)"
-                                        : "rgba(2, 136, 209, 0.08)",
-                                    color:
-                                      inconsistency.tone === "warning"
-                                        ? "#B45309"
-                                        : "#0C4A6E",
-                                  }}
-                                />
-                              ),
-                            )}
-                            {pendencyBadge && (
-                              <Chip
-                                size="small"
-                                label={pendencyBadge.label}
-                                sx={{
-                                  fontWeight: 700,
-                                  color:
-                                    pendencyBadge.tone === "error"
-                                      ? "#B91C1C"
-                                      : "#166534",
-                                  bgcolor:
-                                    pendencyBadge.tone === "error"
-                                      ? "rgba(239, 68, 68, 0.12)"
-                                      : "rgba(34, 197, 94, 0.12)",
-                                  border: "1px solid",
-                                  borderColor:
-                                    pendencyBadge.tone === "error"
-                                      ? "rgba(239, 68, 68, 0.24)"
-                                      : "rgba(34, 197, 94, 0.24)",
-                                }}
-                              />
-                            )}
-                            {archiveBadge.isArchived &&
-                              archiveBadge.badgeLabel && (
-                                <Chip
-                                  size="small"
-                                  clickable
-                                  label={archiveBadge.badgeLabel}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openArchiveReasonDetails(item);
-                                  }}
-                                  sx={{
-                                    fontWeight: 700,
-                                    color: "#B91C1C",
-                                    bgcolor: "rgba(239, 68, 68, 0.12)",
-                                    border: "1px solid rgba(239, 68, 68, 0.28)",
-                                  }}
-                                />
-                              )}
-                          </Stack>
-                          {(item.lastCommentAt ||
-                            cipavdSummary.lastActivityAt) && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              Última movimentação:{" "}
-                              {new Date(
-                                cipavdSummary.lastActivityAt ??
-                                  item.lastCommentAt,
-                              ).toLocaleString("pt-BR")}
-                            </Typography>
-                          )}
-                        </Stack>
-                      </TableCell>
-                      {!isSmifWorkflow && (
-                        <TableCell sx={{ minWidth: 190 }}>
-                          <Stack spacing={0.75} alignItems="flex-start">
-                            <Chip
-                              size="small"
-                              icon={
-                                validation?.isValidated ? (
-                                  <CheckCircleIcon />
-                                ) : (
-                                  <PendingActionsIcon />
-                                )
-                              }
-                              label={
-                                validation?.isValidated
-                                  ? "Validada"
-                                  : "A validar"
-                              }
-                              sx={{
-                                fontWeight: 700,
-                                color: validation?.isValidated
-                                  ? "#166534"
-                                  : "#B45309",
-                                bgcolor: validation?.isValidated
-                                  ? "rgba(34, 197, 94, 0.12)"
-                                  : "rgba(245, 158, 11, 0.12)",
-                                border: "1px solid",
-                                borderColor: validation?.isValidated
-                                  ? "rgba(34, 197, 94, 0.24)"
-                                  : "rgba(245, 158, 11, 0.24)",
-                                "& .MuiChip-icon": {
-                                  color: "inherit",
+                    return (
+                      <TableRow
+                        key={item.id}
+                        hover
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openDetails(item.id)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            openDetails(item.id);
+                          }
+                        }}
+                        sx={{
+                          cursor: "pointer",
+                          ...(isPendingValidation
+                            ? {
+                                bgcolor: PENDING_VALIDATION_ROW_BG,
+                                boxShadow: `inset 4px 0 0 ${PENDING_VALIDATION_ROW_BORDER}`,
+                                "&:hover": {
+                                  bgcolor: `${PENDING_VALIDATION_ROW_HOVER_BG} !important`,
                                 },
-                              }}
-                            />
-                            {validation?.isValidated ? (
+                              }
+                            : {}),
+                        }}
+                      >
+                        <TableCell sx={{ minWidth: 320, maxWidth: 440 }}>
+                          <Stack spacing={0.6}>
+                            <Stack
+                              direction="row"
+                              spacing={0.75}
+                              useFlexGap
+                              flexWrap="wrap"
+                              alignItems="center"
+                            >
+                              <Typography
+                                fontWeight={700}
+                                sx={{
+                                  overflowWrap: "anywhere",
+                                  wordBreak: "break-word",
+                                }}
+                              >
+                                {formatComplaintCaseNumberForDisplay(
+                                  item.caseNumber,
+                                )}
+                              </Typography>
+                              {!isSmifWorkflow && validation?.isValidated && (
+                                <Tooltip
+                                  title={getValidationTooltip(validation)}
+                                >
+                                  <CheckCircleIcon
+                                    color="success"
+                                    fontSize="small"
+                                    aria-label="Denúncia validada"
+                                  />
+                                </Tooltip>
+                              )}
+                              {item.isNewForViewer && (
+                                <Chip
+                                  size="small"
+                                  label="Novo"
+                                  sx={{
+                                    height: 22,
+                                    fontWeight: 800,
+                                    color: "#075985",
+                                    bgcolor: "rgba(14, 165, 233, 0.14)",
+                                    border:
+                                      "1px solid rgba(14, 165, 233, 0.28)",
+                                  }}
+                                />
+                              )}
+                              {inconsistencies.map(
+                                (inconsistency: CpcaCaseInconsistency) => (
+                                  <Chip
+                                    key={`${item.id}-${inconsistency.code}`}
+                                    size="small"
+                                    variant="outlined"
+                                    clickable
+                                    label={inconsistency.badgeLabel}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      setConsistencyPopover({
+                                        anchorEl: event.currentTarget,
+                                        inconsistency,
+                                      });
+                                    }}
+                                    sx={{
+                                      fontWeight: 700,
+                                      borderStyle: "dashed",
+                                      borderColor:
+                                        inconsistency.tone === "warning"
+                                          ? "rgba(245, 124, 0, 0.4)"
+                                          : "rgba(2, 136, 209, 0.35)",
+                                      bgcolor:
+                                        inconsistency.tone === "warning"
+                                          ? "rgba(245, 124, 0, 0.08)"
+                                          : "rgba(2, 136, 209, 0.08)",
+                                      color:
+                                        inconsistency.tone === "warning"
+                                          ? "#B45309"
+                                          : "#0C4A6E",
+                                    }}
+                                  />
+                                ),
+                              )}
+                              {pendencyBadge && (
+                                <Chip
+                                  size="small"
+                                  label={pendencyBadge.label}
+                                  sx={{
+                                    fontWeight: 700,
+                                    color:
+                                      pendencyBadge.tone === "error"
+                                        ? "#B91C1C"
+                                        : "#166534",
+                                    bgcolor:
+                                      pendencyBadge.tone === "error"
+                                        ? "rgba(239, 68, 68, 0.12)"
+                                        : "rgba(34, 197, 94, 0.12)",
+                                    border: "1px solid",
+                                    borderColor:
+                                      pendencyBadge.tone === "error"
+                                        ? "rgba(239, 68, 68, 0.24)"
+                                        : "rgba(34, 197, 94, 0.24)",
+                                  }}
+                                />
+                              )}
+                              {archiveBadge.isArchived &&
+                                archiveBadge.badgeLabel && (
+                                  <Chip
+                                    size="small"
+                                    clickable
+                                    label={archiveBadge.badgeLabel}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openArchiveReasonDetails(item);
+                                    }}
+                                    sx={{
+                                      fontWeight: 700,
+                                      color: "#B91C1C",
+                                      bgcolor: "rgba(239, 68, 68, 0.12)",
+                                      border:
+                                        "1px solid rgba(239, 68, 68, 0.28)",
+                                    }}
+                                  />
+                                )}
+                            </Stack>
+                            {(item.lastCommentAt ||
+                              cipavdSummary.lastActivityAt) && (
                               <Typography
                                 variant="caption"
                                 color="text.secondary"
-                                sx={{ lineHeight: 1.25 }}
                               >
-                                {getValidationActorName(validation)}
-                                <br />
-                                {formatDateTimePtBr(validation.validatedAt)}
+                                Última movimentação:{" "}
+                                {new Date(
+                                  cipavdSummary.lastActivityAt ??
+                                    item.lastCommentAt,
+                                ).toLocaleString("pt-BR")}
                               </Typography>
-                            ) : null}
+                            )}
                           </Stack>
                         </TableCell>
-                      )}
-                      <TableCell>{formatOmLabel(item.locality)}</TableCell>
-                      <TableCell>
-                        {getDetailedViolenceTypeLabel(
-                          item.detailedViolenceType,
-                        ) ??
-                          getComplaintTypeLabel(item.complaintType) ??
-                          "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          size="small"
-                          label={
-                            STATUS_OPTIONS.find(
-                              (entry) => entry.value === item.status,
-                            )?.label ?? item.status
-                          }
-                          sx={{
-                            fontWeight: 700,
-                            bgcolor:
-                              STATUS_CHIP_STYLES[String(item.status)]
-                                ?.bgcolor ?? "rgba(17, 24, 39, 0.08)",
-                            color:
-                              STATUS_CHIP_STYLES[String(item.status)]?.color ??
-                              "#111827",
-                            border: "1px solid",
-                            borderColor:
-                              STATUS_CHIP_STYLES[String(item.status)]
-                                ?.borderColor ?? "rgba(17, 24, 39, 0.14)",
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {PROCEDURE_OPTIONS.find(
-                          (entry) => entry.value === item.procedureType,
-                        )?.label ?? item.procedureType}
-                      </TableCell>
-                      <TableCell>
-                        {item.reportedAt
-                          ? new Date(item.reportedAt).toLocaleDateString(
-                              "pt-BR",
-                            )
-                          : "-"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        <TableCell>{formatOmLabel(item.locality)}</TableCell>
+                        <TableCell>
+                          {getDetailedViolenceTypeLabel(
+                            item.detailedViolenceType,
+                          ) ??
+                            getComplaintTypeLabel(item.complaintType) ??
+                            "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={
+                              STATUS_OPTIONS.find(
+                                (entry) => entry.value === item.status,
+                              )?.label ?? item.status
+                            }
+                            sx={{
+                              fontWeight: 700,
+                              bgcolor:
+                                STATUS_CHIP_STYLES[String(item.status)]
+                                  ?.bgcolor ?? "rgba(17, 24, 39, 0.08)",
+                              color:
+                                STATUS_CHIP_STYLES[String(item.status)]
+                                  ?.color ?? "#111827",
+                              border: "1px solid",
+                              borderColor:
+                                STATUS_CHIP_STYLES[String(item.status)]
+                                  ?.borderColor ?? "rgba(17, 24, 39, 0.14)",
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          {PROCEDURE_OPTIONS.find(
+                            (entry) => entry.value === item.procedureType,
+                          )?.label ?? item.procedureType}
+                        </TableCell>
+                        <TableCell>
+                          {item.reportedAt
+                            ? new Date(item.reportedAt).toLocaleDateString(
+                                "pt-BR",
+                              )
+                            : "-"}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </>
           )}
         </CardContent>
         {totalItems > 0 && (
@@ -4047,7 +4040,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
               <Card>
                 <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-                  <Box sx={{ overflowX: "auto", pb: 1 }}>
+                  <Box sx={{ overflowX: "auto", overflowY: "hidden", pb: 1 }}>
                     <Stepper
                       nonLinear
                       activeStep={activeStep}
@@ -4059,6 +4052,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                             color="inherit"
                             disabled={index > maxUnlockedStep}
                             onClick={() => setActiveStep(index)}
+                            sx={{
+                              minHeight: 44,
+                              overflow: "visible",
+                              "& .MuiStepLabel-label": {
+                                whiteSpace: "nowrap",
+                              },
+                            }}
                           >
                             {step.title}
                           </StepButton>
