@@ -55,6 +55,34 @@ const ParagraphLayout = Extension.create({
               };
             },
           },
+          paragraphMarginLeft: {
+            default: null,
+            parseHTML: (element) => element.style.marginLeft || null,
+            renderHTML: (attributes) => {
+              if (!attributes.paragraphMarginLeft) return {};
+              return { style: `margin-left: ${attributes.paragraphMarginLeft}` };
+            },
+          },
+          paragraphMarginRight: {
+            default: null,
+            parseHTML: (element) => element.style.marginRight || null,
+            renderHTML: (attributes) => {
+              if (!attributes.paragraphMarginRight) return {};
+              return {
+                style: `margin-right: ${attributes.paragraphMarginRight}`,
+              };
+            },
+          },
+          paragraphFirstLineIndent: {
+            default: null,
+            parseHTML: (element) => element.style.textIndent || null,
+            renderHTML: (attributes) => {
+              if (!attributes.paragraphFirstLineIndent) return {};
+              return {
+                style: `text-indent: ${attributes.paragraphFirstLineIndent}`,
+              };
+            },
+          },
         },
       },
     ];

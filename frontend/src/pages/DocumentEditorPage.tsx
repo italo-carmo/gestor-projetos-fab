@@ -11,6 +11,7 @@ import {
   ListItemText,
   MenuItem,
   Paper,
+  Popover,
   Stack,
   TextField,
   Tooltip,
@@ -52,6 +53,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { useParams } from "react-router-dom";
@@ -81,6 +84,8 @@ const FONT_FAMILIES = [
 
 const FONT_SIZES = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32];
 const LINE_HEIGHTS = ["1", "1.15", "1.5", "2"];
+const PAGE_WIDTH_CM = 21;
+const MIN_PARAGRAPH_TEXT_WIDTH_CM = 2;
 
 const DEFAULT_PAGE_SETTINGS = {
   marginTopCm: 2.5,
@@ -263,6 +268,34 @@ const ParagraphLayout = Extension.create({
               };
             },
           },
+          paragraphMarginLeft: {
+            default: null,
+            parseHTML: (element) => element.style.marginLeft || null,
+            renderHTML: (attributes) => {
+              if (!attributes.paragraphMarginLeft) return {};
+              return { style: `margin-left: ${attributes.paragraphMarginLeft}` };
+            },
+          },
+          paragraphMarginRight: {
+            default: null,
+            parseHTML: (element) => element.style.marginRight || null,
+            renderHTML: (attributes) => {
+              if (!attributes.paragraphMarginRight) return {};
+              return {
+                style: `margin-right: ${attributes.paragraphMarginRight}`,
+              };
+            },
+          },
+          paragraphFirstLineIndent: {
+            default: null,
+            parseHTML: (element) => element.style.textIndent || null,
+            renderHTML: (attributes) => {
+              if (!attributes.paragraphFirstLineIndent) return {};
+              return {
+                style: `text-indent: ${attributes.paragraphFirstLineIndent}`,
+              };
+            },
+          },
         },
       },
     ];
@@ -313,6 +346,35 @@ function normalizeMargin(value: unknown) {
   return Math.min(6, Math.max(0.5, Number(parsed.toFixed(1))));
 }
 
+function parseCm(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const raw = String(value ?? "").trim();
+  if (!raw) return 0;
+  if (raw.endsWith("cm")) {
+    const parsed = Number(raw.replace("cm", ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatCm(value: number) {
+  const rounded = Math.round(value * 10) / 10;
+  if (Math.abs(rounded) < 0.05) return null;
+  return `${rounded.toFixed(1).replace(/\.0$/, "")}cm`;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function contentWidthCm(pageSettings: PageSettings) {
+  return Math.max(
+    MIN_PARAGRAPH_TEXT_WIDTH_CM,
+    PAGE_WIDTH_CM - pageSettings.marginLeftCm - pageSettings.marginRightCm,
+  );
+}
+
 function formatDate(value?: string | Date | null) {
   if (!value) return "—";
   return new Date(value).toLocaleString("pt-BR");
@@ -361,7 +423,8 @@ function DocumentEditor(props: {
   const presenceQuery = useOnlineDocumentPresence(documentId);
   const touchPresence = useTouchOnlineDocumentPresence();
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [marginsOpen, setMarginsOpen] = useState(false);
+  const [marginsAnchorEl, setMarginsAnchorEl] =
+    useState<HTMLElement | null>(null);
   const [toolbarVersion, setToolbarVersion] = useState(0);
   const [saveSignal, setSaveSignal] = useState(0);
   const [collaborationStatus, setCollaborationStatus] = useState<
@@ -641,6 +704,23 @@ function DocumentEditor(props: {
       editor?.getAttributes("heading").lineHeight ??
       "1.15",
   );
+  const activeBlockAttributes = editor?.isActive("heading")
+    ? (editor.getAttributes("heading") as Record<string, unknown>)
+    : ((editor?.getAttributes("paragraph") ?? {}) as Record<string, unknown>);
+  const paragraphContentWidthCm = contentWidthCm(pageSettings);
+  const currentParagraphLayout = {
+    leftCm: clamp(
+      parseCm(activeBlockAttributes.paragraphMarginLeft),
+      0,
+      Math.max(0, paragraphContentWidthCm - MIN_PARAGRAPH_TEXT_WIDTH_CM),
+    ),
+    rightCm: clamp(
+      parseCm(activeBlockAttributes.paragraphMarginRight),
+      0,
+      Math.max(0, paragraphContentWidthCm - MIN_PARAGRAPH_TEXT_WIDTH_CM),
+    ),
+    firstLineCm: parseCm(activeBlockAttributes.paragraphFirstLineIndent),
+  };
   void toolbarVersion;
 
   const setFontSize = (size: string) => {
@@ -675,6 +755,54 @@ function DocumentEditor(props: {
       .focus()
       .updateAttributes("paragraph", { paragraphSpacingAfter: spacingPx })
       .run();
+  };
+
+  const setParagraphMargins = (next: {
+    leftCm?: number;
+    rightCm?: number;
+    firstLineCm?: number;
+  }) => {
+    if (!editor || !editorReadyToEdit) return;
+    const contentWidth = paragraphContentWidthCm;
+    let leftCm = currentParagraphLayout.leftCm;
+    let rightCm = currentParagraphLayout.rightCm;
+    let firstLineCm = currentParagraphLayout.firstLineCm;
+
+    if (typeof next.leftCm === "number") {
+      leftCm = clamp(
+        next.leftCm,
+        0,
+        Math.max(0, contentWidth - rightCm - MIN_PARAGRAPH_TEXT_WIDTH_CM),
+      );
+    }
+    if (typeof next.rightCm === "number") {
+      rightCm = clamp(
+        next.rightCm,
+        0,
+        Math.max(0, contentWidth - leftCm - MIN_PARAGRAPH_TEXT_WIDTH_CM),
+      );
+    }
+    if (typeof next.firstLineCm === "number") {
+      firstLineCm = next.firstLineCm;
+    }
+
+    firstLineCm = clamp(
+      firstLineCm,
+      -leftCm,
+      Math.max(0, contentWidth - leftCm - rightCm - MIN_PARAGRAPH_TEXT_WIDTH_CM),
+    );
+
+    const attrs = {
+      paragraphMarginLeft: formatCm(leftCm),
+      paragraphMarginRight: formatCm(rightCm),
+      paragraphFirstLineIndent: formatCm(firstLineCm),
+    };
+    const target = editor.isActive("heading") ? "heading" : "paragraph";
+    editor.chain().focus().updateAttributes(target, attrs).run();
+  };
+
+  const resetParagraphMargins = () => {
+    setParagraphMargins({ leftCm: 0, rightCm: 0, firstLineCm: 0 });
   };
 
   const handleImageSelected = (file?: File | null) => {
@@ -770,6 +898,7 @@ function DocumentEditor(props: {
   ]);
   const editorIsPreparing =
     !editorContentReady && collaborationStatus !== "auth-error";
+  const marginsOpen = Boolean(marginsAnchorEl);
 
   return (
     <Box
@@ -1100,7 +1229,7 @@ function DocumentEditor(props: {
           <ToolbarButton
             title="Margens"
             disabled={!editorReadyToEdit}
-            onClick={() => setMarginsOpen((current) => !current)}
+            onClick={(event) => setMarginsAnchorEl(event.currentTarget)}
           >
             <TuneRoundedIcon fontSize="small" />
           </ToolbarButton>
@@ -1116,36 +1245,57 @@ function DocumentEditor(props: {
           />
         </Stack>
 
-        {marginsOpen && (
-          <Stack
-            direction="row"
-            spacing={1}
-            alignItems="center"
-            sx={{ px: 1.2, pb: 1, overflowX: "auto" }}
-          >
-            <MarginField
-              label="Superior"
-              value={pageSettings.marginTopCm}
-              onChange={(value) => setPageMargin("marginTopCm", value)}
-            />
-            <MarginField
-              label="Direita"
-              value={pageSettings.marginRightCm}
-              onChange={(value) => setPageMargin("marginRightCm", value)}
-            />
-            <MarginField
-              label="Inferior"
-              value={pageSettings.marginBottomCm}
-              onChange={(value) => setPageMargin("marginBottomCm", value)}
-            />
-            <MarginField
-              label="Esquerda"
-              value={pageSettings.marginLeftCm}
-              onChange={(value) => setPageMargin("marginLeftCm", value)}
-            />
-          </Stack>
-        )}
+        <ParagraphRuler
+          contentWidthCm={paragraphContentWidthCm}
+          disabled={!editorReadyToEdit}
+          firstLineCm={currentParagraphLayout.firstLineCm}
+          leftCm={currentParagraphLayout.leftCm}
+          onChange={setParagraphMargins}
+          onReset={resetParagraphMargins}
+          rightCm={currentParagraphLayout.rightCm}
+        />
       </Paper>
+
+      <Popover
+        open={marginsOpen}
+        anchorEl={marginsAnchorEl}
+        onClose={() => setMarginsAnchorEl(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: 1,
+              boxShadow: "0 8px 24px rgba(60, 64, 67, 0.18)",
+              maxWidth: "calc(100vw - 24px)",
+              p: 1.2,
+            },
+          },
+        }}
+      >
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          <MarginField
+            label="Superior"
+            value={pageSettings.marginTopCm}
+            onChange={(value) => setPageMargin("marginTopCm", value)}
+          />
+          <MarginField
+            label="Direita"
+            value={pageSettings.marginRightCm}
+            onChange={(value) => setPageMargin("marginRightCm", value)}
+          />
+          <MarginField
+            label="Inferior"
+            value={pageSettings.marginBottomCm}
+            onChange={(value) => setPageMargin("marginBottomCm", value)}
+          />
+          <MarginField
+            label="Esquerda"
+            value={pageSettings.marginLeftCm}
+            onChange={(value) => setPageMargin("marginLeftCm", value)}
+          />
+        </Stack>
+      </Popover>
 
       <Box sx={{ py: 3, px: { xs: 1, md: 4 }, overflowX: "auto" }}>
         <Paper
@@ -1251,11 +1401,244 @@ function DocumentEditor(props: {
   );
 }
 
+function ParagraphRuler(props: {
+  contentWidthCm: number;
+  disabled: boolean;
+  firstLineCm: number;
+  leftCm: number;
+  onChange: (next: {
+    leftCm?: number;
+    rightCm?: number;
+    firstLineCm?: number;
+  }) => void;
+  onReset: () => void;
+  rightCm: number;
+}) {
+  const rulerRef = useRef<HTMLDivElement | null>(null);
+  const safeContentWidthCm = Math.max(
+    MIN_PARAGRAPH_TEXT_WIDTH_CM,
+    props.contentWidthCm,
+  );
+  const leftCm = clamp(
+    props.leftCm,
+    0,
+    Math.max(0, safeContentWidthCm - MIN_PARAGRAPH_TEXT_WIDTH_CM),
+  );
+  const rightCm = clamp(
+    props.rightCm,
+    0,
+    Math.max(0, safeContentWidthCm - leftCm - MIN_PARAGRAPH_TEXT_WIDTH_CM),
+  );
+  const firstLineCm = clamp(
+    props.firstLineCm,
+    -leftCm,
+    Math.max(
+      0,
+      safeContentWidthCm - leftCm - rightCm - MIN_PARAGRAPH_TEXT_WIDTH_CM,
+    ),
+  );
+  const leftPercent = (leftCm / safeContentWidthCm) * 100;
+  const rightPercent = ((safeContentWidthCm - rightCm) / safeContentWidthCm) * 100;
+  const firstLinePercent =
+    ((leftCm + firstLineCm) / safeContentWidthCm) * 100;
+  const tickCount = Math.floor(safeContentWidthCm);
+
+  const positionToCm = (clientX: number) => {
+    const rect = rulerRef.current?.getBoundingClientRect();
+    if (!rect?.width) return 0;
+    const ratio = clamp((clientX - rect.left) / rect.width, 0, 1);
+    return Math.round(ratio * safeContentWidthCm * 10) / 10;
+  };
+
+  const startDrag =
+    (kind: "left" | "right" | "firstLine") =>
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (props.disabled) return;
+      event.preventDefault();
+
+      const apply = (clientX: number) => {
+        const cm = positionToCm(clientX);
+        if (kind === "left") {
+          props.onChange({ leftCm: cm });
+          return;
+        }
+        if (kind === "right") {
+          props.onChange({ rightCm: safeContentWidthCm - cm });
+          return;
+        }
+        props.onChange({ firstLineCm: cm - leftCm });
+      };
+
+      apply(event.clientX);
+      const handleMove = (moveEvent: PointerEvent) =>
+        apply(moveEvent.clientX);
+      const handleUp = () => {
+        document.removeEventListener("pointermove", handleMove);
+        document.removeEventListener("pointerup", handleUp);
+      };
+      document.addEventListener("pointermove", handleMove);
+      document.addEventListener("pointerup", handleUp);
+    };
+
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      spacing={1}
+      sx={{
+        borderTop: "1px solid #edf0f2",
+        height: 42,
+        minHeight: 42,
+        overflowX: "auto",
+        px: 1.2,
+      }}
+    >
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ flex: "0 0 auto", fontWeight: 600 }}
+      >
+        Paragrafo
+      </Typography>
+      <Box
+        ref={rulerRef}
+        sx={{
+          bgcolor: "#f8fafd",
+          border: "1px solid #dadce0",
+          borderRadius: 1,
+          flex: "1 0 420px",
+          height: 30,
+          maxWidth: 820,
+          minWidth: 360,
+          position: "relative",
+        }}
+      >
+        {Array.from({ length: tickCount + 1 }).map((_, index) => (
+          <Box
+            key={index}
+            sx={{
+              bgcolor: "#bdc1c6",
+              height: index % 2 === 0 ? 10 : 6,
+              left: `${(index / safeContentWidthCm) * 100}%`,
+              position: "absolute",
+              top: 0,
+              width: 1,
+            }}
+          />
+        ))}
+        <Box
+          sx={{
+            bgcolor: "rgba(26, 115, 232, 0.08)",
+            bottom: 0,
+            left: `${leftPercent}%`,
+            pointerEvents: "none",
+            position: "absolute",
+            right: `${100 - rightPercent}%`,
+            top: 12,
+          }}
+        />
+        <RulerHandle
+          disabled={props.disabled}
+          label="Recuo da primeira linha"
+          leftPercent={firstLinePercent}
+          onPointerDown={startDrag("firstLine")}
+          variant="firstLine"
+        />
+        <RulerHandle
+          disabled={props.disabled}
+          label="Margem esquerda do paragrafo"
+          leftPercent={leftPercent}
+          onPointerDown={startDrag("left")}
+          variant="left"
+        />
+        <RulerHandle
+          disabled={props.disabled}
+          label="Margem direita do paragrafo"
+          leftPercent={rightPercent}
+          onPointerDown={startDrag("right")}
+          variant="right"
+        />
+      </Box>
+      <Tooltip title="Zerar recuos do paragrafo">
+        <span>
+          <IconButton
+            disabled={props.disabled}
+            onClick={props.onReset}
+            size="small"
+            sx={{ flex: "0 0 auto" }}
+          >
+            <CloseRoundedIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </Stack>
+  );
+}
+
+function RulerHandle(props: {
+  disabled: boolean;
+  label: string;
+  leftPercent: number;
+  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  variant: "left" | "right" | "firstLine";
+}) {
+  const color = props.disabled ? "#9aa0a6" : "#1a73e8";
+  const isFirstLine = props.variant === "firstLine";
+  return (
+    <Tooltip title={props.label}>
+      <Box
+        aria-label={props.label}
+        onPointerDown={props.onPointerDown}
+        role="button"
+        sx={{
+          alignItems: "center",
+          cursor: props.disabled ? "default" : "ew-resize",
+          display: "flex",
+          height: 28,
+          justifyContent: "center",
+          left: `${props.leftPercent}%`,
+          pointerEvents: props.disabled ? "none" : "auto",
+          position: "absolute",
+          top: isFirstLine ? 0 : 8,
+          transform: "translateX(-50%)",
+          width: 20,
+          zIndex: 2,
+        }}
+        tabIndex={props.disabled ? -1 : 0}
+      >
+        <Box
+          sx={{
+            borderLeft: "6px solid transparent",
+            borderRight: "6px solid transparent",
+            borderTop: isFirstLine ? `8px solid ${color}` : "none",
+            borderBottom: isFirstLine ? "none" : `8px solid ${color}`,
+            height: 0,
+            width: 0,
+          }}
+        />
+        {!isFirstLine && (
+          <Box
+            sx={{
+              bgcolor: color,
+              borderRadius: "2px 2px 0 0",
+              height: 10,
+              mt: 1,
+              position: "absolute",
+              top: 8,
+              width: 6,
+            }}
+          />
+        )}
+      </Box>
+    </Tooltip>
+  );
+}
+
 function ToolbarButton(props: {
   title: string;
   active?: boolean;
   disabled?: boolean;
-  onClick: () => void;
+  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   children: ReactNode;
 }) {
   return (
