@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { TiptapTransformer } from '@hocuspocus/transformer';
 import {
   DocumentAssetType,
   DocumentCategory,
@@ -8,6 +9,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import * as Y from 'yjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
 import type { RbacUser } from '../rbac/rbac.types';
@@ -24,6 +26,7 @@ import {
   ROLE_COMGEP,
   ROLE_TI,
 } from '../rbac/role-access';
+import { documentEditorExtensions } from './document-editor.extensions';
 
 const INITIAL_ONLINE_DOCUMENT_CONTENT = {
   type: 'doc',
@@ -602,6 +605,7 @@ export class DocumentsService {
     const versionTitle = payload.versionTitle?.trim();
     const shouldCreateVersion =
       nextRevision === 1 || nextRevision % 10 === 0 || Boolean(versionTitle);
+    const ydocState = this.encodeOnlineDocumentYDocState(contentJson);
 
     const saved = await this.prisma.$transaction(async (tx) => {
       const onlineContent = await tx.documentOnlineContent.upsert({
@@ -611,6 +615,8 @@ export class DocumentsService {
           contentJson,
           plainText,
           pageSettingsJson,
+          ydocState,
+          ydocStateUpdatedAt: new Date(),
           savedRevision: nextRevision,
           lastSavedById: user?.id,
         },
@@ -618,6 +624,8 @@ export class DocumentsService {
           contentJson,
           plainText,
           pageSettingsJson,
+          ydocState,
+          ydocStateUpdatedAt: new Date(),
           savedRevision: nextRevision,
           lastSavedById: user?.id,
         },
@@ -1864,6 +1872,17 @@ export class DocumentsService {
     };
     walk(value);
     return chunks.join('').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  private encodeOnlineDocumentYDocState(contentJson: unknown) {
+    const ydoc = TiptapTransformer.toYdoc(
+      contentJson as any,
+      'default',
+      documentEditorExtensions as any,
+    );
+    const state = Buffer.from(Y.encodeStateAsUpdate(ydoc));
+    ydoc.destroy();
+    return state;
   }
 
   private mapDocumentWithAccess(document: any, user?: RbacUser) {

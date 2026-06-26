@@ -86,7 +86,7 @@ export class DocumentCollaborationService
         const ydoc = new Y.Doc();
         const persistedState = state.content?.ydocState;
 
-        if (persistedState) {
+        if (persistedState && this.canUsePersistedYDocState(state.content)) {
           Y.applyUpdate(ydoc, new Uint8Array(persistedState));
           return ydoc;
         }
@@ -103,6 +103,9 @@ export class DocumentCollaborationService
           context.documentId,
           Y.encodeStateAsUpdate(seeded),
           context.user,
+        );
+        this.logger.log(
+          `Estado Yjs regenerado a partir do conteudo salvo documento=${context.documentId}`,
         );
         return seeded;
       },
@@ -188,5 +191,22 @@ export class DocumentCollaborationService
       return error.message;
     }
     return String(error);
+  }
+
+  private canUsePersistedYDocState(content: {
+    ydocStateUpdatedAt?: Date | string | null;
+    updatedAt?: Date | string | null;
+  }) {
+    const ydocStateUpdatedAt = this.toTimestamp(content.ydocStateUpdatedAt);
+    if (!ydocStateUpdatedAt) return false;
+    const contentUpdatedAt = this.toTimestamp(content.updatedAt);
+    if (!contentUpdatedAt) return true;
+    return ydocStateUpdatedAt + 2_000 >= contentUpdatedAt;
+  }
+
+  private toTimestamp(value: Date | string | null | undefined) {
+    if (!value) return null;
+    const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
   }
 }
