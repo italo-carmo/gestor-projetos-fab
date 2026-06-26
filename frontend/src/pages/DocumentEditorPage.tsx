@@ -128,7 +128,7 @@ function buildCollaborationUrl() {
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return `${protocol}://${hostname}:3011`;
     }
-    return `${protocol}://${window.location.host}/document-collaboration`;
+    return `${protocol}://${window.location.host}/api/document-collaboration`;
   })();
   const baseUrl = configured ? toAbsoluteWebSocketUrl(configured) : fallback;
   const activeRoleId = localStorage.getItem(ACTIVE_ROLE_STORAGE_KEY)?.trim();

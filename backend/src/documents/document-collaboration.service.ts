@@ -49,18 +49,33 @@ export class DocumentCollaborationService
       debounce: 1_500,
       maxDebounce: 8_000,
       timeout: 30_000,
+      onConnect: async (payload) => {
+        this.logger.log(
+          `Conexao colaborativa recebida socket=${payload.socketId} documento=${payload.documentName} rota=${payload.request.url ?? ''}`,
+        );
+      },
       onAuthenticate: async (payload) => {
-        const documentId = this.parseDocumentId(payload.documentName);
-        const user = await this.authenticateUser(
-          payload.token,
-          payload.requestParameters.get('activeRoleId') ?? undefined,
-        );
-        const state = await this.documents.getOnlineDocumentCollaborationState(
-          documentId,
-          user,
-        );
-        payload.connectionConfig.readOnly = !state.canEdit;
-        return { user, documentId, canEdit: state.canEdit };
+        try {
+          const documentId = this.parseDocumentId(payload.documentName);
+          const user = await this.authenticateUser(
+            payload.token,
+            payload.requestParameters.get('activeRoleId') ?? undefined,
+          );
+          const state = await this.documents.getOnlineDocumentCollaborationState(
+            documentId,
+            user,
+          );
+          payload.connectionConfig.readOnly = !state.canEdit;
+          this.logger.log(
+            `Conexao colaborativa autenticada socket=${payload.socketId} documento=${documentId} usuario=${user.id} edicao=${state.canEdit ? 'sim' : 'nao'}`,
+          );
+          return { user, documentId, canEdit: state.canEdit };
+        } catch (error) {
+          this.logger.warn(
+            `Falha na autenticacao colaborativa socket=${payload.socketId} documento=${payload.documentName}: ${this.formatError(error)}`,
+          );
+          throw error;
+        }
       },
       onLoadDocument: async (payload) => {
         const context = this.getContext(payload.context, payload.documentName);
@@ -105,6 +120,11 @@ export class DocumentCollaborationService
             contentJson,
             user: context.user,
           },
+        );
+      },
+      onDisconnect: async (payload) => {
+        this.logger.log(
+          `Conexao colaborativa encerrada socket=${payload.socketId} documento=${payload.documentName} clientes=${payload.clientsCount}`,
         );
       },
     });
@@ -161,5 +181,12 @@ export class DocumentCollaborationService
       throw new Error(`contexto-colaborativo-invalido:${documentName}`);
     }
     return candidate as CollaborationContext;
+  }
+
+  private formatError(error: unknown) {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return String(error);
   }
 }
