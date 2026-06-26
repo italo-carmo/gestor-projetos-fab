@@ -222,12 +222,17 @@ export class MissionsService {
     const ids = await this.resolveAllowedLocalityIds(scope);
     if (ids.length === 0) {
       return {
-        items: [] as Array<{ id: string; code: string | null; name: string }>,
+        items: [] as Array<{
+          id: string;
+          code: string | null;
+          name: string;
+          uf: string | null;
+        }>,
       };
     }
     const items = await this.prisma.locality.findMany({
       where: { id: { in: ids } },
-      select: { id: true, code: true, name: true },
+      select: { id: true, code: true, name: true, uf: true },
       orderBy: { name: 'asc' },
     });
     return { items };

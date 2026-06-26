@@ -20,7 +20,14 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { throwError } from '../common/http-error';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
-import { hasPermission, ROLE_GSD_LOCALIDADE } from '../rbac/role-access';
+import {
+  hasAnyRole,
+  hasPermission,
+  ROLE_ADM_MISSOES,
+  ROLE_COMGEP,
+  ROLE_GSD_LOCALIDADE,
+  ROLE_TI,
+} from '../rbac/role-access';
 import type { RbacUser } from '../rbac/rbac.types';
 import { PrismaService } from '../prisma/prisma.service';
 import { sanitizeText } from '../common/sanitize';
@@ -35,6 +42,12 @@ import { ReplaceLocalityRecruitsMembersDto } from './dto/replace-locality-recrui
 import { UpdateLocalitiesHasCpcaBatchDto } from './dto/update-localities-has-cpca-batch.dto';
 import { UpdateLocalityRecruitsDto } from './dto/update-locality-recruits.dto';
 import { UpdateLocalityDto } from './dto/update-locality.dto';
+
+const MISSION_LOCALITY_MANAGER_ROLES = [
+  ROLE_TI,
+  ROLE_COMGEP,
+  ROLE_ADM_MISSOES,
+] as const;
 
 @Controller('localities')
 @UseGuards(JwtAuthGuard, RbacGuard)
@@ -155,8 +168,15 @@ export class LocalitiesController {
   }
 
   @Post('cipavd')
-  @RequirePermission('localities_cipavd', 'create')
-  async createCipavdLocality(@Body() dto: CreateCipavdLocalityDto) {
+  async createCipavdLocality(
+    @Body() dto: CreateCipavdLocalityDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    this.assertMissionLocalityCatalogWriteAccess(
+      user,
+      'localities_cipavd',
+      'create',
+    );
     const code = sanitizeText(dto.code).toUpperCase();
     const name = sanitizeText(dto.name);
     const uf = dto.uf ? sanitizeText(dto.uf).toUpperCase().slice(0, 2) : null;
@@ -189,11 +209,16 @@ export class LocalitiesController {
   }
 
   @Put('cipavd/:id')
-  @RequirePermission('localities_cipavd', 'update')
   async updateCipavdLocality(
     @Param('id') id: string,
     @Body() dto: UpdateCipavdLocalityDto,
+    @CurrentUser() user: RbacUser,
   ) {
+    this.assertMissionLocalityCatalogWriteAccess(
+      user,
+      'localities_cipavd',
+      'update',
+    );
     const existing = await this.prisma.locality.findFirst({
       where: { id, catalogType: LocalityCatalogType.CIPAVD },
       select: { id: true },
@@ -253,8 +278,8 @@ export class LocalitiesController {
   }
 
   @Post()
-  @RequirePermission('localities', 'create')
-  async create(@Body() dto: CreateLocalityDto) {
+  async create(@Body() dto: CreateLocalityDto, @CurrentUser() user: RbacUser) {
+    this.assertMissionLocalityCatalogWriteAccess(user, 'localities', 'create');
     const created = await this.prisma.locality.create({
       data: {
         code: sanitizeText(dto.code),
@@ -335,13 +360,15 @@ export class LocalitiesController {
   }
 
   @Put(':id')
-  @RequirePermission('localities', 'update')
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateLocalityDto,
     @CurrentUser() user: RbacUser,
   ) {
-    this.assertLocalityAccess(id, user);
+    this.assertMissionLocalityCatalogWriteAccess(user, 'localities', 'update');
+    if (!this.hasMissionLocalityManagerRole(user)) {
+      this.assertLocalityAccess(id, user);
+    }
     this.assertRecruitsMutationAccess(id, user, dto.recruitsFemaleCountCurrent);
     if (
       dto.recruitsFemaleCountCurrent !== undefined &&
@@ -1138,6 +1165,20 @@ export class LocalitiesController {
     if (user.localityId !== localityId) {
       throwError('RBAC_FORBIDDEN');
     }
+  }
+
+  private hasMissionLocalityManagerRole(user?: RbacUser) {
+    return hasAnyRole(user, [...MISSION_LOCALITY_MANAGER_ROLES]);
+  }
+
+  private assertMissionLocalityCatalogWriteAccess(
+    user: RbacUser | undefined,
+    resource: 'localities' | 'localities_cipavd',
+    action: 'create' | 'update',
+  ) {
+    if (hasPermission(user, resource, action)) return;
+    if (this.hasMissionLocalityManagerRole(user)) return;
+    throwError('RBAC_FORBIDDEN');
   }
 
   private assertRecruitsMutationAccess(

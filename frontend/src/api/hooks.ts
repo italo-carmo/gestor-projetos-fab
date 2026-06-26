@@ -4576,6 +4576,7 @@ export function useUpdateLocality() {
       (await api.put(`/localities/${args.id}`, args.payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ["missions", "locality-options"] });
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
@@ -4640,6 +4641,7 @@ export function useCreateLocality() {
       (await api.post("/localities", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.localities });
+      qc.invalidateQueries({ queryKey: ["missions", "locality-options"] });
       qc.invalidateQueries({ queryKey: ["dashboardRecruits"] });
       qc.invalidateQueries({ queryKey: ["dashboardNational"] });
       qc.invalidateQueries({ queryKey: ["dashboardExecutive"] });
@@ -4702,11 +4704,12 @@ export function useDeleteOm() {
 export function useCreateCipavdLocality() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { code: string; name: string }) =>
+    mutationFn: async (payload: { code: string; name: string; uf?: string | null }) =>
       (await api.post("/localities/cipavd", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.cipavdLocalities });
       qc.invalidateQueries({ queryKey: qk.cipavdLocalitiesCatalog });
+      qc.invalidateQueries({ queryKey: ["missions", "locality-options"] });
       qc.invalidateQueries({ queryKey: ["activities"] });
     },
   });
@@ -4717,11 +4720,12 @@ export function useUpdateCipavdLocality() {
   return useMutation({
     mutationFn: async (args: {
       id: string;
-      payload: { code?: string; name?: string };
+      payload: { code?: string; name?: string; uf?: string | null };
     }) => (await api.put(`/localities/cipavd/${args.id}`, args.payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.cipavdLocalities });
       qc.invalidateQueries({ queryKey: qk.cipavdLocalitiesCatalog });
+      qc.invalidateQueries({ queryKey: ["missions", "locality-options"] });
       qc.invalidateQueries({ queryKey: ["activities"] });
     },
   });

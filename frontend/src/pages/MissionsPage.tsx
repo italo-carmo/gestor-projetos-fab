@@ -60,6 +60,8 @@ import {
   useActivityTypes,
   useAddMissionParticipantFromLdap,
   useAddMissionParticipantFromUser,
+  useCreateCipavdLocality,
+  useCreateLocality,
   useCreateMission,
   useCreateMissionBanner,
   useCreateMissionScheduleItem,
@@ -82,6 +84,8 @@ import {
   useUpdateMissionBanner,
   useUpdateMission,
   useUpdateMissionScheduleItem,
+  useUpdateCipavdLocality,
+  useUpdateLocality,
   useDeleteMissionReportSignature,
   useSpecialties,
   useSignMissionReport,
@@ -97,7 +101,7 @@ import {
   MISSIONS_STATS_SECTION_DEFAULTS,
   persistMissionsPageUiSettings,
 } from '../app/missionsPageUiSettings';
-import { hasAnyRole, ROLE_ADM_MISSOES, ROLE_TI } from '../app/roleAccess';
+import { hasAnyRole, ROLE_ADM_MISSOES, ROLE_COMGEP, ROLE_TI } from '../app/roleAccess';
 import { toMilitaryDisplayName } from '../app/militaryName';
 import { useToast } from '../app/toast';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
@@ -116,7 +120,33 @@ import {
   getMissionScheduleItemLinkedActivities,
   type MissionScheduleFieldActivityDraft,
 } from '../features/missionFieldActivities';
+import { getTargetLocalityKey } from '../constants/localities';
 type MissionScope = 'SMIF' | 'CIPAVD';
+
+type MissionLocalityRow = {
+  id: string;
+  code: string;
+  name: string;
+  uf: string;
+};
+
+type MissionLocalityForm = {
+  code: string;
+  name: string;
+  uf: string;
+};
+
+const blankMissionLocalityForm: MissionLocalityForm = {
+  code: '',
+  name: '',
+  uf: '',
+};
+
+const UF_OPTIONS = [
+  'AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS',
+  'MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC',
+  'SP','SE','TO',
+];
 
 function resolveChecklistPhotoUrl(raw: string) {
   const url = String(raw ?? '').trim();
@@ -925,6 +955,11 @@ export function MissionsPage() {
   const { data: me } = useMe();
   const isTiProfile = hasAnyRole(me, [ROLE_TI]);
   const isAdmMissionsProfile = hasAnyRole(me, [ROLE_ADM_MISSOES]);
+  const canManageMissionLocalities = hasAnyRole(me, [
+    ROLE_TI,
+    ROLE_COMGEP,
+    ROLE_ADM_MISSOES,
+  ]);
   const canCreateMissions = can(me, 'missions', 'create');
   const canUpdateMissions = can(me, 'missions', 'update');
   const canDeleteMissions = can(me, 'missions', 'delete');
@@ -948,6 +983,10 @@ export function MissionsPage() {
   const createMission = useCreateMission();
   const updateMission = useUpdateMission();
   const deleteMission = useDeleteMission();
+  const createSmifLocality = useCreateLocality();
+  const updateSmifLocality = useUpdateLocality();
+  const createCipavdLocality = useCreateCipavdLocality();
+  const updateCipavdLocality = useUpdateCipavdLocality();
   const addParticipantLdap = useAddMissionParticipantFromLdap();
   const addParticipantUser = useAddMissionParticipantFromUser();
   const removeParticipant = useRemoveMissionParticipant();
@@ -971,6 +1010,10 @@ export function MissionsPage() {
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [missionTab, setMissionTab] = useState(0);
   const [missionForm, setMissionForm] = useState(blankMissionForm);
+  const [localityDrawerOpen, setLocalityDrawerOpen] = useState(false);
+  const [localityFormOpen, setLocalityFormOpen] = useState(false);
+  const [editingLocality, setEditingLocality] = useState<MissionLocalityRow | null>(null);
+  const [localityForm, setLocalityForm] = useState<MissionLocalityForm>(blankMissionLocalityForm);
   const [ldapIdentifier, setLdapIdentifier] = useState('');
   const [participantTab, setParticipantTab] = useState(0);
   const [userSearch, setUserSearch] = useState('');
@@ -1034,19 +1077,31 @@ export function MissionsPage() {
 
   const lookupQuery = useLookupMissionLdapParticipant(ldapIdentifier);
 
-  const localityOptions = useMemo(() => {
+  const missionLocalityRows = useMemo((): MissionLocalityRow[] => {
     const rows = (localityOptionsQuery.data?.items ?? []) as Array<{
       id: string;
       code?: string | null;
       name: string;
+      uf?: string | null;
     }>;
     return rows
       .map((row) => ({
         id: String(row.id),
-        name: row.code ? `${row.name} (${row.code})` : String(row.name),
+        code: String(row.code ?? ''),
+        name: String(row.name ?? ''),
+        uf: String(row.uf ?? ''),
       }))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
   }, [localityOptionsQuery.data?.items]);
+
+  const localityOptions = useMemo(
+    () =>
+      missionLocalityRows.map((row) => ({
+        id: row.id,
+        name: row.code ? `${row.name} (${row.code})` : row.name,
+      })),
+    [missionLocalityRows],
+  );
 
   const checklistOmOptions = useMemo(() => {
     if (missionScope === 'CIPAVD') {
@@ -1593,6 +1648,114 @@ export function MissionsPage() {
     const next = new URLSearchParams(params);
     next.delete('missionId');
     setParams(next, { replace: true });
+  };
+
+  const openLocalityManager = () => {
+    if (!canManageMissionLocalities) return;
+    setEditingLocality(null);
+    setLocalityForm(blankMissionLocalityForm);
+    setLocalityFormOpen(true);
+    setLocalityDrawerOpen(true);
+  };
+
+  const openCreateLocalityForm = () => {
+    setEditingLocality(null);
+    setLocalityForm(blankMissionLocalityForm);
+    setLocalityFormOpen(true);
+  };
+
+  const openEditLocalityForm = (locality: MissionLocalityRow) => {
+    setEditingLocality(locality);
+    setLocalityForm({
+      code: locality.code,
+      name: locality.name,
+      uf: locality.uf,
+    });
+    setLocalityFormOpen(true);
+  };
+
+  const closeLocalityForm = () => {
+    setEditingLocality(null);
+    setLocalityForm(blankMissionLocalityForm);
+    setLocalityFormOpen(false);
+  };
+
+  const handleSaveLocality = async () => {
+    if (!canManageMissionLocalities) return;
+
+    const payload = {
+      code: localityForm.code.trim().toUpperCase(),
+      name: localityForm.name.trim(),
+      uf: localityForm.uf.trim().toUpperCase() || null,
+    };
+
+    if (!payload.code || !payload.name) {
+      toast.push({ message: 'Informe sigla e nome da localidade.', severity: 'warning' });
+      return;
+    }
+
+    if (missionScope === 'SMIF' && !getTargetLocalityKey(payload.name)) {
+      toast.push({
+        message:
+          'Nome inválido para localidade SMIF. Use uma das localidades alvo: Brasília, Canoas, Guaratinguetá, Lagoa Santa, Manaus, Pirassununga, Rio de Janeiro ou São Paulo.',
+        severity: 'warning',
+      });
+      return;
+    }
+
+    const duplicatedCode = missionLocalityRows.find((locality) => {
+      if (String(locality.id) === String(editingLocality?.id ?? '')) return false;
+      return String(locality.code ?? '').trim().toUpperCase() === payload.code;
+    });
+    if (duplicatedCode) {
+      toast.push({
+        message: `A sigla ${payload.code} já está em uso por ${duplicatedCode.name}. Use uma sigla diferente.`,
+        severity: 'warning',
+      });
+      return;
+    }
+
+    try {
+      const saved =
+        missionScope === 'CIPAVD'
+          ? editingLocality
+            ? await updateCipavdLocality.mutateAsync({
+                id: editingLocality.id,
+                payload,
+              })
+            : await createCipavdLocality.mutateAsync(payload)
+          : editingLocality
+            ? await updateSmifLocality.mutateAsync({
+                id: editingLocality.id,
+                payload,
+              })
+            : await createSmifLocality.mutateAsync(payload);
+
+      await localityOptionsQuery.refetch();
+
+      const savedId = String(saved?.id ?? '').trim();
+      if (savedId && !editingLocality) {
+        setMissionForm((current) => ({
+          ...current,
+          localityId: savedId,
+        }));
+      }
+
+      toast.push({
+        message: editingLocality
+          ? `Localidade ${missionScope} atualizada.`
+          : `Localidade ${missionScope} criada.`,
+        severity: 'success',
+      });
+      closeLocalityForm();
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ??
+          `Erro ao salvar localidade ${missionScope}.`,
+        severity: 'error',
+      });
+    }
   };
 
   const handleSaveMission = async () => {
@@ -2417,6 +2580,11 @@ export function MissionsPage() {
     missionScope === 'CIPAVD'
       ? 'Planejamento de missões da frente CIPAVD: equipe, cronograma com PDF e mapeamento institucional alinhado ao catálogo CIPAVD.'
       : 'Planejamento das missões SMIF de instrução e acompanhamento, com participantes via LDAP, cronograma oficial e exportação em PDF.';
+  const isSavingLocality =
+    createSmifLocality.isPending ||
+    updateSmifLocality.isPending ||
+    createCipavdLocality.isPending ||
+    updateCipavdLocality.isPending;
 
   const handleScopeTabChange = (_event: unknown, value: MissionScope) => {
     const next = new URLSearchParams(params);
@@ -2440,11 +2608,18 @@ export function MissionsPage() {
             {scopeSubtitle}
           </Typography>
         </Box>
-        {canCreateMissions ? (
-          <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={openCreate}>
-            Nova missão
-          </Button>
-        ) : null}
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+          {canManageMissionLocalities ? (
+            <Button variant="outlined" startIcon={<AddRoundedIcon />} onClick={openLocalityManager}>
+              Localidades {scopeLabel}
+            </Button>
+          ) : null}
+          {canCreateMissions ? (
+            <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={openCreate}>
+              Nova missão
+            </Button>
+          ) : null}
+        </Stack>
       </Stack>
 
       <Tabs value={missionScope} onChange={handleScopeTabChange} sx={{ mb: 2 }}>
@@ -2885,6 +3060,175 @@ export function MissionsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Drawer
+        anchor="right"
+        open={localityDrawerOpen}
+        onClose={() => setLocalityDrawerOpen(false)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 540 } } }}
+      >
+        <Box p={3} display="flex" flexDirection="column" gap={2}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h6" fontWeight={700}>
+                Localidades {scopeLabel}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Cadastre e edite localidades usadas nas missões {scopeLabel}.
+              </Typography>
+            </Box>
+            <Button onClick={() => setLocalityDrawerOpen(false)}>Fechar</Button>
+          </Stack>
+
+          {localityOptionsQuery.isFetching ? <LinearProgress /> : null}
+
+          {localityFormOpen ? (
+            <Card variant="outlined">
+              <CardContent>
+                <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+                  {editingLocality
+                    ? `Editar localidade ${scopeLabel}`
+                    : `Nova localidade ${scopeLabel}`}
+                </Typography>
+                <Stack spacing={1.2}>
+                  <TextField
+                    size="small"
+                    label="Sigla"
+                    value={localityForm.code}
+                    onChange={(event) =>
+                      setLocalityForm({
+                        ...localityForm,
+                        code: event.target.value.toUpperCase(),
+                      })
+                    }
+                    placeholder={missionScope === 'CIPAVD' ? 'Ex: CIPA01' : 'Ex: BASV'}
+                    fullWidth
+                  />
+                  <TextField
+                    size="small"
+                    label="Nome da localidade"
+                    value={localityForm.name}
+                    onChange={(event) =>
+                      setLocalityForm({ ...localityForm, name: event.target.value })
+                    }
+                    placeholder={
+                      missionScope === 'CIPAVD'
+                        ? 'Ex: Base Operacional 01'
+                        : 'Ex: Brasília-DF'
+                    }
+                    fullWidth
+                  />
+                  <TextField
+                    size="small"
+                    select
+                    label="UF (Estado)"
+                    value={localityForm.uf}
+                    onChange={(event) =>
+                      setLocalityForm({
+                        ...localityForm,
+                        uf: event.target.value.toUpperCase(),
+                      })
+                    }
+                    helperText="Sigla do estado usada nos painéis e filtros."
+                    fullWidth
+                  >
+                    <MenuItem value="">
+                      <em>Nenhum</em>
+                    </MenuItem>
+                    {UF_OPTIONS.map((uf) => (
+                      <MenuItem key={uf} value={uf}>
+                        {uf}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                    <Button variant="outlined" onClick={closeLocalityForm}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={handleSaveLocality}
+                      disabled={isSavingLocality}
+                    >
+                      Salvar
+                    </Button>
+                  </Stack>
+                </Stack>
+              </CardContent>
+            </Card>
+          ) : (
+            <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={openCreateLocalityForm}>
+              Nova localidade {scopeLabel}
+            </Button>
+          )}
+
+          <Card variant="outlined">
+            <CardContent>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                spacing={1}
+                sx={{ mb: 1.5 }}
+              >
+                <Typography variant="subtitle1" fontWeight={700}>
+                  Localidades cadastradas
+                </Typography>
+                {localityFormOpen ? (
+                  <Button size="small" onClick={openCreateLocalityForm}>
+                    Nova
+                  </Button>
+                ) : null}
+              </Stack>
+              {missionLocalityRows.length === 0 ? (
+                <EmptyState
+                  title={`Nenhuma localidade ${scopeLabel}`}
+                  description={`Crie uma localidade ${scopeLabel} para usar nas missões.`}
+                />
+              ) : (
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Table size="small" sx={{ minWidth: 460 }}>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: 'primary.main' }}>
+                        <TableCell sx={{ color: '#fff', fontWeight: 700, width: 110 }}>
+                          Sigla
+                        </TableCell>
+                        <TableCell sx={{ color: '#fff', fontWeight: 700 }}>
+                          Localidade
+                        </TableCell>
+                        <TableCell sx={{ color: '#fff', fontWeight: 700, width: 70 }}>
+                          UF
+                        </TableCell>
+                        <TableCell
+                          sx={{ color: '#fff', fontWeight: 700, width: 90 }}
+                          align="right"
+                        >
+                          Ações
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {missionLocalityRows.map((locality) => (
+                        <TableRow key={locality.id} hover>
+                          <TableCell>{locality.code || '-'}</TableCell>
+                          <TableCell>{locality.name}</TableCell>
+                          <TableCell>{locality.uf || '-'}</TableCell>
+                          <TableCell align="right">
+                            <Button size="small" onClick={() => openEditLocalityForm(locality)}>
+                              Editar
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
+      </Drawer>
 
       <Drawer
         anchor="right"
