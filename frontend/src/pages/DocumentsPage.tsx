@@ -42,6 +42,7 @@ import {
   useCreateOnlineDocument,
   useCreateDocumentLink,
   useDeleteDocument,
+  useDeleteDocuments,
   useDeleteDocumentLink,
   useDeleteDocumentSubcategory,
   useDocumentContent,
@@ -230,6 +231,7 @@ export function DocumentsPage() {
   const [moveDocIds, setMoveDocIds] = useState<string[]>([]);
   const [folderDeleteTarget, setFolderDeleteTarget] = useState<DocumentSubcategory | null>(null);
   const [documentDeleteTarget, setDocumentDeleteTarget] = useState<DocumentRow | null>(null);
+  const [bulkDeleteTargets, setBulkDeleteTargets] = useState<DocumentRow[]>([]);
   const [deletionHistoryOpen, setDeletionHistoryOpen] = useState(false);
   const [moveForm, setMoveForm] = useState({
     category: '',
@@ -269,6 +271,7 @@ export function DocumentsPage() {
   const deleteSubcategory = useDeleteDocumentSubcategory();
   const createOnlineDocument = useCreateOnlineDocument();
   const deleteDocument = useDeleteDocument();
+  const deleteDocuments = useDeleteDocuments();
   const createDocumentLink = useCreateDocumentLink();
   const updateDocumentLink = useUpdateDocumentLink();
   const deleteDocumentLink = useDeleteDocumentLink();
@@ -385,20 +388,28 @@ export function DocumentsPage() {
     return items.filter((doc) => doc.category === category && !doc.subcategoryId);
   }, [category, currentFolderId, hasValidCategory, items]);
 
-  const editableDocumentsInCurrentFolderIds = useMemo(
-    () => documentsInCurrentFolder.filter((doc) => doc.canEdit).map((doc) => doc.id),
-    [documentsInCurrentFolder],
+  const selectableDocumentsInCurrentFolderIds = useMemo(
+    () => documentsInCurrentFolder.filter((doc) => doc.canEdit || canDeleteDocument).map((doc) => doc.id),
+    [canDeleteDocument, documentsInCurrentFolder],
   );
   const selectedDocumentsInCurrentFolder = useMemo(
-    () => documentsInCurrentFolder.filter((doc) => selectedDocIds.includes(doc.id) && doc.canEdit),
-    [documentsInCurrentFolder, selectedDocIds],
+    () => documentsInCurrentFolder.filter((doc) => selectedDocIds.includes(doc.id) && (doc.canEdit || canDeleteDocument)),
+    [canDeleteDocument, documentsInCurrentFolder, selectedDocIds],
+  );
+  const selectedEditableDocumentsInCurrentFolder = useMemo(
+    () => selectedDocumentsInCurrentFolder.filter((doc) => doc.canEdit),
+    [selectedDocumentsInCurrentFolder],
+  );
+  const selectedDeletableDocumentsInCurrentFolder = useMemo(
+    () => (canDeleteDocument ? selectedDocumentsInCurrentFolder : []),
+    [canDeleteDocument, selectedDocumentsInCurrentFolder],
   );
   const allCurrentFolderSelected =
-    editableDocumentsInCurrentFolderIds.length > 0 &&
-    selectedDocumentsInCurrentFolder.length === editableDocumentsInCurrentFolderIds.length;
+    selectableDocumentsInCurrentFolderIds.length > 0 &&
+    selectedDocumentsInCurrentFolder.length === selectableDocumentsInCurrentFolderIds.length;
   const someCurrentFolderSelected =
     selectedDocumentsInCurrentFolder.length > 0 &&
-    selectedDocumentsInCurrentFolder.length < editableDocumentsInCurrentFolderIds.length;
+    selectedDocumentsInCurrentFolder.length < selectableDocumentsInCurrentFolderIds.length;
   const titleCountInCurrentFolder = useMemo(() => {
     const map = new Map<string, number>();
     for (const doc of documentsInCurrentFolder) {
@@ -500,12 +511,12 @@ export function DocumentsPage() {
   };
 
   const openMoveSelectedDialog = () => {
-    if (selectedDocumentsInCurrentFolder.length === 0) {
+    if (selectedEditableDocumentsInCurrentFolder.length === 0) {
       toast.push({ message: 'Selecione ao menos um documento para mover.', severity: 'warning' });
       return;
     }
-    const first = selectedDocumentsInCurrentFolder[0];
-    setMoveDocIds(selectedDocumentsInCurrentFolder.map((doc) => doc.id));
+    const first = selectedEditableDocumentsInCurrentFolder[0];
+    setMoveDocIds(selectedEditableDocumentsInCurrentFolder.map((doc) => doc.id));
     setMoveForm({
       category: first.category,
       subcategoryId: first.subcategoryId ?? '',
@@ -546,18 +557,18 @@ export function DocumentsPage() {
   };
 
   const toggleDocumentSelection = (docId: string) => {
-    if (!editableDocumentsInCurrentFolderIds.includes(docId)) return;
+    if (!selectableDocumentsInCurrentFolderIds.includes(docId)) return;
     setSelectedDocIds((prev) => (prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]));
   };
 
   const toggleSelectAllInCurrentFolder = () => {
     if (allCurrentFolderSelected) {
-      setSelectedDocIds((prev) => prev.filter((id) => !editableDocumentsInCurrentFolderIds.includes(id)));
+      setSelectedDocIds((prev) => prev.filter((id) => !selectableDocumentsInCurrentFolderIds.includes(id)));
       return;
     }
     setSelectedDocIds((prev) => {
       const next = new Set(prev);
-      for (const id of editableDocumentsInCurrentFolderIds) {
+      for (const id of selectableDocumentsInCurrentFolderIds) {
         next.add(id);
       }
       return Array.from(next);
@@ -740,6 +751,37 @@ export function DocumentsPage() {
     }
   };
 
+  const openBulkDeleteDialog = () => {
+    if (selectedDeletableDocumentsInCurrentFolder.length === 0) {
+      toast.push({ message: 'Selecione ao menos um documento para excluir.', severity: 'warning' });
+      return;
+    }
+    setBulkDeleteTargets(selectedDeletableDocumentsInCurrentFolder);
+  };
+
+  const handleConfirmBulkDeleteDocuments = async () => {
+    if (bulkDeleteTargets.length === 0) return;
+    const ids = bulkDeleteTargets.map((doc) => doc.id);
+    const deletedIds = new Set(ids);
+
+    try {
+      await deleteDocuments.mutateAsync(ids);
+      setBulkDeleteTargets([]);
+      setSelectedDocIds((prev) => prev.filter((id) => !deletedIds.has(id)));
+      if (selectedId && deletedIds.has(selectedId)) {
+        setSelectedId(null);
+        setDrawerOpen(false);
+      }
+      toast.push({
+        message: `${ids.length} documento(s) excluido(s) com sucesso.`,
+        severity: 'success',
+      });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao excluir documentos.', severity: 'error' });
+    }
+  };
+
   const selectedPathLabel =
     !category
       ? ''
@@ -763,87 +805,37 @@ export function DocumentsPage() {
 
   return (
     <Box>
-      <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" gap={1} mb={1}>
-        <Box>
-          <Typography variant="h4" fontWeight={700}>
-            Impacto Positivo
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Estrutura em pastas e subpastas (multi-nivel), com navegacao tipo drive e vinculos detalhados por arquivo.
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Button
-            variant="outlined"
-            startIcon={<HistoryRoundedIcon />}
-            onClick={() => setDeletionHistoryOpen(true)}
-          >
-            Histórico de exclusões
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddRoundedIcon />}
-            onClick={openCreateOnlineDialog}
-            disabled={!canCreateDocument}
-          >
-            Novo documento
-          </Button>
-          <Button
-            variant="text"
-            onClick={() => {
-              setQ('');
-              setCategory('');
-              setCurrentFolderId('');
-              setLocalityId('');
-            }}
-          >
-            Limpar filtros
-          </Button>
-        </Stack>
+      <Stack direction="row" justifyContent="flex-end" gap={1} mb={1} flexWrap="wrap" useFlexGap>
+        <Button
+          variant="outlined"
+          startIcon={<HistoryRoundedIcon />}
+          onClick={() => setDeletionHistoryOpen(true)}
+        >
+          Histórico de exclusões
+        </Button>
+        <Button
+          variant="contained"
+          startIcon={<AddRoundedIcon />}
+          onClick={openCreateOnlineDialog}
+          disabled={!canCreateDocument}
+        >
+          Novo documento
+        </Button>
+        <Button
+          variant="text"
+          onClick={() => {
+            setQ('');
+            setCategory('');
+            setCurrentFolderId('');
+            setLocalityId('');
+          }}
+        >
+          Limpar filtros
+        </Button>
       </Stack>
 
       <Card sx={{ mb: 2 }}>
         <CardContent>
-          <Grid container spacing={1.4} sx={{ mb: 1.8 }}>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <Typography variant="caption" color="text.secondary">
-                Documentos
-              </Typography>
-              <Typography variant="h5">{coverage?.totalDocuments ?? '—'}</Typography>
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <Typography variant="caption" color="text.secondary">
-                Com vinculo operacional
-              </Typography>
-              <Typography variant="h5">{coverage?.linkedDocuments ?? '—'}</Typography>
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <Typography variant="caption" color="text.secondary">
-                Sem vinculo
-              </Typography>
-              <Typography variant="h5">{coverage?.documentsWithoutLinks ?? '—'}</Typography>
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <Typography variant="caption" color="text.secondary">
-                Extracao de conteudo
-              </Typography>
-              <Stack direction="row" spacing={0.7} flexWrap="wrap" useFlexGap>
-                {(coverage?.parseStatus ?? []).map((row) => (
-                  <Chip
-                    key={row.parseStatus}
-                    size="small"
-                    variant="outlined"
-                    label={`${PARSE_STATUS_LABEL[row.parseStatus] ?? row.parseStatus}: ${row.count}`}
-                  />
-                ))}
-              </Stack>
-            </Grid>
-          </Grid>
-
-          <Alert severity="info" sx={{ mb: 1.5 }}>
-            Extracao de conteudo e a tentativa automatica de ler texto do arquivo para facilitar busca e vinculacao.
-          </Alert>
-
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.2}>
             <TextField
               size="small"
@@ -894,7 +886,7 @@ export function DocumentsPage() {
                   setCurrentFolderId('');
                 }}
               >
-                Impacto Positivo
+                Acervo de documentos
               </Link>
               {category && (
                 <Link
@@ -1084,7 +1076,7 @@ export function DocumentsPage() {
         <CardContent>
           <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" mb={1.2}>
             <Typography variant="subtitle1" fontWeight={700}>
-              {category ? `Arquivos em ${selectedPathLabel}` : 'Selecione uma categoria para navegar em Impacto Positivo'}
+              {category ? `Arquivos em ${selectedPathLabel}` : 'Acervo de documentos'}
             </Typography>
             {!category && (
               <Typography variant="caption" color="text.secondary">
@@ -1098,16 +1090,25 @@ export function DocumentsPage() {
               <Typography variant="caption" color="text.secondary">
                 {selectedDocumentsInCurrentFolder.length > 0
                   ? `${selectedDocumentsInCurrentFolder.length} selecionado(s)`
-                  : 'Selecione documentos para mover em lote'}
+                  : 'Selecione documentos para mover ou excluir em lote'}
               </Typography>
               <Stack direction="row" spacing={1}>
                 <Button
                   size="small"
                   variant="outlined"
                   onClick={openMoveSelectedDialog}
-                  disabled={selectedDocumentsInCurrentFolder.length === 0}
+                  disabled={selectedEditableDocumentsInCurrentFolder.length === 0}
                 >
                   Mover selecionados
+                </Button>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  onClick={openBulkDeleteDialog}
+                  disabled={selectedDeletableDocumentsInCurrentFolder.length === 0 || deleteDocuments.isPending}
+                >
+                  Excluir selecionados
                 </Button>
                 <Button
                   size="small"
@@ -1154,7 +1155,7 @@ export function DocumentsPage() {
                       checked={allCurrentFolderSelected}
                       indeterminate={someCurrentFolderSelected}
                       onChange={toggleSelectAllInCurrentFolder}
-                      disabled={editableDocumentsInCurrentFolderIds.length === 0}
+                      disabled={selectableDocumentsInCurrentFolderIds.length === 0}
                       sx={{ color: 'white', '&.Mui-checked': { color: 'white' }, '&.MuiCheckbox-indeterminate': { color: 'white' } }}
                       inputProps={{ 'aria-label': 'Selecionar todos os documentos da pasta' }}
                     />
@@ -1178,7 +1179,7 @@ export function DocumentsPage() {
                         checked={selectedDocIds.includes(doc.id)}
                         onClick={(event) => event.stopPropagation()}
                         onChange={() => toggleDocumentSelection(doc.id)}
-                        disabled={!doc.canEdit}
+                        disabled={!doc.canEdit && !canDeleteDocument}
                         inputProps={{ 'aria-label': `Selecionar ${doc.title}` }}
                       />
                     </TableCell>
@@ -1893,6 +1894,25 @@ export function DocumentsPage() {
         confirmLabel="Excluir documento"
         severity="error"
         confirmLoading={deleteDocument.isPending}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteTargets.length > 0}
+        onCancel={() => setBulkDeleteTargets([])}
+        onConfirm={() => {
+          void handleConfirmBulkDeleteDocuments();
+        }}
+        title="Excluir documentos selecionados"
+        message={`Excluir ${bulkDeleteTargets.length} documento(s) selecionado(s) do Acervo de Documentos?`}
+        highlightText={
+          bulkDeleteTargets.length === 1
+            ? bulkDeleteTargets[0]?.title ?? ''
+            : `${bulkDeleteTargets.length} documentos`
+        }
+        note="Cada exclusão ficará registrada no histórico com usuário e data. Os documentos não aparecerão mais nas listas, busca, download ou editor."
+        confirmLabel="Excluir documentos"
+        severity="error"
+        confirmLoading={deleteDocuments.isPending}
       />
 
       <ConfirmDialog

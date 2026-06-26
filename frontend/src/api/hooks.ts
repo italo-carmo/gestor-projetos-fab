@@ -5098,6 +5098,24 @@ export function useDeleteDocument() {
   });
 }
 
+export function useDeleteDocuments() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+      await Promise.all(uniqueIds.map((id) => api.delete(`/documents/${id}`)));
+      return { success: true, deletedCount: uniqueIds.length };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: qk.documentCoverage });
+      qc.invalidateQueries({ queryKey: qk.documentDeletionHistory });
+      qc.invalidateQueries({ queryKey: ["search"] });
+      qc.invalidateQueries({ queryKey: ["cipavdReports"] });
+    },
+  });
+}
+
 export function useCreateDocumentSubcategory() {
   const qc = useQueryClient();
   return useMutation({
