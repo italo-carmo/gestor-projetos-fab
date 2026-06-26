@@ -750,7 +750,7 @@ function DocumentEditor(props: {
     if (saveStatus === "error") return "Erro ao salvar";
     if (httpFallback) {
       return lastSavedAt
-        ? `Salvo ${formatDate(lastSavedAt)} (tempo real indisponivel)`
+        ? `Salvo ${formatDate(lastSavedAt)}`
         : "Modo sem tempo real";
     }
     if (collaborationStatus === "auth-error")
