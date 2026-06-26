@@ -116,11 +116,21 @@ function buildCollaborationUrl() {
   const configured = (
     import.meta.env.VITE_DOCUMENT_COLLAB_URL as string | undefined
   )?.trim();
-  const fallback =
-    typeof window === "undefined"
-      ? "ws://localhost:3011"
-      : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:3011`;
-  const baseUrl = configured || fallback;
+  const toAbsoluteWebSocketUrl = (value: string) => {
+    if (typeof window === "undefined" || !value.startsWith("/")) return value;
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    return `${protocol}://${window.location.host}${value}`;
+  };
+  const fallback = (() => {
+    if (typeof window === "undefined") return "ws://localhost:3011";
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return `${protocol}://${hostname}:3011`;
+    }
+    return `${protocol}://${window.location.host}/document-collaboration`;
+  })();
+  const baseUrl = configured ? toAbsoluteWebSocketUrl(configured) : fallback;
   const activeRoleId = localStorage.getItem(ACTIVE_ROLE_STORAGE_KEY)?.trim();
   if (!activeRoleId) return baseUrl;
   const separator = baseUrl.includes("?") ? "&" : "?";
