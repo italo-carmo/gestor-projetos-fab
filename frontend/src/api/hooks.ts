@@ -4964,6 +4964,36 @@ export function useOnlineDocumentVersions(id: string) {
   });
 }
 
+export function useOnlineDocumentPresence(id: string, enabled = true) {
+  return useQuery({
+    queryKey: qk.onlineDocumentPresence(id),
+    queryFn: async () => (await api.get(`/documents/${id}/editor/presence`)).data,
+    enabled: Boolean(id) && enabled,
+    refetchInterval: enabled ? 5_000 : false,
+    staleTime: 3_000,
+  });
+}
+
+export function useTouchOnlineDocumentPresence() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: {
+        sessionId: string;
+        color?: string | null;
+      };
+    }) =>
+      (await api.put(`/documents/${args.id}/editor/presence`, args.payload))
+        .data,
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({
+        queryKey: qk.onlineDocumentPresence(variables.id),
+      });
+    },
+  });
+}
+
 export function useDocumentLinks(filters: {
   documentId?: string;
   entityType?: string;

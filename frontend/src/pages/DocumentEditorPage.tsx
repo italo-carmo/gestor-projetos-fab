@@ -58,8 +58,10 @@ import { useParams } from "react-router-dom";
 import {
   useMe,
   useOnlineDocument,
+  useOnlineDocumentPresence,
   useOnlineDocumentVersions,
   useSaveOnlineDocument,
+  useTouchOnlineDocumentPresence,
 } from "../api/hooks";
 import { ACTIVE_ROLE_STORAGE_KEY } from "../api/client";
 import { EmptyState } from "../components/states/EmptyState";
@@ -97,7 +99,15 @@ type CollaborationUser = {
 };
 
 type PresenceUser = CollaborationUser & {
-  clientId: number;
+  clientId: number | string;
+};
+
+type HttpPresenceItem = {
+  userId?: string;
+  name?: string;
+  email?: string | null;
+  color?: string | null;
+  isCurrentUser?: boolean;
 };
 
 const COLLABORATION_DOCUMENT_PREFIX = "online-document.";
@@ -188,6 +198,21 @@ function readPresenceUsers(provider: HocuspocusProvider): PresenceUser[] {
   }
 
   return users;
+}
+
+function presenceSessionId(documentId: string) {
+  const key = `document-editor-presence:${documentId}`;
+  try {
+    const existing = window.sessionStorage.getItem(key)?.trim();
+    if (existing) return existing;
+    const next =
+      window.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.sessionStorage.setItem(key, next);
+    return next;
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
 }
 
 const FontSize = Extension.create({
@@ -333,6 +358,8 @@ function DocumentEditor(props: {
   const meQuery = useMe();
   const saveDocument = useSaveOnlineDocument();
   const versionsQuery = useOnlineDocumentVersions(documentId);
+  const presenceQuery = useOnlineDocumentPresence(documentId);
+  const touchPresence = useTouchOnlineDocumentPresence();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [marginsOpen, setMarginsOpen] = useState(false);
   const [toolbarVersion, setToolbarVersion] = useState(0);
@@ -365,6 +392,10 @@ function DocumentEditor(props: {
     [initialPayload.content?.contentJson],
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const presenceSessionIdValue = useMemo(
+    () => presenceSessionId(documentId),
+    [documentId],
+  );
   const canEdit = Boolean(initialPayload.document.canEdit);
   const localUser = useMemo<CollaborationUser>(() => {
     const source = meQuery.data as
@@ -482,10 +513,13 @@ function DocumentEditor(props: {
 
     return extensions;
   }, [httpFallback, localUser, provider, ydoc]);
+  const editorContentReady =
+    httpFallback || collaborationStatus === "synced";
+  const editorReadyToEdit = canEdit && editorContentReady;
 
   const editor = useEditor(
     {
-      editable: canEdit && httpFallback,
+      editable: editorReadyToEdit,
       content: httpFallback ? initialEditorContent : undefined,
       extensions: editorExtensions,
       editorProps: {
@@ -504,8 +538,6 @@ function DocumentEditor(props: {
     },
     [documentId, canEdit, httpFallback, editorExtensions],
   );
-  const editorReadyToEdit =
-    canEdit && (httpFallback || collaborationStatus === "synced");
 
   useEffect(() => {
     editor?.setEditable(editorReadyToEdit);
@@ -516,6 +548,33 @@ function DocumentEditor(props: {
     provider.setAwarenessField("user", localUser);
     editor?.commands.updateUser(localUser);
   }, [editor, httpFallback, localUser, provider]);
+
+  useEffect(() => {
+    const sendPresence = () => {
+      touchPresence.mutate({
+        id: documentId,
+        payload: {
+          sessionId: presenceSessionIdValue,
+          color: localUser.color,
+        },
+      });
+    };
+    sendPresence();
+    const interval = window.setInterval(sendPresence, 10_000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") sendPresence();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [
+    documentId,
+    localUser.color,
+    presenceSessionIdValue,
+    touchPresence.mutate,
+  ]);
 
   const saveNow = useCallback(
     async (versionTitle?: string | null) => {
@@ -629,6 +688,60 @@ function DocumentEditor(props: {
     reader.readAsDataURL(file);
   };
 
+  const displayPresenceUsers = useMemo(() => {
+    const byKey = new Map<string, PresenceUser>();
+    const addUser = (user: PresenceUser) => {
+      const keys = [
+        user.id,
+        user.email?.toLowerCase(),
+        user.name,
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean);
+      const existingKey = keys.find((key) => byKey.has(key));
+      if (existingKey) {
+        const existing = byKey.get(existingKey);
+        if (existing && !existing.id && user.id) {
+          const merged = { ...existing, id: user.id };
+          for (const key of keys) byKey.set(key, merged);
+        }
+        return;
+      }
+      if (keys.length === 0) return;
+      for (const key of keys) byKey.set(key, user);
+    };
+
+    addUser({
+      ...localUser,
+      clientId: "local",
+    });
+
+    const httpUsers = (presenceQuery.data?.items ?? []) as HttpPresenceItem[];
+    for (const item of httpUsers) {
+      const name = String(item.name ?? item.email ?? "Usuario").trim();
+      if (!name) continue;
+      addUser({
+        clientId: `http:${item.userId ?? item.email ?? name}`,
+        id: item.userId,
+        name,
+        email: item.email ?? undefined,
+        color: item.color ?? colorFromString(item.userId ?? item.email ?? name),
+      });
+    }
+
+    for (const user of presenceUsers) addUser(user);
+
+    return Array.from(new Set(byKey.values())).sort((first, second) => {
+      const firstIsLocal =
+        first.id === localUser.id || first.email === localUser.email;
+      const secondIsLocal =
+        second.id === localUser.id || second.email === localUser.email;
+      if (firstIsLocal && !secondIsLocal) return -1;
+      if (!firstIsLocal && secondIsLocal) return 1;
+      return first.name.localeCompare(second.name, "pt-BR");
+    });
+  }, [localUser, presenceQuery.data?.items, presenceUsers]);
+
   const versions = (versionsQuery.data?.items ?? []) as VersionItem[];
   const statusLabel = useMemo(() => {
     if (!canEdit) return "Somente leitura";
@@ -655,6 +768,8 @@ function DocumentEditor(props: {
     saveDocument.isPending,
     saveStatus,
   ]);
+  const editorIsPreparing =
+    !editorContentReady && collaborationStatus !== "auth-error";
 
   return (
     <Box
@@ -758,12 +873,17 @@ function DocumentEditor(props: {
               />
             </Stack>
           </Box>
-          <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.5}
+            aria-label={`Pessoas online: ${displayPresenceUsers.length}`}
+          >
             <Tooltip title="Pessoas no documento">
               <GroupRoundedIcon sx={{ color: "text.secondary", fontSize: 20 }} />
             </Tooltip>
             <Stack direction="row" spacing={-0.8}>
-              {presenceUsers.slice(0, 5).map((user) => (
+              {displayPresenceUsers.slice(0, 5).map((user) => (
                 <Tooltip
                   key={`${user.clientId}-${user.id ?? user.name}`}
                   title={user.email ? `${user.name} (${user.email})` : user.name}
@@ -784,7 +904,7 @@ function DocumentEditor(props: {
               ))}
             </Stack>
             <Typography variant="caption" color="text.secondary">
-              {presenceUsers.length}
+              {displayPresenceUsers.length}
             </Typography>
           </Stack>
           <Tooltip title="Salvar agora">
@@ -1031,6 +1151,7 @@ function DocumentEditor(props: {
         <Paper
           elevation={3}
           sx={{
+            position: "relative",
             width: "210mm",
             minHeight: "297mm",
             mx: "auto",
@@ -1039,7 +1160,36 @@ function DocumentEditor(props: {
             p: `${pageSettings.marginTopCm}cm ${pageSettings.marginRightCm}cm ${pageSettings.marginBottomCm}cm ${pageSettings.marginLeftCm}cm`,
           }}
         >
-          <EditorContent editor={editor} />
+          {editorIsPreparing && (
+            <Stack
+              alignItems="center"
+              justifyContent="center"
+              spacing={1.4}
+              sx={{
+                position: "absolute",
+                inset: 0,
+                bgcolor: "#fff",
+                color: "text.secondary",
+                zIndex: 1,
+              }}
+            >
+              <CircularProgress size={28} />
+              <Typography variant="body2" fontWeight={600}>
+                Carregando documento...
+              </Typography>
+              <Typography variant="caption">
+                Sincronizando as informacoes do arquivo.
+              </Typography>
+            </Stack>
+          )}
+          <Box
+            sx={{
+              opacity: editorIsPreparing ? 0 : 1,
+              pointerEvents: editorIsPreparing ? "none" : "auto",
+            }}
+          >
+            <EditorContent editor={editor} />
+          </Box>
         </Paper>
       </Box>
 

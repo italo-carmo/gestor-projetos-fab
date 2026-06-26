@@ -930,6 +930,7 @@ model DocumentAsset {
   content          DocumentContent?
   onlineContent    DocumentOnlineContent?
   onlineVersions   DocumentOnlineVersion[]
+  onlinePresence   DocumentOnlinePresence[]
   links            DocumentLink[]
   cipavdReportFile CipavdReportFile?
 
@@ -1007,6 +1008,24 @@ model DocumentOnlineVersion {
 
   @@unique([documentId, revision])
   @@index([documentId, createdAt])
+}
+
+model DocumentOnlinePresence {
+  id          String   @id @default(cuid())
+  documentId  String
+  sessionId   String
+  userId      String
+  name        String
+  email       String?
+  color       String?
+  connectedAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  document DocumentAsset @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, sessionId])
+  @@index([documentId, lastSeenAt])
+  @@index([lastSeenAt])
 }
 
 model DocumentLink {

@@ -20,6 +20,7 @@ import { UpdateDocumentSubcategoryDto } from './dto/update-document-subcategory.
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CreateOnlineDocumentDto } from './dto/create-online-document.dto';
 import { UpdateOnlineDocumentContentDto } from './dto/update-online-document-content.dto';
+import { UpdateOnlineDocumentPresenceDto } from './dto/update-online-document-presence.dto';
 import {
   hasAnyRole,
   hasPermission,
@@ -41,6 +42,7 @@ const DEFAULT_ONLINE_DOCUMENT_PAGE_SETTINGS = {
 };
 
 const ONLINE_DOCUMENT_MIME_TYPE = 'application/vnd.gestor.online-document+json';
+const ONLINE_DOCUMENT_PRESENCE_TTL_MS = 30_000;
 
 @Injectable()
 export class DocumentsService {
@@ -686,6 +688,96 @@ export class DocumentsService {
     return {
       content: saved,
       createdVersion: shouldCreateVersion,
+    };
+  }
+
+  async touchOnlinePresence(
+    id: string,
+    payload: UpdateOnlineDocumentPresenceDto,
+    user?: RbacUser,
+  ) {
+    if (!user?.id) throwError('RBAC_FORBIDDEN');
+    const sessionId = String(payload.sessionId ?? '').trim();
+    if (!sessionId) {
+      throwError('VALIDATION_ERROR', {
+        field: 'sessionId',
+        reason: 'required',
+      });
+    }
+
+    await this.assertOnlineDocumentPresenceAccess(id, user);
+
+    const now = new Date();
+    const staleBefore = this.onlinePresenceStaleBefore(now);
+    const normalizedColor = String(payload.color ?? '').trim().slice(0, 32);
+
+    await this.prisma.$transaction([
+      this.prisma.documentOnlinePresence.deleteMany({
+        where: { documentId: id, lastSeenAt: { lt: staleBefore } },
+      }),
+      this.prisma.documentOnlinePresence.upsert({
+        where: {
+          documentId_sessionId: {
+            documentId: id,
+            sessionId,
+          },
+        },
+        create: {
+          documentId: id,
+          sessionId,
+          userId: user.id,
+          name: user.name || user.email || 'Usuario',
+          email: user.email || null,
+          color: normalizedColor || null,
+          connectedAt: now,
+          lastSeenAt: now,
+        },
+        update: {
+          userId: user.id,
+          name: user.name || user.email || 'Usuario',
+          email: user.email || null,
+          color: normalizedColor || null,
+          lastSeenAt: now,
+        },
+      }),
+    ]);
+
+    return this.listOnlinePresence(id, user);
+  }
+
+  async listOnlinePresence(id: string, user?: RbacUser) {
+    await this.assertOnlineDocumentPresenceAccess(id, user);
+    const staleBefore = this.onlinePresenceStaleBefore();
+
+    await this.prisma.documentOnlinePresence.deleteMany({
+      where: { documentId: id, lastSeenAt: { lt: staleBefore } },
+    });
+
+    const rows = await this.prisma.documentOnlinePresence.findMany({
+      where: {
+        documentId: id,
+        lastSeenAt: { gte: staleBefore },
+      },
+      orderBy: { lastSeenAt: 'desc' },
+      take: 80,
+    });
+
+    const byUser = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      if (!byUser.has(row.userId)) byUser.set(row.userId, row);
+    }
+
+    return {
+      items: Array.from(byUser.values()).map((row) => ({
+        userId: row.userId,
+        name: row.name,
+        email: row.email,
+        color: row.color,
+        connectedAt: row.connectedAt,
+        lastSeenAt: row.lastSeenAt,
+        isCurrentUser: row.userId === user?.id,
+      })),
+      updatedAt: new Date().toISOString(),
     };
   }
 
@@ -1826,6 +1918,29 @@ export class DocumentsService {
         reason: 'not_online_document',
       });
     }
+  }
+
+  private async assertOnlineDocumentPresenceAccess(id: string, user?: RbacUser) {
+    const document = await this.prisma.documentAsset.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        assetType: true,
+        localityId: true,
+        deletedAt: true,
+        cipavdReportFile: { select: { id: true } },
+      },
+    });
+    if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
+    this.assertOnlineDocument(document);
+    this.assertOnlineDocumentPermission(document, user, 'view');
+    this.assertDocumentScope(document, user);
+    return document;
+  }
+
+  private onlinePresenceStaleBefore(now = new Date()) {
+    return new Date(now.getTime() - ONLINE_DOCUMENT_PRESENCE_TTL_MS);
   }
 
   private buildOnlineDocumentSourcePath(

@@ -27,6 +27,7 @@ import { CreateDocumentLinkDto } from './dto/create-document-link.dto';
 import { UpdateDocumentLinkDto } from './dto/update-document-link.dto';
 import { CreateOnlineDocumentDto } from './dto/create-online-document.dto';
 import { UpdateOnlineDocumentContentDto } from './dto/update-online-document-content.dto';
+import { UpdateOnlineDocumentPresenceDto } from './dto/update-online-document-presence.dto';
 
 const documentsDir = path.resolve(process.cwd(), 'storage', 'documents');
 if (!fs.existsSync(documentsDir)) {
@@ -173,6 +174,20 @@ export class DocumentsController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.documents.saveOnlineDocument(id, dto, user);
+  }
+
+  @Get(':id/editor/presence')
+  listOnlinePresence(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.documents.listOnlinePresence(id, user);
+  }
+
+  @Put(':id/editor/presence')
+  touchOnlinePresence(
+    @Param('id') id: string,
+    @Body() dto: UpdateOnlineDocumentPresenceDto,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.documents.touchOnlinePresence(id, dto, user);
   }
 
   @Get(':id/editor/versions')

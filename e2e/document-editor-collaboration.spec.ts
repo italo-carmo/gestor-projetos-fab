@@ -73,6 +73,12 @@ async function openEditor(page: Page, documentId: string) {
   await expect(editor).toHaveAttribute('contenteditable', 'true', {
     timeout: 20_000,
   });
+  await expect(page.getByText('Carregando documento...')).toHaveCount(0, {
+    timeout: 5_000,
+  });
+  await expect(page.getByLabel(/Pessoas online: [1-9]/)).toBeVisible({
+    timeout: 10_000,
+  });
 
   const websocketUrl = await websocketUrlPromise;
   expect(websocketUrl).toContain('/api/document-collaboration');

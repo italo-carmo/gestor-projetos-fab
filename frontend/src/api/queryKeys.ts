@@ -94,6 +94,8 @@ export const qk = {
   onlineDocument: (id: string) => ["documents", id, "editor"] as const,
   onlineDocumentVersions: (id: string) =>
     ["documents", id, "editor", "versions"] as const,
+  onlineDocumentPresence: (id: string) =>
+    ["documents", id, "editor", "presence"] as const,
   documentLinks: (filters: Record<string, any>) =>
     ["documents", "links", filters] as const,
   documentLinkCandidates: (filters: Record<string, any>) =>
