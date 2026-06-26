@@ -70,6 +70,9 @@ async function openEditor(page: Page, documentId: string) {
   await expect(page.getByText('Reconectando...')).toHaveCount(0, {
     timeout: 15_000,
   });
+  await expect(editor).toHaveAttribute('contenteditable', 'true', {
+    timeout: 20_000,
+  });
 
   const websocketUrl = await websocketUrlPromise;
   expect(websocketUrl).toContain('/api/document-collaboration');
