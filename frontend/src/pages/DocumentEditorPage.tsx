@@ -344,6 +344,7 @@ function DocumentEditor(props: {
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "dirty" | "saving" | "saved" | "error"
   >("idle");
+  const [httpFallback, setHttpFallback] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(
     initialPayload.content?.updatedAt ??
       initialPayload.document.updatedAt ??
@@ -351,6 +352,16 @@ function DocumentEditor(props: {
   );
   const [pageSettings, setPageSettings] = useState<PageSettings>(() =>
     normalizePageSettings(initialPayload.content?.pageSettingsJson),
+  );
+  const collaborationSyncedRef = useRef(false);
+  const readyToSaveRef = useRef(false);
+  const initialEditorContent = useMemo(
+    () =>
+      (initialPayload.content?.contentJson ?? {
+        type: "doc",
+        content: [{ type: "paragraph" }],
+      }) as JSONContent,
+    [initialPayload.content?.contentJson],
   );
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const canEdit = Boolean(initialPayload.document.canEdit);
@@ -390,6 +401,29 @@ function DocumentEditor(props: {
   const { provider, ydoc } = collaboration;
 
   useEffect(() => {
+    collaborationSyncedRef.current = collaborationStatus === "synced";
+  }, [collaborationStatus]);
+
+  useEffect(() => {
+    readyToSaveRef.current = httpFallback || collaborationStatus === "synced";
+  }, [collaborationStatus, httpFallback]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      if (!collaborationSyncedRef.current) {
+        setHttpFallback(true);
+      }
+    }, 4_000);
+    return () => window.clearTimeout(timeout);
+  }, [documentId]);
+
+  useEffect(() => {
+    if (!httpFallback) return;
+    provider.destroy();
+    setPresenceUsers([]);
+  }, [httpFallback, provider]);
+
+  useEffect(() => {
     return () => {
       provider.destroy();
       ydoc.destroy();
@@ -397,6 +431,10 @@ function DocumentEditor(props: {
   }, [provider, ydoc]);
 
   useEffect(() => {
+    if (httpFallback) {
+      setPresenceUsers([]);
+      return;
+    }
     const updatePresence = () => setPresenceUsers(readPresenceUsers(provider));
     updatePresence();
     provider.awareness?.on("change", updatePresence);
@@ -405,16 +443,18 @@ function DocumentEditor(props: {
       provider.awareness?.off("change", updatePresence);
       provider.awareness?.off("update", updatePresence);
     };
-  }, [provider]);
+  }, [httpFallback, provider]);
 
-  const editor = useEditor(
-    {
-      editable: canEdit,
-      extensions: [
-        StarterKit.configure({
-          heading: { levels: [1, 2, 3] },
-          undoRedo: false,
-        }),
+  const editorExtensions = useMemo(() => {
+    const extensions: any[] = [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+        undoRedo: false,
+      }),
+    ];
+
+    if (!httpFallback) {
+      extensions.push(
         Collaboration.configure({
           document: ydoc,
           field: "default",
@@ -425,38 +465,59 @@ function DocumentEditor(props: {
           user: localUser,
           render: renderCollaborationCaret,
         }),
-        TextStyle,
-        FontSize,
-        FontFamily,
-        Color,
-        Underline,
-        ParagraphLayout,
-        TextAlign.configure({ types: ["heading", "paragraph"] }),
-        Image.configure({ allowBase64: true }),
-      ],
+      );
+    }
+
+    extensions.push(
+      TextStyle,
+      FontSize,
+      FontFamily,
+      Color,
+      Underline,
+      ParagraphLayout,
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Image.configure({ allowBase64: true }),
+    );
+
+    return extensions;
+  }, [httpFallback, localUser, provider, ydoc]);
+
+  const editor = useEditor(
+    {
+      editable: canEdit && httpFallback,
+      content: httpFallback ? initialEditorContent : undefined,
+      extensions: editorExtensions,
       editorProps: {
         attributes: {
           class: "gestor-document-editor",
         },
       },
       onUpdate: () => {
+        if (!readyToSaveRef.current) return;
         setToolbarVersion((value) => value + 1);
         setSaveStatus("dirty");
         setSaveSignal((value) => value + 1);
       },
       onSelectionUpdate: () => setToolbarVersion((value) => value + 1),
     },
-    [documentId, provider, ydoc, canEdit],
+    [documentId, canEdit, httpFallback, initialEditorContent, editorExtensions],
   );
+  const editorReadyToEdit =
+    canEdit && (httpFallback || collaborationStatus === "synced");
 
   useEffect(() => {
+    editor?.setEditable(editorReadyToEdit);
+  }, [editor, editorReadyToEdit]);
+
+  useEffect(() => {
+    if (httpFallback) return;
     provider.setAwarenessField("user", localUser);
     editor?.commands.updateUser(localUser);
-  }, [editor, localUser, provider]);
+  }, [editor, httpFallback, localUser, provider]);
 
   const saveNow = useCallback(
     async (versionTitle?: string | null) => {
-      if (!editor || !canEdit) return;
+      if (!editor || !editorReadyToEdit) return;
       setSaveStatus("saving");
       try {
         const result = await saveDocument.mutateAsync({
@@ -479,18 +540,19 @@ function DocumentEditor(props: {
         setSaveStatus("error");
       }
     },
-    [canEdit, documentId, editor, pageSettings, saveDocument, toast],
+    [documentId, editor, editorReadyToEdit, pageSettings, saveDocument, toast],
   );
 
   useEffect(() => {
-    if (!editor || !canEdit || saveStatus !== "dirty") return;
+    if (!editor || !editorReadyToEdit || saveStatus !== "dirty") return;
     const timeout = window.setTimeout(() => {
       void saveNow();
     }, 1200);
     return () => window.clearTimeout(timeout);
-  }, [canEdit, editor, saveNow, saveSignal, saveStatus]);
+  }, [editor, editorReadyToEdit, saveNow, saveSignal, saveStatus]);
 
   const setPageMargin = (field: keyof PageSettings, value: string) => {
+    if (!editorReadyToEdit) return;
     const nextValue = normalizeMargin(value);
     setPageSettings((current) => ({
       ...current,
@@ -561,18 +623,25 @@ function DocumentEditor(props: {
   const versions = (versionsQuery.data?.items ?? []) as VersionItem[];
   const statusLabel = useMemo(() => {
     if (!canEdit) return "Somente leitura";
-    if (collaborationStatus === "auth-error")
-      return "Sem permissao para colaboracao";
-    if (collaborationStatus === "connecting") return "Conectando...";
-    if (collaborationStatus === "disconnected") return "Reconectando...";
     if (saveStatus === "saving" || saveDocument.isPending) return "Salvando...";
     if (saveStatus === "dirty") return "Alteracoes pendentes";
     if (saveStatus === "error") return "Erro ao salvar";
+    if (httpFallback) {
+      return lastSavedAt
+        ? `Salvo ${formatDate(lastSavedAt)} (tempo real indisponivel)`
+        : "Modo sem tempo real";
+    }
+    if (collaborationStatus === "auth-error")
+      return "Sem permissao para colaboracao";
+    if (collaborationStatus === "connecting") return "Conectando...";
+    if (collaborationStatus === "connected") return "Sincronizando...";
+    if (collaborationStatus === "disconnected") return "Reconectando...";
     if (lastSavedAt) return `Salvo ${formatDate(lastSavedAt)}`;
     return "Salvo";
   }, [
     canEdit,
     collaborationStatus,
+    httpFallback,
     lastSavedAt,
     saveDocument.isPending,
     saveStatus,
@@ -715,7 +784,7 @@ function DocumentEditor(props: {
                 onClick={() => {
                   void saveNow("Salvamento manual");
                 }}
-                disabled={!canEdit || saveDocument.isPending}
+                disabled={!editorReadyToEdit || saveDocument.isPending}
                 size="small"
               >
                 {saveDocument.isPending ? (
@@ -743,14 +812,14 @@ function DocumentEditor(props: {
         >
           <ToolbarButton
             title="Desfazer"
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() => editor?.chain().focus().undo().run()}
           >
             <UndoRoundedIcon fontSize="small" />
           </ToolbarButton>
           <ToolbarButton
             title="Refazer"
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() => editor?.chain().focus().redo().run()}
           >
             <RedoRoundedIcon fontSize="small" />
@@ -763,7 +832,7 @@ function DocumentEditor(props: {
             onChange={(event) =>
               editor?.chain().focus().setFontFamily(event.target.value).run()
             }
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             sx={{ width: 170 }}
           >
             {FONT_FAMILIES.map((font) => (
@@ -781,7 +850,7 @@ function DocumentEditor(props: {
                 : "12"
             }
             onChange={(event) => setFontSize(event.target.value)}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             sx={{ width: 82 }}
           >
             {FONT_SIZES.map((size) => (
@@ -793,7 +862,7 @@ function DocumentEditor(props: {
           <ToolbarButton
             title="Negrito"
             active={editor?.isActive("bold")}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() => editor?.chain().focus().toggleBold().run()}
           >
             <FormatBoldRoundedIcon fontSize="small" />
@@ -801,7 +870,7 @@ function DocumentEditor(props: {
           <ToolbarButton
             title="Italico"
             active={editor?.isActive("italic")}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() => editor?.chain().focus().toggleItalic().run()}
           >
             <FormatItalicRoundedIcon fontSize="small" />
@@ -809,7 +878,7 @@ function DocumentEditor(props: {
           <ToolbarButton
             title="Sublinhado"
             active={editor?.isActive("underline")}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() => editor?.chain().focus().toggleUnderline().run()}
           >
             <FormatUnderlinedRoundedIcon fontSize="small" />
@@ -823,14 +892,14 @@ function DocumentEditor(props: {
             onChange={(event) =>
               editor?.chain().focus().setColor(event.target.value).run()
             }
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             sx={{ width: 54 }}
           />
           <Divider orientation="vertical" flexItem />
           <ToolbarButton
             title="Alinhar a esquerda"
             active={editor?.isActive({ textAlign: "left" })}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() => editor?.chain().focus().setTextAlign("left").run()}
           >
             <FormatAlignLeftRoundedIcon fontSize="small" />
@@ -838,7 +907,7 @@ function DocumentEditor(props: {
           <ToolbarButton
             title="Centralizar"
             active={editor?.isActive({ textAlign: "center" })}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() => editor?.chain().focus().setTextAlign("center").run()}
           >
             <FormatAlignCenterRoundedIcon fontSize="small" />
@@ -846,7 +915,7 @@ function DocumentEditor(props: {
           <ToolbarButton
             title="Alinhar a direita"
             active={editor?.isActive({ textAlign: "right" })}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() => editor?.chain().focus().setTextAlign("right").run()}
           >
             <FormatAlignRightRoundedIcon fontSize="small" />
@@ -854,7 +923,7 @@ function DocumentEditor(props: {
           <ToolbarButton
             title="Justificar"
             active={editor?.isActive({ textAlign: "justify" })}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() =>
               editor?.chain().focus().setTextAlign("justify").run()
             }
@@ -870,7 +939,7 @@ function DocumentEditor(props: {
                 : "1.15"
             }
             onChange={(event) => setLineHeight(event.target.value)}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             sx={{ width: 92 }}
           >
             {LINE_HEIGHTS.map((lineHeight) => (
@@ -884,7 +953,7 @@ function DocumentEditor(props: {
             size="small"
             value="0"
             onChange={(event) => setParagraphSpacing(`${event.target.value}px`)}
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             sx={{ width: 118 }}
           >
             <MenuItem value="0">Paragrafo</MenuItem>
@@ -894,14 +963,14 @@ function DocumentEditor(props: {
           </TextField>
           <ToolbarButton
             title="Inserir imagem"
-            disabled={!editor || !canEdit}
+            disabled={!editor || !editorReadyToEdit}
             onClick={() => fileInputRef.current?.click()}
           >
             <ImageRoundedIcon fontSize="small" />
           </ToolbarButton>
           <ToolbarButton
             title="Margens"
-            disabled={!canEdit}
+            disabled={!editorReadyToEdit}
             onClick={() => setMarginsOpen((current) => !current)}
           >
             <TuneRoundedIcon fontSize="small" />
