@@ -355,6 +355,7 @@ function DocumentEditor(props: {
   );
   const collaborationSyncedRef = useRef(false);
   const readyToSaveRef = useRef(false);
+  const changeVersionRef = useRef(0);
   const initialEditorContent = useMemo(
     () =>
       (initialPayload.content?.contentJson ?? {
@@ -494,13 +495,14 @@ function DocumentEditor(props: {
       },
       onUpdate: () => {
         if (!readyToSaveRef.current) return;
+        changeVersionRef.current += 1;
         setToolbarVersion((value) => value + 1);
         setSaveStatus("dirty");
         setSaveSignal((value) => value + 1);
       },
       onSelectionUpdate: () => setToolbarVersion((value) => value + 1),
     },
-    [documentId, canEdit, httpFallback, initialEditorContent, editorExtensions],
+    [documentId, canEdit, httpFallback, editorExtensions],
   );
   const editorReadyToEdit =
     canEdit && (httpFallback || collaborationStatus === "synced");
@@ -518,6 +520,7 @@ function DocumentEditor(props: {
   const saveNow = useCallback(
     async (versionTitle?: string | null) => {
       if (!editor || !editorReadyToEdit) return;
+      const saveVersion = changeVersionRef.current;
       setSaveStatus("saving");
       try {
         const result = await saveDocument.mutateAsync({
@@ -530,7 +533,12 @@ function DocumentEditor(props: {
           },
         });
         setLastSavedAt(result?.content?.updatedAt ?? new Date().toISOString());
-        setSaveStatus("saved");
+        if (changeVersionRef.current === saveVersion) {
+          setSaveStatus("saved");
+        } else {
+          setSaveStatus("dirty");
+          setSaveSignal((value) => value + 1);
+        }
       } catch (error) {
         const payload = parseApiError(error);
         toast.push({
@@ -553,6 +561,7 @@ function DocumentEditor(props: {
 
   const setPageMargin = (field: keyof PageSettings, value: string) => {
     if (!editorReadyToEdit) return;
+    changeVersionRef.current += 1;
     const nextValue = normalizeMargin(value);
     setPageSettings((current) => ({
       ...current,
