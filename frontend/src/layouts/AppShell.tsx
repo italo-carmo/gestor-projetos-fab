@@ -168,7 +168,7 @@ const navSections: NavSection[] = [
         menuKey: "library",
       },
       {
-        label: "Acervo",
+        label: "Relatórios",
         to: "/cipavd-reports",
         icon: <DescriptionRoundedIcon fontSize="small" />,
         menuKey: "cipavd_reports",

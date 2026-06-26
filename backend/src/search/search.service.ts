@@ -772,6 +772,7 @@ export class SearchService {
     );
 
     const and: Prisma.DocumentAssetWhereInput[] = [
+      { deletedAt: null },
       {
         OR: matchAnyNeedle,
       },

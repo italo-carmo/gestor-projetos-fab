@@ -2850,13 +2850,16 @@ export type CipavdReportFile = {
   fileName: string;
   fileUrl: string;
   storageKey?: string | null;
+  onlineDocumentId?: string | null;
+  assetType?: "FILE" | "ONLINE_DOC";
   mimeType?: string | null;
   fileSize?: number | null;
   checksum?: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy?: CipavdReportUser | null;
-  downloadUrl?: string;
+  downloadUrl?: string | null;
+  editorUrl?: string | null;
   path?: string;
   folderPath?: string;
 };
@@ -2960,6 +2963,19 @@ export function useUploadCipavdReportFile() {
       ).data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cipavdReports"] }),
+  });
+}
+
+export function useCreateCipavdReportOnlineDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { name: string; folderId?: string | null }) =>
+      (await api.post("/cipavd-reports/files/online", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cipavdReports"] });
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: ["search"] });
+    },
   });
 }
 
@@ -4871,6 +4887,15 @@ export function useDocumentsCoverage() {
   });
 }
 
+export function useDocumentDeletionHistory(enabled = true) {
+  return useQuery({
+    queryKey: qk.documentDeletionHistory,
+    queryFn: async () => (await api.get("/documents/deletion-history")).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useDocumentContent(id: string) {
   return useQuery({
     queryKey: qk.documentContent(id),
@@ -5055,6 +5080,20 @@ export function useUpdateDocument() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["documents"] });
       qc.invalidateQueries({ queryKey: ["search"] });
+    },
+  });
+}
+
+export function useDeleteDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await api.delete(`/documents/${id}`)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["documents"] });
+      qc.invalidateQueries({ queryKey: qk.documentCoverage });
+      qc.invalidateQueries({ queryKey: qk.documentDeletionHistory });
+      qc.invalidateQueries({ queryKey: ["search"] });
+      qc.invalidateQueries({ queryKey: ["cipavdReports"] });
     },
   });
 }

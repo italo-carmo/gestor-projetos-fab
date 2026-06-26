@@ -30,6 +30,7 @@ import {
 } from '@mui/material';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded';
 import FolderOpenRoundedIcon from '@mui/icons-material/FolderOpenRounded';
 import CreateNewFolderRoundedIcon from '@mui/icons-material/CreateNewFolderRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -40,9 +41,11 @@ import {
   useCreateDocumentSubcategory,
   useCreateOnlineDocument,
   useCreateDocumentLink,
+  useDeleteDocument,
   useDeleteDocumentLink,
   useDeleteDocumentSubcategory,
   useDocumentContent,
+  useDocumentDeletionHistory,
   useDocumentLinkCandidates,
   useDocuments,
   useDocumentsCoverage,
@@ -157,6 +160,20 @@ type DocumentContentResponse = {
   links?: DocumentLinkItem[];
 };
 
+type DeletedDocumentHistoryItem = {
+  id: string;
+  title: string;
+  fileName: string;
+  assetType?: string;
+  category: string;
+  subcategoryId?: string | null;
+  subcategory?: { id: string; name: string; category: string; parentId?: string | null } | null;
+  sourcePath: string;
+  locality?: { id: string; code?: string; name: string } | null;
+  deletedAt?: string | null;
+  deletedBy?: { id: string; name?: string | null; email?: string | null } | null;
+};
+
 function formatFileSize(value?: number | null) {
   if (!value || value <= 0) return '—';
   if (value < 1024) return `${value} B`;
@@ -212,6 +229,8 @@ export function DocumentsPage() {
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveDocIds, setMoveDocIds] = useState<string[]>([]);
   const [folderDeleteTarget, setFolderDeleteTarget] = useState<DocumentSubcategory | null>(null);
+  const [documentDeleteTarget, setDocumentDeleteTarget] = useState<DocumentRow | null>(null);
+  const [deletionHistoryOpen, setDeletionHistoryOpen] = useState(false);
   const [moveForm, setMoveForm] = useState({
     category: '',
     subcategoryId: '',
@@ -249,9 +268,11 @@ export function DocumentsPage() {
   const updateSubcategory = useUpdateDocumentSubcategory();
   const deleteSubcategory = useDeleteDocumentSubcategory();
   const createOnlineDocument = useCreateOnlineDocument();
+  const deleteDocument = useDeleteDocument();
   const createDocumentLink = useCreateDocumentLink();
   const updateDocumentLink = useUpdateDocumentLink();
   const deleteDocumentLink = useDeleteDocumentLink();
+  const deletionHistoryQuery = useDocumentDeletionHistory(deletionHistoryOpen);
   const contentQuery = useDocumentContent(selectedId ?? '');
   const linkCandidatesQuery = useDocumentLinkCandidates({
     entityType: selectedId ? newLinkEntityType : undefined,
@@ -278,6 +299,8 @@ export function DocumentsPage() {
   const documentContent = contentQuery.data as DocumentContentResponse | undefined;
   const linkCandidates = (linkCandidatesQuery.data?.items ?? []) as DocumentLinkCandidateItem[];
   const canCreateDocument = can(meQuery.data, 'documents', 'create');
+  const canDeleteDocument = can(meQuery.data, 'documents', 'delete');
+  const deletionHistoryItems = (deletionHistoryQuery.data?.items ?? []) as DeletedDocumentHistoryItem[];
 
   const subcategoriesById = useMemo(() => {
     const map = new Map<string, DocumentSubcategory>();
@@ -698,6 +721,25 @@ export function DocumentsPage() {
     }
   };
 
+  const handleConfirmDeleteDocument = async () => {
+    if (!documentDeleteTarget) return;
+    const document = documentDeleteTarget;
+
+    try {
+      await deleteDocument.mutateAsync(document.id);
+      setDocumentDeleteTarget(null);
+      setSelectedDocIds((prev) => prev.filter((id) => id !== document.id));
+      if (selectedId === document.id) {
+        setSelectedId(null);
+        setDrawerOpen(false);
+      }
+      toast.push({ message: 'Documento excluido com sucesso.', severity: 'success' });
+    } catch (error) {
+      const payload = parseApiError(error);
+      toast.push({ message: payload.message ?? 'Erro ao excluir documento.', severity: 'error' });
+    }
+  };
+
   const selectedPathLabel =
     !category
       ? ''
@@ -731,6 +773,13 @@ export function DocumentsPage() {
           </Typography>
         </Box>
         <Stack direction="row" spacing={1} alignItems="center">
+          <Button
+            variant="outlined"
+            startIcon={<HistoryRoundedIcon />}
+            onClick={() => setDeletionHistoryOpen(true)}
+          >
+            Histórico de exclusões
+          </Button>
           <Button
             variant="contained"
             startIcon={<AddRoundedIcon />}
@@ -1228,6 +1277,18 @@ export function DocumentsPage() {
                         >
                           Mover
                         </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setDocumentDeleteTarget(doc);
+                          }}
+                          disabled={!canDeleteDocument}
+                        >
+                          Excluir
+                        </Button>
                       </Stack>
                     </TableCell>
                   </TableRow>
@@ -1571,6 +1632,15 @@ export function DocumentsPage() {
                   </Button>
                 )}
                 <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutlineRoundedIcon />}
+                  onClick={() => setDocumentDeleteTarget(selected)}
+                  disabled={!canDeleteDocument || deleteDocument.isPending}
+                >
+                  Excluir
+                </Button>
+                <Button
                   variant="contained"
                   onClick={handleSave}
                   disabled={!selected.canEdit || updateDocument.isPending}
@@ -1749,6 +1819,81 @@ export function DocumentsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Dialog
+        open={deletionHistoryOpen}
+        onClose={() => setDeletionHistoryOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Histórico de exclusões</DialogTitle>
+        <DialogContent dividers>
+          {deletionHistoryQuery.isLoading ? (
+            <SkeletonState />
+          ) : deletionHistoryQuery.isError ? (
+            <ErrorState error={deletionHistoryQuery.error} onRetry={() => deletionHistoryQuery.refetch()} />
+          ) : deletionHistoryItems.length === 0 ? (
+            <EmptyState title="Sem exclusões" description="Nenhum documento excluído foi registrado até agora." />
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow sx={{ bgcolor: 'primary.main' }}>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Documento</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Pasta</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Excluído por</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 700 }}>Data</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {deletionHistoryItems.map((item) => {
+                  const deletedBy = item.deletedBy?.name || item.deletedBy?.email || 'Usuário não identificado';
+                  const folderLabel = item.subcategoryId
+                    ? item.subcategory?.name ?? folderPathById.get(item.subcategoryId) ?? 'Subpasta'
+                    : 'Raiz';
+                  return (
+                    <TableRow key={item.id} hover>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={700}>
+                          {item.title}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.fileName} • {item.sourcePath}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap>
+                          <Chip size="small" variant="outlined" label={CATEGORY_LABELS[item.category] ?? item.category} />
+                          <Chip size="small" label={folderLabel} />
+                        </Stack>
+                      </TableCell>
+                      <TableCell>{deletedBy}</TableCell>
+                      <TableCell>{formatDate(item.deletedAt)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeletionHistoryOpen(false)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(documentDeleteTarget)}
+        onCancel={() => setDocumentDeleteTarget(null)}
+        onConfirm={() => {
+          void handleConfirmDeleteDocument();
+        }}
+        title="Excluir documento"
+        message="Excluir este documento do Acervo de Documentos?"
+        highlightText={documentDeleteTarget?.title ?? ''}
+        note="A exclusão ficará registrada no histórico com usuário e data. O documento não aparecerá mais nas listas, busca, download ou editor."
+        confirmLabel="Excluir documento"
+        severity="error"
+        confirmLoading={deleteDocument.isPending}
+      />
 
       <ConfirmDialog
         open={Boolean(folderDeleteTarget)}

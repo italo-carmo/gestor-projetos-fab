@@ -626,10 +626,10 @@ export function KnowledgeBasesTab() {
                     >
                       <Box>
                         <Typography variant="subtitle2" fontWeight={800}>
-                          Importar do Acervo CIPAVD
+                          Importar dos Relatórios CIPAVD
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          PDFs e DOCX do acervo restrito podem virar documentos indexados desta base.
+                          PDFs e DOCX dos relatórios restritos podem virar documentos indexados desta base.
                         </Typography>
                       </Box>
                       <TextField
@@ -651,7 +651,7 @@ export function KnowledgeBasesTab() {
                     ) : cipavdReportFiles.length === 0 ? (
                       <EmptyState
                         title="Nenhum arquivo disponível"
-                        description="Envie arquivos no menu Acervo do bloco COMANDO para importá-los aqui."
+                        description="Envie arquivos no menu Relatórios do bloco COMANDO para importá-los aqui."
                       />
                     ) : (
                       <AdminTableScroll minWidth={940}>
@@ -678,7 +678,7 @@ export function KnowledgeBasesTab() {
                                 </TableCell>
                                 <TableCell sx={{ maxWidth: 300 }}>
                                   <Typography variant="caption" color="text.secondary">
-                                    {report.folderPath ?? report.path ?? 'Acervo'}
+                                    {report.folderPath ?? report.path ?? 'Relatórios'}
                                   </Typography>
                                 </TableCell>
                                 <TableCell>{formatBytes(report.fileSize)}</TableCell>

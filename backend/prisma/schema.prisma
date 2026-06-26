@@ -100,6 +100,7 @@ model User {
   libraryDocumentsCreated                 LibraryDocument[]                @relation("LibraryDocumentCreator")
   cipavdReportFoldersCreated              CipavdReportFolder[]             @relation("CipavdReportFolderCreator")
   cipavdReportFilesCreated                CipavdReportFile[]               @relation("CipavdReportFileCreator")
+  documentsDeleted                        DocumentAsset[]                  @relation("DocumentAssetDeletedBy")
   bestPracticesCreated                    BestPracticePost[]               @relation("BestPracticeCreator")
   lessonsLearnedCreated                   LessonLearnedPost[]              @relation("LessonLearnedCreator")
   smifComplaintsCreated                   SmifComplaint[]                  @relation("SmifComplaintCreatedBy")
@@ -915,24 +916,30 @@ model DocumentAsset {
   localityId    String?
   activityId    String?
   meetingId     String?
+  deletedAt     DateTime?
+  deletedById   String?
   tagsJson      Json?
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
-  locality       Locality?               @relation(fields: [localityId], references: [id])
-  subcategory    DocumentSubcategory?    @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
-  activity       Activity?               @relation(fields: [activityId], references: [id], onDelete: SetNull)
-  meeting        Meeting?                @relation(fields: [meetingId], references: [id], onDelete: SetNull)
-  content        DocumentContent?
-  onlineContent  DocumentOnlineContent?
-  onlineVersions DocumentOnlineVersion[]
-  links          DocumentLink[]
+  locality         Locality?               @relation(fields: [localityId], references: [id])
+  subcategory      DocumentSubcategory?    @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  activity         Activity?               @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  meeting          Meeting?                @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  deletedBy        User?                   @relation("DocumentAssetDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  content          DocumentContent?
+  onlineContent    DocumentOnlineContent?
+  onlineVersions   DocumentOnlineVersion[]
+  links            DocumentLink[]
+  cipavdReportFile CipavdReportFile?
 
   @@index([assetType, createdAt])
   @@index([category, localityId, createdAt])
   @@index([category, subcategoryId, createdAt])
   @@index([activityId])
   @@index([meetingId])
+  @@index([deletedAt])
+  @@index([deletedById])
 }
 
 model DocumentSubcategory {
@@ -1450,6 +1457,7 @@ model CipavdReportFile {
   fileName    String
   fileUrl     String
   storageKey  String
+  onlineDocumentId String?  @unique
   mimeType    String?
   fileSize    Int?
   checksum    String?
@@ -1458,6 +1466,7 @@ model CipavdReportFile {
   updatedAt   DateTime @updatedAt
 
   folder    CipavdReportFolder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  onlineDocument DocumentAsset? @relation(fields: [onlineDocumentId], references: [id], onDelete: SetNull)
   createdBy User?               @relation("CipavdReportFileCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@unique([folderId, name])

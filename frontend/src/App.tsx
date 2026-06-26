@@ -94,7 +94,13 @@ function App() {
         path="/documents/editor/:id"
         element={
           <RequireAuth>
-            <RequireRoleAccess allow={(user) => can(user, "documents", "view")}>
+            <RequireRoleAccess
+              allow={(user) =>
+                can(user, "documents", "view") ||
+                (can(user, "cipavd_reports", "view") &&
+                  hasAnyRole(user, [ROLE_TI, ROLE_COMGEP]))
+              }
+            >
               <DocumentEditorPage />
             </RequireRoleAccess>
           </RequireAuth>
@@ -419,8 +425,8 @@ function App() {
                       }
                     >
                       <PageEntryGate
-                        title="Carregando Acervo"
-                        description="Preparando pastas e arquivos do acervo CIPAVD."
+                        title="Carregando Relatórios"
+                        description="Preparando pastas, documentos e arquivos de relatórios CIPAVD."
                       >
                         <CipavdReportsPage />
                       </PageEntryGate>

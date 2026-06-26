@@ -18,6 +18,12 @@ import { UpdateDocumentSubcategoryDto } from './dto/update-document-subcategory.
 import { UpdateDocumentDto } from './dto/update-document.dto';
 import { CreateOnlineDocumentDto } from './dto/create-online-document.dto';
 import { UpdateOnlineDocumentContentDto } from './dto/update-online-document-content.dto';
+import {
+  hasAnyRole,
+  hasPermission,
+  ROLE_COMGEP,
+  ROLE_TI,
+} from '../rbac/role-access';
 
 const INITIAL_ONLINE_DOCUMENT_CONTENT = {
   type: 'doc',
@@ -51,7 +57,7 @@ export class DocumentsService {
     },
     user?: RbacUser,
   ) {
-    const where: Prisma.DocumentAssetWhereInput = {};
+    const where: Prisma.DocumentAssetWhereInput = { deletedAt: null };
 
     if (filters.q) {
       where.OR = [
@@ -549,7 +555,9 @@ export class DocumentsService {
       },
     });
     if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
     this.assertOnlineDocument(document);
+    this.assertOnlineDocumentPermission(document, user, 'view');
     this.assertDocumentScope(document, user);
 
     return {
@@ -577,7 +585,9 @@ export class DocumentsService {
       },
     });
     if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
     this.assertOnlineDocument(document);
+    this.assertOnlineDocumentPermission(document, user, 'update');
     this.assertDocumentScope(document, user);
     if (!this.canEdit(document, user)) {
       throwError('RBAC_FORBIDDEN');
@@ -674,10 +684,18 @@ export class DocumentsService {
   async listOnlineVersions(id: string, user?: RbacUser) {
     const document = await this.prisma.documentAsset.findUnique({
       where: { id },
-      select: { id: true, assetType: true, localityId: true },
+      select: {
+        id: true,
+        assetType: true,
+        localityId: true,
+        deletedAt: true,
+        cipavdReportFile: { select: { id: true } },
+      },
     });
     if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
     this.assertOnlineDocument(document);
+    this.assertOnlineDocumentPermission(document, user, 'view');
     this.assertDocumentScope(document, user);
 
     const versions = await this.prisma.documentOnlineVersion.findMany({
@@ -720,7 +738,9 @@ export class DocumentsService {
       },
     });
     if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
     this.assertOnlineDocument(document);
+    this.assertOnlineDocumentPermission(document, user, 'view');
     this.assertDocumentScope(document, user);
 
     return {
@@ -745,10 +765,18 @@ export class DocumentsService {
   ) {
     const document = await this.prisma.documentAsset.findUnique({
       where: { id },
-      select: { id: true, assetType: true, localityId: true },
+      select: {
+        id: true,
+        assetType: true,
+        localityId: true,
+        deletedAt: true,
+        cipavdReportFile: { select: { id: true } },
+      },
     });
     if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
     this.assertOnlineDocument(document);
+    this.assertOnlineDocumentPermission(document, user, 'view');
     this.assertDocumentScope(document, user);
 
     await this.prisma.documentOnlineContent.update({
@@ -777,7 +805,9 @@ export class DocumentsService {
       },
     });
     if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
     this.assertOnlineDocument(document);
+    this.assertOnlineDocumentPermission(document, payload.user, 'update');
     this.assertDocumentScope(document, payload.user);
     if (payload.user && !this.canEdit(document, payload.user)) {
       throwError('RBAC_FORBIDDEN');
@@ -875,6 +905,7 @@ export class DocumentsService {
       include: this.documentInclude(),
     });
     if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
 
     if (
       this.shouldApplyLocalityScope(user) &&
@@ -893,6 +924,7 @@ export class DocumentsService {
       include: this.documentInclude(),
     });
     if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
 
     if (
       this.shouldApplyLocalityScope(user) &&
@@ -994,6 +1026,88 @@ export class DocumentsService {
     });
 
     return this.mapDocumentWithAccess(updated, user);
+  }
+
+  async delete(id: string, user?: RbacUser) {
+    const document = await this.prisma.documentAsset.findUnique({
+      where: { id },
+      include: this.documentInclude(),
+    });
+    if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
+    this.assertDocumentScope(document, user);
+
+    const deletedAt = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cipavdReportFile.deleteMany({
+        where: { onlineDocumentId: id },
+      });
+      await tx.documentAsset.update({
+        where: { id },
+        data: {
+          deletedAt,
+          deletedById: user?.id ?? null,
+          updatedAt: deletedAt,
+        },
+      });
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'documents',
+      action: 'delete_document',
+      entityId: id,
+      localityId: document.localityId ?? undefined,
+      diffJson: {
+        title: document.title,
+        fileName: document.fileName,
+        assetType: document.assetType,
+        category: document.category,
+        subcategoryId: document.subcategoryId ?? null,
+        sourcePath: document.sourcePath,
+        deletedAt,
+        deletedById: user?.id ?? null,
+      },
+    });
+
+    return { success: true };
+  }
+
+  async listDeletionHistory(user?: RbacUser) {
+    const where: Prisma.DocumentAssetWhereInput = {
+      deletedAt: { not: null },
+    };
+
+    if (this.shouldApplyLocalityScope(user)) {
+      where.OR = [
+        { localityId: null },
+        { localityId: user?.localityId as string },
+      ];
+    }
+
+    const items = await this.prisma.documentAsset.findMany({
+      where,
+      include: this.documentInclude(),
+      orderBy: [{ deletedAt: 'desc' }, { title: 'asc' }],
+      take: 200,
+    });
+
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        fileName: item.fileName,
+        assetType: item.assetType,
+        category: item.category,
+        subcategoryId: item.subcategoryId,
+        subcategory: item.subcategory,
+        localityId: item.localityId,
+        locality: item.locality,
+        sourcePath: item.sourcePath,
+        deletedAt: item.deletedAt,
+        deletedBy: item.deletedBy,
+      })),
+    };
   }
 
   async getContent(id: string, user?: RbacUser) {
@@ -1098,6 +1212,7 @@ export class DocumentsService {
       include: this.documentInclude(),
     });
     if (!document) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(document);
     this.assertDocumentScope(document, user);
 
     await this.assertLinkEntityExists(entityType, entityId);
@@ -1159,6 +1274,7 @@ export class DocumentsService {
       },
     });
     if (!existing) throwError('NOT_FOUND');
+    this.assertDocumentNotDeleted(existing.document);
     this.assertDocumentScope(existing.document, user);
 
     const nextDocumentId =
@@ -1191,6 +1307,7 @@ export class DocumentsService {
         include: this.documentInclude(),
       });
       if (!document) throwError('NOT_FOUND');
+      this.assertDocumentNotDeleted(document);
       this.assertDocumentScope(document, user);
       nextDocument = document;
     }
@@ -1760,11 +1877,18 @@ export class DocumentsService {
     document: {
       tagsJson?: unknown;
       activity?: { createdById?: string | null } | null;
+      cipavdReportFile?: { id?: string | null } | null;
     },
     user?: RbacUser,
   ) {
     if (!user) return false;
     if (this.isAdminUser(user)) return true;
+    if (
+      document.cipavdReportFile &&
+      this.hasCipavdReportsPermission(user, 'update')
+    ) {
+      return true;
+    }
     if (
       document.activity?.createdById &&
       document.activity.createdById === user.id
@@ -1812,8 +1936,10 @@ export class DocumentsService {
   }
 
   private documentScopeWhere(user?: RbacUser): Prisma.DocumentAssetWhereInput {
-    if (!this.shouldApplyLocalityScope(user)) return {};
+    const where: Prisma.DocumentAssetWhereInput = { deletedAt: null };
+    if (!this.shouldApplyLocalityScope(user)) return where;
     return {
+      ...where,
       OR: [{ localityId: null }, { localityId: user?.localityId as string }],
     };
   }
@@ -1828,9 +1954,54 @@ export class DocumentsService {
         select: { id: true, title: true, eventDate: true, createdById: true },
       },
       meeting: { select: { id: true, datetime: true, scope: true } },
+      deletedBy: { select: { id: true, name: true, email: true } },
       content: { select: { parseStatus: true, parsedAt: true } },
+      cipavdReportFile: { select: { id: true } },
       _count: { select: { links: true } },
     };
+  }
+
+  private assertDocumentNotDeleted(document: { deletedAt?: Date | null }) {
+    if (document.deletedAt) {
+      throwError('NOT_FOUND');
+    }
+  }
+
+  private assertOnlineDocumentPermission(
+    document: {
+      cipavdReportFile?: { id?: string | null } | null;
+    },
+    user: RbacUser | undefined,
+    action: 'view' | 'update',
+  ) {
+    if (this.hasDocumentPermission(user, action)) return;
+    if (
+      document.cipavdReportFile &&
+      this.hasCipavdReportsPermission(user, action)
+    ) {
+      return;
+    }
+    throwError('RBAC_FORBIDDEN');
+  }
+
+  private hasDocumentPermission(
+    user: RbacUser | undefined,
+    action: 'view' | 'update',
+  ) {
+    return (
+      hasPermission(user, 'documents', action) || hasAnyRole(user, [ROLE_TI])
+    );
+  }
+
+  private hasCipavdReportsPermission(
+    user: RbacUser | undefined,
+    action: 'view' | 'update',
+  ) {
+    if (!hasAnyRole(user, [ROLE_COMGEP, ROLE_TI])) return false;
+    return (
+      hasPermission(user, 'cipavd_reports', action, PermissionScope.NATIONAL) ||
+      hasAnyRole(user, [ROLE_TI])
+    );
   }
 
   private parseEntityType(value: string): DocumentLinkEntity {

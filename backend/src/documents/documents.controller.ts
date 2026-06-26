@@ -104,6 +104,12 @@ export class DocumentsController {
     return this.documents.coverage(user);
   }
 
+  @Get('deletion-history')
+  @RequirePermission('documents', 'view')
+  deletionHistory(@CurrentUser() user: RbacUser) {
+    return this.documents.listDeletionHistory(user);
+  }
+
   @Get('links')
   @RequirePermission('documents', 'view')
   listLinks(
@@ -156,13 +162,11 @@ export class DocumentsController {
   }
 
   @Get(':id/editor')
-  @RequirePermission('documents', 'view')
   getOnlineDocument(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.documents.getOnlineDocument(id, user);
   }
 
   @Put(':id/editor')
-  @RequirePermission('documents', 'update')
   saveOnlineDocument(
     @Param('id') id: string,
     @Body() dto: UpdateOnlineDocumentContentDto,
@@ -172,7 +176,6 @@ export class DocumentsController {
   }
 
   @Get(':id/editor/versions')
-  @RequirePermission('documents', 'view')
   listOnlineVersions(@Param('id') id: string, @CurrentUser() user: RbacUser) {
     return this.documents.listOnlineVersions(id, user);
   }
@@ -197,6 +200,12 @@ export class DocumentsController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.documents.update(id, dto, user);
+  }
+
+  @Delete(':id')
+  @RequirePermission('documents', 'delete')
+  delete(@Param('id') id: string, @CurrentUser() user: RbacUser) {
+    return this.documents.delete(id, user);
   }
 
   @Get(':id/download')

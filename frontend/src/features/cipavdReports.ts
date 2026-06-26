@@ -2,7 +2,13 @@ export type CipavdReportFileLike = {
   name?: string | null;
   fileName?: string | null;
   mimeType?: string | null;
+  assetType?: string | null;
+  onlineDocumentId?: string | null;
 };
+
+export function isCipavdReportOnlineDocument(file: CipavdReportFileLike) {
+  return file.assetType === "ONLINE_DOC" || Boolean(file.onlineDocumentId);
+}
 
 export function getCipavdReportFileExtension(file: CipavdReportFileLike) {
   const fileName = String(file.name || file.fileName || "").trim();
@@ -12,6 +18,7 @@ export function getCipavdReportFileExtension(file: CipavdReportFileLike) {
 }
 
 export function canPreviewCipavdReportPdf(file: CipavdReportFileLike) {
+  if (isCipavdReportOnlineDocument(file)) return false;
   const extension = getCipavdReportFileExtension(file);
   const mimeType = String(file.mimeType ?? "").toLowerCase();
   return extension === "pdf" || mimeType === "application/pdf";

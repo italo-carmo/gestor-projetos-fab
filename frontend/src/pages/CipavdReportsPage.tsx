@@ -40,6 +40,7 @@ import DriveFileMoveRoundedIcon from "@mui/icons-material/DriveFileMoveRounded";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import FolderRoundedIcon from "@mui/icons-material/FolderRounded";
 import InsertDriveFileRoundedIcon from "@mui/icons-material/InsertDriveFileRounded";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import PictureAsPdfRoundedIcon from "@mui/icons-material/PictureAsPdfRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
@@ -54,6 +55,7 @@ import { useDebounce } from "../app/useDebounce";
 import {
   useCipavdReportFolderOptions,
   useCipavdReports,
+  useCreateCipavdReportOnlineDocument,
   useCreateCipavdReportFolder,
   useDeleteCipavdReportFile,
   useDeleteCipavdReportFolder,
@@ -73,6 +75,7 @@ import { SkeletonState } from "../components/states/SkeletonState";
 import {
   canPreviewCipavdReportPdf,
   getCipavdReportFileExtension,
+  isCipavdReportOnlineDocument,
 } from "../features/cipavdReports";
 
 type ViewMode = "list" | "grid";
@@ -99,6 +102,9 @@ function formatDate(value?: string | null) {
 }
 
 function FileIcon({ file }: { file: CipavdReportFile }) {
+  if (isCipavdReportOnlineDocument(file)) {
+    return <DescriptionRoundedIcon sx={{ color: "#1A73E8" }} />;
+  }
   const extension = getCipavdReportFileExtension(file);
   if (canPreviewCipavdReportPdf(file)) {
     return <PictureAsPdfRoundedIcon sx={{ color: "#D93025" }} />;
@@ -118,8 +124,12 @@ function Actions(props: {
   onMove: (target: DriveTarget) => void;
   onDelete: (target: DriveTarget) => void;
   onDownload: (file: CipavdReportFile) => void;
+  onOpenOnlineDocument: (file: CipavdReportFile) => void;
 }) {
   const fileTarget = props.target.type === "file" ? props.target.item : null;
+  const onlineDocument = fileTarget
+    ? isCipavdReportOnlineDocument(fileTarget)
+    : false;
   return (
     <Stack
       direction="row"
@@ -127,7 +137,20 @@ function Actions(props: {
       justifyContent="flex-end"
       onDoubleClick={(event) => event.stopPropagation()}
     >
-      {fileTarget && props.canDownload ? (
+      {fileTarget && onlineDocument ? (
+        <Tooltip title="Editar em nova aba">
+          <IconButton
+            size="small"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onOpenOnlineDocument(fileTarget);
+            }}
+          >
+            <OpenInNewRoundedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ) : null}
+      {fileTarget && !onlineDocument && props.canDownload ? (
         <Tooltip title="Baixar">
           <IconButton
             size="small"
@@ -194,6 +217,8 @@ export function CipavdReportsPage() {
   const debouncedSearch = useDebounce(search, 250);
   const [folderDialogOpen, setFolderDialogOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [onlineDialogOpen, setOnlineDialogOpen] = useState(false);
+  const [onlineDocumentName, setOnlineDocumentName] = useState("");
   const [renameTarget, setRenameTarget] = useState<DriveTarget | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [moveTarget, setMoveTarget] = useState<DriveTarget | null>(null);
@@ -214,6 +239,7 @@ export function CipavdReportsPage() {
     Boolean(moveTarget),
   );
   const createFolder = useCreateCipavdReportFolder();
+  const createOnlineDocument = useCreateCipavdReportOnlineDocument();
   const updateFolder = useUpdateCipavdReportFolder();
   const deleteFolder = useDeleteCipavdReportFolder();
   const uploadFile = useUploadCipavdReportFile();
@@ -231,13 +257,13 @@ export function CipavdReportsPage() {
   const folders = reportsQuery.data?.folders ?? [];
   const files = reportsQuery.data?.files ?? [];
   const breadcrumbs = reportsQuery.data?.breadcrumbs ?? [
-    { id: null, name: "Acervo" },
+    { id: null, name: "Relatórios" },
   ];
   const isEmpty = folders.length === 0 && files.length === 0;
 
   const currentFolderName = useMemo(() => {
     const last = breadcrumbs[breadcrumbs.length - 1];
-    return last?.name ?? "Acervo";
+    return last?.name ?? "Relatórios";
   }, [breadcrumbs]);
 
   useEffect(() => {
@@ -291,6 +317,54 @@ export function CipavdReportsPage() {
     } catch (error) {
       toast.push({
         message: parseApiError(error).message ?? "Erro ao criar pasta.",
+        severity: "error",
+      });
+    }
+  };
+
+  const openCreateOnlineDialog = () => {
+    setOnlineDocumentName("Documento sem titulo");
+    setOnlineDialogOpen(true);
+  };
+
+  const openOnlineEditor = (file: CipavdReportFile) => {
+    const url =
+      file.editorUrl ||
+      (file.onlineDocumentId
+        ? `/documents/editor/${encodeURIComponent(file.onlineDocumentId)}`
+        : file.fileUrl);
+    if (!url) {
+      toast.push({
+        message: "Documento online sem URL de edição.",
+        severity: "warning",
+      });
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCreateOnlineDocument = async () => {
+    const name = onlineDocumentName.trim();
+    if (!name) {
+      toast.push({
+        message: "Informe o nome do documento.",
+        severity: "warning",
+      });
+      return;
+    }
+    try {
+      const created = (await createOnlineDocument.mutateAsync({
+        name,
+        folderId: currentFolderId || null,
+      })) as CipavdReportFile;
+      setOnlineDialogOpen(false);
+      setOnlineDocumentName("");
+      openOnlineEditor(created);
+      toast.push({ message: "Documento online criado.", severity: "success" });
+    } catch (error) {
+      toast.push({
+        message:
+          parseApiError(error).message ?? "Erro ao criar documento online.",
         severity: "error",
       });
     }
@@ -408,6 +482,10 @@ export function CipavdReportsPage() {
   };
 
   const handleDownload = async (file: CipavdReportFile) => {
+    if (isCipavdReportOnlineDocument(file)) {
+      openOnlineEditor(file);
+      return;
+    }
     try {
       await downloadFile.mutateAsync({ id: file.id, fileName: file.name });
     } catch (error) {
@@ -419,6 +497,10 @@ export function CipavdReportsPage() {
   };
 
   const handlePreview = async (file: CipavdReportFile) => {
+    if (isCipavdReportOnlineDocument(file)) {
+      openOnlineEditor(file);
+      return;
+    }
     if (!canPreviewCipavdReportPdf(file)) {
       toast.push({
         message: "Visualização disponível apenas para PDFs.",
@@ -480,7 +562,7 @@ export function CipavdReportsPage() {
         >
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="h4" fontWeight={800} sx={{ mb: 0.4 }}>
-              Acervo
+              Relatórios
             </Typography>
             <Breadcrumbs maxItems={5} aria-label="Caminho da pasta">
               {breadcrumbs.map((item, index) => {
@@ -525,12 +607,21 @@ export function CipavdReportsPage() {
                 Nova pasta
               </Button>
             ) : null}
-            {canUpload ? (
+            {canCreate ? (
               <Button
                 variant="contained"
+                startIcon={<DescriptionRoundedIcon />}
+                onClick={openCreateOnlineDialog}
+                sx={{ bgcolor: "#1A73E8", "&:hover": { bgcolor: "#1557B0" } }}
+              >
+                Novo documento
+              </Button>
+            ) : null}
+            {canUpload ? (
+              <Button
+                variant="outlined"
                 component="label"
                 startIcon={<CloudUploadRoundedIcon />}
-                sx={{ bgcolor: "#1A73E8", "&:hover": { bgcolor: "#1557B0" } }}
               >
                 Upload
                 <input
@@ -565,7 +656,9 @@ export function CipavdReportsPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={`Buscar em ${currentFolderName}`}
-              InputProps={{ startAdornment: <SearchRoundedIcon sx={{ mr: 1 }} /> }}
+              InputProps={{
+                startAdornment: <SearchRoundedIcon sx={{ mr: 1 }} />,
+              }}
               sx={{ maxWidth: { md: 440 } }}
               fullWidth
             />
@@ -592,18 +685,26 @@ export function CipavdReportsPage() {
               description={
                 search
                   ? "Ajuste o termo de busca para localizar outro relatório."
-                  : "Crie uma pasta ou envie PDFs e DOCX para organizar o acervo."
+                  : "Crie uma pasta, um documento online ou envie PDFs e DOCX para organizar os relatórios."
               }
-              actionLabel={canUpload ? "Enviar arquivo" : undefined}
+              actionLabel={
+                canCreate
+                  ? "Novo documento"
+                  : canUpload
+                    ? "Enviar arquivo"
+                    : undefined
+              }
               onAction={
-                canUpload
-                  ? () => {
-                      const input = document.querySelector<HTMLInputElement>(
-                        'input[type="file"][accept*=".pdf"]',
-                      );
-                      input?.click();
-                    }
-                  : undefined
+                canCreate
+                  ? openCreateOnlineDialog
+                  : canUpload
+                    ? () => {
+                        const input = document.querySelector<HTMLInputElement>(
+                          'input[type="file"][accept*=".pdf"]',
+                        );
+                        input?.click();
+                      }
+                    : undefined
               }
             />
           ) : viewMode === "list" ? (
@@ -633,7 +734,8 @@ export function CipavdReportsPage() {
                             {folder.name}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {folder.folderCount ?? 0} pasta(s) · {folder.fileCount ?? 0} arquivo(s)
+                            {folder.folderCount ?? 0} pasta(s) ·{" "}
+                            {folder.fileCount ?? 0} arquivo(s)
                           </Typography>
                         </Box>
                       </Stack>
@@ -651,6 +753,7 @@ export function CipavdReportsPage() {
                         onMove={openMove}
                         onDelete={setDeleteTarget}
                         onDownload={handleDownload}
+                        onOpenOnlineDocument={openOnlineEditor}
                       />
                     </TableCell>
                   </TableRow>
@@ -661,9 +764,11 @@ export function CipavdReportsPage() {
                     hover
                     onDoubleClick={() => void handlePreview(file)}
                     sx={{
-                      cursor: canPreviewCipavdReportPdf(file)
-                        ? "zoom-in"
-                        : "default",
+                      cursor: isCipavdReportOnlineDocument(file)
+                        ? "pointer"
+                        : canPreviewCipavdReportPdf(file)
+                          ? "zoom-in"
+                          : "default",
                     }}
                   >
                     <TableCell>
@@ -679,8 +784,11 @@ export function CipavdReportsPage() {
                         size="small"
                         variant="outlined"
                         label={
-                          getCipavdReportFileExtension(file).toUpperCase() ||
-                          "ARQ"
+                          isCipavdReportOnlineDocument(file)
+                            ? "DOC online"
+                            : getCipavdReportFileExtension(
+                                file,
+                              ).toUpperCase() || "ARQ"
                         }
                       />
                     </TableCell>
@@ -696,6 +804,7 @@ export function CipavdReportsPage() {
                         onMove={openMove}
                         onDelete={setDeleteTarget}
                         onDownload={handleDownload}
+                        onOpenOnlineDocument={openOnlineEditor}
                       />
                     </TableCell>
                   </TableRow>
@@ -725,14 +834,17 @@ export function CipavdReportsPage() {
                     borderColor: "#DADCE0",
                     "&:hover": {
                       borderColor: "#1A73E8",
-                      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.03),
+                      bgcolor: (theme) =>
+                        alpha(theme.palette.primary.main, 0.03),
                     },
                   }}
                 >
                   <CardContent sx={{ p: 1.4, "&:last-child": { pb: 1.4 } }}>
                     <Stack spacing={1.2}>
                       <Stack direction="row" justifyContent="space-between">
-                        <FolderRoundedIcon sx={{ color: "#F4B400", fontSize: 36 }} />
+                        <FolderRoundedIcon
+                          sx={{ color: "#F4B400", fontSize: 36 }}
+                        />
                         <Actions
                           target={{ type: "folder", item: folder }}
                           canUpdate={canUpdate}
@@ -742,6 +854,7 @@ export function CipavdReportsPage() {
                           onMove={openMove}
                           onDelete={setDeleteTarget}
                           onDownload={handleDownload}
+                          onOpenOnlineDocument={openOnlineEditor}
                         />
                       </Stack>
                       <Box sx={{ minWidth: 0 }}>
@@ -749,7 +862,8 @@ export function CipavdReportsPage() {
                           {folder.name}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {folder.folderCount ?? 0} pasta(s) · {folder.fileCount ?? 0} arquivo(s)
+                          {folder.folderCount ?? 0} pasta(s) ·{" "}
+                          {folder.fileCount ?? 0} arquivo(s)
                         </Typography>
                       </Box>
                     </Stack>
@@ -763,13 +877,16 @@ export function CipavdReportsPage() {
                   onDoubleClick={() => void handlePreview(file)}
                   sx={{
                     borderRadius: 2,
-                    cursor: canPreviewCipavdReportPdf(file)
-                      ? "zoom-in"
-                      : "default",
+                    cursor: isCipavdReportOnlineDocument(file)
+                      ? "pointer"
+                      : canPreviewCipavdReportPdf(file)
+                        ? "zoom-in"
+                        : "default",
                     borderColor: "#DADCE0",
                     "&:hover": {
                       borderColor: "#1A73E8",
-                      bgcolor: (theme) => alpha(theme.palette.primary.main, 0.03),
+                      bgcolor: (theme) =>
+                        alpha(theme.palette.primary.main, 0.03),
                     },
                   }}
                 >
@@ -797,6 +914,7 @@ export function CipavdReportsPage() {
                           onMove={openMove}
                           onDelete={setDeleteTarget}
                           onDownload={handleDownload}
+                          onOpenOnlineDocument={openOnlineEditor}
                         />
                       </Stack>
                       <Box sx={{ minWidth: 0 }}>
@@ -804,7 +922,10 @@ export function CipavdReportsPage() {
                           {file.name}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {formatBytes(file.fileSize)} · {formatDate(file.updatedAt)}
+                          {isCipavdReportOnlineDocument(file)
+                            ? "DOC online"
+                            : formatBytes(file.fileSize)}{" "}
+                          · {formatDate(file.updatedAt)}
                         </Typography>
                       </Box>
                     </Stack>
@@ -816,7 +937,12 @@ export function CipavdReportsPage() {
         </Stack>
       </Paper>
 
-      <Dialog open={folderDialogOpen} onClose={() => setFolderDialogOpen(false)} fullWidth maxWidth="xs">
+      <Dialog
+        open={folderDialogOpen}
+        onClose={() => setFolderDialogOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
         <DialogTitle>Nova pasta</DialogTitle>
         <DialogContent>
           <TextField
@@ -830,13 +956,55 @@ export function CipavdReportsPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setFolderDialogOpen(false)}>Cancelar</Button>
-          <Button variant="contained" startIcon={<AddRoundedIcon />} onClick={handleCreateFolder}>
+          <Button
+            variant="contained"
+            startIcon={<AddRoundedIcon />}
+            onClick={handleCreateFolder}
+          >
             Criar
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(renameTarget)} onClose={() => setRenameTarget(null)} fullWidth maxWidth="xs">
+      <Dialog
+        open={onlineDialogOpen}
+        onClose={() => setOnlineDialogOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Novo documento</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Nome do documento"
+            value={onlineDocumentName}
+            onChange={(event) => setOnlineDocumentName(event.target.value)}
+            helperText="Será criado como DOC online editável em tempo real."
+            fullWidth
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOnlineDialogOpen(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            startIcon={<OpenInNewRoundedIcon />}
+            onClick={() => {
+              void handleCreateOnlineDocument();
+            }}
+            disabled={createOnlineDocument.isPending}
+          >
+            Criar e abrir
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(renameTarget)}
+        onClose={() => setRenameTarget(null)}
+        fullWidth
+        maxWidth="xs"
+      >
         <DialogTitle>Renomear</DialogTitle>
         <DialogContent>
           <TextField
@@ -856,7 +1024,12 @@ export function CipavdReportsPage() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={Boolean(moveTarget)} onClose={() => setMoveTarget(null)} fullWidth maxWidth="sm">
+      <Dialog
+        open={Boolean(moveTarget)}
+        onClose={() => setMoveTarget(null)}
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>Mover item</DialogTitle>
         <DialogContent>
           <TextField

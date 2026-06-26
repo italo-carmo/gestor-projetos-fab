@@ -261,8 +261,8 @@ describe('KnowledgeBasesService', () => {
         filePath: sourcePath,
         mimeType: 'application/pdf',
         fileSize: 16,
-        path: 'Acervo / 2026 / relatorio.pdf',
-        folderPath: 'Acervo / 2026',
+        path: 'Relatórios / 2026 / relatorio.pdf',
+        folderPath: 'Relatórios / 2026',
       });
     const reindexSpy = jest
       .spyOn(service, 'reindexDocument')
@@ -278,8 +278,8 @@ describe('KnowledgeBasesService', () => {
     expect(createCall.data.metadataJson).toMatchObject({
       sourceType: 'cipavd_report',
       sourceId: 'report-1',
-      sourcePath: 'Acervo / 2026 / relatorio.pdf',
-      sourceFolderPath: 'Acervo / 2026',
+      sourcePath: 'Relatórios / 2026 / relatorio.pdf',
+      sourceFolderPath: 'Relatórios / 2026',
       importedByUserId: 'user-1',
     });
     expect(reindexSpy).toHaveBeenCalledWith('doc-1', { id: 'user-1' });

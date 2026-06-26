@@ -113,8 +113,8 @@ describe('CipavdReportsService', () => {
 
     expect(result.items[0]).toMatchObject({
       id: 'file-1',
-      path: 'Acervo / 2026 / Junho / ata.pdf',
-      folderPath: 'Acervo / 2026 / Junho',
+      path: 'Relatórios / 2026 / Junho / ata.pdf',
+      folderPath: 'Relatórios / 2026 / Junho',
     });
   });
 });

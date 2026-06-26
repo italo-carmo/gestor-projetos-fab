@@ -1,20 +1,34 @@
 import { Injectable } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import {
+  DocumentAssetType,
+  DocumentCategory,
+  DocumentParseStatus,
+  Prisma,
+} from '@prisma/client';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile, rm } from 'node:fs/promises';
 import * as path from 'node:path';
 import { AuditService } from '../audit/audit.service';
 import { throwError } from '../common/http-error';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
-import {
-  hasAnyRole,
-  ROLE_COMGEP,
-  ROLE_TI,
-} from '../rbac/role-access';
+import { hasAnyRole, ROLE_COMGEP, ROLE_TI } from '../rbac/role-access';
 import { resolveExistingCipavdReportPath } from './cipavd-reports-storage';
 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx']);
-const ROOT_LABEL = 'Acervo';
+const ROOT_LABEL = 'Relatórios';
+const ONLINE_DOCUMENT_STORAGE_PREFIX = 'online-document:';
+const ONLINE_DOCUMENT_MIME_TYPE = 'application/vnd.gestor.online-document+json';
+const INITIAL_ONLINE_DOCUMENT_CONTENT = {
+  type: 'doc',
+  content: [{ type: 'paragraph' }],
+};
+const DEFAULT_ONLINE_DOCUMENT_PAGE_SETTINGS = {
+  marginTopCm: 2.5,
+  marginRightCm: 2.5,
+  marginBottomCm: 2.5,
+  marginLeftCm: 2.5,
+};
 const ALLOWED_MIME_TYPES = new Set([
   '',
   'application/octet-stream',
@@ -132,9 +146,10 @@ export class CipavdReportsService {
     const q = String(filters.q ?? '').trim();
     const [files, folders] = await Promise.all([
       this.prisma.cipavdReportFile.findMany({
-        where: q
-          ? { name: { contains: q, mode: 'insensitive' as const } }
-          : undefined,
+        where: {
+          onlineDocumentId: null,
+          ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+        },
         include: { createdBy: this.createdBySelect() },
         orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
         take: 250,
@@ -257,11 +272,25 @@ export class CipavdReportsService {
     });
     const files = await this.prisma.cipavdReportFile.findMany({
       where: { folderId: { in: folderIds } },
-      select: { id: true, storageKey: true },
+      select: { id: true, storageKey: true, onlineDocumentId: true },
     });
 
     await this.prisma.cipavdReportFolder.delete({ where: { id } });
-    await Promise.all(files.map((file) => this.removeStoredFile(file.storageKey)));
+    await Promise.all(
+      files.map((file) =>
+        file.onlineDocumentId
+          ? Promise.resolve()
+          : this.removeStoredFile(file.storageKey),
+      ),
+    );
+    const onlineDocumentIds = files
+      .map((file) => file.onlineDocumentId)
+      .filter(Boolean) as string[];
+    if (onlineDocumentIds.length > 0) {
+      await this.prisma.documentAsset.deleteMany({
+        where: { id: { in: onlineDocumentIds } },
+      });
+    }
 
     await this.audit.log({
       userId: user?.id,
@@ -340,6 +369,110 @@ export class CipavdReportsService {
     }
   }
 
+  async createOnlineDocumentFile(
+    payload: { name?: string | null; folderId?: string | null },
+    user?: RbacUser,
+  ) {
+    this.assertAccess(user);
+    const folderId = this.normalizeNullableId(payload.folderId);
+    await this.assertParentFolderExists(folderId);
+
+    const name = this.normalizeOnlineDocumentName(payload.name);
+    await this.assertFileNameAvailable(folderId, name);
+
+    const documentId = randomUUID();
+    const title = this.stripDocxExtension(name);
+    const sourcePath = await this.buildOnlineDocumentSourcePath(
+      folderId,
+      title,
+    );
+    const editorUrl = this.buildOnlineEditorUrl(documentId);
+    const contentJson =
+      INITIAL_ONLINE_DOCUMENT_CONTENT as Prisma.InputJsonValue;
+    const pageSettingsJson =
+      DEFAULT_ONLINE_DOCUMENT_PAGE_SETTINGS as Prisma.InputJsonValue;
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const document = await tx.documentAsset.create({
+        data: {
+          id: documentId,
+          title,
+          assetType: DocumentAssetType.ONLINE_DOC,
+          category: DocumentCategory.GENERAL,
+          sourcePath,
+          fileName: name,
+          fileUrl: editorUrl,
+          storageKey: null,
+          mimeType: ONLINE_DOCUMENT_MIME_TYPE,
+          tagsJson: {
+            kind: 'cipavd_report_online_document',
+            createdById: user?.id ?? null,
+            createdByEmail: user?.email ?? null,
+            cipavdReportFolderId: folderId,
+          },
+          content: {
+            create: {
+              parseStatus: DocumentParseStatus.EXTRACTED,
+              textContent: '',
+              parsedAt: new Date(),
+              metadataJson: { source: 'cipavd_report_online_document' },
+            },
+          },
+          onlineContent: {
+            create: {
+              contentJson,
+              plainText: '',
+              pageSettingsJson,
+              savedRevision: 1,
+              lastSavedById: user?.id,
+            },
+          },
+          onlineVersions: {
+            create: {
+              revision: 1,
+              title: 'Criacao do documento',
+              contentJson,
+              plainText: '',
+              pageSettingsJson,
+              createdById: user?.id,
+            },
+          },
+        },
+      });
+
+      return tx.cipavdReportFile.create({
+        data: {
+          name,
+          folderId,
+          fileName: name,
+          fileUrl: editorUrl,
+          storageKey: `${ONLINE_DOCUMENT_STORAGE_PREFIX}${document.id}`,
+          onlineDocumentId: document.id,
+          mimeType: ONLINE_DOCUMENT_MIME_TYPE,
+          fileSize: null,
+          checksum: null,
+          createdById: user?.id ?? null,
+        },
+        include: { createdBy: this.createdBySelect() },
+      });
+    });
+
+    await this.audit.log({
+      userId: user?.id,
+      resource: 'cipavd_reports',
+      action: 'create_online_document',
+      entityId: created.id,
+      diffJson: {
+        name,
+        folderId,
+        onlineDocumentId: created.onlineDocumentId,
+        sourcePath,
+      },
+    });
+
+    return this.serializeFile(created);
+  }
+
   async updateFile(
     id: string,
     payload: { name?: string | null; folderId?: string | null },
@@ -363,10 +496,43 @@ export class CipavdReportsService {
     await this.assertParentFolderExists(nextFolderId);
     await this.assertFileNameAvailable(nextFolderId, nextName, current.id);
 
-    const updated = await this.prisma.cipavdReportFile.update({
-      where: { id },
-      data: { name: nextName, folderId: nextFolderId },
-      include: { createdBy: this.createdBySelect() },
+    const nextOnlineTitle = current.onlineDocumentId
+      ? this.stripDocxExtension(nextName)
+      : null;
+    const nextOnlineSourcePath =
+      current.onlineDocumentId && nextOnlineTitle
+        ? await this.buildOnlineDocumentSourcePath(
+            nextFolderId,
+            nextOnlineTitle,
+          )
+        : null;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (current.onlineDocumentId) {
+        await tx.documentAsset.update({
+          where: { id: current.onlineDocumentId },
+          data: {
+            title: nextOnlineTitle ?? undefined,
+            fileName: nextName,
+            sourcePath: nextOnlineSourcePath ?? undefined,
+          },
+        });
+      }
+
+      return tx.cipavdReportFile.update({
+        where: { id },
+        data: {
+          name: nextName,
+          folderId: nextFolderId,
+          ...(current.onlineDocumentId
+            ? {
+                fileName: nextName,
+                fileUrl: this.buildOnlineEditorUrl(current.onlineDocumentId),
+              }
+            : {}),
+        },
+        include: { createdBy: this.createdBySelect() },
+      });
     });
 
     await this.audit.log({
@@ -390,8 +556,17 @@ export class CipavdReportsService {
     });
     if (!current) throwError('NOT_FOUND');
 
-    await this.prisma.cipavdReportFile.delete({ where: { id } });
-    await this.removeStoredFile(current.storageKey);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cipavdReportFile.delete({ where: { id } });
+      if (current.onlineDocumentId) {
+        await tx.documentAsset.delete({
+          where: { id: current.onlineDocumentId },
+        });
+      }
+    });
+    if (!current.onlineDocumentId) {
+      await this.removeStoredFile(current.storageKey);
+    }
 
     await this.audit.log({
       userId: user?.id,
@@ -414,6 +589,12 @@ export class CipavdReportsService {
       where: { id },
     });
     if (!file) throwError('NOT_FOUND');
+    if (file.onlineDocumentId) {
+      throwError('VALIDATION_ERROR', {
+        field: 'file',
+        reason: 'online_document_not_downloadable',
+      });
+    }
     const filePath = resolveExistingCipavdReportPath(file.storageKey);
     if (!filePath) throwError('NOT_FOUND');
     return { ...file, filePath };
@@ -470,15 +651,24 @@ export class CipavdReportsService {
       name: file.name,
       folderId: file.folderId ?? null,
       fileName: file.fileName,
-      fileUrl: file.fileUrl || this.buildDownloadUrl(file.id),
+      fileUrl: file.onlineDocumentId
+        ? this.buildOnlineEditorUrl(file.onlineDocumentId)
+        : file.fileUrl || this.buildDownloadUrl(file.id),
       storageKey: file.storageKey,
+      onlineDocumentId: file.onlineDocumentId ?? null,
+      assetType: file.onlineDocumentId ? 'ONLINE_DOC' : 'FILE',
       mimeType: file.mimeType ?? null,
       fileSize: file.fileSize ?? null,
       checksum: file.checksum ?? null,
       createdAt: file.createdAt,
       updatedAt: file.updatedAt,
       createdBy: file.createdBy ?? null,
-      downloadUrl: this.buildDownloadUrl(file.id),
+      downloadUrl: file.onlineDocumentId
+        ? null
+        : this.buildDownloadUrl(file.id),
+      editorUrl: file.onlineDocumentId
+        ? this.buildOnlineEditorUrl(file.onlineDocumentId)
+        : null,
     };
   }
 
@@ -488,7 +678,9 @@ export class CipavdReportsService {
   }
 
   private normalizeFolderName(value: string | null | undefined) {
-    const name = String(value ?? '').replace(/\s+/g, ' ').trim();
+    const name = String(value ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (!name) {
       throwError('VALIDATION_ERROR', { field: 'name', reason: 'required' });
     }
@@ -525,9 +717,42 @@ export class CipavdReportsService {
     return name;
   }
 
+  private normalizeOnlineDocumentName(value: string | null | undefined) {
+    const raw = String(value ?? '').trim() || 'Documento sem titulo';
+    let name = raw.replace(/[\\/]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!name) {
+      throwError('VALIDATION_ERROR', { field: 'name', reason: 'required' });
+    }
+    if (!path.extname(name)) {
+      name = `${name}.docx`;
+    }
+    if (path.extname(name).toLowerCase() !== '.docx') {
+      throwError('VALIDATION_ERROR', {
+        field: 'name',
+        reason: 'docx_required',
+      });
+    }
+    if (name.length > 180) {
+      const extension = path.extname(name);
+      const base = name.slice(0, 180 - extension.length).trim();
+      name = `${base}${extension}`;
+    }
+    return name;
+  }
+
+  private stripDocxExtension(name: string) {
+    return (
+      String(name ?? '')
+        .replace(/\.docx$/i, '')
+        .trim() || 'Documento sem titulo'
+    );
+  }
+
   private assertSupportedFile(file: Express.Multer.File, name: string) {
     this.assertSupportedExtension(name);
-    const mimetype = String(file.mimetype ?? '').trim().toLowerCase();
+    const mimetype = String(file.mimetype ?? '')
+      .trim()
+      .toLowerCase();
     if (!ALLOWED_MIME_TYPES.has(mimetype)) {
       throwError('VALIDATION_ERROR', {
         field: 'file',
@@ -647,7 +872,10 @@ export class CipavdReportsService {
 
   private buildFolderPathParts(
     folderId: string | null,
-    folderMap: Map<string, { id: string; name: string; parentId: string | null }>,
+    folderMap: Map<
+      string,
+      { id: string; name: string; parentId: string | null }
+    >,
   ) {
     const parts: string[] = [];
     let cursor = folderId;
@@ -662,7 +890,10 @@ export class CipavdReportsService {
 
   private buildFolderPath(
     folderId: string | null,
-    folderMap: Map<string, { id: string; name: string; parentId: string | null }>,
+    folderMap: Map<
+      string,
+      { id: string; name: string; parentId: string | null }
+    >,
   ) {
     return [ROOT_LABEL, ...this.buildFolderPathParts(folderId, folderMap)].join(
       ' / ',
@@ -672,13 +903,31 @@ export class CipavdReportsService {
   private buildFilePath(
     folderId: string | null,
     fileName: string,
-    folderMap: Map<string, { id: string; name: string; parentId: string | null }>,
+    folderMap: Map<
+      string,
+      { id: string; name: string; parentId: string | null }
+    >,
   ) {
     return [this.buildFolderPath(folderId, folderMap), fileName].join(' / ');
   }
 
   private buildDownloadUrl(id: string) {
     return `/cipavd-reports/files/${encodeURIComponent(id)}/download`;
+  }
+
+  private buildOnlineEditorUrl(id: string) {
+    return `/documents/editor/${encodeURIComponent(id)}`;
+  }
+
+  private async buildOnlineDocumentSourcePath(
+    folderId: string | null,
+    title: string,
+  ) {
+    const folders = await this.prisma.cipavdReportFolder.findMany({
+      select: { id: true, name: true, parentId: true },
+    });
+    const folderMap = new Map(folders.map((item) => [item.id, item]));
+    return [this.buildFolderPath(folderId, folderMap), title].join(' / ');
   }
 
   private detectMimeType(name: string) {

@@ -123,6 +123,15 @@ export class CipavdReportsController {
     return this.reports.uploadFile(file, body, user);
   }
 
+  @Post('files/online')
+  @RequirePermission('cipavd_reports', 'create', 'NATIONAL')
+  createOnlineFile(
+    @Body() body: { name?: string | null; folderId?: string | null },
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.reports.createOnlineDocumentFile(body, user);
+  }
+
   @Put('files/:id')
   @RequirePermission('cipavd_reports', 'update', 'NATIONAL')
   updateFile(
@@ -148,6 +157,9 @@ export class CipavdReportsController {
   ) {
     const file = await this.reports.getFileForDownload(id, user);
     res.setHeader('Cache-Control', 'private, no-store');
-    return res.download(file.filePath, file.name || file.fileName || 'relatorio');
+    return res.download(
+      file.filePath,
+      file.name || file.fileName || 'relatorio',
+    );
   }
 }

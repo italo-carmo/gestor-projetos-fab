@@ -637,7 +637,7 @@ function DocumentEditor(props: {
           spacing={1.2}
           sx={{ px: 1.2, py: 0.8 }}
         >
-          <Tooltip title="Voltar ao Acervo">
+          <Tooltip title="Voltar">
             <IconButton onClick={() => closeEditor(documentId)} size="small">
               <ArrowBackRoundedIcon />
             </IconButton>
