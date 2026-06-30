@@ -967,9 +967,11 @@ export function MissionsPage() {
   const canCreateFieldActivities = can(me, 'task_instances', 'create');
   const canLinkFieldActivities = can(me, 'task_instances', 'update');
   const canManageScheduleFieldActivities = canCreateFieldActivities || canLinkFieldActivities;
+  const canDeleteScheduleItems =
+    canDeleteMissions || (isAdmMissionsProfile && canUpdateMissions);
   const showScheduleFieldActivityColumn = canViewFieldActivities && !isAdmMissionsProfile;
   const showScheduleFieldActivityTools = canManageScheduleFieldActivities && !isAdmMissionsProfile;
-  const canSelectScheduleItems = showScheduleFieldActivityTools || canDeleteMissions;
+  const canSelectScheduleItems = showScheduleFieldActivityTools || canDeleteScheduleItems;
   const showSystemUserParticipantTab = !isAdmMissionsProfile;
   const activityTypesQuery = useActivityTypes(missionScope, showScheduleFieldActivityTools);
   const activitiesForLinkQuery = useActivities({
@@ -1356,7 +1358,7 @@ export function MissionsPage() {
   }, [missionScheduleItems, scheduleDeleteTarget]);
   const selectedScheduleCount = selectedScheduleItemIds.length;
   const scheduleSelectionHelpText = showScheduleFieldActivityTools
-    ? canDeleteMissions
+    ? canDeleteScheduleItems
       ? 'Selecione um ou mais itens para gerar atividades de campo, relacionar atividades existentes ou excluir em lote.'
       : 'Selecione um ou mais itens para gerar atividades de campo ou relacionar atividades existentes.'
     : 'Selecione um ou mais itens para excluir em lote.';
@@ -2124,6 +2126,7 @@ export function MissionsPage() {
   };
 
   const handleDeleteScheduleItem = (itemId: string, itemTitle: string) => {
+    if (!canDeleteScheduleItems) return;
     setScheduleDeleteTarget({ ids: [itemId], title: itemTitle, count: 1 });
   };
 
@@ -2146,6 +2149,7 @@ export function MissionsPage() {
   };
 
   const handleDeleteSelectedScheduleItems = () => {
+    if (!canDeleteScheduleItems) return;
     if (!selectedScheduleItemIds.length) return;
     setScheduleDeleteTarget({
       ids: selectedScheduleItemIds,
@@ -3650,7 +3654,7 @@ export function MissionsPage() {
                                 >
                                   Desfazer seleção
                                 </Button>
-                                {canDeleteMissions ? (
+                                {canDeleteScheduleItems ? (
                                   <Button
                                     variant="outlined"
                                     color="error"
@@ -3794,7 +3798,7 @@ export function MissionsPage() {
                                       >
                                         <EditOutlinedIcon fontSize="small" />
                                       </IconButton>
-                                      {canDeleteMissions ? (
+                                      {canDeleteScheduleItems ? (
                                         <IconButton size="small" color="error" onClick={() => handleDeleteScheduleItem(itemId, item.title ?? 'Item de cronograma')}>
                                           <DeleteOutlineIcon fontSize="small" />
                                         </IconButton>

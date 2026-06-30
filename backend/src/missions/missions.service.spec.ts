@@ -41,6 +41,12 @@ const admMissionsUser = {
   ],
 } as any;
 
+const missionsViewerUser = {
+  ...user,
+  permissions: [{ resource: 'missions', action: 'view', scope: 'NATIONAL' }],
+  roles: [],
+} as any;
+
 function buildPrismaMock() {
   const tx = {
     activity: {
@@ -76,6 +82,10 @@ function buildPrismaMock() {
       create: jest.fn(),
       findFirst: jest.fn(),
       update: jest.fn(),
+    },
+    missionScheduleItem: {
+      findFirst: jest.fn(),
+      delete: jest.fn(),
     },
     locality: {
       findMany: jest.fn().mockResolvedValue([{ id: 'loc-1' }]),
@@ -480,6 +490,41 @@ describe('MissionsService Adm Missões access', () => {
     ).rejects.toMatchObject({
       response: expect.objectContaining({ code: 'RBAC_FORBIDDEN' }),
     });
+  });
+
+  it('allows deleting schedule items with missions update permission', async () => {
+    const prisma = buildPrismaMock();
+    prisma.mission.findUnique.mockResolvedValue(buildMissionForReport());
+    prisma.missionScheduleItem.findFirst.mockResolvedValue({
+      id: 'schedule-1',
+    });
+    prisma.missionScheduleItem.delete.mockResolvedValue({
+      id: 'schedule-1',
+    });
+
+    const service = new MissionsService(prisma, auditMock, fabLdapMock);
+
+    await expect(
+      service.deleteScheduleItem('mission-1', 'schedule-1', admMissionsUser),
+    ).resolves.toEqual({ ok: true });
+
+    expect(prisma.missionScheduleItem.delete).toHaveBeenCalledWith({
+      where: { id: 'schedule-1' },
+    });
+  });
+
+  it('blocks deleting schedule items with only missions view permission', async () => {
+    const prisma = buildPrismaMock();
+    const service = new MissionsService(prisma, auditMock, fabLdapMock);
+
+    await expect(
+      service.deleteScheduleItem('mission-1', 'schedule-1', missionsViewerUser),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'RBAC_FORBIDDEN' }),
+    });
+
+    expect(prisma.mission.findUnique).not.toHaveBeenCalled();
+    expect(prisma.missionScheduleItem.delete).not.toHaveBeenCalled();
   });
 });
 

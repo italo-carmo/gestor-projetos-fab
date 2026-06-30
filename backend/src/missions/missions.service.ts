@@ -2321,6 +2321,7 @@ export class MissionsService {
   }
 
   async deleteScheduleItem(missionId: string, itemId: string, user?: RbacUser) {
+    this.assertMissionScheduleDeleteAccess(user);
     this.assertMissionAccess(user);
     const mission = await this.prisma.mission.findUnique({
       where: { id: missionId },
@@ -3999,6 +4000,18 @@ export class MissionsService {
       hasAnyPermission(user, [
         { resource: 'missions', action: 'update' },
         { resource: 'missions', action: 'upload' },
+      ])
+    ) {
+      return;
+    }
+    throwError('RBAC_FORBIDDEN');
+  }
+
+  private assertMissionScheduleDeleteAccess(user?: RbacUser) {
+    if (
+      hasAnyPermission(user, [
+        { resource: 'missions', action: 'update' },
+        { resource: 'missions', action: 'delete' },
       ])
     ) {
       return;

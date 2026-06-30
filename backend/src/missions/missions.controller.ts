@@ -400,7 +400,7 @@ export class MissionsController {
   }
 
   @Delete(':id/schedule/:itemId')
-  @RequirePermission('missions', 'delete')
+  @RequirePermission('missions', 'view')
   deleteScheduleItem(
     @Param('id') id: string,
     @Param('itemId') itemId: string,
