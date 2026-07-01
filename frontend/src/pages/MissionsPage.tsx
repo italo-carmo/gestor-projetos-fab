@@ -52,7 +52,7 @@ import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import RedoRoundedIcon from '@mui/icons-material/RedoRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import UndoRoundedIcon from '@mui/icons-material/UndoRounded';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   useActivities,
@@ -1380,6 +1380,8 @@ export function MissionsPage() {
   const someScheduleItemsSelected =
     selectedScheduleItemIds.length > 0 &&
     selectedScheduleItemIds.length < allScheduleItemIds.length;
+  const scheduleTableColumnCount =
+    (canSelectScheduleItems ? 1 : 0) + 6 + (showScheduleFieldActivityColumn ? 1 : 0);
   const selectedScheduleDayKey = useMemo(() => {
     if (!selectedScheduleItemIds.length || !scheduleDayOptions.length) return null;
     const normalizedSelection = [...selectedScheduleItemIds].sort().join('|');
@@ -3756,171 +3758,62 @@ export function MissionsPage() {
                                 const isEditingScheduleItem = editingScheduleItemId === itemId;
                                 const linkedActivities = getMissionScheduleItemLinkedActivities(item);
                                 return (
-                                  <TableRow
-                                    key={item.id}
-                                    selected={checked || isEditingScheduleItem}
-                                    sx={isEditingScheduleItem ? { '& > td': { verticalAlign: 'top' } } : undefined}
-                                  >
-                                    {canSelectScheduleItems ? (
-                                      <TableCell padding="checkbox">
-                                        <Checkbox
-                                          size="small"
-                                          checked={checked}
-                                          onChange={() => handleToggleScheduleItemSelection(itemId)}
-                                        />
+                                  <Fragment key={item.id}>
+                                    <TableRow selected={checked || isEditingScheduleItem}>
+                                      {canSelectScheduleItems ? (
+                                        <TableCell padding="checkbox">
+                                          <Checkbox
+                                            size="small"
+                                            checked={checked}
+                                            onChange={() => handleToggleScheduleItemSelection(itemId)}
+                                          />
+                                        </TableCell>
+                                      ) : null}
+                                      <TableCell>
+                                        {new Date(item.startAt).toLocaleString('pt-BR', {
+                                          day: '2-digit',
+                                          month: '2-digit',
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                        })}
+                                        <Typography variant="caption" color="text.secondary" display="block">
+                                          {item.durationMinutes} min
+                                        </Typography>
                                       </TableCell>
-                                    ) : null}
-                                    <TableCell sx={{ minWidth: isEditingScheduleItem ? 200 : undefined }}>
-                                      {isEditingScheduleItem ? (
-                                        <Stack spacing={0.8}>
-                                          <TextField
-                                            size="small"
-                                            type="datetime-local"
-                                            label="Início"
-                                            value={scheduleEditForm.startAt}
-                                            onChange={(event) =>
-                                              setScheduleEditForm({ ...scheduleEditForm, startAt: event.target.value })
-                                            }
-                                            InputLabelProps={{ shrink: true }}
-                                            fullWidth
-                                          />
-                                          <TextField
-                                            size="small"
-                                            type="number"
-                                            label="Duração"
-                                            value={scheduleEditForm.durationMinutes}
-                                            onChange={(event) =>
-                                              setScheduleEditForm({
-                                                ...scheduleEditForm,
-                                                durationMinutes: Number(event.target.value) || 0,
-                                              })
-                                            }
-                                            inputProps={{ min: 1 }}
-                                            fullWidth
-                                          />
-                                        </Stack>
-                                      ) : (
-                                        <>
-                                          {new Date(item.startAt).toLocaleString('pt-BR', {
-                                            day: '2-digit',
-                                            month: '2-digit',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                          })}
-                                          <Typography variant="caption" color="text.secondary" display="block">
-                                            {item.durationMinutes} min
-                                          </Typography>
-                                        </>
-                                      )}
-                                    </TableCell>
-                                    <TableCell sx={{ minWidth: isEditingScheduleItem ? 220 : undefined }}>
-                                      {isEditingScheduleItem ? (
-                                        <TextField
-                                          size="small"
-                                          label="Atividade"
-                                          value={scheduleEditForm.title}
-                                          onChange={(event) =>
-                                            setScheduleEditForm({ ...scheduleEditForm, title: event.target.value })
-                                          }
-                                          fullWidth
-                                        />
-                                      ) : (
-                                        item.title
-                                      )}
-                                    </TableCell>
-                                    <TableCell sx={{ minWidth: isEditingScheduleItem ? 170 : undefined }}>
-                                      {isEditingScheduleItem ? (
-                                        <TextField
-                                          size="small"
-                                          label="Local"
-                                          value={scheduleEditForm.location}
-                                          onChange={(event) =>
-                                            setScheduleEditForm({ ...scheduleEditForm, location: event.target.value })
-                                          }
-                                          fullWidth
-                                        />
-                                      ) : (
-                                        item.location
-                                      )}
-                                    </TableCell>
-                                    <TableCell sx={{ minWidth: isEditingScheduleItem ? 170 : undefined }}>
-                                      {isEditingScheduleItem ? (
-                                        <TextField
-                                          size="small"
-                                          label="Responsável"
-                                          value={scheduleEditForm.responsible}
-                                          onChange={(event) =>
-                                            setScheduleEditForm({ ...scheduleEditForm, responsible: event.target.value })
-                                          }
-                                          fullWidth
-                                        />
-                                      ) : (
-                                        item.responsible
-                                      )}
-                                    </TableCell>
-                                    <TableCell
-                                      sx={{
-                                        maxWidth: isEditingScheduleItem ? 280 : 220,
-                                        minWidth: isEditingScheduleItem ? 220 : undefined,
-                                        whiteSpace: 'pre-wrap',
-                                      }}
-                                    >
-                                      {isEditingScheduleItem ? (
-                                        <TextField
-                                          size="small"
-                                          label="Participantes"
-                                          value={scheduleEditForm.participants}
-                                          onChange={(event) =>
-                                            setScheduleEditForm({ ...scheduleEditForm, participants: event.target.value })
-                                          }
-                                          fullWidth
-                                          multiline
-                                          minRows={2}
-                                        />
-                                      ) : (
-                                        item.participants
-                                      )}
-                                    </TableCell>
-                                    {showScheduleFieldActivityColumn ? (
-                                      <TableCell sx={{ minWidth: 190 }}>
-                                        {linkedActivities.length > 0 ? (
-                                          <Stack spacing={0.5} alignItems="flex-start">
-                                            <Chip
-                                              size="small"
-                                              color="success"
-                                              variant="outlined"
-                                              label={`${linkedActivities.length} vinculada(s)`}
-                                            />
-                                            {linkedActivities.map((activity: any) => (
-                                              <Button
-                                                key={String(activity.id)}
+                                      <TableCell>{item.title}</TableCell>
+                                      <TableCell>{item.location}</TableCell>
+                                      <TableCell>{item.responsible}</TableCell>
+                                      <TableCell sx={{ maxWidth: 220, whiteSpace: 'pre-wrap' }}>{item.participants}</TableCell>
+                                      {showScheduleFieldActivityColumn ? (
+                                        <TableCell sx={{ minWidth: 190 }}>
+                                          {linkedActivities.length > 0 ? (
+                                            <Stack spacing={0.5} alignItems="flex-start">
+                                              <Chip
                                                 size="small"
-                                                variant="text"
-                                                endIcon={<OpenInNewRoundedIcon fontSize="small" />}
-                                                href={`${missionScope === 'CIPAVD' ? '/activities-cipavd' : '/activities'}?activityId=${encodeURIComponent(String(activity.id))}`}
-                                                sx={{ px: 0, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', lineHeight: 1.2 }}
-                                              >
-                                                {activity.title ?? 'Abrir atividade'}
-                                              </Button>
-                                            ))}
-                                          </Stack>
-                                        ) : (
-                                          <Chip size="small" label="Sem vínculo" variant="outlined" />
-                                        )}
-                                      </TableCell>
-                                    ) : null}
-                                    <TableCell>
-                                      {isEditingScheduleItem ? (
-                                        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={0.8} alignItems="flex-start">
-                                          <Button
-                                            size="small"
-                                            variant="contained"
-                                            startIcon={<SaveRoundedIcon />}
-                                            onClick={() => handleSaveInlineScheduleItem(itemId)}
-                                            disabled={updateScheduleItem.isPending}
-                                          >
-                                            Salvar
-                                          </Button>
+                                                color="success"
+                                                variant="outlined"
+                                                label={`${linkedActivities.length} vinculada(s)`}
+                                              />
+                                              {linkedActivities.map((activity: any) => (
+                                                <Button
+                                                  key={String(activity.id)}
+                                                  size="small"
+                                                  variant="text"
+                                                  endIcon={<OpenInNewRoundedIcon fontSize="small" />}
+                                                  href={`${missionScope === 'CIPAVD' ? '/activities-cipavd' : '/activities'}?activityId=${encodeURIComponent(String(activity.id))}`}
+                                                  sx={{ px: 0, minWidth: 0, justifyContent: 'flex-start', textTransform: 'none', lineHeight: 1.2 }}
+                                                >
+                                                  {activity.title ?? 'Abrir atividade'}
+                                                </Button>
+                                              ))}
+                                            </Stack>
+                                          ) : (
+                                            <Chip size="small" label="Sem vínculo" variant="outlined" />
+                                          )}
+                                        </TableCell>
+                                      ) : null}
+                                      <TableCell>
+                                        {isEditingScheduleItem ? (
                                           <Button
                                             size="small"
                                             variant="text"
@@ -3929,29 +3822,151 @@ export function MissionsPage() {
                                           >
                                             Cancelar
                                           </Button>
-                                        </Stack>
-                                      ) : (
-                                        <>
-                                          <IconButton
-                                            size="small"
-                                            onClick={() => handleStartInlineScheduleEdit(item)}
-                                            disabled={updateScheduleItem.isPending}
-                                          >
-                                            <EditOutlinedIcon fontSize="small" />
-                                          </IconButton>
-                                          {canDeleteScheduleItems ? (
+                                        ) : (
+                                          <>
                                             <IconButton
                                               size="small"
-                                              color="error"
-                                              onClick={() => handleDeleteScheduleItem(itemId, item.title ?? 'Item de cronograma')}
+                                              onClick={() => handleStartInlineScheduleEdit(item)}
+                                              disabled={updateScheduleItem.isPending}
                                             >
-                                              <DeleteOutlineIcon fontSize="small" />
+                                              <EditOutlinedIcon fontSize="small" />
                                             </IconButton>
-                                          ) : null}
-                                        </>
-                                      )}
-                                    </TableCell>
-                                  </TableRow>
+                                            {canDeleteScheduleItems ? (
+                                              <IconButton
+                                                size="small"
+                                                color="error"
+                                                onClick={() => handleDeleteScheduleItem(itemId, item.title ?? 'Item de cronograma')}
+                                              >
+                                                <DeleteOutlineIcon fontSize="small" />
+                                              </IconButton>
+                                            ) : null}
+                                          </>
+                                        )}
+                                      </TableCell>
+                                    </TableRow>
+                                    {isEditingScheduleItem ? (
+                                      <TableRow>
+                                        <TableCell
+                                          colSpan={scheduleTableColumnCount}
+                                          sx={{
+                                            bgcolor: 'action.hover',
+                                            borderBottom: '1px solid',
+                                            borderColor: 'divider',
+                                            p: 0,
+                                          }}
+                                        >
+                                          <Collapse in={isEditingScheduleItem} timeout="auto" unmountOnExit>
+                                            <Box sx={{ p: 1.25 }}>
+                                              <Box
+                                                sx={{
+                                                  display: 'grid',
+                                                  gap: 1,
+                                                  gridTemplateColumns: {
+                                                    xs: '1fr',
+                                                    md: 'repeat(3, minmax(0, 1fr))',
+                                                    xl: 'minmax(260px, 2fr) minmax(190px, 1fr) minmax(110px, 0.55fr) minmax(180px, 1fr) minmax(180px, 1fr)',
+                                                  },
+                                                  alignItems: 'start',
+                                                }}
+                                              >
+                                                <TextField
+                                                  size="small"
+                                                  label="Atividade"
+                                                  value={scheduleEditForm.title}
+                                                  onChange={(event) =>
+                                                    setScheduleEditForm({ ...scheduleEditForm, title: event.target.value })
+                                                  }
+                                                  fullWidth
+                                                  sx={{ gridColumn: { md: 'span 2', xl: 'span 1' } }}
+                                                />
+                                                <TextField
+                                                  size="small"
+                                                  type="datetime-local"
+                                                  label="Início"
+                                                  value={scheduleEditForm.startAt}
+                                                  onChange={(event) =>
+                                                    setScheduleEditForm({ ...scheduleEditForm, startAt: event.target.value })
+                                                  }
+                                                  InputLabelProps={{ shrink: true }}
+                                                  fullWidth
+                                                />
+                                                <TextField
+                                                  size="small"
+                                                  type="number"
+                                                  label="Duração"
+                                                  value={scheduleEditForm.durationMinutes}
+                                                  onChange={(event) =>
+                                                    setScheduleEditForm({
+                                                      ...scheduleEditForm,
+                                                      durationMinutes: Number(event.target.value) || 0,
+                                                    })
+                                                  }
+                                                  inputProps={{ min: 1 }}
+                                                  fullWidth
+                                                />
+                                                <TextField
+                                                  size="small"
+                                                  label="Local"
+                                                  value={scheduleEditForm.location}
+                                                  onChange={(event) =>
+                                                    setScheduleEditForm({ ...scheduleEditForm, location: event.target.value })
+                                                  }
+                                                  fullWidth
+                                                />
+                                                <TextField
+                                                  size="small"
+                                                  label="Responsável"
+                                                  value={scheduleEditForm.responsible}
+                                                  onChange={(event) =>
+                                                    setScheduleEditForm({ ...scheduleEditForm, responsible: event.target.value })
+                                                  }
+                                                  fullWidth
+                                                />
+                                                <TextField
+                                                  size="small"
+                                                  label="Participantes"
+                                                  value={scheduleEditForm.participants}
+                                                  onChange={(event) =>
+                                                    setScheduleEditForm({ ...scheduleEditForm, participants: event.target.value })
+                                                  }
+                                                  fullWidth
+                                                  multiline
+                                                  minRows={1}
+                                                  maxRows={3}
+                                                  sx={{ gridColumn: { md: 'span 2', xl: 'span 3' } }}
+                                                />
+                                                <Stack
+                                                  direction="row"
+                                                  spacing={1}
+                                                  justifyContent={{ xs: 'flex-start', xl: 'flex-end' }}
+                                                  alignItems="center"
+                                                  sx={{ gridColumn: { md: 'span 1', xl: 'span 2' }, minWidth: 0 }}
+                                                >
+                                                  <Button
+                                                    size="small"
+                                                    variant="contained"
+                                                    startIcon={<SaveRoundedIcon />}
+                                                    onClick={() => handleSaveInlineScheduleItem(itemId)}
+                                                    disabled={updateScheduleItem.isPending}
+                                                  >
+                                                    Salvar
+                                                  </Button>
+                                                  <Button
+                                                    size="small"
+                                                    variant="text"
+                                                    onClick={handleCancelInlineScheduleEdit}
+                                                    disabled={updateScheduleItem.isPending}
+                                                  >
+                                                    Cancelar
+                                                  </Button>
+                                                </Stack>
+                                              </Box>
+                                            </Box>
+                                          </Collapse>
+                                        </TableCell>
+                                      </TableRow>
+                                    ) : null}
+                                  </Fragment>
                                 );
                               })}
                             </TableBody>
