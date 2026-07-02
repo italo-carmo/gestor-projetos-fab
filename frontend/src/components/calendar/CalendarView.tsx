@@ -1,14 +1,22 @@
 import { Box, Typography } from '@mui/material';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 
 /** Calendário “puro” sem HOC uncontrollable (evita conflito entre date/onNavigate e estado interno). */
 const CalendarControlled =
-  (Calendar as unknown as { ControlledComponent?: typeof Calendar }).ControlledComponent ??
-  Calendar;
+  (Calendar as unknown as { ControlledComponent?: typeof Calendar })
+    .ControlledComponent ?? Calendar;
 
 type RbcView = 'month' | 'week' | 'day' | 'agenda';
-import { endOfDay, format, getDay, parse, startOfDay, startOfWeek } from 'date-fns';
+type RbcNavigateAction = 'PREV' | 'NEXT' | 'TODAY';
+import {
+  endOfDay,
+  format,
+  getDay,
+  parse,
+  startOfDay,
+  startOfWeek,
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { TASK_STATUS_LABELS } from '../../constants/enums';
@@ -42,7 +50,7 @@ const MESSAGES = {
   showMore: (total: number) => `+${total} mais`,
 };
 
-export type CalendarEventKind = 'task' | 'mission' | 'activity';
+export type CalendarEventKind = 'task' | 'mission' | 'activity' | 'meeting';
 
 export type CalendarEventInput = {
   id: string;
@@ -50,10 +58,36 @@ export type CalendarEventInput = {
   date: string | Date;
   /** End date for multi-day events (e.g. missions). If omitted, event is single-day. */
   endDate?: string | Date;
+  /** Keeps dated items full-day by default, but allows meetings to appear at their scheduled time in week/day views. */
+  allDay?: boolean;
   subtitle?: string;
   status?: string;
-  /** Distinguishes styling: task (status colors), mission, activity */
+  /** Distinguishes styling: task (status colors), mission, activity, meeting */
   kind?: CalendarEventKind;
+};
+
+type CalendarRbcEvent = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  status?: string;
+  kind: CalendarEventKind;
+  start: Date;
+  end: Date;
+  allDay: boolean;
+};
+
+type CalendarToolbarProps = {
+  label: string;
+  onNavigate: (action: RbcNavigateAction) => void;
+  onView: (view: RbcView) => void;
+  view: RbcView;
+  views?: RbcView[] | Partial<Record<RbcView, boolean>>;
+};
+
+type CalendarSlotInfo = {
+  start: Date;
+  end: Date;
 };
 
 const STATUS_BG: Record<string, string> = {
@@ -72,14 +106,70 @@ const STATUS_BORDER: Record<string, string> = {
   NOT_STARTED: '#607D8B',
 };
 
-/** Mission: indigo/purple. Activity: teal. Task: by status. */
+/** Mission: indigo/purple. Activity: teal. Meeting: amber. Task: by status. */
 const KIND_STYLES: Record<CalendarEventKind, { bg: string; border: string }> = {
   task: { bg: '', border: '' }, // use status
   mission: { bg: '#EDE7F6', border: '#5E35B1' },
   activity: { bg: '#E0F2F1', border: '#00695C' },
+  meeting: { bg: '#FFF8E1', border: '#F57C00' },
 };
 
-function EventCard({ event }: { event: any }) {
+const VIEW_LABELS: Record<RbcView, string> = {
+  month: 'Mês',
+  week: 'Semana',
+  day: 'Dia',
+  agenda: 'Agenda',
+};
+
+function isRbcView(name: string): name is RbcView {
+  return name in VIEW_LABELS;
+}
+
+function CalendarToolbar({
+  label,
+  onNavigate,
+  onView,
+  view,
+  views,
+}: CalendarToolbarProps) {
+  const rawViews = Array.isArray(views)
+    ? views
+    : Object.keys(views ?? VIEW_LABELS);
+  const availableViews = rawViews.filter(isRbcView);
+
+  return (
+    <Box className="rbc-toolbar app-calendar-toolbar">
+      <Box component="span" className="rbc-btn-group app-calendar-nav">
+        <button type="button" onClick={() => onNavigate('PREV')}>
+          Anterior
+        </button>
+        <button type="button" onClick={() => onNavigate('TODAY')}>
+          Hoje
+        </button>
+        <button type="button" onClick={() => onNavigate('NEXT')}>
+          Próximo
+        </button>
+      </Box>
+      <Box component="span" className="rbc-toolbar-label">
+        {label}
+      </Box>
+      <Box component="span" className="rbc-btn-group app-calendar-views">
+        {availableViews.map((viewName) => (
+          <button
+            key={viewName}
+            type="button"
+            className={view === viewName ? 'rbc-active' : undefined}
+            onClick={() => onView(viewName)}
+          >
+            {VIEW_LABELS[viewName]}
+          </button>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+function EventCard({ event }: { event: CalendarRbcEvent }) {
   const kind: CalendarEventKind = event.kind ?? 'task';
   const isTask = kind === 'task';
   const status = event.status ?? 'NOT_STARTED';
@@ -104,8 +194,18 @@ function EventCard({ event }: { event: any }) {
         minWidth: 0,
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.55, minWidth: 0 }}>
-        <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: dotColor, flex: '0 0 auto' }} />
+      <Box
+        sx={{ display: 'flex', alignItems: 'center', gap: 0.55, minWidth: 0 }}
+      >
+        <Box
+          sx={{
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            bgcolor: dotColor,
+            flex: '0 0 auto',
+          }}
+        />
         <Typography
           variant="caption"
           sx={{
@@ -132,7 +232,8 @@ function EventCard({ event }: { event: any }) {
             textOverflow: 'ellipsis',
           }}
         >
-          {event.subtitle ?? (isTask ? TASK_STATUS_LABELS[event.status] ?? event.status : '')}
+          {event.subtitle ??
+            (isTask ? (TASK_STATUS_LABELS[status] ?? status) : '')}
         </Typography>
       )}
     </Box>
@@ -142,11 +243,13 @@ function EventCard({ event }: { event: any }) {
 export function CalendarView({
   events,
   onSelect,
+  onSelectSlot,
   height = 520,
   date,
 }: {
   events: CalendarEventInput[];
   onSelect: (id: string) => void;
+  onSelectSlot?: (date: Date) => void;
   height?: number | string;
   /** Data inicial / âncora (ex.: início do ano filtrado). Precisa de estado interno + onNavigate para Anterior/Próximo funcionarem. */
   date?: Date;
@@ -154,29 +257,23 @@ export function CalendarView({
   const [currentDate, setCurrentDate] = useState(() => date ?? new Date());
   const [currentView, setCurrentView] = useState<RbcView>('month');
 
-  const dateSeedKey = date
-    ? `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
-    : '';
-
-  useEffect(() => {
-    if (!date) return;
-    setCurrentDate(new Date(date.getFullYear(), date.getMonth(), date.getDate()));
-  }, [dateSeedKey]);
-
-  const rbcEvents = events.map((e) => {
+  const rbcEvents: CalendarRbcEvent[] = events.map((e) => {
     const d = typeof e.date === 'string' ? new Date(e.date) : e.date;
     const endD = e.endDate
-      ? (typeof e.endDate === 'string' ? new Date(e.endDate) : e.endDate)
+      ? typeof e.endDate === 'string'
+        ? new Date(e.endDate)
+        : e.endDate
       : d;
+    const isAllDay = e.allDay ?? true;
     return {
       id: e.id,
       title: e.title,
       subtitle: e.subtitle,
       status: e.status,
       kind: e.kind ?? 'task',
-      start: startOfDay(d),
-      end: endOfDay(endD),
-      allDay: true,
+      start: isAllDay ? startOfDay(d) : d,
+      end: isAllDay ? endOfDay(endD) : endD,
+      allDay: isAllDay,
     };
   });
 
@@ -198,6 +295,13 @@ export function CalendarView({
           flexWrap: 'wrap',
           gap: 0.8,
           mb: 1.1,
+          alignItems: 'center',
+          '& .app-calendar-nav': {
+            order: 1,
+          },
+          '& .app-calendar-views': {
+            order: 3,
+          },
           '& button': {
             borderRadius: 1.3,
             textTransform: 'none',
@@ -210,7 +314,14 @@ export function CalendarView({
             backgroundColor: 'rgba(12, 101, 126, 0.14)',
           },
         },
-        '& .rbc-toolbar-label': { fontWeight: 800, fontSize: 16 },
+        '& .rbc-toolbar-label': {
+          order: 2,
+          flex: '1 1 190px',
+          minWidth: 160,
+          fontWeight: 800,
+          fontSize: 16,
+          textAlign: 'center',
+        },
         '& .rbc-header': {
           padding: '5px 1px',
           fontWeight: 700,
@@ -277,16 +388,22 @@ export function CalendarView({
         endAccessor="end"
         culture="pt-BR"
         messages={MESSAGES}
-        onSelectEvent={(event: any) => onSelect((event as { id: string }).id)}
+        onSelectEvent={(event: CalendarRbcEvent) => onSelect(event.id)}
+        selectable={Boolean(onSelectSlot)}
+        onSelectSlot={(slotInfo: CalendarSlotInfo) =>
+          onSelectSlot?.(slotInfo.start)
+        }
         views={['month', 'week', 'day', 'agenda']}
         view={currentView}
         onView={(nextView: RbcView) => setCurrentView(nextView)}
         date={currentDate}
-        onNavigate={(nextDate: Date) => setCurrentDate(new Date(nextDate.getTime()))}
+        onNavigate={(nextDate: Date) =>
+          setCurrentDate(new Date(nextDate.getTime()))
+        }
         popup={false}
         doShowMoreDrillDown
-        components={{ event: EventCard }}
-        eventPropGetter={(event: any) => {
+        components={{ event: EventCard, toolbar: CalendarToolbar }}
+        eventPropGetter={(event: CalendarRbcEvent) => {
           const kind: CalendarEventKind = event.kind ?? 'task';
           const isTask = kind === 'task';
           const status = event.status ?? 'NOT_STARTED';
