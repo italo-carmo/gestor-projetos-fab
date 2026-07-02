@@ -3,8 +3,15 @@ import { MeetingsService } from './meetings.service';
 
 const prismaMock = {
   meeting: {
+    create: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
+  },
+  role: {
+    findMany: jest.fn(),
+  },
+  user: {
+    findMany: jest.fn(),
   },
   taskTemplate: {
     create: jest.fn(),
@@ -43,6 +50,64 @@ describe('MeetingsService task generation', () => {
       if (Array.isArray(input)) return Promise.all(input);
       return input(txMock);
     });
+  });
+
+  it('creates meetings only with active org-chart participants', async () => {
+    prismaMock.role.findMany.mockResolvedValue([
+      { id: 'role-cipavd', name: 'Coordenação CIPAVD' },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([{ id: 'user-1' }]);
+    prismaMock.meeting.create.mockResolvedValue({
+      id: 'meeting-1',
+      localityId: null,
+      scope: 'Alinhamento CIPAVD',
+      status: 'PLANNED',
+      participants: [],
+    });
+
+    await service.create({
+      datetime: '2026-07-02T12:00:00.000Z',
+      scope: 'Alinhamento CIPAVD',
+      status: 'PLANNED',
+      meetingType: 'ONLINE',
+      meetingLink: 'https://meet.example/reuniao',
+      participantIds: ['user-1', 'user-1', ' '],
+    });
+
+    expect(prismaMock.meeting.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          participants: { create: [{ userId: 'user-1' }] },
+        }),
+      }),
+    );
+  });
+
+  it('rejects meeting participants outside the org chart', async () => {
+    prismaMock.role.findMany.mockResolvedValue([
+      { id: 'role-cipavd', name: 'Coordenação CIPAVD' },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.create({
+        datetime: '2026-07-02T12:00:00.000Z',
+        scope: 'Alinhamento CIPAVD',
+        status: 'PLANNED',
+        meetingType: 'ONLINE',
+        meetingLink: 'https://meet.example/reuniao',
+        participantIds: ['user-fora'],
+      }),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'VALIDATION_ERROR',
+        details: {
+          field: 'participantIds',
+          reason: 'PARTICIPANTS_NOT_IN_ORG_CHART',
+        },
+      }),
+    });
+    expect(prismaMock.meeting.create).not.toHaveBeenCalled();
   });
 
   it('saves optional free-text minutes without requiring files', async () => {
@@ -139,7 +204,8 @@ describe('MeetingsService task generation', () => {
         fileName: 'lista.xlsx',
         fileUrl: '/documents/lista.xlsx',
         storageKey: 'lista-storage.xlsx',
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         fileSize: 987,
       },
     ]);
@@ -189,7 +255,9 @@ describe('MeetingsService task generation', () => {
       localityId: null,
     });
 
-    await expect(service.uploadMinutesFiles('meeting-1', [])).rejects.toMatchObject({
+    await expect(
+      service.uploadMinutesFiles('meeting-1', []),
+    ).rejects.toMatchObject({
       response: expect.objectContaining({
         code: 'VALIDATION_ERROR',
         details: { field: 'files', reason: 'required' },

@@ -28,6 +28,7 @@ import {
   useDashboardNational,
   useLocalities,
   useMe,
+  useMeetingParticipantOptions,
   useMeetings,
   useMissions,
   usePhases,
@@ -138,6 +139,20 @@ type MeetingItem = {
   localityId?: string | null;
 };
 
+type OrgChartParticipant = {
+  id?: string | number | null;
+  name?: string | null;
+  warName?: string | null;
+  email?: string | null;
+  functionText?: string | null;
+};
+
+type ParticipantOption = {
+  id: string;
+  name: string;
+  details: string;
+};
+
 type CreateTaskForm = {
   scope: TaskScope;
   title: string;
@@ -155,8 +170,8 @@ type CreateMeetingForm = {
   meetingType: string;
   location: string;
   meetingLink: string;
-  localityId: string;
   agenda: string;
+  participantIds: string[];
 };
 
 function formatDateRange(startIso: string, endIso: string): string {
@@ -261,6 +276,10 @@ export function CalendarPage() {
     },
     canViewMeetings,
   );
+  const meetingParticipantOptionsQuery = useMeetingParticipantOptions(
+    {},
+    canCreateMeeting,
+  );
   const createTaskInstance = useCreateTaskInstance();
   const createMeeting = useCreateMeeting();
 
@@ -286,8 +305,8 @@ export function CalendarPage() {
       meetingType: 'PRESENCIAL',
       location: '',
       meetingLink: '',
-      localityId,
       agenda: '',
+      participantIds: [],
     }),
   );
 
@@ -367,6 +386,32 @@ export function CalendarPage() {
         }))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
     [phasesQuery.data?.items],
+  );
+
+  const meetingParticipantOptions = useMemo<ParticipantOption[]>(() => {
+    const items = (meetingParticipantOptionsQuery.data?.items ??
+      []) as OrgChartParticipant[];
+    return items
+      .map((participant) => {
+        const id = String(participant.id ?? '').trim();
+        if (!id) return null;
+        const name = String(
+          participant.warName ?? participant.name ?? participant.email ?? id,
+        ).trim();
+        const details = [participant.functionText, participant.email]
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean)
+          .join(' • ');
+        return { id, name, details };
+      })
+      .filter((item): item is ParticipantOption => Boolean(item))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [meetingParticipantOptionsQuery.data?.items]);
+
+  const meetingParticipantOptionIds = useMemo(
+    () =>
+      new Set(meetingParticipantOptions.map((participant) => participant.id)),
+    [meetingParticipantOptions],
   );
 
   const tasks = useMemo<TaskInstanceItem[]>(() => {
@@ -536,8 +581,8 @@ export function CalendarPage() {
     meetingType: 'PRESENCIAL',
     location: '',
     meetingLink: '',
-    localityId,
     agenda: '',
+    participantIds: [],
   });
 
   const openCreateDrawer = (
@@ -679,6 +724,11 @@ export function CalendarPage() {
     }
 
     try {
+      const participantIds = meetingParticipantOptionsQuery.isLoading
+        ? createMeetingForm.participantIds
+        : createMeetingForm.participantIds.filter((id) =>
+            meetingParticipantOptionIds.has(id),
+          );
       await createMeeting.mutateAsync({
         datetime: meetingDate.toISOString(),
         scope: createMeetingForm.scope.trim(),
@@ -692,15 +742,15 @@ export function CalendarPage() {
           createMeetingForm.meetingType === 'ONLINE'
             ? createMeetingForm.meetingLink.trim()
             : null,
-        localityId: createMeetingForm.localityId || null,
+        localityId: null,
         agenda: createMeetingForm.agenda.trim() || null,
-        participantIds: [],
+        participantIds,
       });
 
       const createdYear = meetingDate.getFullYear();
       if (createdYear !== year) setYear(createdYear);
-      if (localityId !== createMeetingForm.localityId) {
-        updateParam('localityId', createMeetingForm.localityId);
+      if (localityId) {
+        updateParam('localityId', '');
       }
       setCreateDrawerOpen(false);
       toast.push({
@@ -1215,20 +1265,27 @@ export function CalendarPage() {
               <TextField
                 select
                 size="small"
-                label="Localidade"
-                value={createMeetingForm.localityId}
+                label="Participantes"
+                SelectProps={{ multiple: true }}
+                value={createMeetingForm.participantIds}
                 onChange={(event) =>
                   setCreateMeetingForm((current) => ({
                     ...current,
-                    localityId: event.target.value,
+                    participantIds: readMultiSelectValue(event.target.value),
                   }))
                 }
-                helperText="Opcional. Use para manter a reunião visível ao filtrar por localidade."
+                helperText={
+                  meetingParticipantOptionsQuery.isLoading
+                    ? 'Carregando militares do organograma...'
+                    : 'Somente militares cadastrados no organograma.'
+                }
+                disabled={meetingParticipantOptionsQuery.isLoading}
               >
-                <MenuItem value="">Geral</MenuItem>
-                {localityNameCatalog.map((loc) => (
-                  <MenuItem key={loc.id} value={loc.id}>
-                    {loc.name}
+                {meetingParticipantOptions.map((participant) => (
+                  <MenuItem key={participant.id} value={participant.id}>
+                    {participant.details
+                      ? `${participant.name} • ${participant.details}`
+                      : participant.name}
                   </MenuItem>
                 ))}
               </TextField>

@@ -3045,6 +3045,38 @@ export function useMeetings(filters: Record<string, any>, enabled = true) {
   });
 }
 
+type MeetingParticipantOptionApiItem = {
+  name?: string | null;
+  warName?: string | null;
+  [key: string]: unknown;
+};
+
+export function useMeetingParticipantOptions(
+  filters: Record<string, unknown> = {},
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.meetingParticipantOptions(filters),
+    queryFn: async () => {
+      const data = (
+        await api.get("/meetings/participant-options", { params: filters })
+      ).data;
+      return {
+        ...data,
+        items: ((data?.items ?? []) as MeetingParticipantOptionApiItem[]).map(
+          (item) => ({
+            ...item,
+            name: toMilitaryDisplayName(item.name),
+            warName: toMilitaryDisplayName(item.warName ?? item.name),
+          }),
+        ),
+      };
+    },
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
 export function useCreateMeeting() {
   const qc = useQueryClient();
   return useMutation({
@@ -3245,7 +3277,10 @@ export function useOrgChart(filters: Record<string, any>) {
   });
 }
 
-export function useOrgChartCommissionMembers(filters: Record<string, any>) {
+export function useOrgChartCommissionMembers(
+  filters: Record<string, any>,
+  enabled = true,
+) {
   return useQuery({
     queryKey: qk.orgChartCommissionMembers(filters),
     queryFn: async () => {
@@ -3261,6 +3296,7 @@ export function useOrgChartCommissionMembers(filters: Record<string, any>) {
         })),
       };
     },
+    enabled,
     staleTime: 15_000,
   });
 }

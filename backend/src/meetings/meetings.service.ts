@@ -13,7 +13,11 @@ import { RbacUser } from '../rbac/rbac.types';
 import { throwError } from '../common/http-error';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
-import { hasPermission } from '../rbac/role-access';
+import {
+  hasPermission,
+  normalizeRoleName,
+  ROLE_COORDENACAO_CIPAVD,
+} from '../rbac/role-access';
 
 @Injectable()
 export class MeetingsService {
@@ -95,6 +99,55 @@ export class MeetingsService {
     return { items, page, pageSize, total };
   }
 
+  async listParticipantOptions(filters: { q?: string }) {
+    const commissionRole = await this.findCommissionRole();
+    if (!commissionRole) return { items: [] };
+
+    const where: Prisma.UserWhereInput = {
+      isActive: true,
+      roles: {
+        some: {
+          roleId: commissionRole.id,
+        },
+      },
+    };
+    if (filters.q) {
+      where.OR = [
+        { name: { contains: filters.q, mode: 'insensitive' } },
+        { email: { contains: filters.q, mode: 'insensitive' } },
+        { ldapUid: { contains: filters.q, mode: 'insensitive' } },
+      ];
+    }
+
+    const items = await this.prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        ldapUid: true,
+        commissionFunction: true,
+        commissionPhone: true,
+        commissionSeniority: true,
+      },
+      orderBy: [{ commissionSeniority: 'asc' }, { name: 'asc' }],
+      take: 400,
+    });
+
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        warName: item.name,
+        email: item.email,
+        ldapUid: item.ldapUid,
+        functionText: item.commissionFunction ?? null,
+        phone: item.commissionPhone ?? null,
+        seniority: item.commissionSeniority ?? null,
+      })),
+    };
+  }
+
   async create(
     payload: {
       datetime: string;
@@ -124,6 +177,9 @@ export class MeetingsService {
       });
     }
     this.assertLocality(payload.localityId ?? null, user);
+    const participantIds = await this.resolveMeetingParticipantIds(
+      payload.participantIds,
+    );
 
     const created = await this.prisma.meeting.create({
       data: {
@@ -136,8 +192,8 @@ export class MeetingsService {
         agenda: payload.agenda ? sanitizeText(payload.agenda) : null,
         minutes: payload.minutes ? sanitizeText(payload.minutes) : null,
         localityId: payload.localityId ?? null,
-        participants: payload.participantIds?.length
-          ? { create: payload.participantIds.map((userId) => ({ userId })) }
+        participants: participantIds.length
+          ? { create: participantIds.map((userId) => ({ userId })) }
           : undefined,
       },
       include: {
@@ -202,6 +258,10 @@ export class MeetingsService {
       });
     }
     this.assertLocality(localityId, user);
+    const participantIds =
+      payload.participantIds === undefined
+        ? undefined
+        : await this.resolveMeetingParticipantIds(payload.participantIds);
 
     if (payload.participantIds !== undefined) {
       await this.prisma.meetingParticipant.deleteMany({
@@ -239,8 +299,8 @@ export class MeetingsService {
             ? sanitizeText(payload.minutes ?? '') || null
             : undefined,
         localityId: payload.localityId !== undefined ? localityId : undefined,
-        participants: payload.participantIds?.length
-          ? { create: payload.participantIds.map((userId) => ({ userId })) }
+        participants: participantIds?.length
+          ? { create: participantIds.map((userId) => ({ userId })) }
           : undefined,
       },
       include: {
@@ -593,6 +653,68 @@ export class MeetingsService {
     return {
       localityId: user.localityId ?? undefined,
     };
+  }
+
+  private async findCommissionRole() {
+    const roles = await this.prisma.role.findMany({
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+    return (
+      roles.find(
+        (role) =>
+          normalizeRoleName(role.name) ===
+          normalizeRoleName(ROLE_COORDENACAO_CIPAVD),
+      ) ?? null
+    );
+  }
+
+  private async resolveMeetingParticipantIds(participantIds?: string[]) {
+    const normalizedIds = Array.from(
+      new Set(
+        (participantIds ?? [])
+          .map((id) => String(id ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (!normalizedIds.length) return [];
+
+    const commissionRole = await this.findCommissionRole();
+    if (!commissionRole) {
+      throwError('VALIDATION_ERROR', {
+        field: 'participantIds',
+        reason: 'PARTICIPANTS_NOT_IN_ORG_CHART',
+      });
+    }
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: { in: normalizedIds },
+        isActive: true,
+        roles: {
+          some: {
+            roleId: commissionRole.id,
+          },
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+    const allowedIds = new Set(users.map((item) => item.id));
+    const hasInvalidParticipant = normalizedIds.some(
+      (id) => !allowedIds.has(id),
+    );
+    if (hasInvalidParticipant) {
+      throwError('VALIDATION_ERROR', {
+        field: 'participantIds',
+        reason: 'PARTICIPANTS_NOT_IN_ORG_CHART',
+      });
+    }
+
+    return normalizedIds;
   }
 
   private assertLocality(localityId: string | null, user?: RbacUser) {

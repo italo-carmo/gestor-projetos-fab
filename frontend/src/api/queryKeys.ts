@@ -60,6 +60,8 @@ export const qk = {
   cipavdReportFolderOptions: (excludeFolderId?: string | null) =>
     ["cipavdReports", "folderOptions", excludeFolderId ?? ""] as const,
   meetings: (filters: Record<string, any>) => ["meetings", filters] as const,
+  meetingParticipantOptions: (filters: Record<string, unknown>) =>
+    ["meetings", "participantOptions", filters] as const,
   checklists: (filters: Record<string, any>) =>
     ["checklists", filters] as const,
   elos: (filters: Record<string, any>) => ["elos", filters] as const,

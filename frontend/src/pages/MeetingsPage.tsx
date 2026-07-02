@@ -25,7 +25,13 @@ import {
 } from '@mui/material';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
-import { addDays, endOfMonth, format, startOfMonth, startOfWeek } from 'date-fns';
+import {
+  addDays,
+  endOfMonth,
+  format,
+  startOfMonth,
+  startOfWeek,
+} from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -36,6 +42,7 @@ import {
   useDownloadMeetingMinutesFile,
   useGenerateMeetingTasks,
   useLocalities,
+  useMeetingParticipantOptions,
   useMeetings,
   usePhases,
   useSpecialties,
@@ -44,7 +51,6 @@ import {
   useUpdateMeetingMinutes,
   useUploadMeetingMinutesFiles,
   useMe,
-  useUsers,
 } from '../api/hooks';
 import { FiltersBar } from '../components/filters/FiltersBar';
 import { ConfirmDialog } from '../components/dialogs/ConfirmDialog';
@@ -54,14 +60,24 @@ import { SkeletonState } from '../components/states/SkeletonState';
 import { useToast } from '../app/toast';
 import { parseApiError } from '../app/apiErrors';
 import { can } from '../app/rbac';
-import { MeetingStatus, MEETING_STATUS_LABELS, MeetingType, MEETING_TYPE_LABELS, TaskPriority, TASK_PRIORITY_LABELS } from '../constants/enums';
+import {
+  MeetingStatus,
+  MEETING_STATUS_LABELS,
+  MeetingType,
+  MEETING_TYPE_LABELS,
+  TaskPriority,
+  TASK_PRIORITY_LABELS,
+} from '../constants/enums';
 
 const STATUS_BG: Record<string, string> = {
   PLANNED: '#E3F2FD',
   HELD: '#E8F5E9',
   CANCELLED: '#FFEBEE',
 };
-const STATUS_CHIP_COLOR: Record<string, 'default' | 'primary' | 'success' | 'error'> = {
+const STATUS_CHIP_COLOR: Record<
+  string,
+  'default' | 'primary' | 'success' | 'error'
+> = {
   PLANNED: 'primary',
   HELD: 'success',
   CANCELLED: 'error',
@@ -70,6 +86,20 @@ const STATUS_CHIP_COLOR: Record<string, 'default' | 'primary' | 'success' | 'err
 function readMultiSelectValue(value: string | string[]) {
   return Array.isArray(value) ? value : value.split(',').filter(Boolean);
 }
+
+type MeetingParticipantOptionRaw = {
+  id?: string | number | null;
+  name?: string | null;
+  warName?: string | null;
+  email?: string | null;
+  functionText?: string | null;
+};
+
+type MeetingParticipantOption = {
+  id: string;
+  name: string;
+  details: string;
+};
 
 export function MeetingsPage() {
   const [params, setParams] = useSearchParams();
@@ -97,8 +127,7 @@ export function MeetingsPage() {
 
   const meetingsQuery = useMeetings(filters);
   const localitiesQuery = useLocalities();
-  const usersQuery = useUsers();
-  const users = usersQuery.data?.items ?? [];
+  const participantOptionsQuery = useMeetingParticipantOptions({});
   const phasesQuery = usePhases();
   const specialtiesQuery = useSpecialties();
   const templatesQuery = useTaskTemplates();
@@ -116,7 +145,9 @@ export function MeetingsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState(0);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [minutesFileToDelete, setMinutesFileToDelete] = useState<any | null>(null);
+  const [minutesFileToDelete, setMinutesFileToDelete] = useState<any | null>(
+    null,
+  );
   const [selectedMeeting, setSelectedMeeting] = useState<any | null>(null);
   const [minutesDraft, setMinutesDraft] = useState('');
   const [form, setForm] = useState({
@@ -126,7 +157,6 @@ export function MeetingsPage() {
     meetingType: 'PRESENCIAL',
     location: '',
     meetingLink: '',
-    localityId: '',
     agenda: '',
     participantIds: [] as string[],
   });
@@ -147,9 +177,36 @@ export function MeetingsPage() {
     localities: [] as { localityId: string; dueDate: string }[],
   });
 
+  const participantOptions = useMemo<MeetingParticipantOption[]>(() => {
+    const items = (participantOptionsQuery.data?.items ??
+      []) as MeetingParticipantOptionRaw[];
+    return items
+      .map((participant) => {
+        const id = String(participant.id ?? '').trim();
+        if (!id) return null;
+        const name = String(
+          participant.warName ?? participant.name ?? participant.email ?? id,
+        ).trim();
+        const details = [participant.functionText, participant.email]
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean)
+          .join(' • ');
+        return { id, name, details };
+      })
+      .filter((item): item is MeetingParticipantOption => Boolean(item))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [participantOptionsQuery.data?.items]);
+
+  const participantOptionIds = useMemo(
+    () => new Set(participantOptions.map((participant) => participant.id)),
+    [participantOptions],
+  );
+
   useEffect(() => {
     if (meetingIdFromUrl && meetingsQuery.data?.items?.length) {
-      const meeting = meetingsQuery.data.items.find((m: any) => m.id === meetingIdFromUrl);
+      const meeting = meetingsQuery.data.items.find(
+        (m: any) => m.id === meetingIdFromUrl,
+      );
       if (meeting) {
         setSelectedMeeting(meeting);
         setMinutesDraft(meeting.minutes ?? '');
@@ -160,8 +217,11 @@ export function MeetingsPage() {
   }, [meetingIdFromUrl, meetingsQuery.data?.items]);
 
   useEffect(() => {
-    if (!drawerOpen || !selectedMeeting?.id || !meetingsQuery.data?.items) return;
-    const found = meetingsQuery.data.items.find((m: any) => m.id === selectedMeeting.id);
+    if (!drawerOpen || !selectedMeeting?.id || !meetingsQuery.data?.items)
+      return;
+    const found = meetingsQuery.data.items.find(
+      (m: any) => m.id === selectedMeeting.id,
+    );
     if (found) setSelectedMeeting(found);
   }, [drawerOpen, selectedMeeting?.id, meetingsQuery.data?.items]);
 
@@ -197,7 +257,6 @@ export function MeetingsPage() {
       meetingType: 'PRESENCIAL',
       location: '',
       meetingLink: '',
-      localityId: '',
       agenda: '',
       participantIds: [],
     });
@@ -215,9 +274,10 @@ export function MeetingsPage() {
       meetingType: meeting.meetingType ?? 'PRESENCIAL',
       location: meeting.location ?? meeting.locality?.name ?? '',
       meetingLink: meeting.meetingLink ?? '',
-      localityId: meeting.localityId ?? '',
       agenda: meeting.agenda ?? '',
-      participantIds: (meeting.participants ?? []).map((p: any) => p.user?.id ?? p.userId).filter(Boolean),
+      participantIds: (meeting.participants ?? [])
+        .map((p: any) => p.user?.id ?? p.userId)
+        .filter(Boolean),
     });
     setDrawerOpen(true);
   };
@@ -226,16 +286,25 @@ export function MeetingsPage() {
     if (selectedMeeting && !canUpdate) return;
     if (!selectedMeeting && !canCreate) return;
     try {
+      const participantIds = participantOptionsQuery.isLoading
+        ? form.participantIds
+        : form.participantIds.filter((id) => participantOptionIds.has(id));
       const payload = {
         datetime: new Date(form.datetime).toISOString(),
         scope: form.scope.trim(),
         status: form.status,
         meetingType: form.meetingType,
-        location: form.meetingType === 'PRESENCIAL' ? form.location.trim() || null : null,
-        meetingLink: form.meetingType === 'ONLINE' ? form.meetingLink.trim() || null : null,
+        location:
+          form.meetingType === 'PRESENCIAL'
+            ? form.location.trim() || null
+            : null,
+        meetingLink:
+          form.meetingType === 'ONLINE'
+            ? form.meetingLink.trim() || null
+            : null,
         localityId: null,
         agenda: form.agenda || null,
-        participantIds: form.participantIds,
+        participantIds,
       };
       if (selectedMeeting) {
         await updateMeeting.mutateAsync({ id: selectedMeeting.id, payload });
@@ -247,7 +316,10 @@ export function MeetingsPage() {
       setDrawerOpen(false);
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao salvar reunião', severity: 'error' });
+      toast.push({
+        message: payload.message ?? 'Erro ao salvar reunião',
+        severity: 'error',
+      });
     }
   };
 
@@ -261,7 +333,10 @@ export function MeetingsPage() {
       toast.push({ message: 'Ata salva', severity: 'success' });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao salvar ata', severity: 'error' });
+      toast.push({
+        message: payload.message ?? 'Erro ao salvar ata',
+        severity: 'error',
+      });
     }
   };
 
@@ -278,7 +353,10 @@ export function MeetingsPage() {
       });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao enviar arquivos', severity: 'error' });
+      toast.push({
+        message: payload.message ?? 'Erro ao enviar arquivos',
+        severity: 'error',
+      });
     }
   };
 
@@ -292,7 +370,10 @@ export function MeetingsPage() {
       });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao baixar arquivo', severity: 'error' });
+      toast.push({
+        message: payload.message ?? 'Erro ao baixar arquivo',
+        severity: 'error',
+      });
     }
   };
 
@@ -307,19 +388,28 @@ export function MeetingsPage() {
       setMinutesFileToDelete(null);
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao excluir arquivo', severity: 'error' });
+      toast.push({
+        message: payload.message ?? 'Erro ao excluir arquivo',
+        severity: 'error',
+      });
     }
   };
 
   const handleAddDecision = async () => {
     if (!selectedMeeting || !decisionText) return;
     try {
-      await addDecision.mutateAsync({ id: selectedMeeting.id, text: decisionText });
+      await addDecision.mutateAsync({
+        id: selectedMeeting.id,
+        text: decisionText,
+      });
       setDecisionText('');
       toast.push({ message: 'Decisão registrada', severity: 'success' });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao adicionar decisão', severity: 'error' });
+      toast.push({
+        message: payload.message ?? 'Erro ao adicionar decisão',
+        severity: 'error',
+      });
     }
   };
 
@@ -357,7 +447,9 @@ export function MeetingsPage() {
       const payload = {
         templateId: wizardPayload.templateId || undefined,
         title: wizardPayload.templateId ? undefined : wizardPayload.title,
-        description: wizardPayload.templateId ? undefined : wizardPayload.description,
+        description: wizardPayload.templateId
+          ? undefined
+          : wizardPayload.description,
         phaseId: wizardPayload.templateId ? undefined : wizardPayload.phaseId,
         specialtyId: wizardPayload.specialtyId || null,
         priority: wizardPayload.priority,
@@ -369,12 +461,21 @@ export function MeetingsPage() {
       setWizardOpen(false);
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao gerar tarefas', severity: 'error' });
+      toast.push({
+        message: payload.message ?? 'Erro ao gerar tarefas',
+        severity: 'error',
+      });
     }
   };
 
   if (meetingsQuery.isLoading) return <SkeletonState />;
-  if (meetingsQuery.isError) return <ErrorState error={meetingsQuery.error} onRetry={() => meetingsQuery.refetch()} />;
+  if (meetingsQuery.isError)
+    return (
+      <ErrorState
+        error={meetingsQuery.error}
+        onRetry={() => meetingsQuery.refetch()}
+      />
+    );
 
   const meetings = meetingsQuery.data?.items ?? [];
   const localities = localitiesQuery.data?.items ?? [];
@@ -399,13 +500,21 @@ export function MeetingsPage() {
       setDrawerOpen(false);
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({ message: payload.message ?? 'Erro ao excluir reunião', severity: 'error' });
+      toast.push({
+        message: payload.message ?? 'Erro ao excluir reunião',
+        severity: 'error',
+      });
     }
   };
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={2}
+      >
         <Typography variant="h4">Reuniões</Typography>
         {canCreate && (
           <Button variant="contained" onClick={openCreate}>
@@ -419,7 +528,10 @@ export function MeetingsPage() {
           <FiltersBar
             localityId={localityId}
             onLocalityChange={(value) => updateParam('localityId', value)}
-            localities={localities.map((l: any) => ({ id: l.id, name: l.name }))}
+            localities={localities.map((l: any) => ({
+              id: l.id,
+              name: l.name,
+            }))}
             onClear={clearFilters}
           />
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} mt={2}>
@@ -472,7 +584,12 @@ export function MeetingsPage() {
         <Tab label="Calendário" />
       </Tabs>
 
-      {meetings.length === 0 && <EmptyState title="Nenhuma reunião" description="Crie uma reunião para começar." />}
+      {meetings.length === 0 && (
+        <EmptyState
+          title="Nenhuma reunião"
+          description="Crie uma reunião para começar."
+        />
+      )}
 
       {meetings.length > 0 && tab === 0 && (
         <Box
@@ -503,13 +620,23 @@ export function MeetingsPage() {
                 }}
               >
                 <Stack spacing={0.6} sx={{ flex: 1 }}>
-                  <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    gap={1}
+                  >
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 700, lineHeight: 1.25 }}
+                    >
                       {format(new Date(meeting.datetime), 'dd/MM/yyyy HH:mm')}
                     </Typography>
                     <Chip
                       size="small"
-                      label={MEETING_STATUS_LABELS[meeting.status] ?? meeting.status}
+                      label={
+                        MEETING_STATUS_LABELS[meeting.status] ?? meeting.status
+                      }
                       color={STATUS_CHIP_COLOR[meeting.status] ?? 'default'}
                       sx={{ height: 22 }}
                     />
@@ -531,11 +658,16 @@ export function MeetingsPage() {
                   <Typography variant="caption" color="text.secondary" noWrap>
                     {meeting.meetingType === 'ONLINE'
                       ? `Online${meeting.meetingLink ? ` • ${meeting.meetingLink}` : ''}`
-                      : meeting.location ?? meeting.locality?.name ?? '—'}
+                      : (meeting.location ?? meeting.locality?.name ?? '—')}
                   </Typography>
                   <Button
                     size="small"
-                    sx={{ alignSelf: 'flex-start', minHeight: 24, px: 0.5, mt: 'auto' }}
+                    sx={{
+                      alignSelf: 'flex-start',
+                      minHeight: 24,
+                      px: 0.5,
+                      mt: 'auto',
+                    }}
                     variant="text"
                     onClick={() => openEdit(meeting)}
                   >
@@ -570,27 +702,45 @@ export function MeetingsPage() {
                     sx={{ cursor: 'pointer' }}
                     onClick={() => openEdit(meeting)}
                   >
-                    <TableCell>{format(new Date(meeting.datetime), 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell>
+                      {format(new Date(meeting.datetime), 'dd/MM/yyyy HH:mm')}
+                    </TableCell>
                     <TableCell>
                       <Chip
                         size="small"
-                        label={MEETING_STATUS_LABELS[meeting.status] ?? meeting.status}
+                        label={
+                          MEETING_STATUS_LABELS[meeting.status] ??
+                          meeting.status
+                        }
                         color={STATUS_CHIP_COLOR[meeting.status] ?? 'default'}
                       />
                     </TableCell>
                     <TableCell sx={{ maxWidth: 280 }} title={meeting.scope}>
-                      <Typography variant="body2" noWrap>{meeting.scope || '—'}</Typography>
+                      <Typography variant="body2" noWrap>
+                        {meeting.scope || '—'}
+                      </Typography>
                     </TableCell>
-                    <TableCell>{MEETING_TYPE_LABELS[meeting.meetingType] ?? meeting.meetingType}</TableCell>
+                    <TableCell>
+                      {MEETING_TYPE_LABELS[meeting.meetingType] ??
+                        meeting.meetingType}
+                    </TableCell>
                     <TableCell sx={{ maxWidth: 200 }}>
                       <Typography variant="body2" noWrap>
                         {meeting.meetingType === 'ONLINE'
-                          ? (meeting.meetingLink || '—')
+                          ? meeting.meetingLink || '—'
                           : (meeting.location ?? meeting.locality?.name ?? '—')}
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Button size="small" onClick={(e) => { e.stopPropagation(); openEdit(meeting); }}>Detalhes</Button>
+                      <Button
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEdit(meeting);
+                        }}
+                      >
+                        Detalhes
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -606,7 +756,9 @@ export function MeetingsPage() {
             <Box display="grid" gridTemplateColumns="repeat(7, 1fr)" gap={1}>
               {calendarDays.map((day) => {
                 const dayMeetings = meetings.filter(
-                  (meeting: any) => format(new Date(meeting.datetime), 'yyyy-MM-dd') === format(day, 'yyyy-MM-dd'),
+                  (meeting: any) =>
+                    format(new Date(meeting.datetime), 'yyyy-MM-dd') ===
+                    format(day, 'yyyy-MM-dd'),
                 );
                 return (
                   <Box
@@ -625,12 +777,19 @@ export function MeetingsPage() {
                     <Typography variant="caption" color="text.secondary">
                       {format(day, 'dd/MM')}
                     </Typography>
-                    <Stack spacing={0.5} mt={1} sx={{ overflowY: 'auto', pr: 0.25 }}>
+                    <Stack
+                      spacing={0.5}
+                      mt={1}
+                      sx={{ overflowY: 'auto', pr: 0.25 }}
+                    >
                       {dayMeetings.map((meeting: any) => (
                         <Chip
                           key={meeting.id}
                           size="small"
-                          label={meeting.scope || MEETING_STATUS_LABELS[meeting.status]}
+                          label={
+                            meeting.scope ||
+                            MEETING_STATUS_LABELS[meeting.status]
+                          }
                           onClick={() => openEdit(meeting)}
                           sx={{
                             cursor: 'pointer',
@@ -684,185 +843,207 @@ export function MeetingsPage() {
             <Tab label="Detalhes" />
             <Tab label="Ata" disabled={!selectedMeeting} />
           </Tabs>
-          <Stack spacing={2} sx={{ display: drawerTab === 0 ? 'flex' : 'none' }}>
-          <TextField
-            size="small"
-            type="datetime-local"
-            label="Data e hora"
-            InputLabelProps={{ shrink: true }}
-            value={form.datetime}
-            onChange={(e) => setForm({ ...form, datetime: e.target.value })}
-            disabled={Boolean(selectedMeeting) && !canUpdate}
-          />
-          <TextField
-            size="small"
-            label="Escopo (o que será tratado)"
-            value={form.scope}
-            onChange={(e) => setForm({ ...form, scope: e.target.value })}
-            placeholder="Ex.: Alinhamento de fases, checklist de preparação"
-            multiline
-            minRows={2}
-            disabled={Boolean(selectedMeeting) && !canUpdate}
-          />
-          <TextField
-            select
-            size="small"
-            label="Status"
-            value={form.status}
-            onChange={(e) => setForm({ ...form, status: e.target.value })}
-            disabled={Boolean(selectedMeeting) && !canUpdate}
+          <Stack
+            spacing={2}
+            sx={{ display: drawerTab === 0 ? 'flex' : 'none' }}
           >
-            {MeetingStatus.map((s) => (
-              <MenuItem key={s} value={s}>
-                {MEETING_STATUS_LABELS[s] ?? s}
-              </MenuItem>
-            ))}
-          </TextField>
-          <TextField
-            select
-            size="small"
-            label="Tipo"
-            value={form.meetingType}
-            onChange={(e) => setForm({ ...form, meetingType: e.target.value })}
-            disabled={Boolean(selectedMeeting) && !canUpdate}
-          >
-            {MeetingType.map((t) => (
-              <MenuItem key={t} value={t}>
-                {MEETING_TYPE_LABELS[t] ?? t}
-              </MenuItem>
-            ))}
-          </TextField>
-          {form.meetingType === 'PRESENCIAL' && (
             <TextField
               size="small"
-              label="Local"
-              value={form.location}
-              onChange={(e) => setForm({ ...form, location: e.target.value })}
-              placeholder="Ex.: Sala de briefing, COMGEP, Auditório"
+              type="datetime-local"
+              label="Data e hora"
+              InputLabelProps={{ shrink: true }}
+              value={form.datetime}
+              onChange={(e) => setForm({ ...form, datetime: e.target.value })}
               disabled={Boolean(selectedMeeting) && !canUpdate}
             />
-          )}
-          {form.meetingType === 'ONLINE' && (
             <TextField
               size="small"
-              label="Link da reunião"
-              value={form.meetingLink}
-              onChange={(e) => setForm({ ...form, meetingLink: e.target.value })}
-              placeholder="https://meet.google.com/..."
+              label="Escopo (o que será tratado)"
+              value={form.scope}
+              onChange={(e) => setForm({ ...form, scope: e.target.value })}
+              placeholder="Ex.: Alinhamento de fases, checklist de preparação"
+              multiline
+              minRows={2}
               disabled={Boolean(selectedMeeting) && !canUpdate}
             />
-          )}
-          <TextField
-            size="small"
-            label="Pauta"
-            value={form.agenda}
-            onChange={(e) => setForm({ ...form, agenda: e.target.value })}
-            multiline
-            minRows={3}
-            disabled={Boolean(selectedMeeting) && !canUpdate}
-          />
-          <TextField
-            select
-            size="small"
-            label="Participantes"
-            SelectProps={{ multiple: true }}
-            value={form.participantIds}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                participantIds: readMultiSelectValue(e.target.value),
-              })
-            }
-            disabled={Boolean(selectedMeeting) && !canUpdate}
-            helperText="Usuários do sistema (logins existentes)"
-          >
-            {users.map((u: any) => (
-              <MenuItem key={u.id} value={u.id}>
-                {u.name ?? u.email} {u.email ? `(${u.email})` : ''}
-              </MenuItem>
-            ))}
-          </TextField>
-          <Stack direction="row" spacing={1}>
-            {((selectedMeeting && canUpdate) || (!selectedMeeting && canCreate)) && (
-              <Button variant="contained" onClick={handleSave}>
-                Salvar
-              </Button>
-            )}
-            {selectedMeeting && canDelete && (
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={handleDeleteMeeting}
-                disabled={deleteMeeting.isPending}
-              >
-                Excluir
-              </Button>
-            )}
-            <Button
-              variant="text"
-              onClick={() => {
-                setDeleteConfirmOpen(false);
-                setDrawerOpen(false);
-              }}
+            <TextField
+              select
+              size="small"
+              label="Status"
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              disabled={Boolean(selectedMeeting) && !canUpdate}
             >
-              Fechar
-            </Button>
-            {selectedMeeting && canGenerate && (
-              <Button variant="outlined" onClick={openWizard}>
-                Gerar tarefas
+              {MeetingStatus.map((s) => (
+                <MenuItem key={s} value={s}>
+                  {MEETING_STATUS_LABELS[s] ?? s}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              size="small"
+              label="Tipo"
+              value={form.meetingType}
+              onChange={(e) =>
+                setForm({ ...form, meetingType: e.target.value })
+              }
+              disabled={Boolean(selectedMeeting) && !canUpdate}
+            >
+              {MeetingType.map((t) => (
+                <MenuItem key={t} value={t}>
+                  {MEETING_TYPE_LABELS[t] ?? t}
+                </MenuItem>
+              ))}
+            </TextField>
+            {form.meetingType === 'PRESENCIAL' && (
+              <TextField
+                size="small"
+                label="Local"
+                value={form.location}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
+                placeholder="Ex.: Sala de briefing, COMGEP, Auditório"
+                disabled={Boolean(selectedMeeting) && !canUpdate}
+              />
+            )}
+            {form.meetingType === 'ONLINE' && (
+              <TextField
+                size="small"
+                label="Link da reunião"
+                value={form.meetingLink}
+                onChange={(e) =>
+                  setForm({ ...form, meetingLink: e.target.value })
+                }
+                placeholder="https://meet.google.com/..."
+                disabled={Boolean(selectedMeeting) && !canUpdate}
+              />
+            )}
+            <TextField
+              size="small"
+              label="Pauta"
+              value={form.agenda}
+              onChange={(e) => setForm({ ...form, agenda: e.target.value })}
+              multiline
+              minRows={3}
+              disabled={Boolean(selectedMeeting) && !canUpdate}
+            />
+            <TextField
+              select
+              size="small"
+              label="Participantes"
+              SelectProps={{ multiple: true }}
+              value={form.participantIds}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  participantIds: readMultiSelectValue(e.target.value),
+                })
+              }
+              disabled={
+                (Boolean(selectedMeeting) && !canUpdate) ||
+                participantOptionsQuery.isLoading
+              }
+              helperText={
+                participantOptionsQuery.isLoading
+                  ? 'Carregando militares do organograma...'
+                  : 'Somente militares cadastrados no organograma.'
+              }
+            >
+              {participantOptions.map((participant) => (
+                <MenuItem key={participant.id} value={participant.id}>
+                  {participant.details
+                    ? `${participant.name} • ${participant.details}`
+                    : participant.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Stack direction="row" spacing={1}>
+              {((selectedMeeting && canUpdate) ||
+                (!selectedMeeting && canCreate)) && (
+                <Button variant="contained" onClick={handleSave}>
+                  Salvar
+                </Button>
+              )}
+              {selectedMeeting && canDelete && (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={handleDeleteMeeting}
+                  disabled={deleteMeeting.isPending}
+                >
+                  Excluir
+                </Button>
+              )}
+              <Button
+                variant="text"
+                onClick={() => {
+                  setDeleteConfirmOpen(false);
+                  setDrawerOpen(false);
+                }}
+              >
+                Fechar
               </Button>
+              {selectedMeeting && canGenerate && (
+                <Button variant="outlined" onClick={openWizard}>
+                  Gerar tarefas
+                </Button>
+              )}
+            </Stack>
+
+            {selectedMeeting && (
+              <>
+                <Divider />
+                <Typography variant="subtitle1">Participantes</Typography>
+                <Stack spacing={1}>
+                  {(selectedMeeting.participants ?? []).length === 0 && (
+                    <Typography variant="body2" color="text.secondary">
+                      Nenhum participante incluído.
+                    </Typography>
+                  )}
+                  {(selectedMeeting.participants ?? []).map((p: any) => (
+                    <Card key={p.id} variant="outlined">
+                      <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
+                        <Typography variant="subtitle2">
+                          {p.user?.name ?? p.user?.email ?? 'Usuário'}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {p.user?.email ?? ''}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Stack>
+                <Divider />
+                <Typography variant="subtitle1">Decisões</Typography>
+                <Stack spacing={1}>
+                  {(selectedMeeting.decisions ?? []).map((decision: any) => (
+                    <Card key={decision.id} variant="outlined">
+                      <CardContent>
+                        <Typography variant="body2">{decision.text}</Typography>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  <Stack direction="row" spacing={1}>
+                    <TextField
+                      size="small"
+                      label="Nova decisão"
+                      value={decisionText}
+                      onChange={(e) => setDecisionText(e.target.value)}
+                      fullWidth
+                    />
+                    <Button variant="contained" onClick={handleAddDecision}>
+                      Adicionar
+                    </Button>
+                  </Stack>
+                </Stack>
+              </>
             )}
           </Stack>
-
           {selectedMeeting && (
-            <>
-              <Divider />
-              <Typography variant="subtitle1">Participantes</Typography>
-              <Stack spacing={1}>
-                {(selectedMeeting.participants ?? []).length === 0 && (
-                  <Typography variant="body2" color="text.secondary">
-                    Nenhum participante incluído.
-                  </Typography>
-                )}
-                {(selectedMeeting.participants ?? []).map((p: any) => (
-                  <Card key={p.id} variant="outlined">
-                    <CardContent sx={{ py: 1, '&:last-child': { pb: 1 } }}>
-                      <Typography variant="subtitle2">{p.user?.name ?? p.user?.email ?? 'Usuário'}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {p.user?.email ?? ''}
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                ))}
-              </Stack>
-              <Divider />
-              <Typography variant="subtitle1">Decisões</Typography>
-              <Stack spacing={1}>
-                {(selectedMeeting.decisions ?? []).map((decision: any) => (
-                  <Card key={decision.id} variant="outlined">
-                    <CardContent>
-                      <Typography variant="body2">{decision.text}</Typography>
-                    </CardContent>
-                  </Card>
-                ))}
-                <Stack direction="row" spacing={1}>
-                  <TextField
-                    size="small"
-                    label="Nova decisão"
-                    value={decisionText}
-                    onChange={(e) => setDecisionText(e.target.value)}
-                    fullWidth
-                  />
-                  <Button variant="contained" onClick={handleAddDecision}>
-                    Adicionar
-                  </Button>
-                </Stack>
-              </Stack>
-            </>
-          )}
-          </Stack>
-          {selectedMeeting && (
-            <Stack spacing={2} sx={{ display: drawerTab === 1 ? 'flex' : 'none' }}>
+            <Stack
+              spacing={2}
+              sx={{ display: drawerTab === 1 ? 'flex' : 'none' }}
+            >
               <TextField
                 label="Texto da ata"
                 value={minutesDraft}
@@ -931,7 +1112,7 @@ export function MeetingsPage() {
                           <Typography variant="caption" color="text.secondary">
                             {document.fileSize
                               ? `${Math.round(Number(document.fileSize) / 1024)} KB`
-                              : document.mimeType ?? 'Arquivo'}
+                              : (document.mimeType ?? 'Arquivo')}
                           </Typography>
                         </Box>
                         <Stack direction="row" spacing={0.5}>
@@ -955,7 +1136,9 @@ export function MeetingsPage() {
                                 <IconButton
                                   size="small"
                                   color="error"
-                                  onClick={() => setMinutesFileToDelete(document)}
+                                  onClick={() =>
+                                    setMinutesFileToDelete(document)
+                                  }
                                   disabled={deleteMeetingMinutesFile.isPending}
                                   aria-label="Excluir arquivo da ata"
                                 >
@@ -975,7 +1158,12 @@ export function MeetingsPage() {
         </Box>
       </Drawer>
 
-      <Drawer anchor="right" open={wizardOpen} onClose={() => setWizardOpen(false)} PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}>
+      <Drawer
+        anchor="right"
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        PaperProps={{ sx: { width: { xs: '100%', md: 520 } } }}
+      >
         <Box p={3} display="flex" flexDirection="column" gap={2}>
           <Typography variant="h5">Gerar tarefas</Typography>
           <Stepper activeStep={wizardStep}>
@@ -993,7 +1181,12 @@ export function MeetingsPage() {
                 size="small"
                 label="Modelo existente"
                 value={wizardPayload.templateId}
-                onChange={(e) => setWizardPayload({ ...wizardPayload, templateId: e.target.value })}
+                onChange={(e) =>
+                  setWizardPayload({
+                    ...wizardPayload,
+                    templateId: e.target.value,
+                  })
+                }
               >
                 <MenuItem value="">Criar novo</MenuItem>
                 {(templatesQuery.data?.items ?? []).map((t: any) => (
@@ -1008,7 +1201,12 @@ export function MeetingsPage() {
                     size="small"
                     label="Título"
                     value={wizardPayload.title}
-                    onChange={(e) => setWizardPayload({ ...wizardPayload, title: e.target.value })}
+                    onChange={(e) =>
+                      setWizardPayload({
+                        ...wizardPayload,
+                        title: e.target.value,
+                      })
+                    }
                   />
                   <TextField
                     size="small"
@@ -1016,14 +1214,24 @@ export function MeetingsPage() {
                     multiline
                     minRows={3}
                     value={wizardPayload.description}
-                    onChange={(e) => setWizardPayload({ ...wizardPayload, description: e.target.value })}
+                    onChange={(e) =>
+                      setWizardPayload({
+                        ...wizardPayload,
+                        description: e.target.value,
+                      })
+                    }
                   />
                   <TextField
                     select
                     size="small"
                     label="Fase"
                     value={wizardPayload.phaseId}
-                    onChange={(e) => setWizardPayload({ ...wizardPayload, phaseId: e.target.value })}
+                    onChange={(e) =>
+                      setWizardPayload({
+                        ...wizardPayload,
+                        phaseId: e.target.value,
+                      })
+                    }
                   >
                     {(phasesQuery.data?.items ?? []).map((p: any) => (
                       <MenuItem key={p.id} value={p.id}>
@@ -1038,7 +1246,12 @@ export function MeetingsPage() {
                 size="small"
                 label="Especialidade"
                 value={wizardPayload.specialtyId}
-                onChange={(e) => setWizardPayload({ ...wizardPayload, specialtyId: e.target.value })}
+                onChange={(e) =>
+                  setWizardPayload({
+                    ...wizardPayload,
+                    specialtyId: e.target.value,
+                  })
+                }
               >
                 <MenuItem value="">Nenhuma</MenuItem>
                 {(specialtiesQuery.data?.items ?? []).map((s: any) => (
@@ -1058,7 +1271,12 @@ export function MeetingsPage() {
                 label="Prazo base"
                 InputLabelProps={{ shrink: true }}
                 value={wizardPayload.baseDueDate}
-                onChange={(e) => setWizardPayload({ ...wizardPayload, baseDueDate: e.target.value })}
+                onChange={(e) =>
+                  setWizardPayload({
+                    ...wizardPayload,
+                    baseDueDate: e.target.value,
+                  })
+                }
               />
               <TextField
                 select
@@ -1087,7 +1305,10 @@ export function MeetingsPage() {
                   key={entry.localityId}
                   size="small"
                   type="date"
-                  label={localities.find((l: any) => l.id === entry.localityId)?.name ?? 'Localidade'}
+                  label={
+                    localities.find((l: any) => l.id === entry.localityId)
+                      ?.name ?? 'Localidade'
+                  }
                   InputLabelProps={{ shrink: true }}
                   value={entry.dueDate}
                   onChange={(e) => {
@@ -1107,7 +1328,12 @@ export function MeetingsPage() {
                 size="small"
                 label="Prioridade"
                 value={wizardPayload.priority}
-                onChange={(e) => setWizardPayload({ ...wizardPayload, priority: e.target.value })}
+                onChange={(e) =>
+                  setWizardPayload({
+                    ...wizardPayload,
+                    priority: e.target.value,
+                  })
+                }
               >
                 {TaskPriority.map((p) => (
                   <MenuItem key={p} value={p}>
@@ -1119,14 +1345,22 @@ export function MeetingsPage() {
                 size="small"
                 label="Responsável (ID)"
                 value={wizardPayload.assigneeId}
-                onChange={(e) => setWizardPayload({ ...wizardPayload, assigneeId: e.target.value })}
+                onChange={(e) =>
+                  setWizardPayload({
+                    ...wizardPayload,
+                    assigneeId: e.target.value,
+                  })
+                }
               />
             </Stack>
           )}
 
           <Stack direction="row" spacing={1}>
             {wizardStep > 0 && (
-              <Button variant="text" onClick={() => setWizardStep((prev) => prev - 1)}>
+              <Button
+                variant="text"
+                onClick={() => setWizardStep((prev) => prev - 1)}
+              >
                 Voltar
               </Button>
             )}
@@ -1163,7 +1397,11 @@ export function MeetingsPage() {
         onConfirm={handleConfirmDeleteMinutesFile}
         title="Excluir arquivo da ata"
         message="Deseja excluir este arquivo da ata?"
-        highlightText={minutesFileToDelete?.title ?? minutesFileToDelete?.fileName ?? 'Arquivo selecionado'}
+        highlightText={
+          minutesFileToDelete?.title ??
+          minutesFileToDelete?.fileName ??
+          'Arquivo selecionado'
+        }
         note="O arquivo será removido da reunião e não aparecerá mais na aba Ata."
         confirmLabel="Excluir arquivo"
         severity="error"

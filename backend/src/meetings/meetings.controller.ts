@@ -61,6 +61,12 @@ export class MeetingsController {
     );
   }
 
+  @Get('participant-options')
+  @RequirePermission('meetings', 'view')
+  participantOptions(@Query('q') q: string | undefined) {
+    return this.meetings.listParticipantOptions({ q });
+  }
+
   @Post()
   @RequirePermission('meetings', 'create')
   create(@Body() dto: CreateMeetingDto, @CurrentUser() user: RbacUser) {
