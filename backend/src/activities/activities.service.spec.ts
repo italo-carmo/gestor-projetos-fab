@@ -23,6 +23,10 @@ const prismaMock = {
   },
   user: {
     findUnique: jest.fn(),
+    findMany: jest.fn(),
+  },
+  role: {
+    findMany: jest.fn(),
   },
 } as any;
 
@@ -176,6 +180,66 @@ describe('ActivitiesService activity types', () => {
     });
   });
 
+  it('lists responsible users only from the org chart commission role', async () => {
+    prismaMock.role.findMany.mockResolvedValue([
+      { id: 'role-cipavd', name: 'Coordenação CIPAVD' },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([
+      {
+        id: 'user-1',
+        name: 'Militar Um',
+        email: 'militar.um@example.mil',
+        localityId: null,
+        specialtyId: null,
+        eloRoleId: null,
+      },
+    ]);
+
+    await expect(service.listResponsibleUsers({}, tiUser)).resolves.toEqual({
+      items: [
+        {
+          id: 'user-1',
+          name: 'Militar Um',
+          email: 'militar.um@example.mil',
+          localityId: null,
+          specialtyId: null,
+          eloRoleId: null,
+        },
+      ],
+    });
+    expect(prismaMock.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          isActive: true,
+          roles: { some: { roleId: 'role-cipavd' } },
+        }),
+      }),
+    );
+  });
+
+  it('rejects activity responsible users outside the org chart', async () => {
+    prismaMock.role.findMany.mockResolvedValue([
+      { id: 'role-cipavd', name: 'Coordenação CIPAVD' },
+    ]);
+    prismaMock.user.findMany.mockResolvedValue([]);
+
+    await expect(
+      (service as any).resolveActivityResponsibleIds(
+        'loc-1',
+        ['user-outside'],
+        tiUser,
+      ),
+    ).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'VALIDATION_ERROR',
+        details: expect.objectContaining({
+          field: 'responsibleUserIds',
+          reason: 'ACTIVITY_RESPONSIBLE_NOT_IN_ORG_CHART',
+        }),
+      }),
+    });
+  });
+
   it('blocks deletion when an activity type is in use', async () => {
     prismaMock.activityType.findUnique.mockResolvedValue({
       id: 'type-1',
@@ -187,7 +251,9 @@ describe('ActivitiesService activity types', () => {
     await expect(service.deleteType('type-1', 'SMIF', tiUser)).rejects.toThrow(
       HttpException,
     );
-    await expect(service.deleteType('type-1', 'SMIF', tiUser)).rejects.toMatchObject({
+    await expect(
+      service.deleteType('type-1', 'SMIF', tiUser),
+    ).rejects.toMatchObject({
       response: expect.objectContaining({
         code: 'VALIDATION_ERROR',
         details: expect.objectContaining({
@@ -208,7 +274,9 @@ describe('ActivitiesService activity types', () => {
     });
     prismaMock.activityType.delete.mockResolvedValue({ id: 'type-1' });
 
-    await expect(service.deleteType('type-1', 'CIPAVD', tiUser)).resolves.toEqual({
+    await expect(
+      service.deleteType('type-1', 'CIPAVD', tiUser),
+    ).resolves.toEqual({
       ok: true,
     });
     expect(prismaMock.activityType.delete).toHaveBeenCalledWith({

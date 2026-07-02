@@ -4764,6 +4764,7 @@ export function MissionsPage() {
                   value={fieldActivityDefaults.responsibleUserId}
                   onChange={(event) => setFieldActivityDefaults((current) => ({ ...current, responsibleUserId: event.target.value }))}
                   sx={{ minWidth: 220 }}
+                  helperText="Somente militares cadastrados no organograma."
                 >
                   <MenuItem value="">Sem responsável</MenuItem>
                   {responsibleOptions.map((user: any) => (
@@ -5033,6 +5034,7 @@ export function MissionsPage() {
                                       value={draft.responsibleUserId}
                                       onChange={(event) => updateFieldActivityDraft(draft.id, { responsibleUserId: event.target.value })}
                                       sx={{ minWidth: 220 }}
+                                      helperText="Somente militares cadastrados no organograma."
                                     >
                                       <MenuItem value="">Sem responsável</MenuItem>
                                       {responsibleOptions.map((user: any) => (

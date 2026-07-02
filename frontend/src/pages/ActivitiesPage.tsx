@@ -914,17 +914,40 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       return true;
     });
 
-    const selectedResponsible = selected?.responsibleUsers?.[0];
-    if (
-      selectedResponsible?.id &&
-      selectedResponsible?.name &&
-      !filtered.some((user: any) => user.id === selectedResponsible.id)
-    ) {
-      filtered.push({ id: selectedResponsible.id, name: selectedResponsible.name });
-    }
-
     return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
-  }, [allResponsibleUsers, selected?.responsibleUsers]);
+  }, [allResponsibleUsers]);
+
+  const responsibleOptionIds = useMemo(
+    () =>
+      new Set(
+        responsibleOptions.map((user: { id?: unknown }) =>
+          String(user.id),
+        ),
+      ),
+    [responsibleOptions],
+  );
+
+  useEffect(() => {
+    if (responsibleUsersQuery.isLoading) return;
+    if (!activityForm.responsibleUserId) return;
+    if (responsibleOptionIds.has(String(activityForm.responsibleUserId))) return;
+    setActivityForm((prev) => ({ ...prev, responsibleUserId: '' }));
+  }, [
+    activityForm.responsibleUserId,
+    responsibleOptionIds,
+    responsibleUsersQuery.isLoading,
+  ]);
+
+  useEffect(() => {
+    if (responsibleUsersQuery.isLoading) return;
+    if (!batchResponsibleUserId) return;
+    if (responsibleOptionIds.has(String(batchResponsibleUserId))) return;
+    setBatchResponsibleUserId('');
+  }, [
+    batchResponsibleUserId,
+    responsibleOptionIds,
+    responsibleUsersQuery.isLoading,
+  ]);
 
   const batchResponsibleOptions = useMemo(() => {
     const filtered = allResponsibleUsers.filter((user: any) => {
@@ -1697,7 +1720,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
       <Tabs
         value={scope}
         onChange={(_event, value: ActivitiesPageScope) => {
-          navigate(value === 'cipavd' ? '/cipavd-activities' : '/activities');
+          navigate(value === 'cipavd' ? '/activities-cipavd' : '/activities');
         }}
         sx={{ mb: 2 }}
       >
@@ -1883,6 +1906,7 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                       onChange={(e) => setBatchResponsibleUserId(e.target.value)}
                       sx={{ width: { xs: '100%', sm: 240 } }}
                       disabled={!selectedIds.length || !canBatchAssignResponsible}
+                      helperText="Somente militares cadastrados no organograma."
                     >
                       <MenuItem value="">Sem responsável</MenuItem>
                       {batchResponsibleOptions.map((user: any) => (
@@ -2513,6 +2537,11 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
                   onChange={(e) => setActivityForm({ ...activityForm, responsibleUserId: e.target.value })}
                   sx={{ minWidth: 240 }}
                   disabled={responsibleUsersQuery.isLoading || !canEditActivityForm || !canCreateAssignResponsible}
+                  helperText={
+                    responsibleUsersQuery.isLoading
+                      ? 'Carregando militares do organograma...'
+                      : 'Somente militares cadastrados no organograma.'
+                  }
                 >
                   <MenuItem value="">Sem responsável</MenuItem>
                   {responsibleOptions.map((user: any) => (

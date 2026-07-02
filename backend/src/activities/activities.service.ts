@@ -16,7 +16,12 @@ import { AuditService } from '../audit/audit.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { sanitizeText } from '../common/sanitize';
 import { parsePagination } from '../common/pagination';
-import { hasPermission, resolveAccessProfile } from '../rbac/role-access';
+import {
+  hasPermission,
+  normalizeRoleName,
+  resolveAccessProfile,
+  ROLE_COORDENACAO_CIPAVD,
+} from '../rbac/role-access';
 import { selectTargetLocalities } from '../common/priority-localities';
 import { decryptSecret, verifyTotpCode } from '../auth/totp.util';
 
@@ -233,9 +238,21 @@ export class ActivitiesService {
     user?: RbacUser,
   ) {
     if (!user?.id) throwError('RBAC_FORBIDDEN');
+    const commissionRole = await this.findCommissionRole();
+    if (!commissionRole) return { items: [] };
+
     const localityId = String(filters.localityId ?? '').trim();
     const specialtyId = String(filters.specialtyId ?? '').trim();
-    const andClauses: Prisma.UserWhereInput[] = [{ isActive: true }];
+    const andClauses: Prisma.UserWhereInput[] = [
+      {
+        isActive: true,
+        roles: {
+          some: {
+            roleId: commissionRole.id,
+          },
+        },
+      },
+    ];
 
     if (localityId) {
       andClauses.push({ localityId });
@@ -246,9 +263,6 @@ export class ActivitiesService {
         OR: [{ specialtyId: null }, { specialtyId }],
       });
     }
-
-    // Only include users with LDAP (exclude old test users like "GSD AF", "Teste Admin", etc.)
-    andClauses.push({ ldapUid: { not: null } });
 
     const where: Prisma.UserWhereInput =
       andClauses.length === 1 ? andClauses[0] : { AND: andClauses };
@@ -3393,18 +3407,51 @@ export class ActivitiesService {
       });
     }
 
+    const commissionRole = await this.findCommissionRole();
+    if (!commissionRole) {
+      throwError('VALIDATION_ERROR', {
+        field: 'responsibleUserIds',
+        reason: 'ACTIVITY_RESPONSIBLE_NOT_IN_ORG_CHART',
+      });
+    }
+
     const users = await this.prisma.user.findMany({
-      where: { id: { in: normalized }, isActive: true },
+      where: {
+        id: { in: normalized },
+        isActive: true,
+        roles: {
+          some: {
+            roleId: commissionRole.id,
+          },
+        },
+      },
       select: { id: true, localityId: true, specialtyId: true },
     });
     if (users.length !== normalized.length) {
       throwError('VALIDATION_ERROR', {
-        reason: 'ACTIVITY_RESPONSIBLE_INVALID',
+        field: 'responsibleUserIds',
+        reason: 'ACTIVITY_RESPONSIBLE_NOT_IN_ORG_CHART',
       });
     }
 
     this.assertScopeConstraint(localityId, null, user);
     return users.map((candidate) => candidate.id);
+  }
+
+  private async findCommissionRole() {
+    const roles = await this.prisma.role.findMany({
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+    return (
+      roles.find(
+        (role) =>
+          normalizeRoleName(role.name) ===
+          normalizeRoleName(ROLE_COORDENACAO_CIPAVD),
+      ) ?? null
+    );
   }
 
   private async resolveActivityTypeId(
