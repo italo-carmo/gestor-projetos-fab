@@ -194,6 +194,22 @@ export class MissionsController {
     return this.missions.removeReportSignature(id, signatureId, user);
   }
 
+  @Get(':id/report/pdf')
+  @RequirePermission('missions', 'download')
+  async exportReportPdf(
+    @Param('id') id: string,
+    @CurrentUser() user: RbacUser,
+    @Res() res: Response,
+  ) {
+    const { fileName, buffer } = await this.missions.buildMissionReportPdf(
+      id,
+      user,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    return res.send(buffer);
+  }
+
   @Get('ldap-participant')
   @RequirePermission('missions', 'view')
   lookupLdapParticipant(

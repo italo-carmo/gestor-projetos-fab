@@ -385,10 +385,13 @@ export function useActivity(id: string, enabled = true) {
   });
 }
 
-export function useActivityResponsibleUsers(filters: {
-  localityId?: string;
-  specialtyId?: string;
-}, enabled = true) {
+export function useActivityResponsibleUsers(
+  filters: {
+    localityId?: string;
+    specialtyId?: string;
+  },
+  enabled = true,
+) {
   const normalized = {
     localityId: filters.localityId || undefined,
     specialtyId: filters.specialtyId || undefined,
@@ -692,11 +695,44 @@ export function useUpsertMissionReport() {
   return useMutation({
     mutationFn: async (args: {
       id: string;
-      payload: { contentHtml?: string; contentText?: string };
+      payload: {
+        contentHtml?: string;
+        contentText?: string;
+        blocks?: Array<Record<string, unknown>>;
+      };
     }) => (await api.put(`/missions/${args.id}/report`, args.payload)).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["missions"] });
       qc.invalidateQueries({ queryKey: qk.mission(args.id) });
+    },
+  });
+}
+
+export function useExportMissionReportPdf() {
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.get(`/missions/${id}/report/pdf`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const contentDisposition = String(
+        response.headers?.["content-disposition"] ?? "",
+      );
+      const fileNameMatch =
+        /filename\*=(?:UTF-8'')?([^;]+)/i.exec(contentDisposition) ??
+        /filename="?([^"]+)"?/i.exec(contentDisposition);
+      const decodedName = fileNameMatch?.[1]
+        ? decodeURIComponent(fileNameMatch[1].trim())
+        : "";
+      a.download = decodedName || `relatorio-missao-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      return true;
     },
   });
 }
@@ -4740,8 +4776,11 @@ export function useDeleteOm() {
 export function useCreateCipavdLocality() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (payload: { code: string; name: string; uf?: string | null }) =>
-      (await api.post("/localities/cipavd", payload)).data,
+    mutationFn: async (payload: {
+      code: string;
+      name: string;
+      uf?: string | null;
+    }) => (await api.post("/localities/cipavd", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.cipavdLocalities });
       qc.invalidateQueries({ queryKey: qk.cipavdLocalitiesCatalog });
@@ -5007,7 +5046,8 @@ export function useOnlineDocumentVersions(id: string) {
 export function useOnlineDocumentPresence(id: string, enabled = true) {
   return useQuery({
     queryKey: qk.onlineDocumentPresence(id),
-    queryFn: async () => (await api.get(`/documents/${id}/editor/presence`)).data,
+    queryFn: async () =>
+      (await api.get(`/documents/${id}/editor/presence`)).data,
     enabled: Boolean(id) && enabled,
     refetchInterval: enabled ? 5_000 : false,
     staleTime: 3_000,
@@ -5157,7 +5197,8 @@ export function useUpdateDocument() {
 export function useDeleteDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => (await api.delete(`/documents/${id}`)).data,
+    mutationFn: async (id: string) =>
+      (await api.delete(`/documents/${id}`)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["documents"] });
       qc.invalidateQueries({ queryKey: qk.documentCoverage });

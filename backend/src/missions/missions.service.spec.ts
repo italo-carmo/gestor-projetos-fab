@@ -322,19 +322,21 @@ describe('MissionsService schedule field activities', () => {
         }),
       }),
     );
-    expect(prisma.__tx.missionScheduleItemActivity.upsert).toHaveBeenCalledWith({
-      where: {
-        scheduleItemId_activityId: {
+    expect(prisma.__tx.missionScheduleItemActivity.upsert).toHaveBeenCalledWith(
+      {
+        where: {
+          scheduleItemId_activityId: {
+            scheduleItemId: 'schedule-linked',
+            activityId: 'activity-created',
+          },
+        },
+        update: {},
+        create: {
           scheduleItemId: 'schedule-linked',
           activityId: 'activity-created',
         },
       },
-      update: {},
-      create: {
-        scheduleItemId: 'schedule-linked',
-        activityId: 'activity-created',
-      },
-    });
+    );
     expect(prisma.__tx.missionScheduleItem.update).not.toHaveBeenCalledWith({
       where: { id: 'schedule-linked' },
       data: { activityId: 'activity-created' },
@@ -575,15 +577,35 @@ describe('MissionsService mission reports', () => {
 
     expect(prisma.__tx.missionReport.upsert).toHaveBeenCalledWith({
       where: { missionId: 'mission-1' },
-      create: {
+      create: expect.objectContaining({
         missionId: 'mission-1',
         contentHtml: '<p>Novo relatório</p>',
         contentText: 'Novo relatório',
-      },
-      update: {
+        blocksJson: expect.objectContaining({
+          version: 1,
+          blocks: [
+            expect.objectContaining({
+              type: 'free_text',
+              contentHtml: '<p>Novo relatório</p>',
+              contentText: 'Novo relatório',
+            }),
+          ],
+        }),
+      }),
+      update: expect.objectContaining({
         contentHtml: '<p>Novo relatório</p>',
         contentText: 'Novo relatório',
-      },
+        blocksJson: expect.objectContaining({
+          version: 1,
+          blocks: [
+            expect.objectContaining({
+              type: 'free_text',
+              contentHtml: '<p>Novo relatório</p>',
+              contentText: 'Novo relatório',
+            }),
+          ],
+        }),
+      }),
     });
     expect(prisma.__tx.missionReportSignature.updateMany).toHaveBeenCalledWith({
       where: { reportId: 'report-1', removedAt: null },
@@ -833,9 +855,7 @@ describe('MissionsService participant name formatting', () => {
         'Alunas do COMGEP, Corpo docente do DIRENS, Todas do CENIPA',
         knownOmSuffixes,
       ),
-    ).toBe(
-      'Alunas do COMGEP, Corpo docente do DIRENS, Todas do CENIPA',
-    );
+    ).toBe('Alunas do COMGEP, Corpo docente do DIRENS, Todas do CENIPA');
   });
 
   it('removes the explicit participant FAB OM even when it is not in the known suffix list', () => {

@@ -3,7 +3,7 @@ import { ActivityScope, LocalityCatalogType, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import fs from 'node:fs';
 import path from 'node:path';
-import { createHash, createHmac } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import PDFDocument from 'pdfkit';
 import { PrismaService } from '../prisma/prisma.service';
 import { throwError } from '../common/http-error';
@@ -55,72 +55,71 @@ const MISSION_PARTICIPANT_OM_SUFFIXES = new Set([
   'GABAER',
 ]);
 
-const MISSION_PARTICIPANT_RANK_ORDER_ENTRIES: Array<
-  readonly [string, number]
-> = [
-  ['GEN', 0],
-  ['TEN BRIG', 1],
-  ['TENBRIG', 1],
-  ['TB', 1],
-  ['MAJ BRIG', 2],
-  ['MAJBRIG', 2],
-  ['MB', 2],
-  ['BRIG', 3],
-  ['BRIGADEIRO', 3],
-  ['CEL', 4],
-  ['CORONEL', 4],
-  ['TEN CEL', 5],
-  ['TENCEL', 5],
-  ['TENENTE CORONEL', 5],
-  ['TCEL', 5],
-  ['MJ', 6],
-  ['MAJ', 6],
-  ['MAJOR', 6],
-  ['CAP', 7],
-  ['CAPITAO', 7],
-  ['CL', 7],
-  ['CAPELAO', 7],
-  ['CP', 7],
-  ['1 TEN', 8],
-  ['1TEN', 8],
-  ['1 TENENTE', 8],
-  ['PRIMEIRO TENENTE', 8],
-  ['TEN', 8],
-  ['1T', 8],
-  ['2 TEN', 9],
-  ['2TEN', 9],
-  ['2 TENENTE', 9],
-  ['SEGUNDO TENENTE', 9],
-  ['2T', 9],
-  ['ASP', 10],
-  ['ASPIRANTE', 10],
-  ['SO', 11],
-  ['SUBOFICIAL', 11],
-  ['1 SGT', 12],
-  ['1SGT', 12],
-  ['1 SARGENTO', 12],
-  ['PRIMEIRO SARGENTO', 12],
-  ['1S', 12],
-  ['2 SGT', 13],
-  ['2SGT', 13],
-  ['2 SARGENTO', 13],
-  ['SEGUNDO SARGENTO', 13],
-  ['2S', 13],
-  ['3 SGT', 14],
-  ['3SGT', 14],
-  ['3 SARGENTO', 14],
-  ['TERCEIRO SARGENTO', 14],
-  ['3S', 14],
-  ['CB', 15],
-  ['CABO', 15],
-  ['SD1', 16],
-  ['S1', 16],
-  ['SD2', 17],
-  ['S2', 17],
-  ['SD', 17],
-  ['SOLDADO', 17],
-  ['ALUNO', 18],
-];
+const MISSION_PARTICIPANT_RANK_ORDER_ENTRIES: Array<readonly [string, number]> =
+  [
+    ['GEN', 0],
+    ['TEN BRIG', 1],
+    ['TENBRIG', 1],
+    ['TB', 1],
+    ['MAJ BRIG', 2],
+    ['MAJBRIG', 2],
+    ['MB', 2],
+    ['BRIG', 3],
+    ['BRIGADEIRO', 3],
+    ['CEL', 4],
+    ['CORONEL', 4],
+    ['TEN CEL', 5],
+    ['TENCEL', 5],
+    ['TENENTE CORONEL', 5],
+    ['TCEL', 5],
+    ['MJ', 6],
+    ['MAJ', 6],
+    ['MAJOR', 6],
+    ['CAP', 7],
+    ['CAPITAO', 7],
+    ['CL', 7],
+    ['CAPELAO', 7],
+    ['CP', 7],
+    ['1 TEN', 8],
+    ['1TEN', 8],
+    ['1 TENENTE', 8],
+    ['PRIMEIRO TENENTE', 8],
+    ['TEN', 8],
+    ['1T', 8],
+    ['2 TEN', 9],
+    ['2TEN', 9],
+    ['2 TENENTE', 9],
+    ['SEGUNDO TENENTE', 9],
+    ['2T', 9],
+    ['ASP', 10],
+    ['ASPIRANTE', 10],
+    ['SO', 11],
+    ['SUBOFICIAL', 11],
+    ['1 SGT', 12],
+    ['1SGT', 12],
+    ['1 SARGENTO', 12],
+    ['PRIMEIRO SARGENTO', 12],
+    ['1S', 12],
+    ['2 SGT', 13],
+    ['2SGT', 13],
+    ['2 SARGENTO', 13],
+    ['SEGUNDO SARGENTO', 13],
+    ['2S', 13],
+    ['3 SGT', 14],
+    ['3SGT', 14],
+    ['3 SARGENTO', 14],
+    ['TERCEIRO SARGENTO', 14],
+    ['3S', 14],
+    ['CB', 15],
+    ['CABO', 15],
+    ['SD1', 16],
+    ['S1', 16],
+    ['SD2', 17],
+    ['S2', 17],
+    ['SD', 17],
+    ['SOLDADO', 17],
+    ['ALUNO', 18],
+  ];
 
 const MISSION_PARTICIPANT_RANK_ORDER = new Map(
   MISSION_PARTICIPANT_RANK_ORDER_ENTRIES,
@@ -203,6 +202,47 @@ type MissionScheduleFieldActivityPayload = {
   responsibleUserIds?: string[];
   eventDate?: string | null;
   reportRequired?: boolean;
+};
+
+type MissionReportFieldKey =
+  | 'title'
+  | 'date'
+  | 'time'
+  | 'location'
+  | 'responsible'
+  | 'participants';
+
+type MissionReportFieldValues = Record<MissionReportFieldKey, string>;
+
+type MissionReportBlockType = 'free_text' | 'day_heading' | 'field_activity';
+
+type MissionReportBlock = {
+  id: string;
+  type: MissionReportBlockType;
+  sortOrder: number;
+  contentHtml?: string;
+  contentText?: string;
+  dayKey?: string | null;
+  dayLabel?: string | null;
+  sourceScheduleItemId?: string | null;
+  sourceActivityId?: string | null;
+  fields?: MissionReportFieldValues;
+  manualOverrides?: Partial<Record<MissionReportFieldKey, boolean>>;
+  createdFrom?: string | null;
+};
+
+type MissionReportBlocksDocument = {
+  version: 1;
+  blocks: MissionReportBlock[];
+};
+
+type MissionReportSourceActivity = {
+  sourceKey: string;
+  scheduleItemId: string;
+  activityId: string | null;
+  dayKey: string;
+  dayLabel: string;
+  fields: MissionReportFieldValues;
 };
 
 @Injectable()
@@ -1070,18 +1110,27 @@ export class MissionsService {
         reportSignaturesCount: 0,
       };
     }
+    const report =
+      mission.scope === ActivityScope.CIPAVD
+        ? await this.ensureMissionReportSynchronized(id, user)
+        : mission.report;
     return {
       ...mission,
-      reportFilled: this.isMissionReportFilled(mission.report),
+      report,
+      reportFilled: this.isMissionReportFilled(report),
       reportSignaturesCount:
-        mission.report?.signatures.filter((signature) => !signature.removedAt)
-          .length ?? 0,
+        report?.signatures.filter((signature) => !signature.removedAt).length ??
+        0,
     };
   }
 
   async upsertReport(
     id: string,
-    dto: { contentHtml?: string | null; contentText?: string | null },
+    dto: {
+      contentHtml?: string | null;
+      contentText?: string | null;
+      blocks?: unknown[] | null;
+    },
     user?: RbacUser,
   ) {
     this.assertMissionReportEditAccess(user);
@@ -1094,35 +1143,103 @@ export class MissionsService {
     await this.assertMissionLocalityAllowed(mission);
     this.assertMissionReportScope(mission);
 
-    const contentHtml = this.sanitizeMissionReportHtml(dto.contentHtml);
-    const contentText = this.sanitizeMissionReportContentText(
-      dto.contentText ?? this.stripMissionReportHtml(contentHtml),
-    );
-
-    const existing = await this.prisma.missionReport.findUnique({
+    const existing = await (this.prisma.missionReport as any).findUnique({
       where: { missionId: id },
       select: {
         id: true,
         contentHtml: true,
         contentText: true,
+        blocksJson: true,
       },
     });
+
+    const hasStructuredBlocks = Array.isArray(dto.blocks);
+    let blocksDocument: MissionReportBlocksDocument;
+    let rendered: { contentHtml: string; contentText: string };
+
+    if (hasStructuredBlocks) {
+      const sourceContext = await this.prisma.mission.findUnique({
+        where: { id },
+        include: {
+          locality: { select: { id: true, code: true, name: true } },
+          scheduleItems: {
+            orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
+            include: {
+              activity: {
+                include: {
+                  visitScheduleItems: {
+                    orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
+                  },
+                },
+              },
+              activityLinks: {
+                orderBy: [{ createdAt: 'asc' }],
+                include: {
+                  activity: {
+                    include: {
+                      activityType: { select: { id: true, name: true } },
+                      visitScheduleItems: {
+                        orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        } as any,
+      } as any);
+      if (!sourceContext) throwError('NOT_FOUND');
+      blocksDocument = this.synchronizeMissionReportBlocks(
+        this.normalizeMissionReportBlocksDocument({
+          version: 1,
+          blocks: dto.blocks ?? [],
+        }),
+        this.buildMissionReportSourceActivities(sourceContext),
+      );
+      rendered = this.renderMissionReportDocument(blocksDocument);
+    } else {
+      const contentHtml = this.sanitizeMissionReportHtml(dto.contentHtml);
+      const contentText = this.sanitizeMissionReportContentText(
+        dto.contentText ?? this.stripMissionReportHtml(contentHtml),
+      );
+      blocksDocument = {
+        version: 1,
+        blocks: [
+          {
+            id: `free-${existing?.id ?? randomUUID()}`,
+            type: 'free_text',
+            sortOrder: 0,
+            contentHtml,
+            contentText,
+            createdFrom: 'legacy_payload',
+          },
+        ],
+      };
+      rendered = { contentHtml, contentText };
+    }
+
+    const nextBlocksJson = blocksDocument as unknown as Prisma.JsonObject;
     const contentChanged =
       !existing ||
-      existing.contentHtml !== contentHtml ||
-      existing.contentText !== contentText;
+      existing.contentHtml !== rendered.contentHtml ||
+      existing.contentText !== rendered.contentText ||
+      JSON.stringify(existing.blocksJson ?? null) !==
+        JSON.stringify(nextBlocksJson);
 
     const report = await this.prisma.$transaction(async (tx) => {
-      const saved = await tx.missionReport.upsert({
+      const saved = await (tx.missionReport as any).upsert({
         where: { missionId: id },
         create: {
           missionId: id,
-          contentHtml,
-          contentText,
+          blocksJson: nextBlocksJson,
+          contentHtml: rendered.contentHtml,
+          contentText: rendered.contentText,
         },
         update: {
-          contentHtml,
-          contentText,
+          blocksJson: nextBlocksJson,
+          contentHtml: rendered.contentHtml,
+          contentText: rendered.contentText,
         },
       });
 
@@ -1182,7 +1299,13 @@ export class MissionsService {
 
     const signer = await this.prisma.user.findUnique({
       where: { id: user.id },
-      select: { id: true, name: true, email: true, totpSecret: true, totpEnabled: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        totpSecret: true,
+        totpEnabled: true,
+      },
     });
     if (!signer?.totpEnabled || !signer?.totpSecret) {
       throwError('AUTH_2FA_INVALID_CODE');
@@ -2624,7 +2747,9 @@ export class MissionsService {
             activityId: activity.id,
           },
         });
-        if (!legacyLinkedScheduleItemIds.has(String(prepared.scheduleItem.id))) {
+        if (
+          !legacyLinkedScheduleItemIds.has(String(prepared.scheduleItem.id))
+        ) {
           await (tx as any).missionScheduleItem.update({
             where: { id: prepared.scheduleItem.id },
             data: { activityId: activity.id },
@@ -2653,7 +2778,9 @@ export class MissionsService {
             activityId: prepared.activity.id,
           },
         });
-        if (!legacyLinkedScheduleItemIds.has(String(prepared.scheduleItem.id))) {
+        if (
+          !legacyLinkedScheduleItemIds.has(String(prepared.scheduleItem.id))
+        ) {
           await (tx as any).missionScheduleItem.update({
             where: { id: prepared.scheduleItem.id },
             data: { activityId: prepared.activity.id },
@@ -3341,6 +3468,307 @@ export class MissionsService {
     return { fileName, buffer };
   }
 
+  async buildMissionReportPdf(missionId: string, user?: RbacUser) {
+    this.assertMissionAccess(user);
+    const syncedReport = await this.ensureMissionReportSynchronized(
+      missionId,
+      user,
+    );
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      include: {
+        locality: { select: { id: true, code: true, name: true } },
+      },
+    });
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+    this.assertMissionReportScope(mission);
+
+    const document = this.normalizeMissionReportBlocksDocument(
+      (syncedReport as any).blocksJson,
+      syncedReport,
+    );
+    const activeSignatures = ((syncedReport as any).signatures ?? []).filter(
+      (signature: any) => !signature.removedAt,
+    );
+
+    const doc = new PDFDocument({
+      margin: 48,
+      size: 'A4',
+      bufferPages: true,
+      info: {
+        Title: `Relatório da Missão - ${mission.title}`,
+        Author: 'CIPAVD',
+      },
+    });
+    const chunks: Buffer[] = [];
+    const done = new Promise<Buffer>((resolve, reject) => {
+      doc.on('data', (chunk) => chunks.push(chunk as Buffer));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+    });
+
+    const palette = {
+      primary: '#123A63',
+      secondary: '#0C657E',
+      soft: '#EEF5FA',
+      border: '#CBD7E3',
+      text: '#172033',
+      muted: '#5B677A',
+      success: '#1F7A4D',
+      warning: '#9A6700',
+    };
+    const contentLeft = doc.page.margins.left;
+    const contentWidth =
+      doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const pageBottom = () => doc.page.height - doc.page.margins.bottom;
+    const ensureSpace = (height: number) => {
+      if (doc.y + height <= pageBottom()) return;
+      doc.addPage();
+    };
+    const writeMetadataRow = (label: string, value: string) => {
+      const y = doc.y;
+      const labelWidth = 118;
+      const rowHeight = Math.max(
+        26,
+        doc.heightOfString(value || '-', {
+          width: contentWidth - labelWidth - 16,
+        }) + 12,
+      );
+      ensureSpace(rowHeight + 4);
+      doc
+        .fillColor(palette.soft)
+        .rect(contentLeft, y, labelWidth, rowHeight)
+        .fill()
+        .strokeColor(palette.border)
+        .rect(contentLeft, y, contentWidth, rowHeight)
+        .stroke();
+      doc
+        .fillColor(palette.text)
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .text(label, contentLeft + 8, y + 8, { width: labelWidth - 16 });
+      doc
+        .font('Helvetica')
+        .fontSize(9.5)
+        .text(value || '-', contentLeft + labelWidth + 8, y + 8, {
+          width: contentWidth - labelWidth - 16,
+        });
+      doc.y = y + rowHeight + 4;
+    };
+    const writeSectionTitle = (title: string, level: 1 | 2 = 1) => {
+      ensureSpace(level === 1 ? 34 : 28);
+      doc.moveDown(level === 1 ? 0.8 : 0.4);
+      const y = doc.y;
+      doc
+        .fillColor(level === 1 ? palette.primary : palette.secondary)
+        .font('Helvetica-Bold')
+        .fontSize(level === 1 ? 13 : 11.5)
+        .text(title, contentLeft, y, {
+          width: contentWidth,
+          align: 'left',
+        });
+      doc
+        .moveTo(contentLeft, doc.y + 3)
+        .lineTo(contentLeft + contentWidth, doc.y + 3)
+        .strokeColor(level === 1 ? palette.primary : palette.secondary)
+        .lineWidth(0.8)
+        .stroke();
+      doc.y += 10;
+      doc.fillColor(palette.text);
+    };
+    const writeParagraph = (value: string) => {
+      const text = sanitizeText(value ?? '').trim();
+      if (!text) return;
+      const height = doc.heightOfString(text, {
+        width: contentWidth,
+        align: 'justify',
+      });
+      ensureSpace(height + 12);
+      doc
+        .fillColor(palette.text)
+        .font('Helvetica')
+        .fontSize(10.5)
+        .text(text, contentLeft, doc.y, {
+          width: contentWidth,
+          align: 'justify',
+          lineGap: 2,
+        });
+      doc.moveDown(0.7);
+    };
+    const writeFieldBox = (fields: MissionReportFieldValues) => {
+      const rows = [
+        ['Horário', fields.time],
+        ['Local', fields.location],
+        ['Responsável', fields.responsible],
+        ['Participantes', fields.participants],
+      ];
+      for (const [label, value] of rows) {
+        writeMetadataRow(label, value || '-');
+      }
+    };
+
+    const logoPath = this.findScheduleLogoPath();
+    if (logoPath) {
+      try {
+        doc.image(logoPath, contentLeft, doc.y, { fit: [92, 60] });
+      } catch {
+        // Mantém a capa mesmo se a imagem institucional não estiver disponível.
+      }
+    }
+    doc
+      .fillColor(palette.primary)
+      .font('Helvetica-Bold')
+      .fontSize(18)
+      .text('RELATÓRIO DA MISSÃO', contentLeft + 108, doc.y + 8, {
+        width: contentWidth - 108,
+        align: 'right',
+      });
+    doc
+      .fillColor(palette.secondary)
+      .fontSize(11)
+      .text('Comissão de Iniciação de Recrutamento Feminino', {
+        width: contentWidth - 108,
+        align: 'right',
+      });
+    doc.y = 150;
+    doc
+      .fillColor(palette.primary)
+      .font('Helvetica-Bold')
+      .fontSize(20)
+      .text(mission.title, contentLeft, doc.y, {
+        width: contentWidth,
+        align: 'center',
+      });
+    doc.moveDown(1.4);
+    writeMetadataRow(
+      'Localidade',
+      mission.locality
+        ? `${mission.locality.name} (${mission.locality.code ?? '-'})`
+        : '-',
+    );
+    writeMetadataRow(
+      'Período',
+      `${this.formatMissionPeriodDate(mission.startDate)} a ${this.formatMissionPeriodDate(mission.endDate)}`,
+    );
+    writeMetadataRow('Escopo', 'CIPAVD');
+    writeMetadataRow(
+      'Status',
+      activeSignatures.length > 0
+        ? `Assinado digitalmente por ${activeSignatures.length} usuário(s)`
+        : 'Não assinado',
+    );
+    writeMetadataRow(
+      'Gerado em',
+      this.formatDateTimeForMissionReport(new Date()),
+    );
+    doc
+      .fillColor(palette.muted)
+      .font('Helvetica')
+      .fontSize(9)
+      .text(
+        'Documento gerado automaticamente pelo sistema. Os campos de atividades de campo refletem o relatório salvo, respeitando edições manuais feitas pelo usuário.',
+        contentLeft,
+        pageBottom() - 70,
+        { width: contentWidth, align: 'center' },
+      );
+
+    doc.addPage();
+    let currentDayNumber = 0;
+    let currentActivityNumber = 0;
+    for (const block of document.blocks) {
+      if (block.type === 'day_heading') {
+        currentDayNumber += 1;
+        currentActivityNumber = 0;
+        const label =
+          block.dayLabel?.trim() ||
+          (block.dayKey
+            ? this.formatMissionReportDayLabelFromKey(block.dayKey)
+            : 'Dia da missão');
+        writeSectionTitle(`${currentDayNumber} - ${label}`, 1);
+        continue;
+      }
+      if (block.type === 'field_activity') {
+        if (currentDayNumber === 0) currentDayNumber = 1;
+        currentActivityNumber += 1;
+        const fields = block.fields ?? this.emptyMissionReportFieldValues();
+        writeSectionTitle(
+          `${currentDayNumber}.${currentActivityNumber} - Atividade de Campo ${fields.title || 'Atividade'}`,
+          2,
+        );
+        writeFieldBox(fields);
+        writeParagraph(
+          block.contentText || this.stripMissionReportHtml(block.contentHtml),
+        );
+        continue;
+      }
+      writeParagraph(
+        block.contentText || this.stripMissionReportHtml(block.contentHtml),
+      );
+    }
+
+    writeSectionTitle('Assinaturas Digitais', 1);
+    if (activeSignatures.length === 0) {
+      writeParagraph(
+        'Este relatório ainda não possui assinatura digital ativa.',
+      );
+    } else {
+      for (const signature of activeSignatures) {
+        writeMetadataRow(
+          signature.signedBy?.name ?? signature.signedById ?? 'Usuário',
+          `Assinado em ${this.formatDateTimeForMissionReport(signature.signedAt)} | Hash ${String(
+            signature.signatureHash ?? '',
+          ).slice(0, 32)}...`,
+        );
+      }
+    }
+
+    const range = doc.bufferedPageRange();
+    for (
+      let pageIndex = range.start;
+      pageIndex < range.start + range.count;
+      pageIndex += 1
+    ) {
+      doc.switchToPage(pageIndex);
+      const footerY = doc.page.height - 34;
+      doc
+        .strokeColor(palette.border)
+        .lineWidth(0.5)
+        .moveTo(doc.page.margins.left, footerY - 8)
+        .lineTo(doc.page.width - doc.page.margins.right, footerY - 8)
+        .stroke();
+      doc
+        .fillColor(palette.muted)
+        .font('Helvetica')
+        .fontSize(8)
+        .text(
+          `Relatório da Missão | Página ${pageIndex + 1 - range.start} de ${range.count}`,
+          doc.page.margins.left,
+          footerY,
+          {
+            width:
+              doc.page.width - doc.page.margins.left - doc.page.margins.right,
+            align: 'center',
+          },
+        );
+    }
+
+    doc.end();
+    const buffer = await done;
+    const sanitizedTitle = mission.title
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 70)
+      .toLowerCase();
+    return {
+      fileName: `relatorio-missao-${sanitizedTitle || mission.id}.pdf`,
+      buffer,
+    };
+  }
+
   private normalizeScheduleFieldActivityItems(
     items: MissionScheduleFieldActivityPayload[] | undefined,
   ) {
@@ -3869,6 +4297,621 @@ export class MissionsService {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
+  private async ensureMissionReportSynchronized(
+    missionId: string,
+    user?: RbacUser,
+  ) {
+    const mission = await this.prisma.mission.findUnique({
+      where: { id: missionId },
+      include: {
+        locality: { select: { id: true, code: true, name: true } },
+        scheduleItems: {
+          orderBy: [{ startAt: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            activity: {
+              include: {
+                visitScheduleItems: {
+                  orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
+                },
+              },
+            },
+            activityLinks: {
+              orderBy: [{ createdAt: 'asc' }],
+              include: {
+                activity: {
+                  include: {
+                    activityType: { select: { id: true, name: true } },
+                    visitScheduleItems: {
+                      orderBy: [{ startTime: 'asc' }, { createdAt: 'asc' }],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        report: {
+          include: {
+            signatures: {
+              orderBy: [{ signedAt: 'desc' }, { createdAt: 'desc' }],
+              include: {
+                signedBy: { select: { id: true, name: true, email: true } },
+                removedBy: { select: { id: true, name: true, email: true } },
+              },
+            },
+          },
+        },
+      } as any,
+    } as any);
+    if (!mission) throwError('NOT_FOUND');
+    await this.assertMissionLocalityAllowed(mission);
+    this.assertMissionReportScope(mission);
+
+    const sourceActivities = this.buildMissionReportSourceActivities(mission);
+    const currentDocument = this.normalizeMissionReportBlocksDocument(
+      (mission as any).report?.blocksJson,
+      (mission as any).report,
+    );
+    const nextDocument = this.synchronizeMissionReportBlocks(
+      currentDocument,
+      sourceActivities,
+    );
+    const rendered = this.renderMissionReportDocument(nextDocument);
+    const currentReport = (mission as any).report ?? null;
+    const nextBlocksJson = nextDocument as unknown as Prisma.JsonObject;
+    const blocksChanged =
+      JSON.stringify(currentReport?.blocksJson ?? null) !==
+      JSON.stringify(nextBlocksJson);
+    const contentChanged =
+      !currentReport ||
+      currentReport.contentHtml !== rendered.contentHtml ||
+      currentReport.contentText !== rendered.contentText ||
+      blocksChanged;
+
+    const report = await this.prisma.$transaction(async (tx) => {
+      const saved = currentReport
+        ? await (tx.missionReport as any).update({
+            where: { id: currentReport.id },
+            data: {
+              blocksJson: nextBlocksJson,
+              contentHtml: rendered.contentHtml,
+              contentText: rendered.contentText,
+            },
+          })
+        : await (tx.missionReport as any).create({
+            data: {
+              missionId,
+              blocksJson: nextBlocksJson,
+              contentHtml: rendered.contentHtml,
+              contentText: rendered.contentText,
+            },
+          });
+
+      if (contentChanged) {
+        await tx.missionReportSignature.updateMany({
+          where: { reportId: saved.id, removedAt: null },
+          data: {
+            removedAt: new Date(),
+            removedById: user?.id ?? null,
+          },
+        });
+      }
+
+      return tx.missionReport.findUnique({
+        where: { id: saved.id },
+        include: {
+          signatures: {
+            orderBy: [{ signedAt: 'desc' }, { createdAt: 'desc' }],
+            include: {
+              signedBy: { select: { id: true, name: true, email: true } },
+              removedBy: { select: { id: true, name: true, email: true } },
+            },
+          },
+        },
+      });
+    });
+    if (!report) throwError('UNEXPECTED');
+    return { ...report, filled: this.isMissionReportFilled(report) };
+  }
+
+  private buildMissionReportSourceActivities(
+    mission: any,
+  ): MissionReportSourceActivity[] {
+    const sources = new Map<string, MissionReportSourceActivity>();
+    const scheduleItems = Array.isArray(mission?.scheduleItems)
+      ? mission.scheduleItems
+      : [];
+
+    for (const scheduleItem of scheduleItems) {
+      const linkedActivities: any[] = [];
+      if (scheduleItem?.activity) {
+        linkedActivities.push(scheduleItem.activity);
+      }
+      for (const link of scheduleItem?.activityLinks ?? []) {
+        if (link?.activity) linkedActivities.push(link.activity);
+      }
+
+      const uniqueActivities = new Map<string, any>();
+      for (const activity of linkedActivities) {
+        const activityId = String(activity?.id ?? '').trim();
+        if (activityId) uniqueActivities.set(activityId, activity);
+      }
+
+      for (const activity of uniqueActivities.values()) {
+        const activityId = String(activity?.id ?? '').trim();
+        const sourceKey = this.buildMissionReportSourceKey(
+          scheduleItem.id,
+          activityId,
+        );
+        if (sources.has(sourceKey)) continue;
+        const fields = this.buildMissionReportSourceFields(
+          mission,
+          scheduleItem,
+          activity,
+        );
+        sources.set(sourceKey, {
+          sourceKey,
+          scheduleItemId: String(scheduleItem.id),
+          activityId,
+          dayKey: this.formatMissionReportDayKey(scheduleItem.startAt),
+          dayLabel: this.formatMissionReportDayLabel(scheduleItem.startAt),
+          fields,
+        });
+      }
+    }
+
+    return Array.from(sources.values()).sort((a, b) => {
+      const dayCompare = a.dayKey.localeCompare(b.dayKey);
+      if (dayCompare !== 0) return dayCompare;
+      return a.sourceKey.localeCompare(b.sourceKey);
+    });
+  }
+
+  private buildMissionReportSourceFields(
+    mission: any,
+    scheduleItem: any,
+    activity: any,
+  ): MissionReportFieldValues {
+    const firstVisit = Array.isArray(activity?.visitScheduleItems)
+      ? activity.visitScheduleItems[0]
+      : null;
+    const title =
+      sanitizeText(activity?.title ?? '').trim() ||
+      sanitizeText(scheduleItem?.title ?? '').trim() ||
+      'Atividade';
+    const endAt = new Date(
+      new Date(scheduleItem.startAt).getTime() +
+        Number(scheduleItem.durationMinutes ?? 0) * 60_000,
+    );
+    const scheduleTime = `${this.formatTime(scheduleItem.startAt)} - ${this.formatTime(endAt)}`;
+    const visitTime = firstVisit?.startTime
+      ? `${sanitizeText(firstVisit.startTime)} - ${this.addMinutesToTimeLabel(
+          firstVisit.startTime,
+          Number(firstVisit.durationMinutes ?? scheduleItem.durationMinutes),
+        )}`
+      : '';
+    return {
+      title,
+      date: this.formatMissionReportDayLabel(scheduleItem.startAt),
+      time: visitTime || scheduleTime,
+      location:
+        sanitizeText(firstVisit?.location ?? '').trim() ||
+        sanitizeText(scheduleItem?.location ?? '').trim() ||
+        sanitizeText(mission?.locality?.name ?? '').trim() ||
+        'Local não informado',
+      responsible:
+        sanitizeText(firstVisit?.responsible ?? '').trim() ||
+        sanitizeText(scheduleItem?.responsible ?? '').trim() ||
+        'Responsável não informado',
+      participants:
+        sanitizeText(firstVisit?.participants ?? '').trim() ||
+        sanitizeText(scheduleItem?.participants ?? '').trim() ||
+        'Participantes não informados',
+    };
+  }
+
+  private synchronizeMissionReportBlocks(
+    document: MissionReportBlocksDocument,
+    sources: MissionReportSourceActivity[],
+  ): MissionReportBlocksDocument {
+    const sourceByKey = new Map(
+      sources.map((source) => [source.sourceKey, source]),
+    );
+    const dayByKey = new Map(sources.map((source) => [source.dayKey, source]));
+    const existingBlocks = document.blocks.map((block, index) => ({
+      ...block,
+      sortOrder: index,
+    }));
+
+    const blocks = existingBlocks.map((block) => {
+      if (block.type === 'day_heading' && block.dayKey) {
+        const source = dayByKey.get(block.dayKey);
+        if (source) {
+          return {
+            ...block,
+            dayLabel: source.dayLabel,
+          };
+        }
+      }
+      if (block.type !== 'field_activity') return block;
+      const key = this.buildMissionReportSourceKey(
+        block.sourceScheduleItemId,
+        block.sourceActivityId,
+      );
+      const source = sourceByKey.get(key);
+      if (!source) return block;
+      const manualOverrides = this.normalizeMissionReportManualOverrides(
+        block.manualOverrides,
+      );
+      const nextFields: MissionReportFieldValues = {
+        ...(block.fields ?? this.emptyMissionReportFieldValues()),
+      };
+      for (const field of this.missionReportFieldKeys()) {
+        if (!manualOverrides[field]) {
+          nextFields[field] = source.fields[field];
+        }
+      }
+      return {
+        ...block,
+        dayKey: source.dayKey,
+        dayLabel: source.dayLabel,
+        fields: nextFields,
+        manualOverrides,
+      };
+    });
+
+    if (blocks.length === 0) {
+      blocks.push(this.createFreeTextMissionReportBlock(0));
+    }
+
+    const existingDayKeys = new Set(
+      blocks
+        .filter((block) => block.type === 'day_heading' && block.dayKey)
+        .map((block) => String(block.dayKey)),
+    );
+    const existingSourceKeys = new Set(
+      blocks
+        .filter((block) => block.type === 'field_activity')
+        .map((block) =>
+          this.buildMissionReportSourceKey(
+            block.sourceScheduleItemId,
+            block.sourceActivityId,
+          ),
+        ),
+    );
+
+    for (const source of sources) {
+      if (!existingDayKeys.has(source.dayKey)) {
+        blocks.push({
+          id: `day-${source.dayKey}-${randomUUID()}`,
+          type: 'day_heading',
+          sortOrder: blocks.length,
+          dayKey: source.dayKey,
+          dayLabel: source.dayLabel,
+          createdFrom: 'auto_sync',
+        });
+        existingDayKeys.add(source.dayKey);
+      }
+      if (!existingSourceKeys.has(source.sourceKey)) {
+        blocks.push({
+          id: `field-${source.scheduleItemId}-${source.activityId ?? 'activity'}-${randomUUID()}`,
+          type: 'field_activity',
+          sortOrder: blocks.length,
+          dayKey: source.dayKey,
+          dayLabel: source.dayLabel,
+          sourceScheduleItemId: source.scheduleItemId,
+          sourceActivityId: source.activityId,
+          fields: source.fields,
+          manualOverrides: {},
+          contentHtml: '',
+          contentText: '',
+          createdFrom: 'auto_sync',
+        });
+        existingSourceKeys.add(source.sourceKey);
+      }
+    }
+
+    return {
+      version: 1,
+      blocks: blocks.map((block, index) => ({
+        ...block,
+        sortOrder: index,
+      })),
+    };
+  }
+
+  private normalizeMissionReportBlocksDocument(
+    value: unknown,
+    legacyReport?: {
+      id?: string;
+      contentHtml?: string | null;
+      contentText?: string | null;
+    } | null,
+  ): MissionReportBlocksDocument {
+    const source = this.isJsonObject(value as any)
+      ? (value as Record<string, unknown>)
+      : null;
+    const rawBlocks = Array.isArray(source?.blocks) ? source.blocks : null;
+    const blocks = rawBlocks
+      ? rawBlocks
+          .map((block, index) => this.normalizeMissionReportBlock(block, index))
+          .filter((block): block is MissionReportBlock => Boolean(block))
+      : [];
+
+    if (blocks.length > 0) {
+      return {
+        version: 1,
+        blocks: blocks.map((block, index) => ({ ...block, sortOrder: index })),
+      };
+    }
+
+    const legacyHtml = this.sanitizeMissionReportHtml(
+      legacyReport?.contentHtml ?? '',
+    );
+    const legacyText = this.sanitizeMissionReportContentText(
+      legacyReport?.contentText ?? this.stripMissionReportHtml(legacyHtml),
+    );
+    if (legacyHtml || legacyText) {
+      return {
+        version: 1,
+        blocks: [
+          {
+            id: `legacy-${legacyReport?.id ?? randomUUID()}`,
+            type: 'free_text',
+            sortOrder: 0,
+            contentHtml: legacyHtml,
+            contentText: legacyText,
+            createdFrom: 'legacy_content',
+          },
+        ],
+      };
+    }
+
+    return { version: 1, blocks: [this.createFreeTextMissionReportBlock(0)] };
+  }
+
+  private normalizeMissionReportBlock(
+    value: unknown,
+    index: number,
+  ): MissionReportBlock | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    const raw = value as Record<string, unknown>;
+    const rawType = String(raw.type ?? '').trim();
+    const type: MissionReportBlockType =
+      rawType === 'day_heading' || rawType === 'field_activity'
+        ? rawType
+        : 'free_text';
+    const id =
+      String(raw.id ?? '')
+        .trim()
+        .slice(0, 120) || `${type}-${Date.now()}-${index}-${randomUUID()}`;
+    const contentHtml = this.sanitizeMissionReportHtml(raw.contentHtml as any);
+    const contentText = this.sanitizeMissionReportContentText(
+      (raw.contentText as any) ?? this.stripMissionReportHtml(contentHtml),
+    );
+    const fields =
+      type === 'field_activity'
+        ? this.normalizeMissionReportFieldValues(raw.fields)
+        : undefined;
+    return {
+      id,
+      type,
+      sortOrder: index,
+      contentHtml,
+      contentText,
+      dayKey: this.normalizeOptionalReportText(raw.dayKey, 40),
+      dayLabel: this.normalizeOptionalReportText(raw.dayLabel, 140),
+      sourceScheduleItemId: this.normalizeOptionalReportText(
+        raw.sourceScheduleItemId,
+        120,
+      ),
+      sourceActivityId: this.normalizeOptionalReportText(
+        raw.sourceActivityId,
+        120,
+      ),
+      fields,
+      manualOverrides:
+        type === 'field_activity'
+          ? this.normalizeMissionReportManualOverrides(raw.manualOverrides)
+          : undefined,
+      createdFrom: this.normalizeOptionalReportText(raw.createdFrom, 80),
+    };
+  }
+
+  private normalizeMissionReportFieldValues(
+    value: unknown,
+  ): MissionReportFieldValues {
+    const raw =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
+    const fields = this.emptyMissionReportFieldValues();
+    for (const key of this.missionReportFieldKeys()) {
+      fields[key] = sanitizeText(String(raw[key] ?? ''))
+        .trim()
+        .slice(0, 800);
+    }
+    return fields;
+  }
+
+  private normalizeMissionReportManualOverrides(
+    value: unknown,
+  ): Partial<Record<MissionReportFieldKey, boolean>> {
+    const raw =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : {};
+    const overrides: Partial<Record<MissionReportFieldKey, boolean>> = {};
+    for (const key of this.missionReportFieldKeys()) {
+      if (raw[key] === true) overrides[key] = true;
+    }
+    return overrides;
+  }
+
+  private renderMissionReportDocument(document: MissionReportBlocksDocument) {
+    let currentDayNumber = 0;
+    let currentActivityNumber = 0;
+    const htmlParts: string[] = [];
+    const textParts: string[] = [];
+
+    for (const block of document.blocks) {
+      if (block.type === 'day_heading') {
+        currentDayNumber += 1;
+        currentActivityNumber = 0;
+        const label =
+          block.dayLabel?.trim() ||
+          (block.dayKey
+            ? this.formatMissionReportDayLabelFromKey(block.dayKey)
+            : 'Dia da missão');
+        const heading = `${currentDayNumber} - ${label}`;
+        htmlParts.push(`<h2>${this.escapeHtml(heading)}</h2>`);
+        textParts.push(heading);
+        continue;
+      }
+
+      if (block.type === 'field_activity') {
+        if (currentDayNumber === 0) currentDayNumber = 1;
+        currentActivityNumber += 1;
+        const fields = block.fields ?? this.emptyMissionReportFieldValues();
+        const title = fields.title.trim() || 'Atividade';
+        const heading = `${currentDayNumber}.${currentActivityNumber} - Atividade de Campo ${title}`;
+        htmlParts.push(`<h3>${this.escapeHtml(heading)}</h3>`);
+        htmlParts.push(
+          [
+            ['Horário', fields.time],
+            ['Local', fields.location],
+            ['Responsável', fields.responsible],
+            ['Participantes', fields.participants],
+          ]
+            .map(
+              ([label, fieldValue]) =>
+                `<p><strong>${this.escapeHtml(label)}:</strong> ${this.escapeHtml(
+                  fieldValue || '-',
+                )}</p>`,
+            )
+            .join(''),
+        );
+        if (block.contentHtml?.trim()) {
+          htmlParts.push(block.contentHtml);
+        }
+        textParts.push(
+          [
+            heading,
+            `Horário: ${fields.time || '-'}`,
+            `Local: ${fields.location || '-'}`,
+            `Responsável: ${fields.responsible || '-'}`,
+            `Participantes: ${fields.participants || '-'}`,
+            block.contentText?.trim() ? block.contentText.trim() : '',
+          ]
+            .filter(Boolean)
+            .join('\n'),
+        );
+        continue;
+      }
+
+      if (block.contentHtml?.trim()) {
+        htmlParts.push(block.contentHtml);
+      }
+      const text = block.contentText?.trim();
+      if (text) textParts.push(text);
+    }
+
+    return {
+      contentHtml: htmlParts.join('\n').trim().slice(0, 240_000),
+      contentText: textParts.join('\n\n').trim().slice(0, 240_000),
+    };
+  }
+
+  private createFreeTextMissionReportBlock(
+    sortOrder: number,
+  ): MissionReportBlock {
+    return {
+      id: `free-${randomUUID()}`,
+      type: 'free_text',
+      sortOrder,
+      contentHtml: '',
+      contentText: '',
+      createdFrom: 'initial_template',
+    };
+  }
+
+  private buildMissionReportSourceKey(
+    scheduleItemId: string | null | undefined,
+    activityId: string | null | undefined,
+  ) {
+    return `${String(scheduleItemId ?? '').trim()}:${String(activityId ?? '').trim()}`;
+  }
+
+  private missionReportFieldKeys(): MissionReportFieldKey[] {
+    return ['title', 'date', 'time', 'location', 'responsible', 'participants'];
+  }
+
+  private emptyMissionReportFieldValues(): MissionReportFieldValues {
+    return {
+      title: '',
+      date: '',
+      time: '',
+      location: '',
+      responsible: '',
+      participants: '',
+    };
+  }
+
+  private normalizeOptionalReportText(value: unknown, maxLength: number) {
+    const normalized = sanitizeText(String(value ?? ''))
+      .trim()
+      .slice(0, maxLength);
+    return normalized || null;
+  }
+
+  private formatMissionReportDayKey(value: Date) {
+    const { year, month, day } = this.getDateTimePartsInTimeZone(value);
+    return `${year}-${month}-${day}`;
+  }
+
+  private formatMissionReportDayLabel(value: Date) {
+    const { year, month, day } = this.getDateTimePartsInTimeZone(value);
+    const monthName = new Intl.DateTimeFormat('pt-BR', {
+      month: 'long',
+      timeZone: this.missionPdfTimeZone,
+    }).format(value);
+    return `Dia ${Number(day)} do mês de ${monthName} do ano de ${year}`;
+  }
+
+  private formatMissionReportDayLabelFromKey(dayKey: string) {
+    const match = String(dayKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return dayKey;
+    const date = new Date(
+      Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12),
+    );
+    return this.formatMissionReportDayLabel(date);
+  }
+
+  private addMinutesToTimeLabel(value: string, minutes: number) {
+    const match = String(value ?? '')
+      .trim()
+      .match(/^(\d{2}):(\d{2})$/);
+    if (!match) return value;
+    const total =
+      Number(match[1]) * 60 +
+      Number(match[2]) +
+      Math.max(1, Number(minutes) || 0);
+    const hour = Math.floor(total / 60) % 24;
+    const minute = total % 60;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  }
+
+  private escapeHtml(value: string | null | undefined) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   private isMissionReportFilled(
     report:
       | {
@@ -3898,10 +4941,7 @@ export class MissionsService {
         '',
       )
       .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-      .replace(
-        /\s+(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi,
-        '',
-      )
+      .replace(/\s+(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, '')
       .replace(/\s+(href|src)\s*=\s*javascript:[^\s>]+/gi, '')
       .replace(/\s+style\s*=\s*(['"])([\s\S]*?)\1/gi, (_match, quote, css) => {
         const safeCss = String(css)
@@ -4344,6 +5384,18 @@ export class MissionsService {
     return `${day}/${month}/${year}`;
   }
 
+  private formatDateTimeForMissionReport(
+    value: Date | string | null | undefined,
+  ) {
+    const parsed = value instanceof Date ? value : new Date(value ?? '');
+    if (Number.isNaN(parsed.getTime())) return '-';
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: this.missionPdfTimeZone,
+    }).format(parsed);
+  }
+
   private formatTime(value: Date, timeZone = this.missionPdfTimeZone) {
     const { hour: hours, minute: minutes } = this.getDateTimePartsInTimeZone(
       value,
@@ -4465,8 +5517,7 @@ export class MissionsService {
     for (const rank of MISSION_PARTICIPANT_RANK_PREFIXES) {
       if (normalized === rank || normalized.startsWith(`${rank} `)) {
         return (
-          MISSION_PARTICIPANT_RANK_ORDER.get(rank) ??
-          Number.MAX_SAFE_INTEGER
+          MISSION_PARTICIPANT_RANK_ORDER.get(rank) ?? Number.MAX_SAFE_INTEGER
         );
       }
     }
@@ -4518,8 +5569,7 @@ export class MissionsService {
     const parts = name.split(/\s+/).filter(Boolean);
     if (parts.length < 2) return name;
     if (
-      this.getMissionParticipantRankSortOrder(name) ===
-      Number.MAX_SAFE_INTEGER
+      this.getMissionParticipantRankSortOrder(name) === Number.MAX_SAFE_INTEGER
     ) {
       return name;
     }
@@ -4557,11 +5607,9 @@ export class MissionsService {
       .filter(Boolean)
       .map((item) =>
         this.removeOmFromParticipantName(item, null, knownOmSuffixes),
-    );
+      );
     return participants.length
-      ? this.sortParticipantsByRankSeniority(participants).join(
-          `${separator} `,
-        )
+      ? this.sortParticipantsByRankSeniority(participants).join(`${separator} `)
       : '-';
   }
 

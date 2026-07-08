@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsArray, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class UpsertMissionReportDto {
   @IsOptional()
@@ -10,4 +10,8 @@ export class UpsertMissionReportDto {
   @IsString()
   @MaxLength(120_000)
   contentText?: string;
+
+  @IsOptional()
+  @IsArray()
+  blocks?: unknown[];
 }

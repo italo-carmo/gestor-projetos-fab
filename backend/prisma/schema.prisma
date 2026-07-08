@@ -387,13 +387,33 @@ model MissionReport {
   missionId   String   @unique
   contentHtml String   @default("")
   contentText String   @default("")
+  blocksJson  Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   mission    Mission                  @relation(fields: [missionId], references: [id], onDelete: Cascade)
   signatures MissionReportSignature[]
+  backups    MissionReportMigrationBackup[]
 
   @@index([updatedAt])
+}
+
+model MissionReportMigrationBackup {
+  id             String   @id @default(cuid())
+  missionReportId String
+  missionId       String
+  contentHtml     String
+  contentText     String
+  contentHtmlMd5  String
+  contentTextMd5  String
+  migrationName   String
+  createdAt       DateTime @default(now())
+
+  report MissionReport @relation(fields: [missionReportId], references: [id], onDelete: Cascade)
+
+  @@unique([missionReportId, migrationName])
+  @@index([missionId])
+  @@index([createdAt])
 }
 
 model MissionReportSignature {
