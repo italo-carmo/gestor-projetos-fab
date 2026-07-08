@@ -3522,20 +3522,55 @@ export class MissionsService {
     const contentWidth =
       doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const pageBottom = () => doc.page.height - doc.page.margins.bottom;
+    const pageContentHeight = () => pageBottom() - doc.page.margins.top;
     const ensureSpace = (height: number) => {
-      if (doc.y + height <= pageBottom()) return;
+      const neededHeight = Math.min(Math.max(height, 0), pageContentHeight());
+      if (doc.y + neededHeight <= pageBottom()) return;
       doc.addPage();
+      doc.y = doc.page.margins.top;
     };
     const writeMetadataRow = (label: string, value: string) => {
-      const y = doc.y;
       const labelWidth = 118;
+      const valueWidth = contentWidth - labelWidth - 16;
+      const valueText = sanitizeText(value || '-').trim() || '-';
+      doc.font('Helvetica').fontSize(9.5);
       const rowHeight = Math.max(
         26,
-        doc.heightOfString(value || '-', {
-          width: contentWidth - labelWidth - 16,
-        }) + 12,
+        doc.heightOfString(valueText, { width: valueWidth }) + 12,
       );
+
+      if (rowHeight > pageContentHeight()) {
+        ensureSpace(32);
+        const headerY = doc.y;
+        doc
+          .fillColor(palette.soft)
+          .rect(contentLeft, headerY, contentWidth, 24)
+          .fill()
+          .strokeColor(palette.border)
+          .rect(contentLeft, headerY, contentWidth, 24)
+          .stroke();
+        doc
+          .fillColor(palette.text)
+          .font('Helvetica-Bold')
+          .fontSize(9)
+          .text(label, contentLeft + 8, headerY + 7, {
+            width: contentWidth - 16,
+          });
+        doc.y = headerY + 30;
+        doc
+          .fillColor(palette.text)
+          .font('Helvetica')
+          .fontSize(9.5)
+          .text(valueText, contentLeft, doc.y, {
+            width: contentWidth,
+            lineGap: 1,
+          });
+        doc.moveDown(0.6);
+        return;
+      }
+
       ensureSpace(rowHeight + 4);
+      const y = doc.y;
       doc
         .fillColor(palette.soft)
         .rect(contentLeft, y, labelWidth, rowHeight)
@@ -3551,19 +3586,23 @@ export class MissionsService {
       doc
         .font('Helvetica')
         .fontSize(9.5)
-        .text(value || '-', contentLeft + labelWidth + 8, y + 8, {
-          width: contentWidth - labelWidth - 16,
+        .text(valueText, contentLeft + labelWidth + 8, y + 8, {
+          width: valueWidth,
         });
       doc.y = y + rowHeight + 4;
     };
     const writeSectionTitle = (title: string, level: 1 | 2 = 1) => {
-      ensureSpace(level === 1 ? 34 : 28);
-      doc.moveDown(level === 1 ? 0.8 : 0.4);
+      const gap = level === 1 ? 10 : 5;
+      const fontSize = level === 1 ? 13 : 11.5;
+      doc.font('Helvetica-Bold').fontSize(fontSize);
+      const titleHeight = doc.heightOfString(title, { width: contentWidth });
+      ensureSpace(gap + titleHeight + 14);
+      doc.y += gap;
       const y = doc.y;
       doc
         .fillColor(level === 1 ? palette.primary : palette.secondary)
         .font('Helvetica-Bold')
-        .fontSize(level === 1 ? 13 : 11.5)
+        .fontSize(fontSize)
         .text(title, contentLeft, y, {
           width: contentWidth,
           align: 'left',
@@ -3580,11 +3619,13 @@ export class MissionsService {
     const writeParagraph = (value: string) => {
       const text = sanitizeText(value ?? '').trim();
       if (!text) return;
+      doc.font('Helvetica').fontSize(10.5);
       const height = doc.heightOfString(text, {
         width: contentWidth,
         align: 'justify',
+        lineGap: 2,
       });
-      ensureSpace(height + 12);
+      ensureSpace(Math.min(height + 12, pageContentHeight()));
       doc
         .fillColor(palette.text)
         .font('Helvetica')
@@ -3662,18 +3703,9 @@ export class MissionsService {
       'Gerado em',
       this.formatDateTimeForMissionReport(new Date()),
     );
-    doc
-      .fillColor(palette.muted)
-      .font('Helvetica')
-      .fontSize(9)
-      .text(
-        'Documento gerado automaticamente pelo sistema. Os campos de atividades de campo refletem o relatório salvo, respeitando edições manuais feitas pelo usuário.',
-        contentLeft,
-        pageBottom() - 70,
-        { width: contentWidth, align: 'center' },
-      );
 
     doc.addPage();
+    doc.y = doc.page.margins.top;
     let currentDayNumber = 0;
     let currentActivityNumber = 0;
     for (const block of document.blocks) {
