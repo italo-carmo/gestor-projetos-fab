@@ -3764,7 +3764,7 @@ export class MissionsService {
       pageIndex += 1
     ) {
       doc.switchToPage(pageIndex);
-      const footerY = doc.page.height - doc.page.margins.bottom - 8;
+      const footerY = doc.page.height - doc.page.margins.bottom - 24;
       doc
         .strokeColor(palette.border)
         .lineWidth(0.5)
