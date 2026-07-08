@@ -3521,7 +3521,9 @@ export class MissionsService {
     const contentLeft = doc.page.margins.left;
     const contentWidth =
       doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    const pageBottom = () => doc.page.height - doc.page.margins.bottom;
+    const footerReserve = 42;
+    const pageBottom = () =>
+      doc.page.height - doc.page.margins.bottom - footerReserve;
     const pageContentHeight = () => pageBottom() - doc.page.margins.top;
     const ensureSpace = (height: number) => {
       const neededHeight = Math.min(Math.max(height, 0), pageContentHeight());
@@ -3762,7 +3764,7 @@ export class MissionsService {
       pageIndex += 1
     ) {
       doc.switchToPage(pageIndex);
-      const footerY = doc.page.height - 34;
+      const footerY = doc.page.height - doc.page.margins.bottom - 8;
       doc
         .strokeColor(palette.border)
         .lineWidth(0.5)
