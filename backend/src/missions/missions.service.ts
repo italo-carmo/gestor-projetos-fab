@@ -363,8 +363,8 @@ export class MissionsService {
             report: null,
             participantsCount: mission.participants.length,
             scheduleItemsCount: mission.scheduleItems.length,
-            reportFilled: false,
-            reportSignaturesCount: 0,
+            reportFilled: this.isMissionReportFilled(mission.report),
+            reportSignaturesCount: mission.report?.signatures.length ?? 0,
           };
         }
         return {
@@ -1100,14 +1100,20 @@ export class MissionsService {
     if (!mission) throwError('NOT_FOUND');
     await this.assertMissionLocalityAllowed(mission);
     if (this.isAdmMissionsProfile(user)) {
+      const report =
+        mission.scope === ActivityScope.CIPAVD
+          ? await this.ensureMissionReportSynchronized(id, user)
+          : mission.report;
       return {
         ...mission,
         scheduleItems: this.stripMissionScheduleActivityLinks(
           mission.scheduleItems,
         ),
-        report: null,
-        reportFilled: false,
-        reportSignaturesCount: 0,
+        report,
+        reportFilled: this.isMissionReportFilled(report),
+        reportSignaturesCount:
+          report?.signatures.filter((signature) => !signature.removedAt)
+            .length ?? 0,
       };
     }
     const report =
@@ -5021,7 +5027,6 @@ export class MissionsService {
   }
 
   private assertMissionReportEditAccess(user?: RbacUser) {
-    this.assertMissionAdvancedTabAccess(user);
     if (hasPermission(user, 'missions', 'update')) {
       return;
     }

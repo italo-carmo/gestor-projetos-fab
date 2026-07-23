@@ -1512,11 +1512,15 @@ export function MissionsPage() {
 
   const items = missionsQuery.data?.items ?? [];
   const selectedMission = missionDetailQuery.data ?? null;
-  const showMissionReportTab =
-    missionScope === "CIPAVD" && !isAdmMissionsProfile;
+  const showMissionReportTab = missionScope === "CIPAVD";
   const showMissionChecklistTab = !isAdmMissionsProfile;
   const missionReportTabIndex = showMissionReportTab ? 3 : -1;
   const missionChecklistTabIndex = showMissionReportTab ? 4 : 3;
+  const lastVisibleMissionTab = showMissionChecklistTab
+    ? missionChecklistTabIndex
+    : showMissionReportTab
+      ? missionReportTabIndex
+      : 2;
   const missionReport = selectedMission?.report ?? null;
   const missionReportSignatures = useMemo(
     () => (missionReport?.signatures ?? []) as any[],
@@ -1835,14 +1839,10 @@ export function MissionsPage() {
   }, [selectedMission]);
 
   useEffect(() => {
-    if (!showMissionChecklistTab && missionTab > 2) {
-      setMissionTab(0);
-      return;
-    }
-    if (!showMissionReportTab && missionTab === 4) {
+    if (missionTab > lastVisibleMissionTab) {
       setMissionTab(0);
     }
-  }, [missionTab, showMissionChecklistTab, showMissionReportTab]);
+  }, [lastVisibleMissionTab, missionTab]);
 
   useEffect(() => {
     if (!showSystemUserParticipantTab && participantTab !== 0) {

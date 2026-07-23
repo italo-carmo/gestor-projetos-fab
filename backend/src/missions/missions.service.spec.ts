@@ -63,6 +63,8 @@ function buildPrismaMock() {
     },
     missionReport: {
       upsert: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
       findUnique: jest.fn(),
     },
     missionReportSignature: {
@@ -388,7 +390,7 @@ describe('MissionsService Adm Missões access', () => {
     jest.clearAllMocks();
   });
 
-  it('strips report data from the mission list', async () => {
+  it('keeps report status but strips report payload from the mission list', async () => {
     const prisma = buildPrismaMock();
     prisma.mission.findMany.mockResolvedValue([
       {
@@ -417,16 +419,22 @@ describe('MissionsService Adm Missões access', () => {
         {
           id: 'mission-1',
           report: null,
-          reportFilled: false,
-          reportSignaturesCount: 0,
+          reportFilled: true,
+          reportSignaturesCount: 1,
         },
       ],
       total: 1,
     });
   });
 
-  it('strips report and field-activity links from mission details', async () => {
+  it('keeps report data and strips field-activity links from mission details', async () => {
     const prisma = buildPrismaMock();
+    const report = {
+      id: 'report-1',
+      contentHtml: '<p>Relatório reservado</p>',
+      contentText: 'Relatório reservado',
+      signatures: [{ id: 'sig-1', removedAt: null }],
+    };
     prisma.mission.findUnique.mockResolvedValue({
       ...buildMissionForReport(),
       participants: [],
@@ -435,6 +443,11 @@ describe('MissionsService Adm Missões access', () => {
         {
           id: 'schedule-1',
           title: 'Palestra base',
+          startAt: new Date('2026-05-10T12:00:00.000Z'),
+          durationMinutes: 60,
+          location: 'Auditório',
+          responsible: 'Equipe',
+          participants: 'Turma A',
           activity: { id: 'activity-1', title: 'Atividade vinculada' },
           activityLinks: [
             {
@@ -446,22 +459,22 @@ describe('MissionsService Adm Missões access', () => {
           ],
         },
       ],
-      report: {
-        id: 'report-1',
-        contentHtml: '<p>Relatório reservado</p>',
-        contentText: 'Relatório reservado',
-        signatures: [{ id: 'sig-1', removedAt: null }],
-      },
+      report,
     });
+    prisma.__tx.missionReport.update.mockResolvedValue({ id: 'report-1' });
+    prisma.__tx.missionReport.findUnique.mockResolvedValue(report);
 
     const service = new MissionsService(prisma, auditMock, fabLdapMock);
     const result = await service.getById('mission-1', admMissionsUser);
 
     expect(result).toMatchObject({
       id: 'mission-1',
-      report: null,
-      reportFilled: false,
-      reportSignaturesCount: 0,
+      report: {
+        id: 'report-1',
+        contentText: 'Relatório reservado',
+      },
+      reportFilled: true,
+      reportSignaturesCount: 1,
     });
     expect(result.scheduleItems[0]).toMatchObject({
       id: 'schedule-1',
@@ -470,9 +483,22 @@ describe('MissionsService Adm Missões access', () => {
     });
   });
 
-  it('blocks advanced mission tabs even with missions update permission', async () => {
+  it('allows report edits and blocks other advanced mission tabs', async () => {
+    const prisma = buildPrismaMock();
+    prisma.mission.findUnique.mockResolvedValue(
+      buildMissionForReport({ locality: undefined }),
+    );
+    prisma.missionReport.findUnique.mockResolvedValue(null);
+    prisma.__tx.missionReport.upsert.mockResolvedValue({ id: 'report-1' });
+    prisma.__tx.missionReport.findUnique.mockResolvedValue({
+      id: 'report-1',
+      missionId: 'mission-1',
+      contentHtml: '<p>Relatório</p>',
+      contentText: 'Relatório',
+      signatures: [],
+    });
     const service = new MissionsService(
-      buildPrismaMock(),
+      prisma,
       auditMock,
       fabLdapMock,
     );
@@ -483,9 +509,7 @@ describe('MissionsService Adm Missões access', () => {
         { contentHtml: '<p>Relatório</p>', contentText: 'Relatório' },
         admMissionsUser,
       ),
-    ).rejects.toMatchObject({
-      response: expect.objectContaining({ code: 'RBAC_FORBIDDEN' }),
-    });
+    ).resolves.toMatchObject({ id: 'report-1', filled: true });
 
     await expect(
       service.getChecklist('mission-1', admMissionsUser),
