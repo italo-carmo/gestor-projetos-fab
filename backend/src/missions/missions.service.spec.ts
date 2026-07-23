@@ -694,6 +694,34 @@ describe('MissionsService mission reports', () => {
     expect(result.suppressedDayKeys).toEqual(['2026-05-10']);
   });
 
+  it('treats missing empty suppression metadata as an unchanged document', () => {
+    const service = new MissionsService(
+      buildPrismaMock(),
+      auditMock,
+      fabLdapMock,
+    );
+    const current = (service as any).normalizeMissionReportBlocksDocument({
+      version: 1,
+      blocks: [
+        {
+          id: 'free-1',
+          type: 'free_text',
+          sortOrder: 0,
+          contentHtml: '<p>Texto preservado</p>',
+          contentText: 'Texto preservado',
+        },
+      ],
+    });
+    const synchronized = (service as any).synchronizeMissionReportBlocks(
+      current,
+      [],
+    );
+
+    expect(synchronized).toEqual(current);
+    expect(synchronized.suppressedSourceKeys).toEqual([]);
+    expect(synchronized.suppressedDayKeys).toEqual([]);
+  });
+
   it('rejects mission reports outside CIPAVD scope', async () => {
     const prisma = buildPrismaMock();
     prisma.locality.findMany.mockResolvedValue([

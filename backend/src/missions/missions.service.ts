@@ -1235,12 +1235,14 @@ export class MissionsService {
     }
 
     const nextBlocksJson = blocksDocument as unknown as Prisma.JsonObject;
+    const existingDocument = existing
+      ? this.normalizeMissionReportBlocksDocument(existing.blocksJson, existing)
+      : null;
     const contentChanged =
       !existing ||
       existing.contentHtml !== rendered.contentHtml ||
       existing.contentText !== rendered.contentText ||
-      JSON.stringify(existing.blocksJson ?? null) !==
-        JSON.stringify(nextBlocksJson);
+      JSON.stringify(existingDocument) !== JSON.stringify(blocksDocument);
 
     const report = await this.prisma.$transaction(async (tx) => {
       const saved = await (tx.missionReport as any).upsert({
@@ -4409,8 +4411,7 @@ export class MissionsService {
     const currentReport = (mission as any).report ?? null;
     const nextBlocksJson = nextDocument as unknown as Prisma.JsonObject;
     const blocksChanged =
-      JSON.stringify(currentReport?.blocksJson ?? null) !==
-      JSON.stringify(nextBlocksJson);
+      JSON.stringify(currentDocument) !== JSON.stringify(nextDocument);
     const contentChanged =
       !currentReport ||
       currentReport.contentHtml !== rendered.contentHtml ||
@@ -4419,14 +4420,16 @@ export class MissionsService {
 
     const report = await this.prisma.$transaction(async (tx) => {
       const saved = currentReport
-        ? await (tx.missionReport as any).update({
-            where: { id: currentReport.id },
-            data: {
-              blocksJson: nextBlocksJson,
-              contentHtml: rendered.contentHtml,
-              contentText: rendered.contentText,
-            },
-          })
+        ? contentChanged
+          ? await (tx.missionReport as any).update({
+              where: { id: currentReport.id },
+              data: {
+                blocksJson: nextBlocksJson,
+                contentHtml: rendered.contentHtml,
+                contentText: rendered.contentText,
+              },
+            })
+          : currentReport
         : await (tx.missionReport as any).create({
             data: {
               missionId,
