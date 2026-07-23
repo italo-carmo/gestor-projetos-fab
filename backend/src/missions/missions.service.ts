@@ -224,6 +224,7 @@ type MissionReportBlock = {
   contentText?: string;
   dayKey?: string | null;
   dayLabel?: string | null;
+  manualDayLabelOverride?: boolean;
   sourceScheduleItemId?: string | null;
   sourceActivityId?: string | null;
   fields?: MissionReportFieldValues;
@@ -234,6 +235,8 @@ type MissionReportBlock = {
 type MissionReportBlocksDocument = {
   version: 1;
   blocks: MissionReportBlock[];
+  suppressedSourceKeys: string[];
+  suppressedDayKeys: string[];
 };
 
 type MissionReportSourceActivity = {
@@ -1136,6 +1139,8 @@ export class MissionsService {
       contentHtml?: string | null;
       contentText?: string | null;
       blocks?: unknown[] | null;
+      suppressedSourceKeys?: string[] | null;
+      suppressedDayKeys?: string[] | null;
     },
     user?: RbacUser,
   ) {
@@ -1200,6 +1205,8 @@ export class MissionsService {
         this.normalizeMissionReportBlocksDocument({
           version: 1,
           blocks: dto.blocks ?? [],
+          suppressedSourceKeys: dto.suppressedSourceKeys ?? [],
+          suppressedDayKeys: dto.suppressedDayKeys ?? [],
         }),
         this.buildMissionReportSourceActivities(sourceContext),
       );
@@ -1211,6 +1218,8 @@ export class MissionsService {
       );
       blocksDocument = {
         version: 1,
+        suppressedSourceKeys: [],
+        suppressedDayKeys: [],
         blocks: [
           {
             id: `free-${existing?.id ?? randomUUID()}`,
@@ -4558,6 +4567,8 @@ export class MissionsService {
       sources.map((source) => [source.sourceKey, source]),
     );
     const dayByKey = new Map(sources.map((source) => [source.dayKey, source]));
+    const suppressedSourceKeys = new Set(document.suppressedSourceKeys);
+    const suppressedDayKeys = new Set(document.suppressedDayKeys);
     const existingBlocks = document.blocks.map((block, index) => ({
       ...block,
       sortOrder: index,
@@ -4566,7 +4577,7 @@ export class MissionsService {
     const blocks = existingBlocks.map((block) => {
       if (block.type === 'day_heading' && block.dayKey) {
         const source = dayByKey.get(block.dayKey);
-        if (source) {
+        if (source && !block.manualDayLabelOverride) {
           return {
             ...block,
             dayLabel: source.dayLabel,
@@ -4621,7 +4632,10 @@ export class MissionsService {
     );
 
     for (const source of sources) {
-      if (!existingDayKeys.has(source.dayKey)) {
+      if (
+        !existingDayKeys.has(source.dayKey) &&
+        !suppressedDayKeys.has(source.dayKey)
+      ) {
         blocks.push({
           id: `day-${source.dayKey}-${randomUUID()}`,
           type: 'day_heading',
@@ -4632,7 +4646,10 @@ export class MissionsService {
         });
         existingDayKeys.add(source.dayKey);
       }
-      if (!existingSourceKeys.has(source.sourceKey)) {
+      if (
+        !existingSourceKeys.has(source.sourceKey) &&
+        !suppressedSourceKeys.has(source.sourceKey)
+      ) {
         blocks.push({
           id: `field-${source.scheduleItemId}-${source.activityId ?? 'activity'}-${randomUUID()}`,
           type: 'field_activity',
@@ -4653,6 +4670,8 @@ export class MissionsService {
 
     return {
       version: 1,
+      suppressedSourceKeys: Array.from(suppressedSourceKeys),
+      suppressedDayKeys: Array.from(suppressedDayKeys),
       blocks: blocks.map((block, index) => ({
         ...block,
         sortOrder: index,
@@ -4671,6 +4690,14 @@ export class MissionsService {
     const source = this.isJsonObject(value as any)
       ? (value as Record<string, unknown>)
       : null;
+    const suppressedSourceKeys = this.normalizeMissionReportSuppressedKeys(
+      source?.suppressedSourceKeys,
+      240,
+    );
+    const suppressedDayKeys = this.normalizeMissionReportSuppressedKeys(
+      source?.suppressedDayKeys,
+      40,
+    );
     const rawBlocks = Array.isArray(source?.blocks) ? source.blocks : null;
     const blocks = rawBlocks
       ? rawBlocks
@@ -4681,6 +4708,8 @@ export class MissionsService {
     if (blocks.length > 0) {
       return {
         version: 1,
+        suppressedSourceKeys,
+        suppressedDayKeys,
         blocks: blocks.map((block, index) => ({ ...block, sortOrder: index })),
       };
     }
@@ -4694,6 +4723,8 @@ export class MissionsService {
     if (legacyHtml || legacyText) {
       return {
         version: 1,
+        suppressedSourceKeys,
+        suppressedDayKeys,
         blocks: [
           {
             id: `legacy-${legacyReport?.id ?? randomUUID()}`,
@@ -4707,7 +4738,12 @@ export class MissionsService {
       };
     }
 
-    return { version: 1, blocks: [this.createFreeTextMissionReportBlock(0)] };
+    return {
+      version: 1,
+      suppressedSourceKeys,
+      suppressedDayKeys,
+      blocks: [this.createFreeTextMissionReportBlock(0)],
+    };
   }
 
   private normalizeMissionReportBlock(
@@ -4743,6 +4779,7 @@ export class MissionsService {
       contentText,
       dayKey: this.normalizeOptionalReportText(raw.dayKey, 40),
       dayLabel: this.normalizeOptionalReportText(raw.dayLabel, 140),
+      manualDayLabelOverride: raw.manualDayLabelOverride === true,
       sourceScheduleItemId: this.normalizeOptionalReportText(
         raw.sourceScheduleItemId,
         120,
@@ -4904,6 +4941,21 @@ export class MissionsService {
       .trim()
       .slice(0, maxLength);
     return normalized || null;
+  }
+
+  private normalizeMissionReportSuppressedKeys(
+    value: unknown,
+    maxLength: number,
+  ) {
+    if (!Array.isArray(value)) return [];
+    return Array.from(
+      new Set(
+        value
+          .map((item) => sanitizeText(String(item ?? '')).trim())
+          .filter(Boolean)
+          .map((item) => item.slice(0, maxLength)),
+      ),
+    ).slice(0, 2_000);
   }
 
   private formatMissionReportDayKey(value: Date) {

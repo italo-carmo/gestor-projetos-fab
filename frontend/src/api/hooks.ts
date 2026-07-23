@@ -699,6 +699,8 @@ export function useUpsertMissionReport() {
         contentHtml?: string;
         contentText?: string;
         blocks?: Array<Record<string, unknown>>;
+        suppressedSourceKeys?: string[];
+        suppressedDayKeys?: string[];
       };
     }) => (await api.put(`/missions/${args.id}/report`, args.payload)).data,
     onSuccess: (_data, args) => {

@@ -16,6 +16,7 @@ import {
   Drawer,
   IconButton,
   LinearProgress,
+  Menu,
   MenuItem,
   Stack,
   Tab,
@@ -781,6 +782,7 @@ type MissionReportBlockDraft = {
   contentText?: string;
   dayKey?: string | null;
   dayLabel?: string | null;
+  manualDayLabelOverride?: boolean;
   sourceScheduleItemId?: string | null;
   sourceActivityId?: string | null;
   fields?: Record<MissionReportFieldKey, string>;
@@ -814,6 +816,19 @@ function createFreeTextMissionReportBlock(
   };
 }
 
+function createDayMissionReportBlock(
+  sortOrder: number,
+): MissionReportBlockDraft {
+  return {
+    id: createMissionReportBlockId("day"),
+    type: "day_heading",
+    sortOrder,
+    dayLabel: "Dia da missão",
+    manualDayLabelOverride: true,
+    createdFrom: "manual",
+  };
+}
+
 function emptyMissionReportFields(): Record<MissionReportFieldKey, string> {
   return {
     title: "",
@@ -823,6 +838,27 @@ function emptyMissionReportFields(): Record<MissionReportFieldKey, string> {
     responsible: "",
     participants: "",
   };
+}
+
+function createFieldActivityMissionReportBlock(
+  sortOrder: number,
+): MissionReportBlockDraft {
+  return {
+    id: createMissionReportBlockId("field"),
+    type: "field_activity",
+    sortOrder,
+    contentHtml: "",
+    contentText: "",
+    fields: emptyMissionReportFields(),
+    manualOverrides: {},
+    createdFrom: "manual",
+  };
+}
+
+function missionReportSourceKey(block: MissionReportBlockDraft) {
+  const scheduleItemId = String(block.sourceScheduleItemId ?? "").trim();
+  const activityId = String(block.sourceActivityId ?? "").trim();
+  return scheduleItemId ? `${scheduleItemId}:${activityId}` : "";
 }
 
 function normalizeMissionReportBlocks(report: any): MissionReportBlockDraft[] {
@@ -859,6 +895,7 @@ function normalizeMissionReportBlocks(report: any): MissionReportBlockDraft[] {
         ),
         dayKey: raw.dayKey ? String(raw.dayKey) : null,
         dayLabel: raw.dayLabel ? String(raw.dayLabel) : null,
+        manualDayLabelOverride: raw.manualDayLabelOverride === true,
         sourceScheduleItemId: raw.sourceScheduleItemId
           ? String(raw.sourceScheduleItemId)
           : null,
@@ -1394,6 +1431,16 @@ export function MissionsPage() {
   const [missionReportBlocks, setMissionReportBlocks] = useState<
     MissionReportBlockDraft[]
   >([createFreeTextMissionReportBlock(0)]);
+  const [
+    missionReportSuppressedSourceKeys,
+    setMissionReportSuppressedSourceKeys,
+  ] = useState<string[]>([]);
+  const [missionReportSuppressedDayKeys, setMissionReportSuppressedDayKeys] =
+    useState<string[]>([]);
+  const [missionReportInsertMenu, setMissionReportInsertMenu] = useState<{
+    anchorEl: HTMLElement;
+    index: number;
+  } | null>(null);
   const [missionReportDirty, setMissionReportDirty] = useState(false);
   const [missionReportSignDialogOpen, setMissionReportSignDialogOpen] =
     useState(false);
@@ -1539,6 +1586,22 @@ export function MissionsPage() {
   const missionReportDraftFilled = Boolean(
     missionReportBlocksToText(missionReportBlocks),
   );
+  const missionReportBlockNumbers = useMemo(() => {
+    const numbers = new Map<string, string>();
+    let dayNumber = 0;
+    let activityNumber = 0;
+    for (const block of missionReportBlocks) {
+      if (block.type === "day_heading") {
+        dayNumber += 1;
+        activityNumber = 0;
+        numbers.set(block.id, String(dayNumber));
+      } else if (block.type === "field_activity") {
+        activityNumber += 1;
+        numbers.set(block.id, `${Math.max(dayNumber, 1)}.${activityNumber}`);
+      }
+    }
+    return numbers;
+  }, [missionReportBlocks]);
   const activityTypes = activityTypesQuery.data?.items ?? [];
   const specialties = specialtiesQuery.data?.items ?? [];
   const existingFieldActivities = useMemo(
@@ -1790,6 +1853,9 @@ export function MissionsPage() {
       setSelectedScheduleItemIds([]);
       resetBannerForm();
       setMissionReportBlocks([createFreeTextMissionReportBlock(0)]);
+      setMissionReportSuppressedSourceKeys([]);
+      setMissionReportSuppressedDayKeys([]);
+      setMissionReportInsertMenu(null);
       setMissionReportDirty(false);
       setMissionReportSignDialogOpen(false);
       setMissionReportSignCode("");
@@ -1854,6 +1920,17 @@ export function MissionsPage() {
     setMissionReportBlocks(
       normalizeMissionReportBlocks(selectedMission?.report),
     );
+    setMissionReportSuppressedSourceKeys(
+      Array.isArray(selectedMission?.report?.blocksJson?.suppressedSourceKeys)
+        ? selectedMission.report.blocksJson.suppressedSourceKeys.map(String)
+        : [],
+    );
+    setMissionReportSuppressedDayKeys(
+      Array.isArray(selectedMission?.report?.blocksJson?.suppressedDayKeys)
+        ? selectedMission.report.blocksJson.suppressedDayKeys.map(String)
+        : [],
+    );
+    setMissionReportInsertMenu(null);
     setMissionReportDirty(false);
     setMissionReportSignDialogOpen(false);
     setMissionReportSignCode("");
@@ -2001,6 +2078,9 @@ export function MissionsPage() {
     resetBannerForm();
     setCloneSourceMissionId("");
     setMissionReportBlocks([createFreeTextMissionReportBlock(0)]);
+    setMissionReportSuppressedSourceKeys([]);
+    setMissionReportSuppressedDayKeys([]);
+    setMissionReportInsertMenu(null);
     setMissionReportDirty(false);
     setMissionReportSignDialogOpen(false);
     setMissionReportSignCode("");
@@ -2023,6 +2103,9 @@ export function MissionsPage() {
     resetBannerForm();
     setCloneSourceMissionId("");
     setMissionReportBlocks([createFreeTextMissionReportBlock(0)]);
+    setMissionReportSuppressedSourceKeys([]);
+    setMissionReportSuppressedDayKeys([]);
+    setMissionReportInsertMenu(null);
     setMissionReportDirty(false);
     setMissionReportSignDialogOpen(false);
     setMissionReportSignCode("");
@@ -2054,6 +2137,9 @@ export function MissionsPage() {
     setBannerDeleteTarget(null);
     setScheduleDeleteTarget(null);
     setMissionReportBlocks([createFreeTextMissionReportBlock(0)]);
+    setMissionReportSuppressedSourceKeys([]);
+    setMissionReportSuppressedDayKeys([]);
+    setMissionReportInsertMenu(null);
     setMissionReportDirty(false);
     setMissionReportSignDialogOpen(false);
     setMissionReportSignCode("");
@@ -2329,16 +2415,22 @@ export function MissionsPage() {
     setMissionReportDirty(true);
   };
 
-  const insertMissionReportTextBlock = (insertIndex: number) => {
+  const insertMissionReportBlock = (
+    insertIndex: number,
+    type: MissionReportBlockType,
+  ) => {
     updateMissionReportBlocks((current) => {
       const next = [...current];
-      next.splice(
-        Math.max(0, Math.min(insertIndex, next.length)),
-        0,
-        createFreeTextMissionReportBlock(insertIndex),
-      );
+      const block =
+        type === "day_heading"
+          ? createDayMissionReportBlock(insertIndex)
+          : type === "field_activity"
+            ? createFieldActivityMissionReportBlock(insertIndex)
+            : createFreeTextMissionReportBlock(insertIndex);
+      next.splice(Math.max(0, Math.min(insertIndex, next.length)), 0, block);
       return next;
     });
+    setMissionReportInsertMenu(null);
   };
 
   const updateMissionReportBlockContent = (blockId: string, html: string) => {
@@ -2349,6 +2441,20 @@ export function MissionsPage() {
               ...block,
               contentHtml: html,
               contentText: missionReportHtmlToText(html),
+            }
+          : block,
+      ),
+    );
+  };
+
+  const updateMissionReportDayLabel = (blockId: string, value: string) => {
+    updateMissionReportBlocks((current) =>
+      current.map((block) =>
+        block.id === blockId && block.type === "day_heading"
+          ? {
+              ...block,
+              dayLabel: value,
+              manualDayLabelOverride: true,
             }
           : block,
       ),
@@ -2396,6 +2502,21 @@ export function MissionsPage() {
 
   const confirmDeleteMissionReportBlock = () => {
     if (!missionReportBlockDeleteTarget) return;
+    const sourceKey = missionReportSourceKey(missionReportBlockDeleteTarget);
+    if (sourceKey) {
+      setMissionReportSuppressedSourceKeys((current) =>
+        current.includes(sourceKey) ? current : [...current, sourceKey],
+      );
+    }
+    const dayKey =
+      missionReportBlockDeleteTarget.type === "day_heading"
+        ? String(missionReportBlockDeleteTarget.dayKey ?? "").trim()
+        : "";
+    if (dayKey) {
+      setMissionReportSuppressedDayKeys((current) =>
+        current.includes(dayKey) ? current : [...current, dayKey],
+      );
+    }
     updateMissionReportBlocks((current) => {
       const next = current.filter(
         (block) => block.id !== missionReportBlockDeleteTarget.id,
@@ -2430,19 +2551,24 @@ export function MissionsPage() {
       dayLabel: block.dayLabel ?? null,
       sourceScheduleItemId: block.sourceScheduleItemId ?? null,
       sourceActivityId: block.sourceActivityId ?? null,
+      manualDayLabelOverride: block.manualDayLabelOverride === true,
       fields: block.fields ?? undefined,
       manualOverrides: block.manualOverrides ?? undefined,
       createdFrom: block.createdFrom ?? undefined,
     }));
+
+  const buildMissionReportPayload = () => ({
+    blocks: serializeMissionReportBlocks(),
+    suppressedSourceKeys: missionReportSuppressedSourceKeys,
+    suppressedDayKeys: missionReportSuppressedDayKeys,
+  });
 
   const handleSaveMissionReport = async () => {
     if (!selectedMission?.id) return;
     try {
       await upsertMissionReport.mutateAsync({
         id: selectedMission.id,
-        payload: {
-          blocks: serializeMissionReportBlocks(),
-        },
+        payload: buildMissionReportPayload(),
       });
       setMissionReportDirty(false);
       toast.push({ message: "Relatório salvo.", severity: "success" });
@@ -2481,9 +2607,7 @@ export function MissionsPage() {
       if (missionReportDirty) {
         await upsertMissionReport.mutateAsync({
           id: selectedMission.id,
-          payload: {
-            blocks: serializeMissionReportBlocks(),
-          },
+          payload: buildMissionReportPayload(),
         });
         setMissionReportDirty(false);
       }
@@ -2538,7 +2662,7 @@ export function MissionsPage() {
       if (missionReportDirty) {
         await upsertMissionReport.mutateAsync({
           id: selectedMission.id,
-          payload: { blocks: serializeMissionReportBlocks() },
+          payload: buildMissionReportPayload(),
         });
         setMissionReportDirty(false);
       }
@@ -5661,8 +5785,8 @@ export function MissionsPage() {
                                 variant="body2"
                                 color="text.secondary"
                               >
-                                Texto livre da missão CIPAVD com assinatura
-                                digital de múltiplos usuários.
+                                Relatório estruturado em blocos, com conteúdo
+                                livre e atividades da missão.
                               </Typography>
                             </Box>
                             <Stack
@@ -5700,8 +5824,11 @@ export function MissionsPage() {
                                     variant="text"
                                     size="small"
                                     startIcon={<AddRoundedIcon />}
-                                    onClick={() =>
-                                      insertMissionReportTextBlock(index)
+                                    onClick={(event) =>
+                                      setMissionReportInsertMenu({
+                                        anchorEl: event.currentTarget,
+                                        index,
+                                      })
                                     }
                                     disabled={
                                       !canUpdateMissions ||
@@ -5709,7 +5836,7 @@ export function MissionsPage() {
                                     }
                                     sx={{ alignSelf: "flex-start" }}
                                   >
-                                    Inserir texto aqui
+                                    Inserir bloco aqui
                                   </Button>
                                   <Box
                                     onDragOver={(event) => {
@@ -5793,6 +5920,11 @@ export function MissionsPage() {
                                           variant="subtitle2"
                                           fontWeight={700}
                                         >
+                                          {missionReportBlockNumbers.get(
+                                            block.id,
+                                          )
+                                            ? `${missionReportBlockNumbers.get(block.id)} - `
+                                            : ""}
                                           {block.type === "day_heading"
                                             ? "Dia"
                                             : block.type === "field_activity"
@@ -5846,12 +5978,24 @@ export function MissionsPage() {
 
                                     <Box sx={{ p: 1.2 }}>
                                       {block.type === "day_heading" ? (
-                                        <Typography
-                                          variant="subtitle1"
-                                          fontWeight={700}
-                                        >
-                                          {block.dayLabel || "Dia da missão"}
-                                        </Typography>
+                                        <TextField
+                                          size="small"
+                                          label="Título do dia"
+                                          value={
+                                            block.dayLabel || "Dia da missão"
+                                          }
+                                          onChange={(event) =>
+                                            updateMissionReportDayLabel(
+                                              block.id,
+                                              event.target.value,
+                                            )
+                                          }
+                                          fullWidth
+                                          disabled={
+                                            !canUpdateMissions ||
+                                            upsertMissionReport.isPending
+                                          }
+                                        />
                                       ) : null}
 
                                       {block.type === "free_text" ? (
@@ -6015,10 +6159,11 @@ export function MissionsPage() {
                                 variant="outlined"
                                 size="small"
                                 startIcon={<AddRoundedIcon />}
-                                onClick={() =>
-                                  insertMissionReportTextBlock(
-                                    missionReportBlocks.length,
-                                  )
+                                onClick={(event) =>
+                                  setMissionReportInsertMenu({
+                                    anchorEl: event.currentTarget,
+                                    index: missionReportBlocks.length,
+                                  })
                                 }
                                 disabled={
                                   !canUpdateMissions ||
@@ -6026,9 +6171,46 @@ export function MissionsPage() {
                                 }
                                 sx={{ alignSelf: "flex-start" }}
                               >
-                                Inserir texto no final
+                                Inserir bloco no final
                               </Button>
                             </Stack>
+
+                            <Menu
+                              anchorEl={missionReportInsertMenu?.anchorEl}
+                              open={Boolean(missionReportInsertMenu)}
+                              onClose={() => setMissionReportInsertMenu(null)}
+                            >
+                              <MenuItem
+                                onClick={() =>
+                                  insertMissionReportBlock(
+                                    missionReportInsertMenu?.index ?? 0,
+                                    "free_text",
+                                  )
+                                }
+                              >
+                                Texto livre
+                              </MenuItem>
+                              <MenuItem
+                                onClick={() =>
+                                  insertMissionReportBlock(
+                                    missionReportInsertMenu?.index ?? 0,
+                                    "day_heading",
+                                  )
+                                }
+                              >
+                                Dia
+                              </MenuItem>
+                              <MenuItem
+                                onClick={() =>
+                                  insertMissionReportBlock(
+                                    missionReportInsertMenu?.index ?? 0,
+                                    "field_activity",
+                                  )
+                                }
+                              >
+                                Atividade de campo
+                              </MenuItem>
+                            </Menu>
 
                             {activeMissionReportSignatures.length > 0 &&
                             missionReportDirty ? (

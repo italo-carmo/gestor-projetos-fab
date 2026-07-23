@@ -497,11 +497,7 @@ describe('MissionsService Adm Missões access', () => {
       contentText: 'Relatório',
       signatures: [],
     });
-    const service = new MissionsService(
-      prisma,
-      auditMock,
-      fabLdapMock,
-    );
+    const service = new MissionsService(prisma, auditMock, fabLdapMock);
 
     await expect(
       service.upsertReport(
@@ -645,6 +641,57 @@ describe('MissionsService mission reports', () => {
         entityId: 'mission-1',
       }),
     );
+  });
+
+  it('does not recreate automatically synchronized blocks deleted by the user', () => {
+    const service = new MissionsService(
+      buildPrismaMock(),
+      auditMock,
+      fabLdapMock,
+    );
+    const sourceKey = 'schedule-1:activity-1';
+    const result = (service as any).synchronizeMissionReportBlocks(
+      {
+        version: 1,
+        suppressedSourceKeys: [sourceKey],
+        suppressedDayKeys: ['2026-05-10'],
+        blocks: [
+          {
+            id: 'free-1',
+            type: 'free_text',
+            sortOrder: 0,
+            contentHtml: '<p>Texto preservado</p>',
+            contentText: 'Texto preservado',
+          },
+        ],
+      },
+      [
+        {
+          sourceKey,
+          scheduleItemId: 'schedule-1',
+          activityId: 'activity-1',
+          dayKey: '2026-05-10',
+          dayLabel: 'Dia 10 do mês de maio do ano de 2026',
+          fields: {
+            title: 'Palestra',
+            date: 'Dia 10 do mês de maio do ano de 2026',
+            time: '09:00 - 10:00',
+            location: 'Auditório',
+            responsible: 'Cap Silva',
+            participants: 'Efetivo',
+          },
+        },
+      ],
+    );
+
+    expect(result.blocks).toEqual([
+      expect.objectContaining({
+        id: 'free-1',
+        contentText: 'Texto preservado',
+      }),
+    ]);
+    expect(result.suppressedSourceKeys).toEqual([sourceKey]);
+    expect(result.suppressedDayKeys).toEqual(['2026-05-10']);
   });
 
   it('rejects mission reports outside CIPAVD scope', async () => {
