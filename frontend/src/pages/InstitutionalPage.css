@@ -1106,40 +1106,24 @@
 .institutional-support-card__head {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.institutional-support-card__head > span {
-  width: 44px;
-  height: 44px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  border-radius: 11px;
-  background: var(--institutional-navy);
-  color: #fff;
-  font-size: 0.68rem;
-  font-weight: 800;
+  min-height: 28px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--institutional-line);
 }
 
 .institutional-support-card h3 {
   margin: 0;
   color: var(--institutional-navy);
-  font-size: 0.96rem;
-}
-
-.institutional-support-card__head p {
-  margin: 3px 0 0;
-  color: var(--institutional-muted);
-  font-size: 0.68rem;
-  line-height: 1.35;
+  font-size: 1rem;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
 }
 
 .institutional-coverage-note {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin: 15px 0;
+  margin: 12px 0 15px;
   padding: 7px 9px;
   border-radius: 8px;
   background: #fff4ea;

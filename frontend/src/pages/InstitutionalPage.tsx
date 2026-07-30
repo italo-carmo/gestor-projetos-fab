@@ -712,8 +712,7 @@ export function InstitutionalPage() {
                   return (
                     <article key={channel.servedOm.id} className="institutional-support-card">
                       <div className="institutional-support-card__head">
-                        <span>{channel.servedOm.code.slice(0, 3)}</span>
-                        <div><h3>{channel.servedOm.code}</h3><p>{channel.servedOm.name}{channel.servedOm.uf ? ` • ${channel.servedOm.uf}` : ""}</p></div>
+                        <h3>{channel.servedOm.code}</h3>
                       </div>
                       {inherited ? <p className="institutional-coverage-note"><ShieldRoundedIcon /> Atendida pela CPCA {channel.responsibleCpca.code}</p> : <p className="institutional-coverage-note is-own"><ShieldRoundedIcon /> CPCA própria</p>}
                       <div className="institutional-support-card__links">
