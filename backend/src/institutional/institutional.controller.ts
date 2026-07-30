@@ -23,14 +23,6 @@ export class InstitutionalController {
     return response.send(photo.buffer);
   }
 
-  @Get('news/:id/photo')
-  async getNewsPhoto(@Param('id') id: string, @Res() response: Response) {
-    const photo = await this.institutional.getNewsPhoto(id);
-    response.setHeader('Content-Type', photo.contentType);
-    response.setHeader('Cache-Control', 'public, max-age=3600');
-    return response.send(photo.buffer);
-  }
-
   @Get('materials/:id')
   async downloadMaterial(@Param('id') id: string, @Res() response: Response) {
     const material = await this.institutional.getMaterial(id);

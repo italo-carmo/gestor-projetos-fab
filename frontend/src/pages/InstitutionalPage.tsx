@@ -43,12 +43,16 @@ type InstitutionalAction = {
   year: number;
   status: "PROGRAMADA" | "EM_ANDAMENTO" | "REALIZADA";
   locality: Locality;
-  activities: Array<{
-    id: string;
-    title: string;
-    startAt: string;
-    location?: string | null;
-  }>;
+};
+
+type InstitutionalNews = {
+  id: string;
+  title: string;
+  summary?: string | null;
+  audience: "INTERNAL" | "EXTERNAL";
+  publishedAt: string;
+  sourceUrl: string;
+  coverImageUrl?: string | null;
 };
 
 type InstitutionalPhoto = {
@@ -71,7 +75,6 @@ type InstitutionalData = {
   agenda: Array<{
     id: string;
     title: string;
-    activity: string;
     scope: Scope;
     startDate: string;
     endDate: string;
@@ -79,17 +82,7 @@ type InstitutionalData = {
     location: string;
     locality: Locality;
   }>;
-  news: Array<{
-    id: string;
-    title: string;
-    role?: string | null;
-    organization?: string | null;
-    impact: "MULTIPLICADOR" | "SIMBOLICO";
-    text: string;
-    publishedAt: string;
-    locality: Locality;
-    photoUrl?: string | null;
-  }>;
+  news: InstitutionalNews[];
   supportChannels: Array<{
     servedOm: { id: string; code: string; name: string; uf?: string | null };
     responsibleCpca: { id: string; code: string; name: string; uf?: string | null };
@@ -239,6 +232,23 @@ function EmptyInstitutionalState({ children }: { children: string }) {
       <ShieldRoundedIcon />
       <p>{children}</p>
     </div>
+  );
+}
+
+function InstitutionalNewsCover({ news }: { news: InstitutionalNews }) {
+  const [failedImageUrl, setFailedImageUrl] = useState("");
+  const imageUrl = toApiUrl(news.coverImageUrl);
+
+  if (!imageUrl || failedImageUrl === imageUrl) return <CampaignRoundedIcon />;
+
+  return (
+    <img
+      src={imageUrl}
+      alt={`Capa da notícia: ${news.title}`}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailedImageUrl(imageUrl)}
+    />
   );
 }
 
@@ -396,9 +406,6 @@ export function InstitutionalPage() {
           <div className="institutional-hero__orb institutional-hero__orb--two" />
           <div className="institutional-container institutional-hero__grid">
             <div className="institutional-hero__content">
-              <span className="institutional-hero__kicker">
-                <ShieldRoundedIcon /> Comissão Itinerante
-              </span>
               <h1>
                 Informação, prevenção <span>e acolhimento</span>
               </h1>
@@ -420,10 +427,6 @@ export function InstitutionalPage() {
             <div className="institutional-hero__visual" aria-hidden="true">
               <div className="institutional-hero__seal">
                 <img src="/brand/cipavd-7.png" alt="" />
-              </div>
-              <div className="institutional-hero__message">
-                <span>Nosso compromisso</span>
-                <strong>Respeito protege. Informação transforma.</strong>
               </div>
             </div>
           </div>
@@ -500,7 +503,6 @@ export function InstitutionalPage() {
             <SectionHeading
               eyebrow="Nossa equipe"
               title="Membros da CIPAVD"
-              text="Composição atualizada automaticamente a partir do organograma do sistema."
             />
             {data.members.length ? (
               <div className="institutional-org-chart">
@@ -583,11 +585,6 @@ export function InstitutionalPage() {
                         <h3>{action.title}</h3>
                         <p className="institutional-action-card__location"><LocationOnRoundedIcon /> {action.locality.code} • {action.locality.name}{action.locality.uf ? `/${action.locality.uf}` : ""}</p>
                         {action.summary ? <p>{action.summary}</p> : null}
-                        {action.activities.length ? (
-                          <div className="institutional-activity-tags">
-                            {action.activities.slice(0, 3).map((activity) => <span key={activity.id}>{activity.title}</span>)}
-                          </div>
-                        ) : null}
                       </div>
                     </article>
                   )) : <EmptyInstitutionalState>Nenhuma ação encontrada para o filtro selecionado.</EmptyInstitutionalState>}
@@ -602,21 +599,23 @@ export function InstitutionalPage() {
             <SectionHeading
               eyebrow="Impacto positivo"
               title="Notícias e histórias que inspiram"
-              text="Destaques cadastrados em Impacto Positivo, apresentados com atualização automática."
+              text="Notícias destinadas aos públicos interno e externo, publicadas em Impacto Positivo."
             />
             {data.news.length ? (
               <div className="institutional-news-grid">
                 {data.news.map((news) => (
                   <article key={news.id} className="institutional-news-card">
                     <div className="institutional-news-card__media">
-                      {news.photoUrl ? <img src={toApiUrl(news.photoUrl)} alt={`Destaque: ${news.title}`} loading="lazy" /> : <CampaignRoundedIcon />}
-                      <span>{news.impact === "MULTIPLICADOR" ? "Impacto multiplicador" : "Impacto simbólico"}</span>
+                      <InstitutionalNewsCover news={news} />
+                      <span>{news.audience === "INTERNAL" ? "Público interno" : "Público externo"}</span>
                     </div>
                     <div className="institutional-news-card__body">
-                      <small>{formatDate(news.publishedAt)} • {news.locality.code}</small>
+                      <small>{formatDate(news.publishedAt)}</small>
                       <h3>{news.title}</h3>
-                      {news.role || news.organization ? <p className="institutional-news-card__role">{[news.role, news.organization].filter(Boolean).join(" • ")}</p> : null}
-                      <p>{news.text}</p>
+                      {news.summary ? <p>{news.summary}</p> : null}
+                      <a href={news.sourceUrl} target="_blank" rel="noreferrer">
+                        Ler notícia <OpenInNewRoundedIcon />
+                      </a>
                     </div>
                   </article>
                 ))}
@@ -644,8 +643,7 @@ export function InstitutionalPage() {
                     </div>
                     <div className="institutional-agenda-item__content">
                       <div><span className={`institutional-scope-chip is-${item.scope.toLowerCase()}`}>{item.scope}</span><span className={`institutional-status-chip is-${item.status.toLowerCase()}`}>{STATUS_LABEL[item.status]}</span></div>
-                      <h3>{item.activity}</h3>
-                      <p>{item.title}</p>
+                      <h3>{item.title}</h3>
                       <small><LocationOnRoundedIcon /> {item.location} • {formatDateRange(item.startDate, item.endDate)}</small>
                     </div>
                   </article>

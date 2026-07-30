@@ -29,7 +29,6 @@ test('renders the public institutional page without authentication', async ({
             year: 2026,
             status: 'PROGRAMADA',
             locality: { id: 'l1', code: 'BAAN', name: 'Base Aérea de Natal', uf: 'RN' },
-            activities: [{ id: 'at1', title: 'Palestra', startAt: '2026-08-10T12:00:00.000Z', location: 'Auditório' }],
           },
           {
             id: 'a2',
@@ -41,14 +40,12 @@ test('renders the public institutional page without authentication', async ({
             year: 2026,
             status: 'REALIZADA',
             locality: { id: 'l2', code: 'GAP-RJ', name: 'Grupamento de Apoio do Rio de Janeiro', uf: 'RJ' },
-            activities: [],
           },
         ],
         agenda: [
           {
             id: 'a1',
             title: 'Missão CIPAVD Natal',
-            activity: 'Palestra',
             scope: 'CIPAVD',
             startDate: '2026-08-10T12:00:00.000Z',
             endDate: '2026-08-12T12:00:00.000Z',
@@ -60,14 +57,21 @@ test('renders the public institutional page without authentication', async ({
         news: [
           {
             id: 'n1',
-            title: 'Militar em destaque',
-            role: 'Multiplicadora',
-            organization: 'BAAN',
-            impact: 'MULTIPLICADOR',
-            text: 'Uma iniciativa que fortaleceu a prevenção e o acolhimento.',
+            title: 'Campanha fortalece ambiente de respeito',
+            summary: 'Uma iniciativa que fortaleceu a prevenção e o acolhimento.',
+            audience: 'INTERNAL',
             publishedAt: '2026-07-20T12:00:00.000Z',
-            locality: { id: 'l1', code: 'BAAN', name: 'Base Aérea de Natal', uf: 'RN' },
-            photoUrl: '/institutional/news/n1/photo',
+            sourceUrl: 'https://www.fab.mil.br/noticia-interna',
+            coverImageUrl: null,
+          },
+          {
+            id: 'n2',
+            title: 'FAB amplia ações de prevenção',
+            summary: 'Ações institucionais chegam a novas localidades.',
+            audience: 'EXTERNAL',
+            publishedAt: '2026-07-18T12:00:00.000Z',
+            sourceUrl: 'https://www.fab.mil.br/noticia-externa',
+            coverImageUrl: null,
           },
         ],
         supportChannels: [
@@ -85,7 +89,7 @@ test('renders the public institutional page without authentication', async ({
           groups: [
             {
               id: 'gallery:CIPAVD:l1',
-              title: 'BAAN',
+              title: 'Base Aérea de Natal',
               scope: 'CIPAVD',
               locality: { id: 'l1', code: 'BAAN', name: 'Base Aérea de Natal', uf: 'RN' },
               photos: [{ id: 'p1', title: 'Palestra na BAAN', imageUrl: '/institutional/library-photos/p1', mimeType: 'image/png' }],
@@ -105,9 +109,13 @@ test('renders the public institutional page without authentication', async ({
 
   await expect(page).toHaveURL(/\/institucional$/);
   await expect(page.getByRole('heading', { name: /Informação, prevenção/i })).toBeVisible();
+  await expect(page.getByText('Comissão Itinerante', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Nosso compromisso', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Membros da CIPAVD' })).toBeVisible();
+  await expect(page.getByText(/Composição atualizada automaticamente/)).toHaveCount(0);
   const actionsSection = page.locator('#acoes');
   await expect(actionsSection.getByText('Missão CIPAVD Natal', { exact: true })).toBeVisible();
+  await expect(actionsSection.getByText('Palestra', { exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Rio de Janeiro: 1 ação(ões)' }).click();
   await expect(actionsSection.getByText('Missão SMIF Rio de Janeiro', { exact: true })).toBeVisible();
@@ -117,6 +125,15 @@ test('renders the public institutional page without authentication', async ({
   await expect(page.getByText('Atendida pela CPCA BAAN')).toBeVisible();
   await expect(page.getByText('cpca.baan@fab.mil.br')).toBeVisible();
 
+  const newsSection = page.locator('#noticias');
+  await expect(newsSection.getByText('Público interno')).toBeVisible();
+  await expect(newsSection.getByText('Público externo')).toBeVisible();
+
+  const agendaSection = page.locator('#agenda');
+  await expect(agendaSection.getByRole('heading', { name: 'Missão CIPAVD Natal' })).toBeVisible();
+  await expect(agendaSection.getByText('Palestra', { exact: true })).toHaveCount(0);
+
   await expect(page.getByRole('heading', { name: 'Biblioteca' })).toBeVisible();
+  await expect(page.locator('#biblioteca').getByRole('heading', { name: 'Base Aérea de Natal' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ampliar Palestra na BAAN' })).toBeVisible();
 });

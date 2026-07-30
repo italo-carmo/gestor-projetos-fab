@@ -123,6 +123,16 @@ function missionStatus(startDate: Date, endDate: Date, now: Date) {
   return 'EM_ANDAMENTO';
 }
 
+function articleSummary(
+  summary: string | null | undefined,
+  contentText: string | null | undefined,
+) {
+  const normalizedSummary = String(summary ?? '').trim();
+  const value = normalizedSummary || String(contentText ?? '').trim();
+  if (!value) return null;
+  return value.length > 360 ? `${value.slice(0, 357).trimEnd()}…` : value;
+}
+
 @Injectable()
 export class InstitutionalService {
   constructor(private readonly prisma: PrismaService) {}
@@ -145,7 +155,7 @@ export class InstitutionalService {
       members,
       actionMissions,
       agendaMissions,
-      highlights,
+      articles,
       contactOms,
       libraryPhotos,
       materials,
@@ -178,10 +188,6 @@ export class InstitutionalService {
           endDate: true,
           updatedAt: true,
           locality: { select: { id: true, code: true, name: true, uf: true } },
-          scheduleItems: {
-            select: { id: true, title: true, startAt: true, location: true },
-            orderBy: { startAt: 'asc' },
-          },
         },
         orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }],
         take: 80,
@@ -200,27 +206,27 @@ export class InstitutionalService {
           updatedAt: true,
           locality: { select: { id: true, code: true, name: true, uf: true } },
           scheduleItems: {
-            select: { id: true, title: true, startAt: true, location: true },
+            select: { location: true },
             orderBy: { startAt: 'asc' },
           },
         },
         orderBy: [{ startDate: 'asc' }],
         take: 40,
       }),
-      this.prisma.socialCommunicationHighlight.findMany({
+      this.prisma.socialCommunicationArticle.findMany({
         select: {
           id: true,
-          militaryName: true,
-          highlightRole: true,
-          fabom: true,
-          photoMimeType: true,
-          impact: true,
-          highlightText: true,
+          sourceUrl: true,
+          title: true,
+          coverImageUrl: true,
+          summary: true,
+          contentText: true,
+          audience: true,
+          publishedAt: true,
           createdAt: true,
           updatedAt: true,
-          locality: { select: { id: true, code: true, name: true, uf: true } },
         },
-        orderBy: [{ createdAt: 'desc' }],
+        orderBy: [{ publishedAt: 'desc' }, { createdAt: 'desc' }],
         take: 12,
       }),
       this.prisma.om.findMany({
@@ -324,7 +330,7 @@ export class InstitutionalService {
         {
           id: key,
           title: photo.locality
-            ? photo.locality.code || photo.locality.name
+            ? photo.locality.name
             : `Acervo geral — ${photo.scope}`,
           scope: photo.scope,
           locality: photo.locality,
@@ -357,7 +363,7 @@ export class InstitutionalService {
       ...members.map((item) => item.updatedAt),
       ...actionMissions.map((item) => item.updatedAt),
       ...agendaMissions.map((item) => item.updatedAt),
-      ...highlights.map((item) => item.updatedAt),
+      ...articles.map((item) => item.updatedAt),
       ...libraryPhotos.map((item) => item.updatedAt),
       ...materials.map((item) => item.updatedAt),
     ];
@@ -383,40 +389,29 @@ export class InstitutionalService {
         year: mission.startDate.getFullYear(),
         status: missionStatus(mission.startDate, mission.endDate, now),
         locality: mission.locality,
-        activities: mission.scheduleItems.map((item) => ({
-          id: item.id,
-          title: item.title,
-          startAt: item.startAt,
-          location: item.location,
-        })),
       })),
       agenda: agendaMissions.map((mission) => ({
         id: mission.id,
         missionId: mission.id,
         title: mission.title,
-        activity: mission.scheduleItems[0]?.title ?? mission.title,
         scope: mission.scope,
         startDate: mission.startDate,
         endDate: mission.endDate,
         status: missionStatus(mission.startDate, mission.endDate, now),
         location:
           mission.scheduleItems[0]?.location ||
-          mission.locality.code ||
-          mission.locality.name,
+          mission.locality.name ||
+          mission.locality.code,
         locality: mission.locality,
       })),
-      news: highlights.map((highlight) => ({
-        id: highlight.id,
-        title: highlight.militaryName,
-        role: highlight.highlightRole,
-        organization: highlight.fabom,
-        impact: highlight.impact,
-        text: highlight.highlightText,
-        publishedAt: highlight.createdAt,
-        locality: highlight.locality,
-        photoUrl: highlight.photoMimeType
-          ? `/institutional/news/${highlight.id}/photo`
-          : null,
+      news: articles.map((article) => ({
+        id: article.id,
+        title: article.title,
+        summary: articleSummary(article.summary, article.contentText),
+        audience: article.audience,
+        publishedAt: article.publishedAt ?? article.createdAt,
+        sourceUrl: article.sourceUrl,
+        coverImageUrl: article.coverImageUrl,
       })),
       supportChannels: publicContacts,
       materials: publicMaterials,
@@ -458,18 +453,6 @@ export class InstitutionalService {
     return {
       buffer: fs.readFileSync(filePath),
       contentType: photo.mimeType || 'image/jpeg',
-    };
-  }
-
-  async getNewsPhoto(id: string) {
-    const highlight = await this.prisma.socialCommunicationHighlight.findUnique({
-      where: { id },
-      select: { photoBase64: true, photoMimeType: true },
-    });
-    if (!highlight?.photoBase64) throwError('NOT_FOUND');
-    return {
-      buffer: Buffer.from(highlight.photoBase64, 'base64'),
-      contentType: highlight.photoMimeType || 'image/jpeg',
     };
   }
 

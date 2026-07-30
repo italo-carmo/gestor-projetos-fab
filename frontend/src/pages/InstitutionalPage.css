@@ -208,28 +208,9 @@
   padding-bottom: 70px;
 }
 
-.institutional-hero__kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.institutional-hero__kicker svg {
-  font-size: 1rem;
-  color: #f2b584;
-}
-
 .institutional-hero h1 {
   max-width: 760px;
-  margin: 24px 0 24px;
+  margin: 0 0 24px;
   font-size: clamp(3rem, 5.8vw, 5.5rem);
   line-height: 0.98;
   letter-spacing: -0.055em;
@@ -310,38 +291,6 @@
   border-radius: 50%;
   object-fit: cover;
   filter: drop-shadow(0 22px 34px rgba(0, 0, 0, 0.28));
-}
-
-.institutional-hero__message {
-  position: absolute;
-  right: 0;
-  bottom: 24px;
-  width: min(300px, 80%);
-  padding: 18px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 14px;
-  background: rgba(3, 36, 51, 0.78);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
-}
-
-.institutional-hero__message span,
-.institutional-hero__message strong {
-  display: block;
-}
-
-.institutional-hero__message span {
-  margin-bottom: 5px;
-  color: #f2b584;
-  font-size: 0.7rem;
-  font-weight: 750;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
-.institutional-hero__message strong {
-  font-size: 0.96rem;
-  line-height: 1.45;
 }
 
 .institutional-hero__stats {
@@ -505,11 +454,12 @@
 
 .institutional-materials {
   display: grid;
-  grid-template-columns: 0.75fr 1.25fr;
-  gap: 48px;
+  grid-template-columns: minmax(340px, 0.95fr) minmax(0, 1.05fr);
+  gap: 64px;
   align-items: center;
+  min-height: 280px;
   margin-top: 70px;
-  padding: 42px;
+  padding: 56px 64px;
   border-radius: 20px;
   background: linear-gradient(135deg, #07364a, #0c657e);
   color: #fff;
@@ -876,21 +826,6 @@
   color: var(--institutional-orange);
 }
 
-.institutional-activity-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 12px;
-}
-
-.institutional-activity-tags span {
-  padding: 4px 7px;
-  border-radius: 6px;
-  background: #f0f5f7;
-  color: #4d6873;
-  font-size: 0.62rem;
-}
-
 .institutional-news-section {
   background: var(--institutional-deep);
   color: #fff;
@@ -946,6 +881,9 @@
 }
 
 .institutional-news-card__body {
+  min-height: 235px;
+  display: flex;
+  flex-direction: column;
   padding: 22px;
 }
 
@@ -971,10 +909,20 @@
   overflow: hidden;
 }
 
-.institutional-news-card__body .institutional-news-card__role {
-  color: rgba(255, 255, 255, 0.87);
-  font-weight: 700;
-  -webkit-line-clamp: 2;
+.institutional-news-card__body > a {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 18px;
+  color: #8fd7e6;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.institutional-news-card__body > a svg {
+  font-size: 0.95rem;
 }
 
 .institutional-agenda-section {
@@ -1037,12 +985,6 @@
   margin: 9px 0 3px;
   color: var(--institutional-navy);
   font-size: 1rem;
-}
-
-.institutional-agenda-item p {
-  margin: 0;
-  color: var(--institutional-muted);
-  font-size: 0.8rem;
 }
 
 .institutional-agenda-item small {
@@ -1596,6 +1538,13 @@
   .institutional-area-card:nth-child(4) { grid-column: auto; }
   .institutional-area-card:last-child { grid-column: 1 / -1; min-height: auto; }
 
+  .institutional-materials {
+    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+    gap: 36px;
+    min-height: 250px;
+    padding: 40px;
+  }
+
   .institutional-actions-layout { grid-template-columns: 0.8fr 1.2fr; gap: 24px; }
   .institutional-support-grid { grid-template-columns: repeat(2, 1fr); }
   .institutional-news-grid { grid-template-columns: repeat(2, 1fr); }
@@ -1616,7 +1565,6 @@
   .institutional-hero__content > p { font-size: 1rem; }
   .institutional-hero__visual { min-height: 350px; }
   .institutional-hero__seal { width: min(340px, 85%); }
-  .institutional-hero__message { right: 4%; bottom: 0; }
   .institutional-hero__stats { grid-template-columns: repeat(2, 1fr); margin-top: 45px; }
   .institutional-hero__stats > div { min-height: 90px; }
   .institutional-hero__stats > div:nth-child(3) { border-left: 0; border-top: 1px solid rgba(255, 255, 255, 0.14); }
@@ -1626,7 +1574,12 @@
   .institutional-about__intro { grid-template-columns: 1fr; gap: 30px; }
   .institutional-about__copy { padding-left: 20px; }
   .institutional-area-grid { margin-top: 42px; }
-  .institutional-materials { grid-template-columns: 1fr; gap: 26px; padding: 28px; }
+  .institutional-materials {
+    grid-template-columns: 1fr;
+    gap: 26px;
+    min-height: auto;
+    padding: 34px 28px;
+  }
 
   .institutional-org-chart__members { grid-template-columns: repeat(2, 1fr); }
   .institutional-org-chart__members::before { display: none; }
