@@ -1,4 +1,6 @@
 import { ActivityScope } from '@prisma/client';
+import { AuthService } from '../auth/auth.service';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   buildPublicCpcaContacts,
@@ -45,15 +47,16 @@ describe('buildPublicCpcaContacts', () => {
       },
     ]);
 
-    expect(result).toEqual([
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual(
       expect.objectContaining({
         coverageType: 'MANAGED_BY_OTHER',
         email: 'cpca.baan@fab.mil.br',
         intraerUrl: 'https://intraer.fab.mil.br/cpca-baan',
-        servedOm: expect.objectContaining({ code: '1 GDA' }),
-        responsibleCpca: expect.objectContaining({ code: 'BAAN' }),
       }),
-    ]);
+    );
+    expect(result[0]?.servedOm.code).toBe('1 GDA');
+    expect(result[0]?.responsibleCpca.code).toBe('BAAN');
   });
 
   it('publishes only completed contact items with valid values', () => {
@@ -85,8 +88,18 @@ describe('buildPublicCpcaContacts', () => {
 });
 
 describe('InstitutionalService public content', () => {
-  it('publishes articles, mission names and full library locality names', async () => {
+  it('publishes member photos, LDAP war names and institutional content', async () => {
     const updatedAt = new Date('2026-07-30T12:00:00.000Z');
+    const member = {
+      id: 'flavia',
+      name: '2S FLAVIA COMGEP',
+      email: 'flavia@fab.mil.br',
+      ldapUid: 'flavia',
+      om: { code: 'DIRENS' },
+      commissionFunction: 'Membro',
+      commissionSeniority: 1,
+      updatedAt,
+    };
     const locality = {
       id: 'belem',
       code: 'BE',
@@ -104,7 +117,23 @@ describe('InstitutionalService public content', () => {
       locality,
     };
     const prisma = {
-      role: { findMany: jest.fn().mockResolvedValue([]) },
+      role: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 'commission-role', name: 'Coordenação CIPAVD' },
+          ]),
+      },
+      user: {
+        findMany: jest.fn().mockResolvedValue([member]),
+        findFirst: jest.fn().mockResolvedValue({
+          id: member.id,
+          name: member.name,
+          email: member.email,
+          ldapUid: member.ldapUid,
+          om: member.om,
+        }),
+      },
       mission: {
         findMany: jest
           .fn()
@@ -146,12 +175,39 @@ describe('InstitutionalService public content', () => {
       },
       libraryDocument: { findMany: jest.fn().mockResolvedValue([]) },
     };
+    const auth = {
+      getSigpesPhotoByOrder: jest.fn().mockResolvedValue({
+        base64: Buffer.from('member-photo').toString('base64'),
+        mimeType: 'image/jpeg',
+      }),
+    };
+    const fabLdap = {
+      lookupByUid: jest.fn().mockResolvedValue({
+        uid: 'flavia',
+        dn: 'uid=flavia,ou=people,dc=fab,dc=mil,dc=br',
+        name: '2S FLAVIA',
+        email: member.email,
+        fabom: 'COMGEP',
+        numeroOrdem: '1234567',
+      }),
+    };
     const service = new InstitutionalService(
       prisma as unknown as PrismaService,
+      auth as unknown as AuthService,
+      fabLdap as unknown as FabLdapService,
     );
 
     const result = await service.getPageData();
 
+    expect(result.members[0]).toEqual(
+      expect.objectContaining({
+        name: '2S FLAVIA',
+        photoUrl: '/institutional/members/flavia/photo',
+      }),
+    );
+    expect(result.members[0]).not.toHaveProperty('email');
+    expect(result.members[0]).not.toHaveProperty('ldapUid');
+    expect(result.members[0]).not.toHaveProperty('numeroOrdem');
     expect(result.actions[0]).not.toHaveProperty('activities');
     expect(result.agenda[0]).toEqual(
       expect.objectContaining({ title: 'Missão CIPAVD Belém' }),
@@ -164,5 +220,10 @@ describe('InstitutionalService public content', () => {
       }),
     );
     expect(result.library.groups[0].title).toBe('Belém');
+
+    const photo = await service.getMemberPhoto('flavia');
+    expect(photo.contentType).toBe('image/jpeg');
+    expect(photo.buffer.toString()).toBe('member-photo');
+    expect(fabLdap.lookupByUid).toHaveBeenCalledTimes(1);
   });
 });

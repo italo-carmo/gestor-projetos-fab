@@ -55,6 +55,14 @@ type InstitutionalNews = {
   coverImageUrl?: string | null;
 };
 
+type InstitutionalMember = {
+  id: string;
+  name: string;
+  function?: string | null;
+  seniority?: number | null;
+  photoUrl?: string | null;
+};
+
 type InstitutionalPhoto = {
   id: string;
   title: string;
@@ -65,12 +73,7 @@ type InstitutionalPhoto = {
 type InstitutionalData = {
   generatedAt: string;
   lastUpdatedAt: string;
-  members: Array<{
-    id: string;
-    name: string;
-    function?: string | null;
-    seniority?: number | null;
-  }>;
+  members: InstitutionalMember[];
   actions: InstitutionalAction[];
   agenda: Array<{
     id: string;
@@ -249,6 +252,26 @@ function InstitutionalNewsCover({ news }: { news: InstitutionalNews }) {
       referrerPolicy="no-referrer"
       onError={() => setFailedImageUrl(imageUrl)}
     />
+  );
+}
+
+function InstitutionalMemberAvatar({ member }: { member: InstitutionalMember }) {
+  const [failedImageUrl, setFailedImageUrl] = useState("");
+  const imageUrl = toApiUrl(member.photoUrl);
+
+  return (
+    <span className="institutional-member-card__avatar">
+      {imageUrl && failedImageUrl !== imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={member.name}
+          loading="lazy"
+          onError={() => setFailedImageUrl(imageUrl)}
+        />
+      ) : (
+        initials(member.name)
+      )}
+    </span>
   );
 }
 
@@ -507,7 +530,7 @@ export function InstitutionalPage() {
             {data.members.length ? (
               <div className="institutional-org-chart">
                 <article className="institutional-member-card institutional-member-card--lead">
-                  <span className="institutional-member-card__avatar">{initials(data.members[0].name)}</span>
+                  <InstitutionalMemberAvatar member={data.members[0]} />
                   <div>
                     <small>Coordenação</small>
                     <h3>{data.members[0].name}</h3>
@@ -518,7 +541,7 @@ export function InstitutionalPage() {
                 <div className="institutional-org-chart__members">
                   {data.members.slice(1).map((member) => (
                     <article key={member.id} className="institutional-member-card">
-                      <span className="institutional-member-card__avatar">{initials(member.name)}</span>
+                      <InstitutionalMemberAvatar member={member} />
                       <div>
                         <h3>{member.name}</h3>
                         <p>{member.function || "Membro da Comissão"}</p>

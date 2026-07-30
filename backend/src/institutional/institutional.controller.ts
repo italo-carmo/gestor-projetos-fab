@@ -15,6 +15,14 @@ export class InstitutionalController {
     return this.institutional.getPageData();
   }
 
+  @Get('members/:id/photo')
+  async getMemberPhoto(@Param('id') id: string, @Res() response: Response) {
+    const photo = await this.institutional.getMemberPhoto(id);
+    response.setHeader('Content-Type', photo.contentType);
+    response.setHeader('Cache-Control', 'public, max-age=1800');
+    return response.send(photo.buffer);
+  }
+
   @Get('library-photos/:id')
   async getLibraryPhoto(@Param('id') id: string, @Res() response: Response) {
     const photo = await this.institutional.getLibraryPhoto(id);

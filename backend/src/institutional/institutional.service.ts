@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { ActivityScope } from '@prisma/client';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { AuthService } from '../auth/auth.service';
 import { throwError } from '../common/http-error';
+import { stripOmSuffixFromLdapName } from '../common/military-name';
+import { FabLdapService } from '../ldap/fab-ldap.service';
 import { resolveExistingLibraryDocumentPath } from '../library/library-storage';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -36,6 +39,21 @@ type ContactOm = {
     };
   }>;
 };
+
+type InstitutionalMemberSource = {
+  id: string;
+  name: string;
+  email: string;
+  ldapUid: string | null;
+  om: { code: string } | null;
+};
+
+type InstitutionalMemberIdentity = {
+  name: string;
+  numeroOrdem: string | null;
+};
+
+const MEMBER_IDENTITY_CACHE_TTL_MS = 5 * 60_000;
 
 function extractEmail(value: string | null | undefined) {
   const match = String(value ?? '').match(
@@ -135,7 +153,16 @@ function articleSummary(
 
 @Injectable()
 export class InstitutionalService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly memberIdentityCache = new Map<
+    string,
+    { expiresAt: number; identity: InstitutionalMemberIdentity }
+  >();
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auth: AuthService,
+    private readonly fabLdap: FabLdapService,
+  ) {}
 
   async getPageData() {
     const now = new Date();
@@ -169,6 +196,9 @@ export class InstitutionalService {
             select: {
               id: true,
               name: true,
+              email: true,
+              ldapUid: true,
+              om: { select: { code: true } },
               commissionFunction: true,
               commissionSeniority: true,
               updatedAt: true,
@@ -325,17 +355,15 @@ export class InstitutionalService {
     for (const photo of libraryPhotos) {
       const key = `gallery:${photo.scope}:${photo.locality?.id ?? 'all'}`;
       const existing = libraryGroups.get(key);
-      const group =
-        existing ??
-        {
-          id: key,
-          title: photo.locality
-            ? photo.locality.name
-            : `Acervo geral — ${photo.scope}`,
-          scope: photo.scope,
-          locality: photo.locality,
-          photos: [],
-        };
+      const group = existing ?? {
+        id: key,
+        title: photo.locality
+          ? photo.locality.name
+          : `Acervo geral — ${photo.scope}`,
+        scope: photo.scope,
+        locality: photo.locality,
+        photos: [],
+      };
       group.photos.push({
         id: photo.id,
         title: photo.title,
@@ -358,6 +386,9 @@ export class InstitutionalService {
         downloadUrl: `/institutional/materials/${material.id}`,
       }));
     const publicContacts = buildPublicCpcaContacts(contactOms as ContactOm[]);
+    const memberIdentities = await Promise.all(
+      members.map((member) => this.resolveMemberIdentity(member)),
+    );
 
     const updateDates = [
       ...members.map((item) => item.updatedAt),
@@ -371,13 +402,15 @@ export class InstitutionalService {
     return {
       generatedAt: now.toISOString(),
       lastUpdatedAt:
-        updateDates.sort((a, b) => b.getTime() - a.getTime())[0]?.toISOString() ??
-        now.toISOString(),
-      members: members.map((member) => ({
+        updateDates
+          .sort((a, b) => b.getTime() - a.getTime())[0]
+          ?.toISOString() ?? now.toISOString(),
+      members: members.map((member, index) => ({
         id: member.id,
-        name: member.name,
+        name: memberIdentities[index]?.name ?? member.name,
         function: member.commissionFunction,
         seniority: member.commissionSeniority,
+        photoUrl: `/institutional/members/${member.id}/photo`,
       })),
       actions: actionMissions.map((mission) => ({
         id: mission.id,
@@ -448,12 +481,62 @@ export class InstitutionalService {
     }
 
     const safeName = path.basename(String(photo.fileUrl ?? '').trim());
-    const filePath = path.resolve(process.cwd(), 'storage', 'library-photos', safeName);
+    const filePath = path.resolve(
+      process.cwd(),
+      'storage',
+      'library-photos',
+      safeName,
+    );
     if (!safeName || !fs.existsSync(filePath)) throwError('NOT_FOUND');
     return {
       buffer: fs.readFileSync(filePath),
       contentType: photo.mimeType || 'image/jpeg',
     };
+  }
+
+  async getMemberPhoto(id: string) {
+    const roles = await this.prisma.role.findMany({
+      select: { id: true, name: true },
+    });
+    const commissionRole = roles.find(
+      (role) =>
+        normalizeRoleName(role.name) ===
+        normalizeRoleName(ROLE_COORDENACAO_CIPAVD),
+    );
+    if (!commissionRole) throwError('NOT_FOUND');
+
+    const member = await this.prisma.user.findFirst({
+      where: {
+        id,
+        isActive: true,
+        roles: { some: { roleId: commissionRole.id } },
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        ldapUid: true,
+        om: { select: { code: true } },
+      },
+    });
+    if (!member) throwError('NOT_FOUND');
+
+    const identity = await this.resolveMemberIdentity(member);
+    if (!identity.numeroOrdem) throwError('NOT_FOUND');
+
+    try {
+      const photo = await this.auth.getSigpesPhotoByOrder(identity.numeroOrdem);
+      if (!photo.base64) throwError('NOT_FOUND');
+      const contentType = String(photo.mimeType ?? '').toLowerCase();
+      return {
+        buffer: Buffer.from(photo.base64, 'base64'),
+        contentType: contentType.startsWith('image/')
+          ? contentType
+          : 'image/jpeg',
+      };
+    } catch {
+      throwError('NOT_FOUND');
+    }
   }
 
   async getMaterial(id: string) {
@@ -480,5 +563,36 @@ export class InstitutionalService {
       fileName: material.fileName || material.title,
       mimeType: material.mimeType,
     };
+  }
+
+  private async resolveMemberIdentity(
+    member: InstitutionalMemberSource,
+  ): Promise<InstitutionalMemberIdentity> {
+    const cached = this.memberIdentityCache.get(member.id);
+    if (cached && cached.expiresAt > Date.now()) return cached.identity;
+
+    let profile: Awaited<ReturnType<FabLdapService['lookupByUid']>> = null;
+    try {
+      profile = member.ldapUid
+        ? await this.fabLdap.lookupByUid(member.ldapUid)
+        : await this.fabLdap.lookupByEmail(member.email);
+    } catch {
+      profile = null;
+    }
+
+    const fallbackName =
+      stripOmSuffixFromLdapName(
+        member.name,
+        profile?.fabom ?? member.om?.code,
+      ) || member.name;
+    const identity = {
+      name: String(profile?.name ?? '').trim() || fallbackName,
+      numeroOrdem: profile?.numeroOrdem ?? null,
+    };
+    this.memberIdentityCache.set(member.id, {
+      expiresAt: Date.now() + MEMBER_IDENTITY_CACHE_TTL_MS,
+      identity,
+    });
+    return identity;
   }
 }

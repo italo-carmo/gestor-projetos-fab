@@ -15,8 +15,20 @@ test('renders the public institutional page without authentication', async ({
         generatedAt: '2026-07-30T12:00:00.000Z',
         lastUpdatedAt: '2026-07-30T12:00:00.000Z',
         members: [
-          { id: 'm1', name: 'Cel Aviadora Maria Silva', function: 'Coordenadora', seniority: 1 },
-          { id: 'm2', name: 'Maj Ana Souza', function: 'Psicologia', seniority: 2 },
+          {
+            id: 'm1',
+            name: 'Cel Aviadora Maria Silva',
+            function: 'Coordenadora',
+            seniority: 1,
+            photoUrl: '/institutional/members/m1/photo',
+          },
+          {
+            id: 'm2',
+            name: '2S FLAVIA',
+            function: 'Psicologia',
+            seniority: 2,
+            photoUrl: '/institutional/members/m2/photo',
+          },
         ],
         actions: [
           {
@@ -113,11 +125,17 @@ test('renders the public institutional page without authentication', async ({
   await expect(page.getByText('Nosso compromisso', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Membros da CIPAVD' })).toBeVisible();
   await expect(page.getByText(/Composição atualizada automaticamente/)).toHaveCount(0);
+  const membersSection = page.locator('#membros');
+  await expect(membersSection.locator('.institutional-member-card__avatar img')).toHaveCount(2);
+  await expect(membersSection.getByRole('img', { name: '2S FLAVIA' })).toBeVisible();
+  await expect(membersSection.getByText(/FLAVIA COMGEP/)).toHaveCount(0);
   const actionsSection = page.locator('#acoes');
   await expect(actionsSection.getByText('Missão CIPAVD Natal', { exact: true })).toBeVisible();
   await expect(actionsSection.getByText('Palestra', { exact: true })).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Rio de Janeiro: 1 ação(ões)' }).click();
+  await page
+    .getByRole('button', { name: 'Rio de Janeiro: 1 ação(ões)' })
+    .click({ force: true });
   await expect(actionsSection.getByText('Missão SMIF Rio de Janeiro', { exact: true })).toBeVisible();
   await expect(actionsSection.getByText('Missão CIPAVD Natal', { exact: true })).not.toBeVisible();
 
