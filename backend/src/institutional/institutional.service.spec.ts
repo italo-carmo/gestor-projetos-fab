@@ -158,7 +158,12 @@ describe('InstitutionalService public content', () => {
           },
         ]),
       },
-      om: { findMany: jest.fn().mockResolvedValue([]) },
+      om: {
+        findMany: jest
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([{ code: 'COMGEP' }, { code: 'DIRENS' }]),
+      },
       libraryPhoto: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -185,9 +190,9 @@ describe('InstitutionalService public content', () => {
       lookupByUid: jest.fn().mockResolvedValue({
         uid: 'flavia',
         dn: 'uid=flavia,ou=people,dc=fab,dc=mil,dc=br',
-        name: '2S FLAVIA',
+        name: '2S FLAVIA COMGEP',
         email: member.email,
-        fabom: 'COMGEP',
+        fabom: 'DIRENS',
         numeroOrdem: '1234567',
       }),
     };

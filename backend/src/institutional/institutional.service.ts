@@ -55,6 +55,22 @@ type InstitutionalMemberIdentity = {
 
 const MEMBER_IDENTITY_CACHE_TTL_MS = 5 * 60_000;
 
+function stripKnownOmSuffix(
+  rawName: string | null | undefined,
+  omCodes: Array<string | null | undefined>,
+) {
+  const name = String(rawName ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!name) return '';
+
+  for (const omCode of omCodes) {
+    const sanitized = stripOmSuffixFromLdapName(name, omCode);
+    if (sanitized !== name) return sanitized;
+  }
+  return name;
+}
+
 function extractEmail(value: string | null | undefined) {
   const match = String(value ?? '').match(
     /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
@@ -186,6 +202,7 @@ export class InstitutionalService {
       contactOms,
       libraryPhotos,
       materials,
+      knownOms,
     ] = await Promise.all([
       commissionRole
         ? this.prisma.user.findMany({
@@ -334,6 +351,9 @@ export class InstitutionalService {
         orderBy: [{ createdAt: 'desc' }],
         take: 100,
       }),
+      this.prisma.om.findMany({
+        select: { code: true },
+      }),
     ]);
 
     const libraryGroups = new Map<
@@ -387,7 +407,12 @@ export class InstitutionalService {
       }));
     const publicContacts = buildPublicCpcaContacts(contactOms as ContactOm[]);
     const memberIdentities = await Promise.all(
-      members.map((member) => this.resolveMemberIdentity(member)),
+      members.map((member) =>
+        this.resolveMemberIdentity(
+          member,
+          knownOms.map((om) => om.code),
+        ),
+      ),
     );
 
     const updateDates = [
@@ -567,6 +592,7 @@ export class InstitutionalService {
 
   private async resolveMemberIdentity(
     member: InstitutionalMemberSource,
+    knownOmCodes: string[] = [],
   ): Promise<InstitutionalMemberIdentity> {
     const cached = this.memberIdentityCache.get(member.id);
     if (cached && cached.expiresAt > Date.now()) return cached.identity;
@@ -580,13 +606,14 @@ export class InstitutionalService {
       profile = null;
     }
 
-    const fallbackName =
-      stripOmSuffixFromLdapName(
-        member.name,
-        profile?.fabom ?? member.om?.code,
-      ) || member.name;
+    const sourceName = String(profile?.name ?? '').trim() || member.name;
+    const sanitizedName = stripKnownOmSuffix(sourceName, [
+      profile?.fabom,
+      member.om?.code,
+      ...knownOmCodes,
+    ]);
     const identity = {
-      name: String(profile?.name ?? '').trim() || fallbackName,
+      name: sanitizedName || member.name,
       numeroOrdem: profile?.numeroOrdem ?? null,
     };
     this.memberIdentityCache.set(member.id, {
