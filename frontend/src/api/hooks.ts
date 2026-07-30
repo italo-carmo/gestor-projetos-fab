@@ -2765,6 +2765,15 @@ export function useLibrary(filters: Record<string, any> = {}) {
   });
 }
 
+/** Public institutional page */
+export function useInstitutionalPage() {
+  return useQuery({
+    queryKey: ["institutional", "public-page"],
+    queryFn: async () => (await api.get("/institutional")).data,
+    staleTime: 60_000,
+  });
+}
+
 export function useUpdateLibrarySettings() {
   const qc = useQueryClient();
   return useMutation({

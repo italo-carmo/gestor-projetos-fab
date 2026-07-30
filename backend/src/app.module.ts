@@ -40,6 +40,7 @@ import { ManualsModule } from './manuals/manuals.module';
 import { MailModule } from './mail/mail.module';
 import { CipavdReportsModule } from './cipavd-reports/cipavd-reports.module';
 import { CertificatesModule } from './certificates/certificates.module';
+import { InstitutionalModule } from './institutional/institutional.module';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { CertificatesModule } from './certificates/certificates.module';
     KnowledgeBasesModule,
     ManualsModule,
     AiModule,
+    InstitutionalModule,
   ],
   controllers: [AppController],
   providers: [AppService],

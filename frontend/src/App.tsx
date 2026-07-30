@@ -44,6 +44,7 @@ import { LibraryPage } from "./pages/LibraryPage";
 import { BestPracticesPage } from "./pages/BestPracticesPage";
 import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { CipavdReportsPage } from "./pages/CipavdReportsPage";
+import { InstitutionalPage } from "./pages/InstitutionalPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
 import { can } from "./app/rbac";
@@ -81,6 +82,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/institucional" element={<InstitutionalPage />} />
       <Route path="/2fa-setup" element={<TwoFactorSetupPage />} />
       <Route
         path="/certificate-layout-preview"

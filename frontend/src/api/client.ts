@@ -45,7 +45,8 @@ const shouldAttachGlobalLocality = (url: string, method?: string) => {
     normalized.startsWith("/admin/rbac") ||
     normalized.startsWith("/roles") ||
     normalized.startsWith("/permissions") ||
-    normalized.startsWith("/users")
+    normalized.startsWith("/users") ||
+    normalized.startsWith("/institutional")
   ) {
     return false;
   }
