@@ -125,6 +125,7 @@ type InstitutionalData = {
 const NAV_ITEMS = [
   ["Sobre", "sobre"],
   ["Membros", "membros"],
+  ["Áreas de atuação", "areas-atuacao"],
   ["Ações", "acoes"],
   ["Notícias", "noticias"],
   ["Agenda", "agenda"],
@@ -136,27 +137,27 @@ const ACTION_AREAS = [
   {
     icon: SchoolRoundedIcon,
     title: "Educação e conscientização",
-    text: "Palestras, campanhas, oficinas e rodas de conversa sobre assédio, violência doméstica, respeito mútuo e convivência saudável.",
+    text: "Realização de palestras, campanhas, oficinas e rodas de conversa destinadas à sensibilização do efetivo sobre assédio moral, assédio sexual, violência doméstica, respeito mútuo e convivência saudável no ambiente de trabalho.",
   },
   {
     icon: VolunteerActivismRoundedIcon,
     title: "Orientação e acolhimento",
-    text: "Orientação e escuta inicial em articulação com as CPCAs e os canais institucionais competentes.",
+    text: "Promoção de ações de orientação e escuta inicial às pessoas que necessitem de apoio, em articulação com as CPCAs das Organizações Militares e com os canais institucionais competentes.",
   },
   {
     icon: SecurityRoundedIcon,
     title: "Prevenção ao assédio",
-    text: "Boas práticas de relacionamento interpessoal, ética, respeito e valorização da dignidade da pessoa humana.",
+    text: "Desenvolvimento de iniciativas voltadas à prevenção do assédio moral e do assédio sexual, difundindo boas práticas de relacionamento interpessoal, ética, respeito e valorização da dignidade da pessoa humana.",
   },
   {
     icon: FavoriteBorderRoundedIcon,
     title: "Prevenção à violência doméstica",
-    text: "Ações educativas sobre formas de violência, seus impactos, a rede de proteção e os canais de apoio disponíveis.",
+    text: "Realização de ações educativas para conscientizar sobre as diferentes formas de violência doméstica e familiar, seus impactos e a importância da rede de proteção e dos canais de apoio disponíveis.",
   },
   {
     icon: WorkspacesRoundedIcon,
     title: "Capacitação institucional",
-    text: "Apoio às Organizações Militares por meio da capacitação de gestores, militares e servidores civis.",
+    text: "Apoio às Organizações Militares por meio da capacitação de gestores, militares e servidores civis, fortalecendo a cultura organizacional de prevenção, acolhimento e respeito às pessoas.",
   },
 ];
 
@@ -485,19 +486,6 @@ export function InstitutionalPage() {
               </div>
             </div>
 
-            <div className="institutional-area-grid">
-              {ACTION_AREAS.map((area) => {
-                const Icon = area.icon;
-                return (
-                  <article key={area.title} className="institutional-area-card">
-                    <span><Icon /></span>
-                    <h3>{area.title}</h3>
-                    <p>{area.text}</p>
-                  </article>
-                );
-              })}
-            </div>
-
             <div className="institutional-materials">
               <div>
                 <span className="institutional-eyebrow">Materiais de apoio</span>
@@ -553,6 +541,28 @@ export function InstitutionalPage() {
             ) : (
               <EmptyInstitutionalState>A composição da comissão será exibida após a atualização do organograma.</EmptyInstitutionalState>
             )}
+          </div>
+        </section>
+
+        <section id="areas-atuacao" className="institutional-section institutional-areas-section">
+          <div className="institutional-container">
+            <SectionHeading
+              eyebrow="Como atuamos"
+              title="Principais áreas de atuação"
+              text="A CIPAVD desenvolve ações voltadas à promoção de um ambiente institucional seguro, respeitoso e livre de qualquer forma de violência. Sua atuação possui caráter preventivo, educativo e orientador, abrangendo as seguintes áreas:"
+            />
+            <div className="institutional-area-grid">
+              {ACTION_AREAS.map((area) => {
+                const Icon = area.icon;
+                return (
+                  <article key={area.title} className="institutional-area-card">
+                    <span><Icon /></span>
+                    <h3>{area.title}</h3>
+                    <p>{area.text}</p>
+                  </article>
+                );
+              })}
+            </div>
           </div>
         </section>
 

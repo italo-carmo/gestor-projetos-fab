@@ -129,6 +129,11 @@ test('renders the public institutional page without authentication', async ({
   await expect(membersSection.locator('.institutional-member-card__avatar img')).toHaveCount(2);
   await expect(membersSection.getByRole('img', { name: '2S FLAVIA' })).toBeVisible();
   await expect(membersSection.getByText(/FLAVIA COMGEP/)).toHaveCount(0);
+  const areasSection = page.locator('#areas-atuacao');
+  await expect(areasSection.getByRole('heading', { name: 'Principais áreas de atuação' })).toBeVisible();
+  await expect(areasSection.locator('.institutional-area-card')).toHaveCount(5);
+  await expect(areasSection.getByRole('heading', { name: 'Educação e conscientização' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Áreas de atuação', exact: true }).first()).toHaveAttribute('href', '#areas-atuacao');
   const actionsSection = page.locator('#acoes');
   await expect(actionsSection.getByText('Missão CIPAVD Natal', { exact: true })).toBeVisible();
   await expect(actionsSection.getByText('Palestra', { exact: true })).toHaveCount(0);

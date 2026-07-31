@@ -401,6 +401,16 @@
   margin-top: 18px;
 }
 
+.institutional-areas-section {
+  background:
+    radial-gradient(circle at 12% 18%, rgba(197, 106, 43, 0.08), transparent 26%),
+    linear-gradient(180deg, #fff, #f7fafb);
+}
+
+.institutional-areas-section .institutional-section-heading {
+  max-width: 860px;
+}
+
 .institutional-area-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
