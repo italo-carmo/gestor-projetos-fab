@@ -779,7 +779,7 @@ export function InstitutionalPage() {
           <div><strong>Informação e apoio</strong>{NAV_ITEMS.slice(4).map(([label, anchor]) => <a key={anchor} href={`#${anchor}`}>{label}</a>)}</div>
           <div><strong>Acesso restrito</strong><p>Área de gestão destinada aos usuários autorizados.</p><Link to="/login">Entrar no sistema <ArrowForwardRoundedIcon /></Link></div>
         </div>
-        <div className="institutional-container institutional-footer__bottom"><span>Comando-Geral do Pessoal • Força Aérea Brasileira</span><span>Dados atualizados em {formatDate(data.lastUpdatedAt)}</span></div>
+        <div className="institutional-container institutional-footer__bottom"><span>Comando-Geral do Pessoal • Força Aérea Brasileira</span></div>
       </footer>
 
       {lightbox ? (
