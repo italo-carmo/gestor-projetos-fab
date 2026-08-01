@@ -61,6 +61,31 @@ import {
 const CPCA_PRESIDENT_TUTORIAL_URL =
   "/tutorial-cpca/tutorial-presidente-cpca.html";
 
+const INTEGRA_PAGE_BACKGROUND =
+  "radial-gradient(circle at 14% 16%, rgba(100, 184, 238, 0.24) 0%, transparent 34%), radial-gradient(circle at 88% 82%, rgba(33, 91, 177, 0.12) 0%, transparent 32%), linear-gradient(135deg, #F9FCFF 0%, #EEF5FF 52%, #E5EFFB 100%)";
+
+const INTEGRA_PRIMARY_BUTTON_SX = {
+  fontWeight: 800,
+  background: "linear-gradient(135deg, #123B8E 0%, #2874CF 100%)",
+  boxShadow: "0 12px 24px rgba(18, 59, 142, 0.24)",
+  "&:hover": {
+    background: "linear-gradient(135deg, #0D317A 0%, #1E64B8 100%)",
+    boxShadow: "0 14px 28px rgba(18, 59, 142, 0.3)",
+  },
+} as const;
+
+const INTEGRA_TEXT_FIELD_SX = {
+  "& .MuiOutlinedInput-root": {
+    backgroundColor: "rgba(255, 255, 255, 0.82)",
+    "&.Mui-focused fieldset": {
+      borderColor: "#2468BE",
+    },
+  },
+  "& .MuiInputLabel-root.Mui-focused": {
+    color: "#174D99",
+  },
+} as const;
+
 type TwoFactorState = {
   twoFactorToken: string;
   useBackupCode: boolean;
@@ -530,14 +555,16 @@ export function LoginPage() {
           py: { xs: 3, md: 4.5 },
           display: "grid",
           placeItems: "center",
-          background: "linear-gradient(180deg, #f6fbff 0%, #eef6fb 100%)",
+          background: INTEGRA_PAGE_BACKGROUND,
         }}
       >
         <Card
           sx={{
             width: "100%",
             maxWidth: 440,
-            boxShadow: "0 22px 45px rgba(9, 43, 54, 0.14)",
+            border: "1px solid rgba(24, 73, 150, 0.14)",
+            backgroundColor: "rgba(255, 255, 255, 0.94)",
+            boxShadow: "0 24px 52px rgba(18, 59, 142, 0.16)",
           }}
         >
           <CardContent sx={{ p: { xs: 2.6, md: 3.4 } }}>
@@ -547,7 +574,7 @@ export function LoginPage() {
               spacing={1}
               sx={{ mb: 1 }}
             >
-              <LockRoundedIcon sx={{ color: "primary.main" }} />
+              <LockRoundedIcon sx={{ color: "#174D99" }} />
               <Typography variant="h5" sx={{ fontWeight: 800 }}>
                 Verificação em duas etapas
               </Typography>
@@ -586,13 +613,14 @@ export function LoginPage() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleVerify2fa();
                   }}
-                  sx={{ mb: 2 }}
+                  sx={{ ...INTEGRA_TEXT_FIELD_SX, mb: 2 }}
                 />
                 <Button
                   variant="contained"
                   fullWidth
                   disabled={totpCode.length !== 6 || verifyMutation.isPending}
                   onClick={handleVerify2fa}
+                  sx={INTEGRA_PRIMARY_BUTTON_SX}
                 >
                   {verifyMutation.isPending ? "Verificando..." : "Verificar"}
                 </Button>
@@ -645,7 +673,7 @@ export function LoginPage() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleVerify2fa();
                   }}
-                  sx={{ mb: 1 }}
+                  sx={{ ...INTEGRA_TEXT_FIELD_SX, mb: 1 }}
                 />
                 <Typography
                   variant="caption"
@@ -660,6 +688,7 @@ export function LoginPage() {
                   fullWidth
                   disabled={!totpCode.trim() || verifyMutation.isPending}
                   onClick={handleVerify2fa}
+                  sx={INTEGRA_PRIMARY_BUTTON_SX}
                 >
                   {verifyMutation.isPending ? "Verificando..." : "Verificar"}
                 </Button>
@@ -707,13 +736,15 @@ export function LoginPage() {
         py: { xs: 3, md: 4.5 },
         display: "grid",
         placeItems: "center",
-        background: "linear-gradient(180deg, #f6fbff 0%, #eef6fb 100%)",
+        background: INTEGRA_PAGE_BACKGROUND,
       }}
     >
       <Box
         sx={{
           width: "100%",
           maxWidth: 1080,
+          position: "relative",
+          zIndex: 1,
           display: "grid",
           gridTemplateColumns: { xs: "1fr", md: "1.2fr 1fr" },
           gap: 2.2,
@@ -725,9 +756,37 @@ export function LoginPage() {
             placeItems: "center",
             p: { xs: 3, md: 4 },
             minHeight: { xs: 270, md: 420 },
+            position: "relative",
+            isolation: "isolate",
+            overflow: "hidden",
             background:
-              "linear-gradient(145deg, rgba(12,101,126,0.93), rgba(8,73,91,0.95))",
-            boxShadow: "0 24px 44px rgba(7, 46, 60, 0.28)",
+              "linear-gradient(145deg, #FFFFFF 0%, #F2F8FF 56%, #DFEDFF 100%)",
+            border: "1px solid rgba(28, 83, 164, 0.16)",
+            boxShadow: "0 28px 58px rgba(18, 59, 142, 0.16)",
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              zIndex: -1,
+              width: 330,
+              height: 330,
+              top: -180,
+              right: -120,
+              borderRadius: "50%",
+              background:
+                "radial-gradient(circle, rgba(80, 166, 232, 0.32) 0%, rgba(80, 166, 232, 0) 72%)",
+            },
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              zIndex: -1,
+              width: 300,
+              height: 300,
+              bottom: -190,
+              left: -90,
+              borderRadius: "50%",
+              background:
+                "radial-gradient(circle, rgba(18, 59, 142, 0.18) 0%, rgba(18, 59, 142, 0) 72%)",
+            },
           }}
         >
           <Box
@@ -741,7 +800,9 @@ export function LoginPage() {
               objectFit: "contain",
               display: "block",
               mx: "auto",
-              filter: "drop-shadow(0 18px 30px rgba(3, 23, 30, 0.35))",
+              position: "relative",
+              zIndex: 1,
+              filter: "drop-shadow(0 18px 28px rgba(18, 59, 142, 0.2))",
             }}
           />
         </Card>
@@ -753,13 +814,31 @@ export function LoginPage() {
             alignSelf: "stretch",
             display: "grid",
             placeItems: "center",
-            boxShadow: "0 22px 45px rgba(9, 43, 54, 0.14)",
+            border: "1px solid rgba(24, 73, 150, 0.12)",
+            backgroundColor: "rgba(255, 255, 255, 0.94)",
+            boxShadow: "0 24px 52px rgba(18, 59, 142, 0.14)",
           }}
         >
           <CardContent
             sx={{ width: "100%", maxWidth: 390, p: { xs: 2.6, md: 3.4 } }}
           >
-            <Typography variant="h5" sx={{ fontWeight: 800 }}>
+            <Typography
+              variant="overline"
+              sx={{
+                display: "block",
+                mb: 0.5,
+                color: "#2468BE",
+                fontWeight: 800,
+                letterSpacing: "0.16em",
+                lineHeight: 1.2,
+              }}
+            >
+              INTEGRA
+            </Typography>
+            <Typography
+              variant="h5"
+              sx={{ fontWeight: 800, color: "#102F66" }}
+            >
               Entrar
             </Typography>
             <Typography
@@ -788,6 +867,7 @@ export function LoginPage() {
                 }}
                 placeholder="Somente números"
                 fullWidth
+                sx={INTEGRA_TEXT_FIELD_SX}
               />
               <TextField
                 name="password"
@@ -797,12 +877,13 @@ export function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 fullWidth
+                sx={INTEGRA_TEXT_FIELD_SX}
               />
               <Button
                 variant="contained"
                 type="submit"
                 disabled={loginMutation.isPending}
-                sx={{ mt: 0.6 }}
+                sx={{ ...INTEGRA_PRIMARY_BUTTON_SX, mt: 0.6 }}
               >
                 {loginMutation.isPending ? "Entrando..." : "Entrar"}
               </Button>
@@ -816,7 +897,7 @@ export function LoginPage() {
                 <Button
                   variant="text"
                   onClick={openCpcaSelfRegistrationDialog}
-                  sx={{ minWidth: 0 }}
+                  sx={{ minWidth: 0, color: "#1B57A5", fontWeight: 700 }}
                 >
                   Presidência CPCA
                 </Button>
@@ -829,10 +910,10 @@ export function LoginPage() {
                     size="small"
                     aria-label="Abrir tutorial de cadastro da Presidência CPCA"
                     sx={{
-                      color: "text.secondary",
+                      color: "#61718A",
                       "&:hover": {
-                        bgcolor: "action.hover",
-                        color: "primary.main",
+                        bgcolor: "rgba(36, 104, 190, 0.08)",
+                        color: "#1B57A5",
                       },
                     }}
                   >
