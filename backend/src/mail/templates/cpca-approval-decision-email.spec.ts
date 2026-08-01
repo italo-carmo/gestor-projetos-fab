@@ -14,10 +14,10 @@ describe('buildCpcaApprovalDecisionEmail', () => {
     });
 
     expect(message.subject).toBe(
-      'Gestor CIPAVD | Solicitação de presidência CPCA homologada | CCA BR',
+      'INTEGRA | Solicitação de presidência CPCA homologada | CCA BR',
     );
     expect(message.subject).not.toContain('CCA BR · CCA BR');
-    expect(message.html).toContain('Gestor CIPAVD');
+    expect(message.html).toContain('INTEGRA');
     expect(message.html).not.toContain('CCA BR · CCA BR');
     expect(message.text).toContain('OM: CCA BR');
     expect(message.text).not.toContain('CCA BR · CCA BR');
@@ -37,12 +37,12 @@ describe('buildCpcaApprovalDecisionEmail', () => {
     });
 
     expect(message.subject).toBe(
-      'Gestor CIPAVD | Solicitação de presidência CPCA rejeitada | CCA BR',
+      'INTEGRA | Solicitação de presidência CPCA rejeitada | CCA BR',
     );
-    expect(message.html).toContain('Gestor CIPAVD');
+    expect(message.html).toContain('INTEGRA');
     expect(message.html).toContain('Ajustar o boletim informado.');
     expect(message.text).toContain(
-      'Este e-mail foi enviado automaticamente pelo Gestor CIPAVD.',
+      'Este e-mail foi enviado automaticamente pelo INTEGRA.',
     );
     expect(message.text).not.toContain('CPCA COMGEP');
   });
@@ -87,7 +87,7 @@ describe('buildCpcaApprovalDecisionEmail', () => {
     });
 
     expect(message.subject).toBe(
-      'Gestor CIPAVD | Cadastro como membro da CPCA registrado | CCA BR',
+      'INTEGRA | Cadastro como membro da CPCA registrado | CCA BR',
     );
     expect(message.html).toContain('Cadastro registrado');
     expect(message.html).toContain(

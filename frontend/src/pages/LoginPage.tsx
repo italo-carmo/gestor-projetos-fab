@@ -732,8 +732,8 @@ export function LoginPage() {
         >
           <Box
             component="img"
-            src="/logo-png.png"
-            alt="CIPAVD"
+            src="/brand/integra.png"
+            alt="INTEGRA"
             sx={{
               width: { xs: "92%", md: "85%" },
               maxWidth: 520,

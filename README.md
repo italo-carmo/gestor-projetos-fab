@@ -1,4 +1,4 @@
-# CIPAVD Gestao - Monorepo
+# INTEGRA - Monorepo
 
 ## Requisitos
 - Node.js `^20.19` ou `^22.12` (Prisma 7 não suporta Node 18)

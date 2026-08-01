@@ -17,10 +17,10 @@ describe('buildCpcaSelfRegistrationNotificationEmail', () => {
     });
 
     expect(message.subject).toBe(
-      'Gestor CIPAVD | Novo cadastro de presidente CPCA | CCA BR',
+      'INTEGRA | Novo cadastro de presidente CPCA | CCA BR',
     );
     expect(message.subject).not.toContain('CCA BR · CCA BR');
-    expect(message.html).toContain('Gestor CIPAVD');
+    expect(message.html).toContain('INTEGRA');
     expect(message.html).toContain('Um usuário se cadastrou como presidente CPCA');
     expect(message.html).not.toContain('CCA BR · CCA BR');
     expect(message.text).toContain('OM: CCA BR');

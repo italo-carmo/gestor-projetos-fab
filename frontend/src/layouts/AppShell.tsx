@@ -1012,23 +1012,22 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             <Box
               sx={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                p: 0.4,
+                width: 48,
+                height: 54,
                 display: "grid",
                 placeItems: "center",
-                background: "linear-gradient(135deg, #0C657E 10%, #C56A2B 90%)",
-                boxShadow: "0 10px 22px rgba(8, 54, 71, 0.22)",
+                flexShrink: 0,
               }}
             >
-              <Avatar
-                src="/brand/cipavd-7.png"
-                alt="CIPAVD"
+              <Box
+                component="img"
+                src="/brand/integra.png"
+                alt="INTEGRA"
                 sx={{
-                  width: 32,
-                  height: 32,
-                  bgcolor: "#f8fafc",
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  filter: "drop-shadow(0 7px 10px rgba(8, 54, 71, 0.2))",
                 }}
               />
             </Box>
@@ -1037,13 +1036,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 variant="subtitle2"
                 sx={{ fontWeight: 800, lineHeight: 1.1 }}
               >
-                CIPAVD Gestão
+                INTEGRA
               </Typography>
               <Typography
                 variant="caption"
                 sx={{ color: "text.secondary", lineHeight: 1.1 }}
               >
-                SMIF e CPCA
+                CIPAVD · CPCA · SMIF
               </Typography>
             </Box>
           </Box>

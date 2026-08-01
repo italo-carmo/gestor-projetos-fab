@@ -173,7 +173,7 @@ export function TwoFactorSetupPage() {
                     const w = window.open('', '_blank');
                     if (w) {
                       w.document.write(
-                        `<html><head><title>Códigos de Recuperação - Gestor CIPAVD</title></head><body style="font-family:monospace;padding:40px"><h2>Códigos de Recuperação</h2><p>Gestor CIPAVD - Autenticação em Dois Fatores</p><hr/><ol>${backupCodes.map((c) => `<li style="margin:8px 0;font-size:18px">${c}</li>`).join('')}</ol><hr/><p style="color:#666">Cada código só pode ser usado uma vez. Guarde em local seguro.</p></body></html>`,
+                        `<html><head><title>Códigos de Recuperação - INTEGRA</title></head><body style="font-family:monospace;padding:40px"><h2>Códigos de Recuperação</h2><p>INTEGRA - Autenticação em Dois Fatores</p><hr/><ol>${backupCodes.map((c) => `<li style="margin:8px 0;font-size:18px">${c}</li>`).join('')}</ol><hr/><p style="color:#666">Cada código só pode ser usado uma vez. Guarde em local seguro.</p></body></html>`,
                       );
                       w.print();
                     }

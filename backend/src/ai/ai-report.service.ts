@@ -281,7 +281,7 @@ export class AiReportService {
       margin: PAGE_MARGIN,
       info: {
         Title: draft.title,
-        Author: 'Sistema CIPAVD/SMIF',
+        Author: 'INTEGRA',
         Subject: 'Relatório personalizado gerado pelo assistente virtual',
       },
     });

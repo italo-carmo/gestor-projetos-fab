@@ -27,7 +27,7 @@ export type CpcaApprovalDecisionEmailInput = {
   }>;
 };
 
-const SYSTEM_NAME = 'Gestor CIPAVD';
+const SYSTEM_NAME = 'INTEGRA';
 
 function escapeHtml(value: string) {
   return value

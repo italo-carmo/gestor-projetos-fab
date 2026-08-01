@@ -251,7 +251,7 @@ Regras:
 5. Sempre que houver evidência, cite OM, UF, score e motivo.
 6. Não use tabelas markdown nem raciocínio interno.`;
 
-const CHATBOT_SYSTEM_PROMPT = `Você é o chatbot institucional do sistema CIPAVD/SMIF/CPCA.
+const CHATBOT_SYSTEM_PROMPT = `Você é o chatbot institucional do sistema INTEGRA, composto por CIPAVD, CPCA e SMIF.
 Regras:
 1. Responda sempre em português do Brasil.
 2. Use Markdown bem formatado.
@@ -3435,7 +3435,7 @@ export class AiService {
         .font('Helvetica')
         .fontSize(10)
         .fillColor('#D8E3F1')
-        .text('Sistema CIPAVD / SMIF', LEFT, 50, {
+        .text('INTEGRA', LEFT, 50, {
           width: PAGE_WIDTH,
           align: 'center',
         });

@@ -81,7 +81,7 @@ describe('MailService', () => {
     expect(transporterMock.sendMail).toHaveBeenCalledWith(
       expect.objectContaining({
         from: {
-          name: 'Gestor CIPAVD',
+          name: 'INTEGRA',
           address: 'italoibsc@fab.mil.br',
         },
         to: ['destinatario@fab.mil.br'],

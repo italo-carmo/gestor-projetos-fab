@@ -1,7 +1,7 @@
 # WIREFRAMES_TASK_CORE — Wireframes (foco no core)
 
 ## 1) /tasks (Tabela + Kanban)
-[TopBar]  CIPAVD Gestão | Contexto | Perfil
+[TopBar]  INTEGRA | Contexto | Perfil
 [Drawer]  Dashboard | Tarefas | Gantt | Calendário | Reuniões | (Admin...)
 
 [Header] Tarefas

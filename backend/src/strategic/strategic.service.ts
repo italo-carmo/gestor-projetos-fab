@@ -4430,7 +4430,7 @@ export class StrategicService {
         .fontSize(7)
         .fillColor(GRAY)
         .text(
-          'DOCUMENTO RESTRITO — USO INTERNO  |  Sistema de Gestão CIPAVD/SMIF  |  Força Aérea Brasileira',
+          'DOCUMENTO RESTRITO — USO INTERNO  |  INTEGRA  |  Força Aérea Brasileira',
           { align: 'center' },
         );
       doc

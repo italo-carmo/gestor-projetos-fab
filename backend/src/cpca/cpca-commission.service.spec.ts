@@ -514,7 +514,7 @@ describe('CpcaCommissionService', () => {
       expect.objectContaining({
         to: 'ti.cpca@fab.mil.br',
         subject:
-          'Gestor CIPAVD | Novo cadastro de presidente CPCA | CCA BR',
+          'INTEGRA | Novo cadastro de presidente CPCA | CCA BR',
         html: expect.stringContaining('1T Denise'),
         text: expect.stringContaining('OM: CCA BR'),
       }),
@@ -990,7 +990,7 @@ describe('CpcaCommissionService', () => {
       expect.objectContaining({
         to: 'membro@fab.mil.br',
         subject:
-          'Gestor CIPAVD | Cadastro como membro da CPCA registrado | CCA BR',
+          'INTEGRA | Cadastro como membro da CPCA registrado | CCA BR',
         html: expect.stringContaining(
           'Você foi cadastrado como membro da CPCA desta OM no sistema.',
         ),

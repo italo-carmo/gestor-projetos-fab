@@ -83,13 +83,12 @@ function firstConfig(config: ConfigService, key: string): string | undefined {
 
 function resolveDefaultFromName(value: string | undefined): string {
   const configured = String(value ?? '').trim();
-  if (
-    !configured ||
-    configured.localeCompare('CPCA COMGEP', 'pt-BR', {
-      sensitivity: 'base',
-    }) === 0
-  ) {
-    return 'Gestor CIPAVD';
+  const isLegacyName = ['CPCA COMGEP', 'Gestor CIPAVD'].some(
+    (name) =>
+      configured.localeCompare(name, 'pt-BR', { sensitivity: 'base' }) === 0,
+  );
+  if (!configured || isLegacyName) {
+    return 'INTEGRA';
   }
   return configured;
 }

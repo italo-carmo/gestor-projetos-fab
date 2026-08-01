@@ -1,4 +1,4 @@
-// Prisma schema for CIPAVD Gestao
+// Prisma schema for INTEGRA
 
 generator client {
   provider = "prisma-client-js"

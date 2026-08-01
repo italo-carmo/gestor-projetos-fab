@@ -13,7 +13,7 @@ const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 const BACKUP_CODE_COUNT = 8;
 const BCRYPT_ROUNDS = 10;
-const TOTP_ISSUER = 'Gestor CIPAVD';
+const TOTP_ISSUER = 'INTEGRA';
 const TOTP_PERIOD = 30;
 const TOTP_DIGITS = 6;
 
