@@ -3198,6 +3198,8 @@ export class TasksService {
         totalActivities: 0,
         completedActivities: 0,
         completionPercent: 0,
+        visitedCities: 0,
+        participantsInActivities: 0,
         lateActivities: 0,
         unassignedActivities: 0,
         reportPending: 0,
@@ -3343,6 +3345,14 @@ export class TasksService {
           }
         : null;
 
+    const missionDateRangeFilter: Prisma.MissionWhereInput | null =
+      from || to
+        ? {
+            ...(from ? { endDate: { gte: from } } : {}),
+            ...(to ? { startDate: { lte: to } } : {}),
+          }
+        : null;
+
     const activities: any[] = await this.prisma.activity.findMany({
       where: {
         localityId: { in: localityIds },
@@ -3422,6 +3432,24 @@ export class TasksService {
       },
       orderBy: [{ eventDate: 'asc' }, { createdAt: 'asc' }],
     } as any);
+    const cipavdMissions =
+      scopeFilter === ActivityScope.CIPAVD
+        ? await this.prisma.mission.findMany({
+            where: {
+              localityId: { in: localityIds },
+              scope: ActivityScope.CIPAVD,
+              ...(missionDateRangeFilter ?? {}),
+            },
+            select: {
+              id: true,
+              title: true,
+              localityId: true,
+              startDate: true,
+              endDate: true,
+            },
+            orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
+          })
+        : [];
     const filteredActivities = activities.filter((activity) =>
       activity.localityId ? aliasByLocalityId.has(activity.localityId) : false,
     );
@@ -3741,21 +3769,6 @@ export class TasksService {
           acc + Number(activity.report?.participantsCount ?? 0),
         0,
       );
-    const visitedCities = new Set(
-      filteredActivities
-        .filter(
-          (activity) =>
-            activity.status === ActivityStatus.DONE &&
-            isVisitActivity(activity),
-        )
-        .map(
-          (activity) =>
-            canonicalLocalityIdByActivityId.get(activity.id) ??
-            activity.localityId ??
-            '',
-        )
-        .filter(Boolean),
-    ).size;
     const completedActivitiesItems = filteredActivities
       .filter((activity) => activity.status === ActivityStatus.DONE)
       .map((activity) => mapExecutiveActivityItem(activity))
@@ -3768,48 +3781,80 @@ export class TasksService {
         localityName: string;
         commandName: string;
         visitActivities: number;
+        visitMissions: number;
         lastVisitDate: Date | null;
       }
     >();
-    for (const activity of filteredActivities) {
-      if (
-        activity.status !== ActivityStatus.DONE ||
-        !isVisitActivity(activity)
-      ) {
-        continue;
+    if (scopeFilter === ActivityScope.CIPAVD) {
+      for (const mission of cipavdMissions) {
+        const locality = localityById.get(mission.localityId);
+        const current = visitedCitiesMap.get(mission.localityId);
+        const currentVisitDate = mission.endDate ?? mission.startDate;
+        if (!current) {
+          visitedCitiesMap.set(mission.localityId, {
+            localityId: mission.localityId,
+            localityCode: locality?.code ?? '',
+            localityName: locality?.name ?? '',
+            commandName: locality?.commandName ?? '',
+            visitActivities: 0,
+            visitMissions: 1,
+            lastVisitDate: currentVisitDate,
+          });
+          continue;
+        }
+        current.visitMissions += 1;
+        if (
+          !current.lastVisitDate ||
+          currentVisitDate.getTime() > current.lastVisitDate.getTime()
+        ) {
+          current.lastVisitDate = currentVisitDate;
+        }
       }
-      const canonicalId =
-        canonicalLocalityIdByActivityId.get(activity.id) ??
-        activity.localityId ??
-        '';
-      if (!canonicalId) continue;
-      const locality = localityById.get(canonicalId);
-      const current = visitedCitiesMap.get(canonicalId);
-      const currentEventDate = activity.eventDate ?? activity.createdAt;
-      if (!current) {
-        visitedCitiesMap.set(canonicalId, {
-          localityId: canonicalId,
-          localityCode: locality?.code ?? '',
-          localityName: locality?.name ?? '',
-          commandName: locality?.commandName ?? '',
-          visitActivities: 1,
-          lastVisitDate: currentEventDate ?? null,
-        });
-        continue;
-      }
-      current.visitActivities += 1;
-      if (
-        currentEventDate &&
-        (!current.lastVisitDate ||
-          currentEventDate.getTime() > current.lastVisitDate.getTime())
-      ) {
-        current.lastVisitDate = currentEventDate;
+    } else {
+      for (const activity of filteredActivities) {
+        if (
+          activity.status !== ActivityStatus.DONE ||
+          !isVisitActivity(activity)
+        ) {
+          continue;
+        }
+        const canonicalId =
+          canonicalLocalityIdByActivityId.get(activity.id) ??
+          activity.localityId ??
+          '';
+        if (!canonicalId) continue;
+        const locality = localityById.get(canonicalId);
+        const current = visitedCitiesMap.get(canonicalId);
+        const currentEventDate = activity.eventDate ?? activity.createdAt;
+        if (!current) {
+          visitedCitiesMap.set(canonicalId, {
+            localityId: canonicalId,
+            localityCode: locality?.code ?? '',
+            localityName: locality?.name ?? '',
+            commandName: locality?.commandName ?? '',
+            visitActivities: 1,
+            visitMissions: 0,
+            lastVisitDate: currentEventDate ?? null,
+          });
+          continue;
+        }
+        current.visitActivities += 1;
+        if (
+          currentEventDate &&
+          (!current.lastVisitDate ||
+            currentEventDate.getTime() > current.lastVisitDate.getTime())
+        ) {
+          current.lastVisitDate = currentEventDate;
+        }
       }
     }
+    const visitedCities = visitedCitiesMap.size;
     const visitedCitiesItems = Array.from(visitedCitiesMap.values()).sort(
       (a, b) => {
-        if (b.visitActivities !== a.visitActivities) {
-          return b.visitActivities - a.visitActivities;
+        const aVisits = a.visitMissions + a.visitActivities;
+        const bVisits = b.visitMissions + b.visitActivities;
+        if (bVisits !== aVisits) {
+          return bVisits - aVisits;
         }
         return (
           new Date(b.lastVisitDate ?? 0).getTime() -

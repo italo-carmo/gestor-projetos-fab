@@ -378,7 +378,7 @@ export function DashboardExecutivePage() {
       visitedCities: {
         title: 'Cidades visitadas',
         subtitle:
-          'Localidades que receberam atividade de visita concluída no recorte atual.',
+          'Localidades que receberam missões CIPAVD no recorte atual.',
       },
       reportsApproved: {
         title: 'Relatórios aprovados',
@@ -402,6 +402,12 @@ export function DashboardExecutivePage() {
     next.set('activityId', activityId);
     next.set('tab', 'report');
     navigate(`/activities-cipavd?${next.toString()}`);
+  };
+  const openLocalityMissions = (targetLocalityId: string) => {
+    const next = new URLSearchParams();
+    next.set('localityId', targetLocalityId);
+    next.set('scope', 'CIPAVD');
+    navigate(`/missions?${next.toString()}`);
   };
   const openLocalityActivities = (targetLocalityId: string) => {
     const next = new URLSearchParams();
@@ -647,7 +653,7 @@ export function DashboardExecutivePage() {
                   id: 'visitedCities' as const,
                   label: 'Cidades visitadas',
                   value: visitedCities,
-                  helper: 'Localidades com atividade concluída',
+                  helper: 'Localidades com missão CIPAVD',
                 },
                 {
                   id: 'reportsApproved' as const,
@@ -1220,7 +1226,7 @@ export function DashboardExecutivePage() {
                       <Stack direction="row" spacing={1} alignItems="center">
                         <Chip
                           size="small"
-                          label={`${Number(item.visitActivities ?? 0)} visita(s)`}
+                          label={`${Number(item.visitMissions ?? item.visitActivities ?? 0)} missão(ões)`}
                         />
                         <Typography variant="caption" color="text.secondary">
                           Última: {formatDateTime(item.lastVisitDate)}
@@ -1228,9 +1234,9 @@ export function DashboardExecutivePage() {
                         <Button
                           size="small"
                           variant="outlined"
-                          onClick={() => openLocalityActivities(String(item.localityId))}
+                          onClick={() => openLocalityMissions(String(item.localityId))}
                         >
-                          Ver atividades
+                          Ver missões
                         </Button>
                       </Stack>
                     </Stack>

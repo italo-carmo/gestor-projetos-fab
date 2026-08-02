@@ -9,6 +9,15 @@ const prismaMock = {
   locality: {
     findMany: jest.fn(),
   },
+  activity: {
+    findMany: jest.fn(),
+  },
+  mission: {
+    findMany: jest.fn(),
+  },
+  specialty: {
+    findFirst: jest.fn(),
+  },
   user: {
     findMany: jest.fn(),
   },
@@ -250,6 +259,72 @@ describe('TasksService rules', () => {
           localityId: 'cipavd-loc-1',
           scope: ActivityScope.CIPAVD,
         }),
+      }),
+    );
+  });
+
+  it('counts distinct CIPAVD mission localities as visited cities', async () => {
+    prismaMock.locality.findMany.mockResolvedValue([
+      {
+        id: 'cipavd-loc-1',
+        code: 'RIO',
+        name: 'Rio de Janeiro',
+        commandName: 'COMAER',
+      },
+      {
+        id: 'cipavd-loc-2',
+        code: 'BSB',
+        name: 'Brasília',
+        commandName: 'COMAER',
+      },
+    ]);
+    prismaMock.activity.findMany.mockResolvedValue([]);
+    prismaMock.mission.findMany.mockResolvedValue([
+      {
+        id: 'mission-1',
+        title: 'Missão Rio 1',
+        localityId: 'cipavd-loc-1',
+        startDate: new Date('2026-04-01T00:00:00.000Z'),
+        endDate: new Date('2026-04-03T00:00:00.000Z'),
+      },
+      {
+        id: 'mission-2',
+        title: 'Missão Rio 2',
+        localityId: 'cipavd-loc-1',
+        startDate: new Date('2026-05-01T00:00:00.000Z'),
+        endDate: new Date('2026-05-02T00:00:00.000Z'),
+      },
+      {
+        id: 'mission-3',
+        title: 'Missão Brasília',
+        localityId: 'cipavd-loc-2',
+        startDate: new Date('2026-06-01T00:00:00.000Z'),
+        endDate: new Date('2026-06-04T00:00:00.000Z'),
+      },
+    ]);
+    prismaMock.specialty.findFirst.mockResolvedValue(null);
+
+    const result = await service.getDashboardExecutive(
+      { scope: 'CIPAVD' },
+      { id: 'ti-1', roles: [{ name: 'TI' }] } as any,
+    );
+
+    expect(result.summary.visitedCities).toBe(2);
+    expect(result.kpiDetails.visitedCities).toEqual([
+      expect.objectContaining({
+        localityId: 'cipavd-loc-1',
+        visitMissions: 2,
+        lastVisitDate: new Date('2026-05-02T00:00:00.000Z'),
+      }),
+      expect.objectContaining({
+        localityId: 'cipavd-loc-2',
+        visitMissions: 1,
+        lastVisitDate: new Date('2026-06-04T00:00:00.000Z'),
+      }),
+    ]);
+    expect(prismaMock.mission.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ scope: ActivityScope.CIPAVD }),
       }),
     );
   });
