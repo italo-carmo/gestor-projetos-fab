@@ -311,23 +311,29 @@ export function InstitutionalPage() {
     };
   }, []);
 
+  const scopeActions = useMemo(
+    () =>
+      (data?.actions ?? []).filter(
+        (action) => selectedScope === "ALL" || action.scope === selectedScope,
+      ),
+    [data?.actions, selectedScope],
+  );
+
   const stateCounts = useMemo(() => {
     const result: Record<string, number> = {};
-    for (const action of data?.actions ?? []) {
+    for (const action of scopeActions) {
       const uf = String(action.locality?.uf ?? "").toUpperCase();
       if (uf) result[uf] = (result[uf] ?? 0) + 1;
     }
     return result;
-  }, [data?.actions]);
+  }, [scopeActions]);
 
   const filteredActions = useMemo(
     () =>
-      (data?.actions ?? []).filter(
-        (action) =>
-          (selectedScope === "ALL" || action.scope === selectedScope) &&
-          (!selectedUf || action.locality?.uf === selectedUf),
+      scopeActions.filter(
+        (action) => !selectedUf || action.locality?.uf === selectedUf,
       ),
-    [data?.actions, selectedScope, selectedUf],
+    [scopeActions, selectedUf],
   );
 
   const supportChannels = useMemo(() => {
@@ -594,7 +600,10 @@ export function InstitutionalPage() {
                       type="button"
                       key={scope}
                       className={selectedScope === scope ? "is-active" : ""}
-                      onClick={() => setSelectedScope(scope)}
+                      onClick={() => {
+                        setSelectedScope(scope);
+                        setSelectedUf("");
+                      }}
                     >
                       {scope === "ALL" ? "Todas" : scope}
                     </button>
