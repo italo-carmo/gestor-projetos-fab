@@ -587,6 +587,7 @@ export function InstitutionalPage() {
                 </div>
                 <BrazilMissionMap
                   counts={stateCounts}
+                  scope={selectedScope}
                   selectedUf={selectedUf}
                   onSelect={(uf) => setSelectedUf((current) => current === uf ? "" : uf)}
                 />

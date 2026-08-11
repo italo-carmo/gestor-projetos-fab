@@ -686,6 +686,10 @@
   transition: fill 150ms ease, opacity 150ms ease, stroke-width 150ms ease;
 }
 
+.institutional-map__state.is-inactive {
+  cursor: default;
+}
+
 .institutional-map__state:hover,
 .institutional-map__state:focus-visible {
   opacity: 0.78;

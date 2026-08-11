@@ -139,16 +139,25 @@ test('renders the public institutional page without authentication', async ({
   await expect(actionsSection.getByText('Palestra', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Rio Grande do Norte: 1 ação(ões)' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Rio de Janeiro: 1 ação(ões)' })).toBeVisible();
+  await expect(actionsSection.locator('.institutional-map__state[data-active="true"]')).toHaveCount(2);
 
   await actionsSection.getByRole('button', { name: 'CIPAVD', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Rio Grande do Norte: 1 ação(ões)' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Rio de Janeiro: 0 ação(ões)' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rio Grande do Norte: 1 ação(ões)' })).toHaveAttribute('data-active', 'true');
+  await expect(page.getByRole('button', { name: 'Rio de Janeiro: 0 ação(ões)' })).toHaveAttribute('data-active', 'false');
+  await expect(page.getByRole('button', { name: 'Rio de Janeiro: 0 ação(ões)' })).toHaveAttribute('fill', '#f7fafb');
+  await expect(actionsSection.locator('.institutional-map__state[data-active="true"]')).toHaveCount(1);
   await expect(actionsSection.getByText('Missão CIPAVD Natal', { exact: true })).toBeVisible();
   await expect(actionsSection.getByText('Missão SMIF Rio de Janeiro', { exact: true })).not.toBeVisible();
 
   await actionsSection.getByRole('button', { name: 'SMIF', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Rio Grande do Norte: 0 ação(ões)' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Rio de Janeiro: 1 ação(ões)' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rio Grande do Norte: 0 ação(ões)' })).toHaveAttribute('data-active', 'false');
+  await expect(page.getByRole('button', { name: 'Rio Grande do Norte: 0 ação(ões)' })).toHaveAttribute('fill', '#f7fafb');
+  await expect(page.getByRole('button', { name: 'Rio de Janeiro: 1 ação(ões)' })).toHaveAttribute('data-active', 'true');
+  await expect(actionsSection.locator('.institutional-map__state[data-active="true"]')).toHaveCount(1);
   await expect(actionsSection.getByText('Missão SMIF Rio de Janeiro', { exact: true })).toBeVisible();
   await expect(actionsSection.getByText('Missão CIPAVD Natal', { exact: true })).not.toBeVisible();
 

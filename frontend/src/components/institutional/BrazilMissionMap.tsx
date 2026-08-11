@@ -1,5 +1,13 @@
 import { useMemo } from "react";
 
+type MissionMapScope = "ALL" | "CIPAVD" | "SMIF";
+
+const SCOPE_COLORS: Record<MissionMapScope, { hue: number; saturation: number }> = {
+  ALL: { hue: 193, saturation: 76 },
+  CIPAVD: { hue: 214, saturation: 62 },
+  SMIF: { hue: 142, saturation: 39 },
+};
+
 const BRAZIL_STATES: Record<
   string,
   { name: string; path: string; labelX: number; labelY: number }
@@ -35,10 +43,12 @@ const BRAZIL_STATES: Record<
 
 export function BrazilMissionMap({
   counts,
+  scope,
   selectedUf,
   onSelect,
 }: {
   counts: Record<string, number>;
+  scope: MissionMapScope;
   selectedUf: string;
   onSelect: (uf: string) => void;
 }) {
@@ -49,15 +59,17 @@ export function BrazilMissionMap({
 
   const getFill = (uf: string) => {
     const count = counts[uf] ?? 0;
-    if (!count) return "#dce8ed";
+    if (!count) return "#f7fafb";
     const intensity = Math.max(0.24, count / maxCount);
     const lightness = 52 - intensity * 24;
-    return `hsl(193 76% ${lightness}%)`;
+    const color = SCOPE_COLORS[scope];
+    return `hsl(${color.hue} ${color.saturation}% ${lightness}%)`;
   };
 
   return (
     <svg
       className="institutional-map"
+      data-scope={scope}
       viewBox="20 20 860 880"
       role="img"
       aria-label="Mapa do Brasil com a distribuição das ações da CIPAVD e do SMIF"
@@ -69,24 +81,29 @@ export function BrazilMissionMap({
       </defs>
       {Object.entries(BRAZIL_STATES).map(([uf, state]) => {
         const count = counts[uf] ?? 0;
-        const selected = selectedUf === uf;
+        const active = count > 0;
+        const selected = active && selectedUf === uf;
         return (
           <g key={uf}>
             <title>{`${state.name} (${uf}): ${count} ação(ões)`}</title>
             <path
               d={state.path}
               fill={selected ? "#c56a2b" : getFill(uf)}
-              stroke="#ffffff"
-              strokeWidth={selected ? 4 : 2}
+              stroke={active ? "#ffffff" : "#b8c7cc"}
+              strokeWidth={selected ? 4 : active ? 2 : 1.5}
               strokeLinejoin="round"
-              filter="url(#institutional-map-shadow)"
+              filter={active ? "url(#institutional-map-shadow)" : undefined}
               role="button"
-              tabIndex={0}
+              tabIndex={active ? 0 : -1}
+              aria-disabled={!active}
               aria-label={`${state.name}: ${count} ação(ões)`}
-              className="institutional-map__state"
-              onClick={() => onSelect(uf)}
+              data-active={active ? "true" : "false"}
+              className={`institutional-map__state ${active ? "is-active" : "is-inactive"}`}
+              onClick={() => {
+                if (active) onSelect(uf);
+              }}
               onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+                if (active && (event.key === "Enter" || event.key === " ")) {
                   event.preventDefault();
                   onSelect(uf);
                 }
