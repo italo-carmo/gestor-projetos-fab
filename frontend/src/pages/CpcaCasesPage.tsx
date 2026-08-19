@@ -441,6 +441,7 @@ const OCCURRENCE_FORM_OPTIONS = [
 
 const NOT_INFORMED_RANK_VALUE = "NAO INFORMADO";
 const NOT_INFORMED_RANK_LABEL = "Não informado";
+const CIVIL_RANK_VALUE = "Civil";
 const LONG_SELECT_MENU_PROPS = {
   PaperProps: {
     sx: {
@@ -673,6 +674,23 @@ function getDetailedViolenceTypeLabel(value: string | null | undefined) {
     DETAILED_VIOLENCE_TYPE_OPTIONS.find((item) => item.value === normalized)
       ?.label ?? normalized
   );
+}
+
+function getRankOptionLabel(value: string) {
+  const normalized = String(value ?? "").trim();
+  if (normalized === NOT_INFORMED_RANK_VALUE) return NOT_INFORMED_RANK_LABEL;
+  return normalized;
+}
+
+function withCivilAfterRecruta(items: string[]) {
+  const normalizedItems = Array.from(
+    new Set(items.map((item) => String(item ?? "").trim()).filter(Boolean)),
+  );
+  const withoutCivil = normalizedItems.filter(
+    (item) =>
+      item.toLowerCase() !== CIVIL_RANK_VALUE.toLowerCase(),
+  );
+  return [...withoutCivil, CIVIL_RANK_VALUE];
 }
 
 function getComplaintTypeLabel(value: string | null | undefined) {
@@ -1176,11 +1194,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   );
   const rankOptionsWithUnknown = useMemo(
     () =>
-      Array.from(
-        new Set(
-          [NOT_INFORMED_RANK_VALUE, ...rankOptions]
-            .map((item) => String(item ?? "").trim())
-            .filter(Boolean),
+      withCivilAfterRecruta(
+        Array.from(
+          new Set(
+            [NOT_INFORMED_RANK_VALUE, ...rankOptions]
+              .map((item) => String(item ?? "").trim())
+              .filter(Boolean),
+          ),
         ),
       ),
     [rankOptions],
@@ -2117,9 +2137,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           >
             {rankOptionsWithUnknown.map((rank: string) => (
               <MenuItem key={rank} value={rank}>
-                {rank === NOT_INFORMED_RANK_VALUE
-                  ? NOT_INFORMED_RANK_LABEL
-                  : rank}
+                {getRankOptionLabel(rank)}
               </MenuItem>
             ))}
           </TextField>
@@ -2189,9 +2207,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           >
             {rankOptionsWithUnknown.map((rank: string) => (
               <MenuItem key={rank} value={rank}>
-                {rank === NOT_INFORMED_RANK_VALUE
-                  ? NOT_INFORMED_RANK_LABEL
-                  : rank}
+                {getRankOptionLabel(rank)}
               </MenuItem>
             ))}
           </TextField>
@@ -2271,9 +2287,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             >
               {rankOptionsWithUnknown.map((rank: string) => (
                 <MenuItem key={`notifier-rank-${rank}`} value={rank}>
-                  {rank === NOT_INFORMED_RANK_VALUE
-                    ? NOT_INFORMED_RANK_LABEL
-                    : rank}
+                  {getRankOptionLabel(rank)}
                 </MenuItem>
               ))}
             </TextField>
