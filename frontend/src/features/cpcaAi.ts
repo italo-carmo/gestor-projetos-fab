@@ -7,10 +7,10 @@ import type {
 export const CPCA_AI_PROFILE = "cpca_agent" as const;
 
 export const CPCA_AI_QUICK_PROMPTS = [
-  "Liste as principais inconsistências cadastrais e normativas nas denúncias CPCA.",
-  "Monte um briefing executivo das denúncias CPCA abertas, com prioridades por OM.",
-  "Crie um relatório analítico das denúncias CPCA com base nos casos e nas bases de conhecimento selecionadas.",
-  "Aponte gargalos de workflow e riscos institucionais nas denúncias CPCA.",
+  "Liste as principais inconsistências cadastrais e normativas nos acolhimentos CPCA.",
+  "Monte um briefing executivo dos acolhimentos CPCA abertos, com prioridades por OM.",
+  "Crie um relatório analítico dos acolhimentos CPCA com base nos casos e nas bases de conhecimento selecionadas.",
+  "Aponte gargalos de workflow e riscos institucionais nos acolhimentos CPCA.",
 ] as const;
 
 const SOURCE_LABELS: Record<AiKnowledgeSourceId, string> = {
@@ -26,13 +26,13 @@ const SOURCE_LABELS: Record<AiKnowledgeSourceId, string> = {
   survey_best_practice_cycle: "Pesquisa ciclo de boas práticas",
   survey_cpca_meeting: "Pesquisa encontro CPCA",
   survey_gsd_evaluation: "Pesquisa avaliação GSD",
-  complaints_cpca: "Denúncias CPCA",
-  complaints_smif: "Denúncias SMIF",
+  complaints_cpca: "Acolhimentos CPCA",
+  complaints_smif: "Acolhimentos SMIF",
 };
 
 const FEATURE_LABELS: Record<AiProfileFeatureId, string> = {
   structured_situational: "Panorama situacional",
-  structured_complaints: "Perfis de denúncias",
+  structured_complaints: "Perfis de acolhimentos",
   structured_text: "Sinais textuais",
   structured_geo: "Recorte geográfico",
   rag_knowledge_bases: "RAG documental",

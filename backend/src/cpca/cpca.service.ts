@@ -20,7 +20,10 @@ import {
   type CpcaCaseInconsistency,
 } from './cpca-case-inconsistency';
 import { ComplaintSummaryPrivacyService } from './complaint-summary-privacy.service';
-import { CreateCpcaCaseDto } from './dto/create-cpca-case.dto';
+import {
+  CPCA_SELECTABLE_DETAILED_VIOLENCE_TYPES,
+  CreateCpcaCaseDto,
+} from './dto/create-cpca-case.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
 import {
   isJudicialArchiveProcedureSituation,
@@ -52,6 +55,9 @@ const CPCA_PROCEDURE_ORDER = [
   'CONSELHO_JUSTIFICACAO',
 ] as const;
 const CPCA_COMPLAINT_TYPE_ORDER = ['MORAL', 'SEXUAL'] as const;
+const CPCA_SELECTABLE_DETAILED_VIOLENCE_TYPE_SET = new Set<string>(
+  CPCA_SELECTABLE_DETAILED_VIOLENCE_TYPES,
+);
 const CPCA_OPEN_STATUS_SET = new Set<string>([
   'RECEIVED',
   'PROTECTION_MEASURES',
@@ -202,6 +208,8 @@ const COMPLAINT_HISTORY_FIELD_LABELS: Record<string, string> = {
   complaintType: 'Tipo',
   notifierType: 'Tipo de noticiante',
   status: 'Status',
+  processOpened: 'Abriu processo',
+  processNotOpenedReason: 'Justificativa para não abertura de processo',
   procedureType: 'Procedimento administrativo',
   procedureCurrentSituation: 'Situação do procedimento',
   reportedAt: 'Data de recebimento',
@@ -216,7 +224,7 @@ const COMPLAINT_HISTORY_FIELD_LABELS: Record<string, string> = {
   notifierRank: 'Posto/graduação do noticiante',
   notifierGender: 'Gênero do noticiante',
   notifierAgeRange: 'Faixa etária do noticiante',
-  detailedViolenceType: 'Tipo de assédio ou violência',
+  detailedViolenceType: 'Natureza do Relato',
   harassmentContext: 'Contexto',
   occurrenceLocation: 'Local de ocorrência',
   incidentFrequency: 'Frequência',
@@ -265,6 +273,7 @@ const COMPLAINT_HISTORY_CREATE_FIELDS = [
   'omId',
   'complaintType',
   'status',
+  'processOpened',
   'procedureType',
   'detailedViolenceType',
   'reportedAt',
@@ -1823,6 +1832,7 @@ export class CpcaService {
     context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
   ) {
     const workflowContext = this.resolveContext(context);
+    this.assertSelectableDetailedViolenceType(payload.detailedViolenceType);
     const constraints = this.getScopeConstraints(user, workflowContext);
     const localityId = await this.resolveTargetLocalityId(
       payload.omId ?? payload.localityId,
@@ -1844,7 +1854,17 @@ export class CpcaService {
     const historyModel = (this.prisma as any).cpcComplaintStatusHistory;
 
     const status = payload.status ?? 'RECEIVED';
-    const procedureType = payload.procedureType ?? 'NOT_DEFINED';
+    const requestedProcedureType = payload.procedureType ?? 'NOT_DEFINED';
+    const processOpened =
+      payload.processOpened ??
+      (requestedProcedureType !== 'NOT_DEFINED' ? true : null);
+    const processNotOpenedReason =
+      processOpened === false
+        ? this.cleanOptional(payload.processNotOpenedReason)
+        : null;
+    this.assertProcessOpeningConsistency(processOpened, processNotOpenedReason);
+    const procedureType =
+      processOpened === false ? 'NOT_DEFINED' : requestedProcedureType;
     if (status === 'CONCLUDED' || status === 'ARCHIVED') {
       throwError('VALIDATION_ERROR', {
         field: 'status',
@@ -1855,8 +1875,12 @@ export class CpcaService {
       status,
       complaintType: payload.complaintType,
       confidentialityTermSigned: payload.confidentialityTermSigned ?? false,
-      preliminaryReportGenerated: payload.preliminaryReportGenerated ?? false,
-      preliminaryReportDate: payload.preliminaryReportDate,
+      preliminaryReportGenerated:
+        processOpened === false
+          ? false
+          : (payload.preliminaryReportGenerated ?? false),
+      preliminaryReportDate:
+        processOpened === false ? null : payload.preliminaryReportDate,
       victimAccusedSeparationEvaluated:
         payload.victimAccusedSeparationEvaluated ?? false,
       victimAccusedSeparationApplied:
@@ -1889,6 +1913,8 @@ export class CpcaService {
       notifierType: payload.notifierType ?? 'VITIMA',
       status,
       procedureType,
+      processOpened,
+      processNotOpenedReason,
       reportedAt:
         this.parseOptionalIsoDateInput(payload.reportedAt, 'reportedAt') ??
         new Date(),
@@ -1914,12 +1940,14 @@ export class CpcaService {
       ),
       occurrenceForm: occurrenceForms[0] ?? null,
       occurrenceForms,
-      administrativeProcedure: this.cleanOptional(
-        payload.administrativeProcedure,
-      ),
-      procedureCurrentSituation: this.cleanOptional(
-        payload.procedureCurrentSituation,
-      ),
+      administrativeProcedure:
+        processOpened === false
+          ? null
+          : this.cleanOptional(payload.administrativeProcedure),
+      procedureCurrentSituation:
+        processOpened === false
+          ? null
+          : this.cleanOptional(payload.procedureCurrentSituation),
       retaliationReported: this.cleanOptional(payload.retaliationReported),
       retaliationAgainst: this.cleanOptional(payload.retaliationAgainst),
       evidenceCount: payload.evidenceCount ?? 0,
@@ -1941,14 +1969,25 @@ export class CpcaService {
       legalSupportProvided: payload.legalSupportProvided ?? false,
       contactRestrictionApplied: payload.contactRestrictionApplied ?? false,
       preliminaryAnalysis: this.cleanOptional(payload.preliminaryAnalysis),
-      preliminaryReportGenerated: payload.preliminaryReportGenerated ?? false,
+      preliminaryReportGenerated:
+        processOpened === false
+          ? false
+          : (payload.preliminaryReportGenerated ?? false),
       preliminaryReportDate:
-        this.parseOptionalIsoDateInput(
-          payload.preliminaryReportDate,
-          'preliminaryReportDate',
-        ) ?? null,
-      procedureReference: this.cleanOptional(payload.procedureReference),
-      procedureNotes: this.cleanOptional(payload.procedureNotes),
+        processOpened === false
+          ? null
+          : (this.parseOptionalIsoDateInput(
+              payload.preliminaryReportDate,
+              'preliminaryReportDate',
+            ) ?? null),
+      procedureReference:
+        processOpened === false
+          ? null
+          : this.cleanOptional(payload.procedureReference),
+      procedureNotes:
+        processOpened === false
+          ? null
+          : this.cleanOptional(payload.procedureNotes),
       womenLedHandlingPrioritized:
         payload.womenLedHandlingPrioritized === undefined
           ? null
@@ -2119,6 +2158,8 @@ export class CpcaService {
         contactRestrictionApplied: true,
         status: true,
         procedureType: true,
+        processOpened: true,
+        processNotOpenedReason: true,
         procedureCurrentSituation: true,
         preliminaryAnalysis: true,
         preliminaryReportGenerated: true,
@@ -2163,6 +2204,19 @@ export class CpcaService {
       workflowContext,
     );
 
+    const currentDetailedViolenceType = this.cleanOptional(
+      current.detailedViolenceType,
+    );
+    const requestedDetailedViolenceType = this.cleanOptional(
+      payload.detailedViolenceType,
+    );
+    if (
+      payload.detailedViolenceType !== undefined &&
+      requestedDetailedViolenceType !== currentDetailedViolenceType
+    ) {
+      this.assertSelectableDetailedViolenceType(requestedDetailedViolenceType);
+    }
+
     const targetLocalityIdRaw = payload.omId ?? payload.localityId;
     const nextLocalityId = targetLocalityIdRaw
       ? await this.resolveTargetLocalityId(
@@ -2172,15 +2226,36 @@ export class CpcaService {
         )
       : (current.omId ?? current.localityId ?? null);
 
+    const requestedNextProcedure =
+      payload.procedureType ?? current.procedureType;
+    const inferredNextProcessOpened =
+      requestedNextProcedure !== 'NOT_DEFINED' ? true : null;
+    const nextProcessOpened =
+      payload.processOpened === undefined
+        ? (current.processOpened ?? inferredNextProcessOpened)
+        : (payload.processOpened ?? inferredNextProcessOpened);
+    const nextProcessNotOpenedReason =
+      nextProcessOpened === false
+        ? payload.processNotOpenedReason === undefined
+          ? this.cleanOptional(current.processNotOpenedReason)
+          : this.cleanOptional(payload.processNotOpenedReason)
+        : null;
+    this.assertProcessOpeningConsistency(
+      nextProcessOpened,
+      nextProcessNotOpenedReason,
+    );
     const nextProcedureCurrentSituation =
-      payload.procedureCurrentSituation === undefined
-        ? this.cleanOptional(current.procedureCurrentSituation)
-        : this.cleanOptional(payload.procedureCurrentSituation);
+      nextProcessOpened === false
+        ? null
+        : payload.procedureCurrentSituation === undefined
+          ? this.cleanOptional(current.procedureCurrentSituation)
+          : this.cleanOptional(payload.procedureCurrentSituation);
     const nextStatus = syncWorkflowStatusWithProcedureSituation({
       status: payload.status ?? current.status,
       procedureCurrentSituation: nextProcedureCurrentSituation,
     });
-    const nextProcedure = payload.procedureType ?? current.procedureType;
+    const nextProcedure =
+      nextProcessOpened === false ? 'NOT_DEFINED' : requestedNextProcedure;
     this.assertStatusTransition(
       current.status,
       nextStatus,
@@ -2190,14 +2265,19 @@ export class CpcaService {
     const nextConfidentialityTermSigned =
       payload.confidentialityTermSigned ?? current.confidentialityTermSigned;
     const nextPreliminaryReportGenerated =
-      payload.preliminaryReportGenerated ?? current.preliminaryReportGenerated;
+      nextProcessOpened === false
+        ? false
+        : (payload.preliminaryReportGenerated ??
+          current.preliminaryReportGenerated);
     const nextPreliminaryReportDate =
-      payload.preliminaryReportDate === undefined
-        ? current.preliminaryReportDate
-        : this.parseOptionalIsoDateInput(
-            payload.preliminaryReportDate,
-            'preliminaryReportDate',
-          );
+      nextProcessOpened === false
+        ? null
+        : payload.preliminaryReportDate === undefined
+          ? current.preliminaryReportDate
+          : this.parseOptionalIsoDateInput(
+              payload.preliminaryReportDate,
+              'preliminaryReportDate',
+            );
     const nextVictimAccusedSeparationEvaluated =
       payload.victimAccusedSeparationEvaluated ??
       current.victimAccusedSeparationEvaluated;
@@ -2299,7 +2379,9 @@ export class CpcaService {
         complaintType: payload.complaintType,
         notifierType: payload.notifierType,
         status: nextStatus,
-        procedureType: payload.procedureType,
+        procedureType: nextProcedure,
+        processOpened: nextProcessOpened,
+        processNotOpenedReason: nextProcessNotOpenedReason,
         reportedAt:
           payload.reportedAt !== undefined
             ? this.parseOptionalIsoDateInput(payload.reportedAt, 'reportedAt')
@@ -2349,9 +2431,11 @@ export class CpcaService {
         occurrenceForms:
           nextOccurrenceForms !== undefined ? nextOccurrenceForms : undefined,
         administrativeProcedure:
-          payload.administrativeProcedure !== undefined
-            ? this.cleanOptional(payload.administrativeProcedure)
-            : undefined,
+          nextProcessOpened === false
+            ? null
+            : payload.administrativeProcedure !== undefined
+              ? this.cleanOptional(payload.administrativeProcedure)
+              : undefined,
         procedureCurrentSituation: nextProcedureCurrentSituation,
         retaliationReported:
           payload.retaliationReported !== undefined
@@ -2389,22 +2473,28 @@ export class CpcaService {
           payload.preliminaryAnalysis !== undefined
             ? this.cleanOptional(payload.preliminaryAnalysis)
             : undefined,
-        preliminaryReportGenerated: payload.preliminaryReportGenerated,
+        preliminaryReportGenerated: nextPreliminaryReportGenerated,
         preliminaryReportDate:
-          payload.preliminaryReportDate !== undefined
-            ? this.parseOptionalIsoDateInput(
-                payload.preliminaryReportDate,
-                'preliminaryReportDate',
-              )
-            : undefined,
+          nextProcessOpened === false
+            ? null
+            : payload.preliminaryReportDate !== undefined
+              ? this.parseOptionalIsoDateInput(
+                  payload.preliminaryReportDate,
+                  'preliminaryReportDate',
+                )
+              : undefined,
         procedureReference:
-          payload.procedureReference !== undefined
-            ? this.cleanOptional(payload.procedureReference)
-            : undefined,
+          nextProcessOpened === false
+            ? null
+            : payload.procedureReference !== undefined
+              ? this.cleanOptional(payload.procedureReference)
+              : undefined,
         procedureNotes:
-          payload.procedureNotes !== undefined
-            ? this.cleanOptional(payload.procedureNotes)
-            : undefined,
+          nextProcessOpened === false
+            ? null
+            : payload.procedureNotes !== undefined
+              ? this.cleanOptional(payload.procedureNotes)
+              : undefined,
         womenLedHandlingPrioritized: payload.womenLedHandlingPrioritized,
         victimAccusedSeparationEvaluated:
           payload.victimAccusedSeparationEvaluated,
@@ -3590,11 +3680,11 @@ export class CpcaService {
   private describeComplaintHistoryAction(action: string) {
     switch (action) {
       case 'create':
-        return 'Denúncia criada';
+        return 'Acolhimento criado';
       case 'update':
-        return 'Denúncia atualizada';
+        return 'Acolhimento atualizado';
       case 'delete':
-        return 'Denúncia excluída';
+        return 'Acolhimento excluído';
       case 'comment':
         return 'Comentário inserido';
       case 'cipavd_comment_create':
@@ -3638,7 +3728,7 @@ export class CpcaService {
     switch (action) {
       case 'comment':
       case 'cipavd_comment_create':
-        return 'Comentário registrado na denúncia.';
+        return 'Comentário registrado no acolhimento.';
       case 'cipavd_pendency_create':
         return 'Nova pendência registrada pela gestão.';
       case 'cipavd_pendency_resolve':
@@ -3646,9 +3736,9 @@ export class CpcaService {
       case 'cipavd_pendency_reopen':
         return 'Pendência reaberta pela gestão.';
       case 'cipavd_pendency_delete':
-        return 'Pendência removida da denúncia.';
+        return 'Pendência removida do acolhimento.';
       case 'validation':
-        return 'Denúncia validada pela comissão.';
+        return 'Acolhimento validado pela comissão.';
       default:
         return 'Movimentação registrada.';
     }
@@ -3932,7 +4022,7 @@ export class CpcaService {
       label:
         reason === 'PENDENCY_RESOLVED'
           ? 'Solução de pendência'
-          : 'Nova denúncia',
+          : 'Novo acolhimento',
     };
   }
 
@@ -4747,36 +4837,36 @@ export class CpcaService {
         created: {
           actorLabel: 'Registrada por',
           dateLabel: 'Registrada em',
-          heading: `Pendência registrada em denúncia ${workflowLabel}`,
+          heading: `Pendência registrada em acolhimento ${workflowLabel}`,
           badgeLabel: 'Pendência registrada',
-          intro: `A gestão nacional registrou uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
+          intro: `A gestão nacional registrou uma pendência em um acolhimento ${workflowLabel} vinculado à sua comissão.`,
           bodyText:
             'Este aviso indica que há uma pendência aberta para análise e resposta no sistema.',
         },
         updated: {
           actorLabel: 'Atualizada por',
           dateLabel: 'Atualizada em',
-          heading: `Pendência atualizada em denúncia ${workflowLabel}`,
+          heading: `Pendência atualizada em acolhimento ${workflowLabel}`,
           badgeLabel: 'Pendência atualizada',
-          intro: `A gestão nacional atualizou uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
+          intro: `A gestão nacional atualizou uma pendência em um acolhimento ${workflowLabel} vinculado à sua comissão.`,
           bodyText:
             'Este aviso indica que o texto da pendência foi ajustado e precisa ser observado no sistema.',
         },
         reopened: {
           actorLabel: 'Reaberta por',
           dateLabel: 'Reaberta em',
-          heading: `Pendência reaberta em denúncia ${workflowLabel}`,
+          heading: `Pendência reaberta em acolhimento ${workflowLabel}`,
           badgeLabel: 'Pendência reaberta',
-          intro: `A gestão nacional reabriu uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
+          intro: `A gestão nacional reabriu uma pendência em um acolhimento ${workflowLabel} vinculado à sua comissão.`,
           bodyText:
             'Este aviso indica que há nova análise pendente de resposta pela comissão no sistema.',
         },
         finalized: {
           actorLabel: 'Finalizada por',
           dateLabel: 'Finalizada em',
-          heading: `Pendência finalizada com sucesso em denúncia ${workflowLabel}`,
+          heading: `Pendência finalizada com sucesso em acolhimento ${workflowLabel}`,
           badgeLabel: 'Pendência finalizada',
-          intro: `A gestão nacional validou e finalizou uma pendência em uma denúncia ${workflowLabel} vinculada à sua comissão.`,
+          intro: `A gestão nacional validou e finalizou uma pendência em um acolhimento ${workflowLabel} vinculado à sua comissão.`,
           bodyText:
             'Este aviso confirma que a solução registrada pela comissão foi aceita e a pendência foi encerrada no sistema.',
         },
@@ -4809,7 +4899,7 @@ export class CpcaService {
       );
 
       const message = buildCpcaApprovalDecisionEmail({
-        requestTypeLabel: `Pendência em denúncia ${workflowLabel}`,
+        requestTypeLabel: `Pendência em acolhimento ${workflowLabel}`,
         recipientName: target.president.user.name,
         status: isFinalized ? 'APPROVED' : 'REJECTED',
         locality: target.complaintOm,
@@ -4821,17 +4911,17 @@ export class CpcaService {
         reasonLabel: isFinalized ? null : 'Texto da pendência',
         nextSteps: isFinalized
           ? [
-              `Acesse o menu Denúncias ${workflowLabel} no sistema se precisar consultar o histórico.`,
+              `Acesse o menu Acolhimentos ${workflowLabel} no sistema se precisar consultar o histórico.`,
               caseNumber
                 ? `Localize o caso ${caseNumber} e abra a área de pendências.`
-                : 'Abra a denúncia correspondente e consulte a área de pendências.',
+                : 'Abra o acolhimento correspondente e consulte a área de pendências.',
               'Mantenha o registro para consulta futura, se necessário.',
             ]
           : [
-              `Acesse o menu Denúncias ${workflowLabel} no sistema.`,
+              `Acesse o menu Acolhimentos ${workflowLabel} no sistema.`,
               caseNumber
                 ? `Localize o caso ${caseNumber} e abra a área de pendências.`
-                : 'Abra a denúncia correspondente e consulte a área de pendências.',
+                : 'Abra o acolhimento correspondente e consulte a área de pendências.',
               'Registre a resposta da comissão para que a gestão nacional possa validar a solução.',
             ],
         extraDetails: details,
@@ -4900,8 +4990,11 @@ export class CpcaService {
 
   private serializeComplaint(item: any) {
     const workflowScope = String(item?.workflowScope ?? 'CPCA');
+    const procedureType = String(item?.procedureType ?? 'NOT_DEFINED');
     return {
       ...item,
+      processOpened:
+        item?.processOpened ?? (procedureType !== 'NOT_DEFINED' ? true : null),
       status: syncWorkflowStatusWithProcedureSituation({
         status: item?.status,
         procedureCurrentSituation: item?.procedureCurrentSituation,
@@ -4965,6 +5058,21 @@ export class CpcaService {
     if (value === null) return null;
     const normalized = this.cleanText(value);
     return normalized || null;
+  }
+
+  private assertSelectableDetailedViolenceType(
+    value: string | null | undefined,
+  ) {
+    const normalized = this.cleanOptional(value);
+    if (
+      normalized &&
+      !CPCA_SELECTABLE_DETAILED_VIOLENCE_TYPE_SET.has(normalized)
+    ) {
+      throwError('VALIDATION_ERROR', {
+        field: 'detailedViolenceType',
+        reason: 'DETAILED_VIOLENCE_TYPE_NOT_SELECTABLE',
+      });
+    }
   }
 
   private async assertEvidenceSummaryPrivacy(args: {
@@ -5192,6 +5300,21 @@ export class CpcaService {
       throwError('VALIDATION_ERROR', {
         field: 'archiveReason',
         reason: 'ARCHIVE_REASON_REQUIRED_FOR_ARCHIVE',
+      });
+    }
+  }
+
+  private assertProcessOpeningConsistency(
+    processOpened: boolean | null | undefined,
+    processNotOpenedReason: string | null | undefined,
+  ) {
+    if (
+      processOpened === false &&
+      !this.cleanOptional(processNotOpenedReason)
+    ) {
+      throwError('VALIDATION_ERROR', {
+        field: 'processNotOpenedReason',
+        reason: 'PROCESS_NOT_OPENED_REASON_REQUIRED',
       });
     }
   }

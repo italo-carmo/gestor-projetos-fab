@@ -227,7 +227,7 @@ function formatDetachedOmSummary(payload: DeleteOmResponse | null | undefined) {
   if (!detached) return "";
   const labels: Array<[number | undefined, string]> = [
     [detached.users, "usuários"],
-    [detached.cpcaCases, "denúncias CPCA"],
+    [detached.cpcaCases, "acolhimentos CPCA"],
     [detached.cpcaCommissionPresidents, "presidências CPCA"],
     [detached.cpcaCommissionMembers, "membros de comissão"],
     [detached.cpcaPresidentRequests, "solicitações de presidente"],
@@ -1689,7 +1689,7 @@ export function OmsAdminPage() {
         <ConfirmDialog
           open={Boolean(deleteId)}
           title="Excluir OM"
-          message="A OM será removida do catálogo, mas os registros relacionados serão preservados. Usuários, denúncias e vínculos de comissão apenas perderão a associação com esta OM."
+          message="A OM será removida do catálogo, mas os registros relacionados serão preservados. Usuários, acolhimentos e vínculos de comissão apenas perderão a associação com esta OM."
           note="Esta ação não exclui os itens relacionados. Ela apenas desfaz os relacionamentos com a OM e remove a cobertura CPCA associada."
           severity="warning"
           confirmLabel="Excluir OM"

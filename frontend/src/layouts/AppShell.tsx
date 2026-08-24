@@ -192,7 +192,7 @@ const navSections: NavSection[] = [
         menuKey: "activities_smif",
       },
       {
-        label: "Denúncias",
+        label: "Acolhimentos",
         to: "/smif-complaints",
         icon: <PolicyRoundedIcon fontSize="small" />,
         menuKey: "smif_complaints",
@@ -288,7 +288,7 @@ const navSections: NavSection[] = [
     label: "CPCA",
     items: [
       {
-        label: "Denúncias",
+        label: "Acolhimentos",
         to: "/cpca-cases",
         icon: <PolicyRoundedIcon fontSize="small" />,
         menuKey: "cpca_cases",

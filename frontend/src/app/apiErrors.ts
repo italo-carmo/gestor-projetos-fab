@@ -11,6 +11,10 @@ const REASON_MESSAGES: Record<string, string> = {
     "Para assédio sexual, o Termo de Sigilo deve ser marcado na etapa 2 (Acolhimento e proteção) antes de salvar.",
   PRELIMINARY_REPORT_DATE_REQUIRES_FLAG:
     "Informe que o relatório preliminar foi gerado antes de definir a data.",
+  PROCESS_NOT_OPENED_REASON_REQUIRED:
+    "Justifique o motivo de não ter sido aberto um processo.",
+  DETAILED_VIOLENCE_TYPE_NOT_SELECTABLE:
+    "Selecione uma das opções disponíveis em Natureza do Relato.",
   SEPARATION_APPLIED_REQUIRES_EVALUATION:
     "Marque que a separação foi avaliada antes de aplicá-la.",
   CONTRACTOR_REFERRAL_REQUIRES_OUTSOURCED_FLAG:
@@ -18,7 +22,7 @@ const REASON_MESSAGES: Record<string, string> = {
   OUTCOME_SUMMARY_REQUIRED_FOR_CLOSURE:
     "Preencha o resumo do desfecho para concluir/arquivar o caso.",
   ARCHIVE_REASON_REQUIRED_FOR_ARCHIVE:
-    "Preencha o motivo do arquivamento antes de salvar a denúncia como arquivada.",
+    "Preencha o motivo do arquivamento antes de salvar o acolhimento como arquivado.",
   DEFENSE_CONFIRMATION_REQUIRED_FOR_CLOSURE:
     "Confirme que o direito de defesa do acusado foi assegurado antes de concluir/arquivar.",
   CPCA_NOT_ENABLED_FOR_LOCALITY:

@@ -55,6 +55,15 @@ export class UpdateCpcaCaseDto {
   procedureType?: (typeof CPCA_PROCEDURE_TYPES)[number];
 
   @IsOptional()
+  @IsBoolean()
+  processOpened?: boolean | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  processNotOpenedReason?: string;
+
+  @IsOptional()
   @IsISO8601()
   incidentDate?: string;
 

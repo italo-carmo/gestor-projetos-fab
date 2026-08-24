@@ -1160,7 +1160,7 @@ export function CpcaCommissionPage() {
                       }}
                     >
                       <Typography variant="caption" color="text.secondary">
-                        Denúncias
+                        Acolhimentos
                       </Typography>
                       <Typography
                         variant="body2"
@@ -1882,7 +1882,7 @@ export function CpcaCommissionPage() {
                 >
                   <Box>
                     <Typography variant="h6" fontWeight={800}>
-                      Pendências das denúncias
+                      Pendências dos acolhimentos
                     </Typography>
                     <Typography
                       variant="body2"
@@ -1923,7 +1923,7 @@ export function CpcaCommissionPage() {
                 {commissionOpenPendingItems.length === 0 &&
                 commissionResolvedPendingItems.length === 0 ? (
                   <Typography variant="body2" color="text.secondary">
-                    Nenhuma pendência de denúncia encontrada para a OM
+                    Nenhuma pendência de acolhimento encontrada para a OM
                     selecionada.
                   </Typography>
                 ) : (
@@ -1968,7 +1968,7 @@ export function CpcaCommissionPage() {
                                 )
                               }
                             >
-                              Abrir denúncia
+                              Abrir acolhimento
                             </Button>
                           </Stack>
                           <Typography variant="body2" color="text.secondary">
@@ -2039,7 +2039,7 @@ export function CpcaCommissionPage() {
                                       )
                                     }
                                   >
-                                    Revisar denúncia
+                                    Revisar acolhimento
                                   </Button>
                                 </Stack>
                                 <Typography

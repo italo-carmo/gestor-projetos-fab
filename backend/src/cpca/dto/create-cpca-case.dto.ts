@@ -67,6 +67,18 @@ export const CPCA_DETAILED_VIOLENCE_TYPES = [
   'VIOLACAO_SEXUAL_MEDIANTE_FRAUDE',
   'ESTUPRO',
 ] as const;
+export const CPCA_SELECTABLE_DETAILED_VIOLENCE_TYPES = [
+  'ASSEDIO_MORAL',
+  'ASSEDIO_SEXUAL',
+  'VIOLENCIA_DOMESTICA_FISICA',
+  'VIOLENCIA_DOMESTICA_PSICOLOGICA',
+  'VIOLENCIA_DOMESTICA_MORAL',
+  'VIOLENCIA_DOMESTICA_PATRIMONIAL',
+  'VIOLENCIA_DOMESTICA_SEXUAL',
+  'VIOLENCIA_DOMESTICA_VICARIA',
+  'IMPORTUNACAO_SEXUAL',
+  'DISCRIMINACAO',
+] as const;
 export const CPCA_HARASSMENT_CONTEXTS = ['PRESENCIAL', 'VIRTUAL'] as const;
 export const CPCA_OCCURRENCE_LOCATIONS = [
   'INTERIOR_OM',
@@ -198,6 +210,15 @@ export class CreateCpcaCaseDto {
   @IsOptional()
   @IsIn(CPCA_PROCEDURE_TYPES)
   procedureType?: (typeof CPCA_PROCEDURE_TYPES)[number];
+
+  @IsOptional()
+  @IsBoolean()
+  processOpened?: boolean | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  processNotOpenedReason?: string;
 
   @IsOptional()
   @IsISO8601()

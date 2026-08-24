@@ -78,6 +78,8 @@ function makeCurrentComplaint(overrides: Record<string, unknown> = {}) {
     confidentialityTermSigned: false,
     status: 'RECEIVED',
     procedureType: 'NOT_DEFINED',
+    processOpened: null,
+    processNotOpenedReason: null,
     procedureCurrentSituation: null,
     preliminaryReportGenerated: false,
     preliminaryReportDate: null,
@@ -111,6 +113,8 @@ function makePersistedComplaintFromCreate(
     notifierType: data.notifierType,
     status: data.status,
     procedureType: data.procedureType,
+    processOpened: data.processOpened ?? null,
+    processNotOpenedReason: data.processNotOpenedReason ?? null,
     procedureCurrentSituation: data.procedureCurrentSituation ?? null,
     reportedAt: data.reportedAt,
     incidentDate: data.incidentDate ?? null,
@@ -147,6 +151,14 @@ function makePersistedComplaintFromUpdate(
     notifierType: data.notifierType ?? extras.notifierType ?? 'VITIMA',
     status: data.status ?? extras.status ?? 'RECEIVED',
     procedureType: data.procedureType ?? extras.procedureType ?? 'NOT_DEFINED',
+    processOpened:
+      data.processOpened !== undefined
+        ? data.processOpened
+        : (extras.processOpened ?? null),
+    processNotOpenedReason:
+      data.processNotOpenedReason !== undefined
+        ? data.processNotOpenedReason
+        : (extras.processNotOpenedReason ?? null),
     procedureCurrentSituation:
       data.procedureCurrentSituation ??
       extras.procedureCurrentSituation ??
@@ -483,6 +495,117 @@ describe('CpcaService case mutations', () => {
     expect(prisma.cpcComplaintCase.create).not.toHaveBeenCalled();
   });
 
+  it('exige justificativa quando o processo não foi aberto', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+
+    prisma.om.findUnique.mockResolvedValue({ id: 'om-1', code: 'BACG' });
+    jest
+      .spyOn(service as any, 'getScopeConstraints')
+      .mockReturnValue({ localityId: 'om-1' });
+    jest
+      .spyOn(service as any, 'resolveTargetLocalityId')
+      .mockResolvedValue('om-1');
+    jest
+      .spyOn(service as any, 'resolveCpcaManagerLocalityCode')
+      .mockResolvedValue('BACG');
+    jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+
+    await expectReason(
+      service.create(
+        {
+          complaintType: 'MORAL',
+          aggressorRank: '1S',
+          aggressorGender: 'MASCULINO',
+          victimRank: '2S',
+          victimGender: 'FEMININO',
+          processOpened: false,
+          processNotOpenedReason: '   ',
+        } as any,
+        makeUser() as any,
+      ),
+      'PROCESS_NOT_OPENED_REASON_REQUIRED',
+    );
+
+    expect(prisma.cpcComplaintCase.create).not.toHaveBeenCalled();
+  });
+
+  it('rejeita natureza do relato legada em um novo acolhimento', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+
+    await expectReason(
+      service.create(
+        {
+          complaintType: 'MORAL',
+          aggressorRank: '1S',
+          aggressorGender: 'MASCULINO',
+          victimRank: '2S',
+          victimGender: 'FEMININO',
+          detailedViolenceType: 'INJURIA',
+        } as any,
+        makeUser() as any,
+      ),
+      'DETAILED_VIOLENCE_TYPE_NOT_SELECTABLE',
+    );
+
+    expect(prisma.cpcComplaintCase.create).not.toHaveBeenCalled();
+  });
+
+  it('preserva natureza do relato legada quando o registro antigo é editado', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue(
+      makeCurrentComplaint({ detailedViolenceType: 'INJURIA' }),
+    );
+    prisma.cpcComplaintCase.update.mockImplementation(async ({ data }: any) =>
+      makePersistedComplaintFromUpdate(data, {
+        detailedViolenceType: 'INJURIA',
+      }),
+    );
+
+    jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+    jest.spyOn(service as any, 'assertCaseAccess').mockResolvedValue(undefined);
+
+    await service.update(
+      'case-1',
+      { detailedViolenceType: 'INJURIA' } as any,
+      makeUser() as any,
+    );
+
+    expect(
+      prisma.cpcComplaintCase.update.mock.calls[0]?.[0]?.data
+        ?.detailedViolenceType,
+    ).toBe('INJURIA');
+  });
+
+  it('impede trocar um registro antigo para outra natureza legada', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue(
+      makeCurrentComplaint({ detailedViolenceType: 'INJURIA' }),
+    );
+    jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+    jest.spyOn(service as any, 'assertCaseAccess').mockResolvedValue(undefined);
+
+    await expectReason(
+      service.update(
+        'case-1',
+        { detailedViolenceType: 'CALUNIA' } as any,
+        makeUser() as any,
+      ),
+      'DETAILED_VIOLENCE_TYPE_NOT_SELECTABLE',
+    );
+
+    expect(prisma.cpcComplaintCase.update).not.toHaveBeenCalled();
+  });
+
   it('atualiza denúncia sem transição de status e sem criar novo histórico', async () => {
     const prisma = createPrismaMock();
     const audit = createAuditMock();
@@ -545,6 +668,56 @@ describe('CpcaService case mutations', () => {
         code: 'BASP',
         name: 'Base Aérea de São Paulo',
       },
+    });
+  });
+
+  it('limpa os dados processuais ao registrar que não abriu processo', async () => {
+    const prisma = createPrismaMock();
+    const audit = createAuditMock();
+    const service = new CpcaService(prisma, audit as any);
+
+    prisma.cpcComplaintCase.findUnique.mockResolvedValue(
+      makeCurrentComplaint({
+        status: 'INVESTIGATION',
+        processOpened: true,
+        procedureType: 'SINDICANCIA',
+        procedureCurrentSituation: 'EM_ANDAMENTO',
+        procedureReference: 'REF-123',
+        procedureNotes: 'Dados anteriores.',
+        preliminaryReportGenerated: true,
+        preliminaryReportDate: new Date('2026-08-01T12:00:00.000Z'),
+      }),
+    );
+    prisma.cpcComplaintCase.update.mockImplementation(async ({ data }: any) =>
+      makePersistedComplaintFromUpdate(data, {
+        status: 'INVESTIGATION',
+      }),
+    );
+
+    jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+    jest.spyOn(service as any, 'assertCaseAccess').mockResolvedValue(undefined);
+
+    await service.update(
+      'case-1',
+      {
+        processOpened: false,
+        processNotOpenedReason:
+          'A análise preliminar não identificou elementos para instauração.',
+      } as any,
+      makeUser() as any,
+    );
+
+    const updateData = prisma.cpcComplaintCase.update.mock.calls[0]?.[0]?.data;
+    expect(updateData).toMatchObject({
+      processOpened: false,
+      processNotOpenedReason:
+        'A análise preliminar não identificou elementos para instauração.',
+      procedureType: 'NOT_DEFINED',
+      procedureCurrentSituation: null,
+      procedureReference: null,
+      procedureNotes: null,
+      preliminaryReportGenerated: false,
+      preliminaryReportDate: null,
     });
   });
 

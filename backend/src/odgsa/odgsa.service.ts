@@ -442,7 +442,7 @@ export class OdgsaService {
   }
 
   private buildRoleDescription(code: string, name: string) {
-    return `Acompanhamento somente leitura das denúncias CPCA das OMs vinculadas ao ODGSA ${code} - ${name}`;
+    return `Acompanhamento somente leitura dos acolhimentos CPCA das OMs vinculadas ao ODGSA ${code} - ${name}`;
   }
 
   private rethrowKnownConstraint(error: unknown, reason: string): never {

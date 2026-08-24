@@ -255,7 +255,7 @@ export function OdgsaAdminPage() {
                     <TableCell>
                       <Typography variant="body2">{item.role.name}</Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Somente leitura das denúncias e indicadores
+                        Somente leitura dos acolhimentos e indicadores
                       </Typography>
                     </TableCell>
                     <TableCell align="center">{item.usersCount}</TableCell>

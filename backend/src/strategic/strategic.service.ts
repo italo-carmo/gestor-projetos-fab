@@ -1513,7 +1513,7 @@ export class StrategicService {
         }
         if (complaintsStats.openCases > 0) {
           rankingReasons.push(
-            `${complaintsStats.openCases} denúncia(s) formal(is) aberta(s)`,
+            `${complaintsStats.openCases} acolhimento(s) formal(is) aberto(s)`,
           );
         }
         if (complaintsStats.retaliationCases > 0) {
@@ -1532,7 +1532,7 @@ export class StrategicService {
           );
         } else if (researchTotal === 0 && complaintsStats.totalCases > 0) {
           rankingReasons.push(
-            'há denúncia formal, mas não há pesquisa normalizada para comparação nesta OM',
+            'há acolhimento formal, mas não há pesquisa normalizada para comparação nesta OM',
           );
         } else if (researchTotal > 0 && researchTotal < 10) {
           rankingReasons.push(
@@ -1832,7 +1832,7 @@ export class StrategicService {
       }
       if (item.complaints?.openCases > 0) {
         rankingReasons.push(
-          `${item.complaints.openCases} denúncia(s) formal(is) aberta(s)`,
+          `${item.complaints.openCases} acolhimento(s) formal(is) aberto(s)`,
         );
       }
       if (item.underreport?.eligible && item.underreport?.percent >= 40) {
@@ -1844,7 +1844,7 @@ export class StrategicService {
         Number(item.underreport?.researchTotal ?? 0) === 0
       ) {
         rankingReasons.push(
-          'há denúncia formal na UF, mas não há pesquisa normalizada para comparação',
+          'há acolhimento formal na UF, mas não há pesquisa normalizada para comparação',
         );
       } else if (
         Number(item.underreport?.researchTotal ?? 0) > 0 &&
@@ -2731,7 +2731,7 @@ export class StrategicService {
       );
       return {
         id: id || `aggressor-${caseNumber || 'case'}`,
-        title: caseNumber ? `Denúncia ${caseNumber}` : 'Denúncia',
+        title: caseNumber ? `Acolhimento ${caseNumber}` : 'Acolhimento',
         subtitle: [
           scope,
           String(row?.complaintType ?? '').trim()
@@ -3390,7 +3390,7 @@ export class StrategicService {
           const date = fmtDate(item?.reportedAt);
           pushRef(
             `complaint-${item?.id ?? caseNumber}`,
-            `Denúncia ${caseNumber}`,
+            `Acolhimento ${caseNumber}`,
             href,
             [workflow, status, date].filter(Boolean).join(' • '),
           );
@@ -3551,7 +3551,7 @@ export class StrategicService {
     const system =
       'Você é analista institucional da FAB (CIPAVD/SMIF). ' +
       'Responda em português do Brasil, tom técnico e objetivo, sem inventar números que não constem no JSON. ' +
-      'Estruture em 3 a 5 parágrafos curtos: síntese situacional, riscos/padrões nas denúncias (se houver casos), ' +
+      'Estruture em 3 a 5 parágrafos curtos: síntese situacional, riscos/padrões nos acolhimentos (se houver casos), ' +
       'destaques da análise textual e distribuição geográfica quando relevante.';
 
     try {
@@ -3773,7 +3773,7 @@ export class StrategicService {
         kw,
         44,
         String(dashboard.complaints.totalCases),
-        'Denúncias Registradas',
+        'Acolhimentos Registrados',
         RED,
       );
       kpiBox(
@@ -3953,9 +3953,9 @@ export class StrategicService {
 
       doc.y = actY + 82;
 
-      // ======================== 4. DENÚNCIAS ========================
+      // ======================== 4. ACOLHIMENTOS ========================
       ensureSpace(100);
-      sectionHeader('04', 'PANORAMA DE DENÚNCIAS');
+      sectionHeader('04', 'PANORAMA DE ACOLHIMENTOS');
       doc.moveDown(0.3);
 
       const compY = doc.y;
@@ -3973,7 +3973,7 @@ export class StrategicService {
       doc
         .fontSize(7)
         .fillColor(GRAY)
-        .text('Total de denúncias', LEFT + 8, compY + 32, {
+        .text('Total de acolhimentos', LEFT + 8, compY + 32, {
           width: thirdW - 16,
           align: 'center',
         });
@@ -4408,7 +4408,7 @@ export class StrategicService {
             .fontSize(7)
             .fillColor(GRAY)
             .text(
-              `Destaques por UF — Denúncias: ${topByComplaints?.uf ?? '-'} (${topByComplaints?.complaints ?? 0}) | ` +
+              `Destaques por UF — Acolhimentos: ${topByComplaints?.uf ?? '-'} (${topByComplaints?.complaints ?? 0}) | ` +
                 `Pressão: ${topByPressure?.uf ?? '-'} (${Number(topByPressure?.pressureScore ?? 0).toFixed(1)}) | ` +
                 `Atividades: ${topByActivities?.uf ?? '-'} (${topByActivities?.activities ?? 0}) | ` +
                 `Missões: ${topByMissions?.uf ?? '-'} (${topByMissions?.missions ?? 0}) como cobertura inicial.`,
@@ -4892,7 +4892,7 @@ export class StrategicService {
             : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`;
         return {
           id: id || `complaint-${caseNumber}`,
-          title: caseNumber ? `Denúncia ${caseNumber}` : 'Denúncia',
+          title: caseNumber ? `Acolhimento ${caseNumber}` : 'Acolhimento',
           subtitle: [scope, String(row?.locality?.name ?? '').trim()]
             .filter(Boolean)
             .join(' • '),

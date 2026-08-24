@@ -608,25 +608,25 @@ export function CpcaStatsPage() {
     monthly: "Detalhe da evolução mensal",
     procedure: "Detalhe por procedimento",
     openAging: "Detalhe de envelhecimento dos abertos",
-    violenceType: "Detalhe por tipo de assédio/violência",
+    violenceType: "Detalhe por Natureza do Relato",
     aggressorAge: "Detalhe de faixa etária do acusado",
     victimAge: "Detalhe de faixa etária da vítima/noticiante",
   };
   const chartDetailMeaningByKind: Record<CpcaChartDetailKind, string> = {
     status:
-      "Este item simboliza quantas denúncias estão neste status dentro do período e filtros atuais.",
+      "Este item simboliza quantos acolhimentos estão neste status dentro do período e filtros atuais.",
     monthly:
       "Este item simboliza o comportamento mensal de entradas e estoque de casos em aberto.",
     procedure:
-      "Este item simboliza quantas denúncias tiveram este procedimento instaurado no período.",
+      "Este item simboliza quantos acolhimentos tiveram este procedimento instaurado no período.",
     openAging:
       "Este item simboliza a concentração de casos ainda abertos por faixa de tempo em aberto.",
     violenceType:
-      "Este item simboliza a incidência de cada tipo específico de assédio/violência no recorte atual.",
+      "Este item simboliza a incidência de cada Natureza do Relato no recorte atual.",
     aggressorAge:
-      "Este item simboliza quantas denúncias possuem acusado nesta faixa etária no recorte atual.",
+      "Este item simboliza quantos acolhimentos possuem acusado nesta faixa etária no recorte atual.",
     victimAge:
-      "Este item simboliza quantas denúncias possuem vítima/noticiante nesta faixa etária no recorte atual.",
+      "Este item simboliza quantos acolhimentos possuem vítima/noticiante nesta faixa etária no recorte atual.",
   };
   const chartDetailLabel =
     chartDetail?.item?.label ??
@@ -706,12 +706,12 @@ export function CpcaStatsPage() {
             Painel de Comando - CPCA
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Indicadores de denúncias, risco, tempo de resposta e priorização por
+            Indicadores de acolhimentos, risco, tempo de resposta e priorização por
             OM para apoio ao comando.
           </Typography>
         </Box>
         <Button component={Link} to="/cpca-cases" variant="outlined">
-          Abrir denúncias
+          Abrir acolhimentos
         </Button>
       </Box>
 
@@ -1366,7 +1366,7 @@ export function CpcaStatsPage() {
                     mb={1}
                   >
                     <Typography variant="h6" sx={{ color: style.textColor }}>
-                      Distribuição por tipo de assédio ou violência
+                      Distribuição por Natureza do Relato
                     </Typography>
                     {isTiProfile ? (
                       <Tooltip title="Editar cores do card">
@@ -1874,7 +1874,7 @@ export function CpcaStatsPage() {
                           openKpiCase(String(item.caseNumber ?? ""))
                         }
                       >
-                        Abrir denúncia
+                        Abrir acolhimento
                       </Button>
                     </Stack>
                   </CardContent>
@@ -1885,7 +1885,7 @@ export function CpcaStatsPage() {
         </DialogContent>
         <DialogActions>
           <Button variant="outlined" onClick={openCpcaCasesPanel}>
-            Abrir painel de denúncias
+            Abrir painel de acolhimentos
           </Button>
           <Button onClick={() => setKpiDetail(null)}>Fechar</Button>
         </DialogActions>
@@ -1978,7 +1978,7 @@ export function CpcaStatsPage() {
                             size="small"
                             variant="text"
                           >
-                            Abrir denúncia
+                            Abrir acolhimento
                           </Button>
                         </Stack>
                       </CardContent>
@@ -1992,7 +1992,7 @@ export function CpcaStatsPage() {
         <DialogActions>
           {canFilterOpenCases ? (
             <Button variant="outlined" onClick={openCpcaCasesFromDetail}>
-              Abrir denúncias filtradas
+              Abrir acolhimentos filtrados
             </Button>
           ) : null}
           <Button onClick={() => setChartDetail(null)}>Fechar</Button>

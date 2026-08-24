@@ -1844,7 +1844,7 @@ export class AiAssistantService {
           value: 'STRATEGIC',
           label: 'Relatório estratégico',
           description:
-            'Cruza pesquisas, denúncias, missões, atividades e dados executivos para visão gerencial.',
+            'Cruza pesquisas, acolhimentos, missões, atividades e dados executivos para visão gerencial.',
         },
         {
           value: 'OPERATIONAL',
@@ -1874,8 +1874,8 @@ export class AiAssistantService {
               { value: 'MISSION_SCHEDULE', label: 'Cronograma da missão' },
               { value: 'ACTIVITIES', label: 'Atividades executadas' },
               { value: 'TASKS', label: 'Tarefas e pendências' },
-              { value: 'CPCA_CASES', label: 'Denúncias CPCA' },
-              { value: 'SMIF_CASES', label: 'Denúncias SMIF' },
+              { value: 'CPCA_CASES', label: 'Acolhimentos CPCA' },
+              { value: 'SMIF_CASES', label: 'Acolhimentos SMIF' },
               { value: 'RECOMMENDATIONS', label: 'Recomendações' },
             ]
           : [
@@ -1885,8 +1885,8 @@ export class AiAssistantService {
                 value: 'SURVEY_DOMESTIC',
                 label: 'Pesquisa de violência doméstica',
               },
-              { value: 'CPCA_CASES', label: 'Denúncias CPCA' },
-              { value: 'SMIF_CASES', label: 'Denúncias SMIF' },
+              { value: 'CPCA_CASES', label: 'Acolhimentos CPCA' },
+              { value: 'SMIF_CASES', label: 'Acolhimentos SMIF' },
               { value: 'MISSION_OVERVIEW', label: 'Missões' },
               { value: 'ACTIVITIES', label: 'Atividades' },
               { value: 'TASKS', label: 'Tarefas' },

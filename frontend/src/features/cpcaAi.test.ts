@@ -39,7 +39,7 @@ describe("cpcaAi helpers", () => {
       ],
     });
 
-    expect(summary.sourceLabels).toEqual(["Denúncias CPCA", "Tarefas"]);
+    expect(summary.sourceLabels).toEqual(["Acolhimentos CPCA", "Tarefas"]);
     expect(summary.featureLabels).toContain("Inconsistências CPCA");
     expect(summary.knowledgeBaseLabels).toEqual(["Base CPCA", "ICA 30-13"]);
     expect(summary.counts).toEqual({

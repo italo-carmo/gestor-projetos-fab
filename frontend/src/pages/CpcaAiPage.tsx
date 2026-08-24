@@ -215,7 +215,7 @@ export function CpcaAiPage() {
       setInput("");
       setRunning(true);
       setStatusText(
-        "Carregando contexto CPCA, denúncias e bases documentais...",
+        "Carregando contexto CPCA, acolhimentos e bases documentais...",
       );
 
       let partialText = "";
@@ -383,9 +383,9 @@ export function CpcaAiPage() {
     <Stack spacing={2.5}>
       <StrategicTabGuideCard
         title="IA CPCA especializada"
-        description="Conversa dedicada para denúncias CPCA, workflow, inconsistências, leitura normativa, bases documentais e produção de briefings ou relatórios com rastreabilidade."
+        description="Conversa dedicada para acolhimentos CPCA, workflow, inconsistências, leitura normativa, bases documentais e produção de briefings ou relatórios com rastreabilidade."
         questions={[
-          "Como esta tela cruza denúncias CPCA, features habilitadas, fontes estruturadas e bases documentais liberadas para o perfil.",
+          "Como esta tela cruza acolhimentos CPCA, features habilitadas, fontes estruturadas e bases documentais liberadas para o perfil.",
           "Quais análises a IA consegue entregar aqui, como inconsistências, leitura de workflow, interpretação normativa e respostas executivas.",
           "Onde visualizar o contexto ativo do perfil, usar prompts rápidos e exportar a resposta final em PDF quando a análise estiver pronta.",
         ]}
@@ -432,7 +432,7 @@ export function CpcaAiPage() {
                       IA CPCA
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Conversa especializada para analisar denúncias, apontar
+                      Conversa especializada para analisar acolhimentos, apontar
                       inconsistências e consolidar respostas e relatórios.
                     </Typography>
                   </Box>
@@ -670,7 +670,7 @@ export function CpcaAiPage() {
                     color="text.secondary"
                     sx={{ maxWidth: 640, mx: "auto", mt: 1, lineHeight: 1.75 }}
                   >
-                    Use esta IA para analisar denúncias CPCA, cruzar o workflow
+                    Use esta IA para analisar acolhimentos CPCA, cruzar o workflow
                     com a base normativa e produzir relatórios com
                     rastreabilidade.
                   </Typography>
@@ -814,7 +814,7 @@ export function CpcaAiPage() {
                 fullWidth
                 size="small"
                 label="Pergunta"
-                placeholder="Ex.: Aponte inconsistências normativas nas denúncias CPCA abertas."
+                placeholder="Ex.: Aponte inconsistências normativas nos acolhimentos CPCA abertos."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -846,7 +846,7 @@ export function CpcaAiPage() {
                   href="/cpca-cases"
                   startIcon={<PolicyRoundedIcon />}
                 >
-                  Abrir denúncias CPCA
+                  Abrir acolhimentos CPCA
                 </Button>
               </Stack>
             </Stack>

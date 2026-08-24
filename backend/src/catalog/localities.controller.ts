@@ -1118,7 +1118,7 @@ export class LocalitiesController {
         count: checklistStatuses,
       },
       { key: 'kpiValues', label: 'KPIs históricos', count: kpiValues },
-      { key: 'cpcaCases', label: 'Denúncias CPCA', count: cpcaCases },
+      { key: 'cpcaCases', label: 'Acolhimentos CPCA', count: cpcaCases },
       {
         key: 'recruitAssignmentsFrom',
         label: 'Designações de recrutas de origem',
@@ -1154,7 +1154,7 @@ export class LocalitiesController {
         label: 'Destaques de comunicação social',
         count: socialCommunicationHighlights,
       },
-      { key: 'smifComplaints', label: 'Denúncias SMIF', count: smifComplaints },
+      { key: 'smifComplaints', label: 'Acolhimentos SMIF', count: smifComplaints },
     ].filter((item) => item.count > 0);
   }
 

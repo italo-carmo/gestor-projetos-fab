@@ -1781,6 +1781,8 @@ model CpcComplaintCase {
   notifierType                     CpcNotifierType           @default(VITIMA)
   status                           CpcComplaintStatus        @default(RECEIVED)
   procedureType                    CpcProcedureType          @default(NOT_DEFINED)
+  processOpened                    Boolean?
+  processNotOpenedReason           String?
   incidentDate                     DateTime?
   reportedAt                       DateTime                  @default(now())
   aggressorRank                    String

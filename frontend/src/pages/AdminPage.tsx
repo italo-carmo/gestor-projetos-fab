@@ -183,13 +183,13 @@ const ANALYSIS_SOURCE_CATALOG: Array<{
   },
   {
     id: 'complaints_cpca',
-    label: 'Denúncias CPCA',
-    description: 'Casos e andamento de denúncias CPCA.',
+    label: 'Acolhimentos CPCA',
+    description: 'Casos e andamento de acolhimentos CPCA.',
   },
   {
     id: 'complaints_smif',
-    label: 'Denúncias SMIF',
-    description: 'Casos e andamento de denúncias SMIF.',
+    label: 'Acolhimentos SMIF',
+    description: 'Casos e andamento de acolhimentos SMIF.',
   },
 ];
 
@@ -202,13 +202,13 @@ const AI_PROFILE_FEATURE_CATALOG: Array<{
     id: 'structured_situational',
     label: 'Panorama situacional',
     description:
-      'Libera panorama estruturado com pesquisas, denúncias, missões, atividades e tarefas.',
+      'Libera panorama estruturado com pesquisas, acolhimentos, missões, atividades e tarefas.',
   },
   {
     id: 'structured_complaints',
-    label: 'Perfis de denúncias',
+    label: 'Perfis de acolhimentos',
     description:
-      'Libera perfil de agressor, vítima, relações hierárquicas e estatísticas de denúncias.',
+      'Libera perfil de agressor, vítima, relações hierárquicas e estatísticas de acolhimentos.',
   },
   {
     id: 'structured_text',
@@ -249,7 +249,7 @@ const AI_PROFILE_FEATURE_CATALOG: Array<{
     id: 'cpca_case_inconsistencies',
     label: 'Inconsistências CPCA',
     description:
-      'Libera a camada analítica de inconsistências cadastrais, cronológicas e normativas nas denúncias CPCA.',
+      'Libera a camada analítica de inconsistências cadastrais, cronológicas e normativas nos acolhimentos CPCA.',
   },
   {
     id: 'comgep_room',
@@ -1826,7 +1826,7 @@ const ANALYSIS_PROMPTS_CONFIG: {
     label: 'Resumo Executivo Completo',
     short: 'Panorama completo para o comando.',
     placeholder:
-      'Redija um resumo executivo completo para o comando, abordando panorama situacional, perfil de denúncias, destaques textuais e distribuição geográfica.',
+      'Redija um resumo executivo completo para o comando, abordando panorama situacional, perfil de acolhimentos, destaques textuais e distribuição geográfica.',
     accent: '#1A3C6E',
     icon: <AutoAwesomeRoundedIcon sx={{ fontSize: 28 }} />,
   },
@@ -1834,9 +1834,9 @@ const ANALYSIS_PROMPTS_CONFIG: {
     type: 'situational',
     group: 'ia',
     label: 'Análise Situacional',
-    short: 'Pesquisas, denúncias, atividades e missões.',
+    short: 'Pesquisas, acolhimentos, atividades e missões.',
     placeholder:
-      'Analise o panorama situacional: pesquisas, taxas de violência, denúncias ativas, atividades e missões.',
+      'Analise o panorama situacional: pesquisas, taxas de violência, acolhimentos ativos, atividades e missões.',
     accent: '#2E7D32',
     icon: <DashboardRoundedIcon sx={{ fontSize: 28 }} />,
   },
@@ -1866,7 +1866,7 @@ const ANALYSIS_PROMPTS_CONFIG: {
     label: 'Distribuição Geográfica',
     short: 'Concentração por estado e localidade.',
     placeholder:
-      'Analise a distribuição geográfica: estados com mais registros, concentração de denúncias, atividades e missões por região.',
+      'Analise a distribuição geográfica: estados com mais registros, concentração de acolhimentos, atividades e missões por região.',
     accent: '#ED6C02',
     icon: <MapRoundedIcon sx={{ fontSize: 28 }} />,
   },
@@ -1884,9 +1884,9 @@ const ANALYSIS_PROMPTS_CONFIG: {
     type: 'cpca_agent',
     group: 'chatbot',
     label: 'IA CPCA',
-    short: 'Denúncias CPCA, inconsistências, relatórios e base normativa.',
+    short: 'Acolhimentos CPCA, inconsistências, relatórios e base normativa.',
     placeholder:
-      'Responda como a IA analítica da CPCA, com foco em denúncias CPCA, workflow, inconsistências cadastrais e procedimentais, aderência normativa, risco institucional e relatórios executivos com rastreabilidade por caso e OM.',
+      'Responda como a IA analítica da CPCA, com foco em acolhimentos CPCA, workflow, inconsistências cadastrais e procedimentais, aderência normativa, risco institucional e relatórios executivos com rastreabilidade por caso e OM.',
     accent: '#8B1E3F',
     icon: <ShieldRoundedIcon sx={{ fontSize: 28 }} />,
   },

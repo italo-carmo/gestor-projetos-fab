@@ -140,14 +140,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Fluxos de missao, participantes, agenda e checklist.",
     route: "/missions",
     sidebarItems: ["Missoes"],
-    expectedActions: [
-      "view",
-      "create",
-      "update",
-      "delete",
-      "upload",
-      "download",
-    ],
+    expectedActions: ["view", "create", "update", "delete", "upload", "download"],
   },
   reports: {
     menu: "Operacoes",
@@ -165,7 +158,14 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     description: "Relatórios restritos com PDFs, DOCX e documentos online.",
     route: "/cipavd-reports",
     sidebarItems: ["Relatórios"],
-    expectedActions: ["view", "create", "update", "delete", "upload", "download"],
+    expectedActions: [
+      "view",
+      "create",
+      "update",
+      "delete",
+      "upload",
+      "download",
+    ],
   },
   notices: {
     menu: "Comunicacao",
@@ -247,7 +247,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
       "Abertura de casos, operação da comissão CPCA e fluxo de homologações.",
     route: "/cpca-cases",
     routeAliases: ["/cpca-commission", "/cpca-president-approvals"],
-    sidebarItems: ["Denúncias", "Comissão CPCA", "Homologações CPCA"],
+    sidebarItems: ["Acolhimentos", "Comissão CPCA", "Homologações CPCA"],
     expectedActions: CRUD_COMMENT,
   },
   cpca_checklist: {
@@ -264,7 +264,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     menu: "CPCA",
     menuOrder: 60,
     title: "Dashboard CPCA",
-    description: "Visualização do painel analítico de denúncias CPCA.",
+    description: "Visualização do painel analítico de acolhimentos CPCA.",
     route: "/dashboard/cpca",
     routeAliases: ["/cpca-stats"],
     sidebarItems: ["CPCA"],
@@ -304,10 +304,10 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
   smif_complaints: {
     menu: "CPCA",
     menuOrder: 60,
-    title: "Denuncias SMIF",
-    description: "Gestao de denuncias SMIF e seu fluxo de tratativa.",
+    title: "Acolhimentos SMIF",
+    description: "Gestao de acolhimentos SMIF e seu fluxo de tratativa.",
     route: "/smif-complaints",
-    sidebarItems: ["Denuncias"],
+    sidebarItems: ["Acolhimentos"],
     expectedActions: CRUD_COMMENT,
   },
   elos: {

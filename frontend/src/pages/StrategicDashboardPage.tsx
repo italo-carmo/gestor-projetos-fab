@@ -1081,7 +1081,7 @@ function SituationalTab() {
   const complaintMetrics = [
     {
       key: "total",
-      label: "Total de denúncias/casos",
+      label: "Total de acolhimentos/casos",
       value: Number(c.totalCases ?? 0),
       items: Array.isArray(complaintDetails.total)
         ? complaintDetails.total
@@ -1271,14 +1271,14 @@ function SituationalTab() {
   ];
   const institutionalResponse = [
     {
-      title: "Denúncias CPCA em tratamento",
+      title: "Acolhimentos CPCA em tratamento",
       value: `${c.openByCpca ?? 0}`,
-      helper: `CPCA total ${c.byCpca ?? 0} • fonte: denúncias formais CPCA`,
+      helper: `CPCA total ${c.byCpca ?? 0} • fonte: acolhimentos formais CPCA`,
       color: "#1A3C6E",
       detail: "complaints",
     },
     {
-      title: "Denúncias SMIF em tratamento",
+      title: "Acolhimentos SMIF em tratamento",
       value: `${c.openBySmif ?? 0}`,
       helper: `SMIF total ${c.bySmif ?? 0} • fluxo separado de CPCA`,
       color: "#7B1FA2",
@@ -1337,8 +1337,8 @@ function SituationalTab() {
     Number(cross.complaintOmsWithoutResearch ?? 0) > 0
       ? {
           id: "cross-source-gap",
-          title: "Há denúncias sem pesquisa comparável",
-          description: `${cross.complaintOmsWithoutResearch ?? 0} OM(s) têm denúncia formal, mas não têm pesquisa normalizada na mesma OM. O cruzamento deve usar UF ou ficar marcado como lacuna.`,
+          title: "Há acolhimentos sem pesquisa comparável",
+          description: `${cross.complaintOmsWithoutResearch ?? 0} OM(s) têm acolhimento formal, mas não têm pesquisa normalizada na mesma OM. O cruzamento deve usar UF ou ficar marcado como lacuna.`,
           detail: "complaints",
         }
       : null,
@@ -1597,8 +1597,8 @@ function SituationalTab() {
             />
             <DetailMeaningBlock
               title="O que este número significa"
-              meaning="Este bloco consolida denúncias formais registradas no sistema, separando CPCA e SMIF. Ele mede carga real de tratamento institucional; é diferente das pesquisas autorreferidas, que medem prevalência percebida nos públicos pesquisados."
-              source="Fonte: registros de denúncias do sistema, com origem nos módulos CPCA e SMIF."
+              meaning="Este bloco consolida acolhimentos formais registrados no sistema, separando CPCA e SMIF. Ele mede carga real de tratamento institucional; é diferente das pesquisas autorreferidas, que medem prevalência percebida nos públicos pesquisados."
+              source="Fonte: registros de acolhimentos do sistema, com origem nos módulos CPCA e SMIF."
             />
             <DetailAccordionSection
               title="Leitura executiva"
@@ -1623,7 +1623,7 @@ function SituationalTab() {
                   />
                 ))}
                 <DetailRow
-                  label="OMs com denúncia sem pesquisa na mesma OM"
+                  label="OMs com acolhimento sem pesquisa na mesma OM"
                   value={cross.complaintOmsWithoutResearch ?? 0}
                   color="#4E342E"
                 />
@@ -1812,7 +1812,7 @@ function SituationalTab() {
     surveys: "Detalhamento — Pesquisa de Escolas",
     domesticViolence: "Detalhamento — Violência Doméstica no Efetivo Feminino",
     recruits: "Detalhamento — Pesquisa com Recrutas",
-    complaints: "Detalhamento — Denúncias/Casos",
+    complaints: "Detalhamento — Acolhimentos/Casos",
     activities: "Detalhamento — Atividades de Campo",
     missions: "Detalhamento — Missões Realizadas",
   };
@@ -1823,7 +1823,7 @@ function SituationalTab() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Denúncias CPCA abertas"
+            title="Acolhimentos CPCA abertos"
             value={c.openByCpca ?? 0}
             subtitle={`CPCA total ${c.byCpca ?? 0} • SMIF abertos ${c.openBySmif ?? 0}`}
             color="#1A3C6E"
@@ -1852,7 +1852,7 @@ function SituationalTab() {
           <KpiCard
             title="Lacuna de cruzamento"
             value={cross.complaintOmsWithoutResearch ?? 0}
-            subtitle="OMs com denúncia formal sem pesquisa na mesma OM"
+            subtitle="OMs com acolhimento formal sem pesquisa na mesma OM"
             color="#4E342E"
             onClick={() => setDetailModal("complaints")}
           />
@@ -1961,7 +1961,7 @@ function SituationalTab() {
                 color="text.secondary"
                 sx={{ mb: 1.5 }}
               >
-                Denúncias formais e atuação registrada. Missões aparecem como
+                Acolhimentos formais e atuação registrada. Missões aparecem como
                 cobertura inicial, não como projeção estatística.
               </Typography>
               <Stack spacing={1.2}>
@@ -2015,7 +2015,7 @@ function SituationalTab() {
                   variant="outlined"
                   onClick={() => setDetailModal("complaints")}
                 >
-                  Denúncias
+                  Acolhimentos
                 </Button>
                 <Button
                   size="small"
@@ -2217,8 +2217,8 @@ function AggressorProfileTab() {
           <Stack spacing={1.25}>
             <DetailMeaningBlock
               title="O que este número significa"
-              meaning="Este total reúne todos os casos usados para montar o perfil do agressor. A lista abaixo mostra exatamente quais denúncias formam o agregado, para que o gestor consiga sair do KPI e chegar ao registro real."
-              source="Fonte: denúncias CPCA e SMIF consolidadas no painel de Perfil de Assédio."
+              meaning="Este total reúne todos os casos usados para montar o perfil do agressor. A lista abaixo mostra exatamente quais acolhimentos formam o agregado, para que o gestor consiga sair do KPI e chegar ao registro real."
+              source="Fonte: acolhimentos CPCA e SMIF consolidados no painel de Perfil de Assédio."
             />
             <DetailAccordionSection
               title="Resumo executivo"
@@ -2274,7 +2274,7 @@ function AggressorProfileTab() {
             <DetailMeaningBlock
               title="O que este número significa"
               meaning="Casos classificados como assédio moral. O detalhamento abaixo mostra quais registros foram enquadrados nessa tipologia."
-              source="Fonte: campo de tipificação da denúncia nos módulos CPCA e SMIF."
+              source="Fonte: campo de Natureza do Relato nos módulos CPCA e SMIF."
             />
             <DetailAccordionSection
               title="Resumo executivo"
@@ -2320,7 +2320,7 @@ function AggressorProfileTab() {
             <DetailMeaningBlock
               title="O que este número significa"
               meaning="Casos classificados como assédio sexual. A lista abaixo mostra os registros exatos por trás do KPI, com acesso direto ao fluxo correspondente."
-              source="Fonte: campo de tipificação da denúncia nos módulos CPCA e SMIF."
+              source="Fonte: campo de Natureza do Relato nos módulos CPCA e SMIF."
             />
             <DetailAccordionSection
               title="Resumo executivo"
@@ -2366,7 +2366,7 @@ function AggressorProfileTab() {
             <DetailMeaningBlock
               title="O que este número significa"
               meaning="Conta os casos em que o agressor ocupava posição hierárquica ou funcional superior à vítima. A lista abaixo mostra os registros usados nessa leitura."
-              source="Fonte: campo de relação hierárquica/funcional da denúncia."
+              source="Fonte: campo de relação hierárquica/funcional do acolhimento."
             />
             <DetailAccordionSection
               title="Resumo executivo"
@@ -2907,8 +2907,8 @@ function GeoMapTab() {
     .slice(0, 15)
     .map((s: any) => ({
       uf: s.uf,
-      "Denúncias CPCA": Number(s.cpcaComplaints ?? s.complaints ?? 0),
-      "Denúncias SMIF": Number(s.smifComplaints ?? 0),
+      "Acolhimentos CPCA": Number(s.cpcaComplaints ?? s.complaints ?? 0),
+      "Acolhimentos SMIF": Number(s.smifComplaints ?? 0),
       "Pesq. escolas": Number(s.schoolSurveyYes ?? 0),
       "VD 12m": Number(s.domesticLast12MonthsYes ?? 0),
       "Missões CIPAVD": Number(s.missions ?? 0),
@@ -2928,7 +2928,7 @@ function GeoMapTab() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <KpiCard
-            title="UFs com denúncia CPCA"
+            title="UFs com acolhimento CPCA"
             value={data.summary?.statesWithCpcaComplaints ?? 0}
             subtitle="Demanda formal CPCA localizada por UF"
             color="#1A3C6E"
@@ -2952,7 +2952,7 @@ function GeoMapTab() {
           <KpiCard
             title="Lacuna territorial"
             value={statesWithComplaintsWithoutResearch.length}
-            subtitle="UFs com denúncia formal e sem pesquisa normalizada"
+            subtitle="UFs com acolhimento formal e sem pesquisa normalizada"
             color="#ED6C02"
             onClick={() => setGeoKpiModal("statesWithData")}
           />
@@ -2990,7 +2990,7 @@ function GeoMapTab() {
                 sx={{ mb: 1, display: "block" }}
               >
                 Clique em um estado para abrir o resumo territorial. A
-                intensidade do azul usa denúncias e sinais de pesquisa; missões
+                intensidade do azul usa acolhimentos e sinais de pesquisa; missões
                 entram como resposta, não como pressão.
               </Typography>
               <BrazilMap
@@ -3011,7 +3011,7 @@ function GeoMapTab() {
                 color="text.secondary"
                 sx={{ mb: 1, display: "block" }}
               >
-                Barras separam denúncias CPCA/SMIF e sinais positivos das
+                Barras separam acolhimentos CPCA/SMIF e sinais positivos das
                 pesquisas. Missões aparecem como resposta separada e não entram
                 no cálculo da pressão.
               </Typography>
@@ -3040,14 +3040,14 @@ function GeoMapTab() {
                     />
                     <Legend />
                     <Bar
-                      dataKey="Denúncias CPCA"
+                      dataKey="Acolhimentos CPCA"
                       stackId="a"
                       fill="#D32F2F"
                       barSize={16}
                       onClick={(entry: any) => openStateDetail(entry?.uf)}
                     />
                     <Bar
-                      dataKey="Denúncias SMIF"
+                      dataKey="Acolhimentos SMIF"
                       stackId="a"
                       fill="#7B1FA2"
                       barSize={16}
@@ -3258,7 +3258,7 @@ function GeoMapTab() {
                   sx={{ lineHeight: 1.7 }}
                 >
                   Quanto maior esse número, maior a capacidade do painel de
-                  distribuir denúncias, atividades e missões por estado e OM de
+                  distribuir acolhimentos, atividades e missões por estado e OM de
                   forma confiável.
                 </Typography>
               </Stack>
@@ -3384,8 +3384,8 @@ function GeoMapTab() {
           <Stack spacing={1.25}>
             <DetailMeaningBlock
               title="O que este número significa"
-              meaning="Este KPI mostra em quantos estados existe pressão territorial mensurável: denúncia formal CPCA/SMIF ou sinal positivo em pesquisa normalizada por UF. Atividades e missões aparecem como resposta institucional, não como pressão."
-              source="Fonte: consolidação por UF de denúncias CPCA/SMIF, pesquisas de escolas e pesquisa de violência doméstica."
+              meaning="Este KPI mostra em quantos estados existe pressão territorial mensurável: acolhimento formal CPCA/SMIF ou sinal positivo em pesquisa normalizada por UF. Atividades e missões aparecem como resposta institucional, não como pressão."
+              source="Fonte: consolidação por UF de acolhimentos CPCA/SMIF, pesquisas de escolas e pesquisa de violência doméstica."
             />
             <DetailAccordionSection
               title="Resumo executivo"
@@ -3399,7 +3399,7 @@ function GeoMapTab() {
                   color="#ED6C02"
                 />
                 <DetailRow
-                  label="Estados com denúncia sem pesquisa"
+                  label="Estados com acolhimento sem pesquisa"
                   value={statesWithComplaintsWithoutResearch.length}
                   color="#4E342E"
                 />
@@ -3409,7 +3409,7 @@ function GeoMapTab() {
                   sx={{ lineHeight: 1.7 }}
                 >
                   A tabela separa origem formal, origem amostral e resposta.
-                  Estados com denúncia e sem pesquisa não são tratados como
+                  Estados com acolhimento e sem pesquisa não são tratados como
                   ausência de problema; ficam marcados como lacuna de evidência.
                 </Typography>
               </Stack>
@@ -3537,7 +3537,7 @@ function GeoMapTab() {
             <Stack spacing={1.5} sx={{ mt: 1 }}>
               <DetailMeaningBlock
                 title="O que este detalhamento mostra"
-                meaning="Este modal concentra a leitura territorial do estado selecionado. A pressão é formada por denúncias formais e sinais de pesquisa; atividades e missões aparecem como resposta/cobertura para evitar inferência causal indevida."
+                meaning="Este modal concentra a leitura territorial do estado selecionado. A pressão é formada por acolhimentos formais e sinais de pesquisa; atividades e missões aparecem como resposta/cobertura para evitar inferência causal indevida."
                 source="Fonte: consolidação territorial por UF do Painel Estratégico, separando CPCA, SMIF, pesquisas, atividades e missões."
               />
               <AiCopilotCtaRow
@@ -3580,7 +3580,7 @@ function GeoMapTab() {
                       {selectedState.data.cpcaComplaints ?? 0}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Denúncias CPCA
+                      Acolhimentos CPCA
                     </Typography>
                   </Card>
                 </Grid>
@@ -3623,7 +3623,7 @@ function GeoMapTab() {
                     sx={{ bgcolor: "#FFF5F5" }}
                   >
                     <Typography fontWeight={600} color="#D32F2F">
-                      Denúncias / Casos ({selectedState.data.complaints})
+                      Acolhimentos / Casos ({selectedState.data.complaints})
                     </Typography>
                   </AccordionSummary>
                   <AccordionDetails sx={{ p: 0 }}>

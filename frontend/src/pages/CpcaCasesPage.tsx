@@ -108,6 +108,7 @@ import {
   getComplaintArchiveReasonMeta,
   isComplaintArchiveReasonRequired,
 } from "../features/complaintArchiveReason";
+import { resolveComplaintProcessOpenedValue } from "../features/complaintProcessOpening";
 
 const STATUS_OPTIONS = [
   { value: "RECEIVED", label: "Recebida" },
@@ -212,11 +213,14 @@ const GENDER_OPTIONS = [
   { value: "NAO_INFORMADO", label: "Não informado" },
 ];
 
-const DETAILED_VIOLENCE_TYPE_OPTIONS: Array<{
+type DetailedViolenceTypeOption = {
   value: string;
   label: string;
   macroComplaintType: "MORAL" | "SEXUAL";
-}> = [
+  legacy?: boolean;
+};
+
+const DETAILED_VIOLENCE_TYPE_OPTIONS: DetailedViolenceTypeOption[] = [
   {
     value: "ASSEDIO_MORAL",
     label: "Assédio Moral",
@@ -333,6 +337,24 @@ const DETAILED_VIOLENCE_TYPE_OPTIONS: Array<{
     macroComplaintType: "SEXUAL",
   },
 ];
+
+const SELECTABLE_DETAILED_VIOLENCE_TYPE_VALUES = new Set([
+  "ASSEDIO_MORAL",
+  "ASSEDIO_SEXUAL",
+  "VIOLENCIA_DOMESTICA_FISICA",
+  "VIOLENCIA_DOMESTICA_PSICOLOGICA",
+  "VIOLENCIA_DOMESTICA_MORAL",
+  "VIOLENCIA_DOMESTICA_PATRIMONIAL",
+  "VIOLENCIA_DOMESTICA_SEXUAL",
+  "VIOLENCIA_DOMESTICA_VICARIA",
+  "IMPORTUNACAO_SEXUAL",
+  "DISCRIMINACAO",
+]);
+
+const SELECTABLE_DETAILED_VIOLENCE_TYPE_OPTIONS =
+  DETAILED_VIOLENCE_TYPE_OPTIONS.filter((item) =>
+    SELECTABLE_DETAILED_VIOLENCE_TYPE_VALUES.has(item.value),
+  );
 
 const HARASSMENT_CONTEXT_OPTIONS = [
   { value: "PRESENCIAL", label: "Presencial" },
@@ -582,6 +604,8 @@ function createDefaultForm() {
     complaintType: "MORAL",
     notifierType: "VITIMA",
     status: "RECEIVED",
+    processOpened: "",
+    processNotOpenedReason: "",
     procedureType: "NOT_DEFINED",
     reportedAt: formatDateInputValue(new Date()),
     incidentDate: "",
@@ -676,6 +700,24 @@ function getDetailedViolenceTypeLabel(value: string | null | undefined) {
   );
 }
 
+function getDetailedViolenceTypeFormOptions(
+  currentValue: string | null | undefined,
+): DetailedViolenceTypeOption[] {
+  const normalized = String(currentValue ?? "").trim();
+  const legacyOption = DETAILED_VIOLENCE_TYPE_OPTIONS.find(
+    (item) =>
+      item.value === normalized &&
+      !SELECTABLE_DETAILED_VIOLENCE_TYPE_VALUES.has(item.value),
+  );
+
+  return legacyOption
+    ? [
+        { ...legacyOption, legacy: true },
+        ...SELECTABLE_DETAILED_VIOLENCE_TYPE_OPTIONS,
+      ]
+    : SELECTABLE_DETAILED_VIOLENCE_TYPE_OPTIONS;
+}
+
 function getRankOptionLabel(value: string) {
   const normalized = String(value ?? "").trim();
   if (normalized === NOT_INFORMED_RANK_VALUE) return NOT_INFORMED_RANK_LABEL;
@@ -746,7 +788,7 @@ function getValidationActorName(validation: any) {
 }
 
 function getValidationTooltip(validation: any) {
-  if (!validation?.isValidated) return "Denúncia aguardando validação";
+  if (!validation?.isValidated) return "Acolhimento aguardando validação";
   return `Validada por ${getValidationActorName(validation)} em ${formatDateTimePtBr(
     validation.validatedAt,
   )}`;
@@ -1243,6 +1285,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     form.confidentialityTermSigned,
   );
   const hasStep3Progress = Boolean(
+    toNullable(form.processOpened) ||
+    toNullable(form.processNotOpenedReason) ||
     toNullable(form.procedureReference) ||
     toNullable(form.preliminaryReportDate) ||
     toNullable(form.procedureCurrentSituation) ||
@@ -1310,6 +1354,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         item.status ?? "RECEIVED",
         item.procedureCurrentSituation ?? "",
       ),
+      processOpened: resolveComplaintProcessOpenedValue(item),
+      processNotOpenedReason: item.processNotOpenedReason ?? "",
       procedureType: item.procedureType ?? "NOT_DEFINED",
       incidentDate: toDateInputValue(item.incidentDate),
       aggressorRank: item.aggressorRank ?? "",
@@ -1611,6 +1657,18 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       return;
     }
 
+    if (
+      form.processOpened === "NAO" &&
+      !toNullable(form.processNotOpenedReason)
+    ) {
+      setActiveStep(2);
+      toast.push({
+        message: "Justifique o motivo de não ter sido aberto um processo.",
+        severity: "warning",
+      });
+      return;
+    }
+
     const inferredComplaintType = inferMacroComplaintTypeFromDetailed(
       form.detailedViolenceType,
     );
@@ -1628,7 +1686,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       setActiveStep(2);
       toast.push({
         message:
-          "Preencha o motivo do arquivamento antes de salvar a denúncia arquivada.",
+          "Preencha o motivo do arquivamento antes de salvar o acolhimento arquivado.",
         severity: "warning",
       });
       return;
@@ -1656,7 +1714,18 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       complaintType: macroComplaintType,
       notifierType: form.notifierType,
       status: syncedStatus,
-      procedureType: form.procedureType,
+      processOpened:
+        form.processOpened === "SIM"
+          ? true
+          : form.processOpened === "NAO"
+            ? false
+            : null,
+      processNotOpenedReason:
+        form.processOpened === "NAO"
+          ? toNullable(form.processNotOpenedReason)
+          : null,
+      procedureType:
+        form.processOpened === "NAO" ? "NOT_DEFINED" : form.procedureType,
       reportedAt: toNullable(form.reportedAt),
       incidentDate: toNullable(form.incidentDate),
       aggressorRank: form.aggressorRank,
@@ -1681,7 +1750,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         form.hierarchicalFunctionalRelation,
       ),
       occurrenceForms: form.occurrenceForms,
-      procedureCurrentSituation: toNullable(form.procedureCurrentSituation),
+      procedureCurrentSituation:
+        form.processOpened === "NAO"
+          ? null
+          : toNullable(form.procedureCurrentSituation),
       evidenceSummary: toNullable(form.evidenceSummary),
       confidentialityTermSigned: Boolean(form.confidentialityTermSigned),
       confidentialityHandlingNotes: toNullable(
@@ -1697,11 +1769,18 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       socialSupportProvided: Boolean(form.socialSupportProvided),
       legalSupportProvided: Boolean(form.legalSupportProvided),
       contactRestrictionApplied: Boolean(form.contactRestrictionApplied),
-      preliminaryReportGenerated: Boolean(
-        toNullable(form.preliminaryReportDate),
-      ),
-      preliminaryReportDate: toNullable(form.preliminaryReportDate),
-      procedureReference: toNullable(form.procedureReference),
+      preliminaryReportGenerated:
+        form.processOpened === "NAO"
+          ? false
+          : Boolean(toNullable(form.preliminaryReportDate)),
+      preliminaryReportDate:
+        form.processOpened === "NAO"
+          ? null
+          : toNullable(form.preliminaryReportDate),
+      procedureReference:
+        form.processOpened === "NAO"
+          ? null
+          : toNullable(form.procedureReference),
       victimAccusedSeparationEvaluated: Boolean(
         form.victimAccusedSeparationEvaluated,
       ),
@@ -1782,7 +1861,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     if (!normalizedId || !canValidateCpcaCase || isSmifWorkflow) {
       toast.push({
         message:
-          "Seu perfil ativo não possui permissão para validar denúncias.",
+          "Seu perfil ativo não possui permissão para validar acolhimentos.",
         severity: "warning",
       });
       return;
@@ -1792,13 +1871,14 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       const result = await validateCpcaCase.mutateAsync(normalizedId);
       toast.push({
         message: result?.alreadyValidated
-          ? "Denúncia já estava validada."
-          : "Denúncia validada pela comissão.",
+          ? "Acolhimento já estava validado."
+          : "Acolhimento validado pela comissão.",
         severity: "success",
       });
     } catch (error) {
       toast.push({
-        message: parseApiError(error).message ?? "Erro ao validar a denúncia.",
+        message:
+          parseApiError(error).message ?? "Erro ao validar o acolhimento.",
         severity: "error",
       });
     }
@@ -1945,12 +2025,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     if (!selectedId) return;
     try {
       await deleteCase.mutateAsync(selectedId);
-      toast.push({ message: "Denúncia excluída.", severity: "success" });
+      toast.push({ message: "Acolhimento excluído.", severity: "success" });
       setConfirmDeleteOpen(false);
       closeDrawer();
     } catch (error) {
       toast.push({
-        message: parseApiError(error).message ?? "Erro ao excluir denúncia.",
+        message: parseApiError(error).message ?? "Erro ao excluir acolhimento.",
         severity: "error",
       });
     }
@@ -1999,7 +2079,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <TextField
             select
             size="small"
-            label="Tipo de assédio ou violência"
+            label="Natureza do Relato"
             value={form.detailedViolenceType}
             onChange={(e) => {
               const nextDetailedType = e.target.value;
@@ -2014,11 +2094,18 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             SelectProps={{ MenuProps: LONG_SELECT_MENU_PROPS }}
           >
             <MenuItem value="">Selecionar</MenuItem>
-            {DETAILED_VIOLENCE_TYPE_OPTIONS.map((item) => (
-              <MenuItem key={item.value} value={item.value}>
-                {item.label}
-              </MenuItem>
-            ))}
+            {getDetailedViolenceTypeFormOptions(form.detailedViolenceType).map(
+              (item) => (
+                <MenuItem
+                  key={item.value}
+                  value={item.value}
+                  disabled={item.legacy}
+                >
+                  {item.label}
+                  {item.legacy ? " (registro anterior)" : ""}
+                </MenuItem>
+              ),
+            )}
           </TextField>
 
           <TextField
@@ -2583,110 +2670,168 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     if (activeStep === 2) {
       return (
         <Stack spacing={1.2}>
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                md: "repeat(2, minmax(0, 1fr))",
-              },
-              gap: 1.2,
-            }}
-          >
-            <TextField
-              select
-              size="small"
-              label="Status da triagem/apuração"
-              value={form.status}
-              onChange={(e) =>
-                setForm((prev) => ({
-                  ...prev,
-                  status: syncCpcaWorkflowStatus(
-                    e.target.value,
-                    prev.procedureCurrentSituation,
-                  ),
-                }))
-              }
-            >
-              {statusOptionsForStep(2, form.status).map((item) => (
-                <MenuItem key={item.value} value={item.value}>
-                  {item.label}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              size="small"
-              label="Procedimento administrativo"
-              value={form.procedureType}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, procedureType: e.target.value }))
-              }
-            >
-              {PROCEDURE_OPTIONS.map((item) => (
-                <MenuItem key={item.value} value={item.value}>
-                  {item.label}
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              size="small"
-              label="Situação atual do procedimento"
-              value={form.procedureCurrentSituation}
-              onChange={(e) => {
-                const nextProcedureCurrentSituation = e.target.value;
-                setForm((prev) => ({
-                  ...prev,
-                  procedureCurrentSituation: nextProcedureCurrentSituation,
-                  status: syncCpcaWorkflowStatus(
-                    prev.status,
-                    nextProcedureCurrentSituation,
-                  ),
-                }));
-              }}
-            >
-              <MenuItem value="">Selecionar</MenuItem>
-              {PROCEDURE_CURRENT_SITUATION_OPTIONS.map((item) => (
-                <MenuItem key={item.value} value={item.value}>
-                  {item.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Box>
-
           <TextField
+            select
             size="small"
-            label="Referência do processo"
-            value={form.procedureReference}
-            onChange={(e) =>
+            label="Abriu processo?"
+            value={form.processOpened}
+            onChange={(e) => {
+              const processOpened = e.target.value;
               setForm((prev) => ({
                 ...prev,
-                procedureReference: e.target.value,
-              }))
-            }
+                processOpened,
+                ...(processOpened === "NAO"
+                  ? {
+                      procedureType: "NOT_DEFINED",
+                      procedureCurrentSituation: "",
+                      procedureReference: "",
+                      preliminaryReportGenerated: false,
+                      preliminaryReportDate: "",
+                    }
+                  : {}),
+                ...(processOpened !== "NAO"
+                  ? { processNotOpenedReason: "" }
+                  : {}),
+              }));
+            }}
             fullWidth
-          />
+          >
+            <MenuItem value="">Selecione</MenuItem>
+            <MenuItem value="SIM">Sim</MenuItem>
+            <MenuItem value="NAO">Não</MenuItem>
+          </TextField>
 
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+          {form.processOpened === "NAO" && (
             <TextField
               size="small"
-              type="date"
-              label="Data do relatório"
-              InputLabelProps={{ shrink: true }}
-              value={form.preliminaryReportDate}
+              label="Justificativa para não abertura do processo"
+              value={form.processNotOpenedReason}
               onChange={(e) =>
                 setForm((prev) => ({
                   ...prev,
-                  preliminaryReportDate: e.target.value,
-                  preliminaryReportGenerated: Boolean(e.target.value),
+                  processNotOpenedReason: e.target.value,
                 }))
               }
-              sx={{ minWidth: 220 }}
+              required
+              error={!toNullable(form.processNotOpenedReason)}
+              helperText="Informe por que não houve abertura de processo."
+              fullWidth
+              multiline
+              minRows={3}
             />
-          </Stack>
+          )}
+
+          {form.processOpened === "SIM" && (
+            <>
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    md: "repeat(2, minmax(0, 1fr))",
+                  },
+                  gap: 1.2,
+                }}
+              >
+                <TextField
+                  select
+                  size="small"
+                  label="Procedimento administrativo"
+                  value={form.procedureType}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      procedureType: e.target.value,
+                    }))
+                  }
+                >
+                  {PROCEDURE_OPTIONS.map((item) => (
+                    <MenuItem key={item.value} value={item.value}>
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+
+                <TextField
+                  select
+                  size="small"
+                  label="Status da triagem/apuração"
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      status: syncCpcaWorkflowStatus(
+                        e.target.value,
+                        prev.procedureCurrentSituation,
+                      ),
+                    }))
+                  }
+                >
+                  {statusOptionsForStep(2, form.status).map((item) => (
+                    <MenuItem key={item.value} value={item.value}>
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+
+                <TextField
+                  select
+                  size="small"
+                  label="Situação atual do procedimento"
+                  value={form.procedureCurrentSituation}
+                  onChange={(e) => {
+                    const nextProcedureCurrentSituation = e.target.value;
+                    setForm((prev) => ({
+                      ...prev,
+                      procedureCurrentSituation: nextProcedureCurrentSituation,
+                      status: syncCpcaWorkflowStatus(
+                        prev.status,
+                        nextProcedureCurrentSituation,
+                      ),
+                    }));
+                  }}
+                >
+                  <MenuItem value="">Selecionar</MenuItem>
+                  {PROCEDURE_CURRENT_SITUATION_OPTIONS.map((item) => (
+                    <MenuItem key={item.value} value={item.value}>
+                      {item.label}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+
+              <TextField
+                size="small"
+                label="Referência do processo"
+                value={form.procedureReference}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    procedureReference: e.target.value,
+                  }))
+                }
+                fullWidth
+              />
+
+              <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+                <TextField
+                  size="small"
+                  type="date"
+                  label="Data do relatório"
+                  InputLabelProps={{ shrink: true }}
+                  value={form.preliminaryReportDate}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      preliminaryReportDate: e.target.value,
+                      preliminaryReportGenerated: Boolean(e.target.value),
+                    }))
+                  }
+                  sx={{ minWidth: 220 }}
+                />
+              </Stack>
+            </>
+          )}
 
           {archiveReasonRequired && (
             <TextField
@@ -2702,7 +2847,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               error={archiveReasonMeta.isMissingReason}
               helperText={
                 archiveReasonMeta.isMissingReason
-                  ? "Preencha o motivo do arquivamento para salvar a denúncia como arquivada."
+                  ? "Preencha o motivo do arquivamento para salvar o acolhimento como arquivado."
                   : "Explique de forma objetiva o fundamento do arquivamento."
               }
               fullWidth
@@ -2999,7 +3144,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            {workflowLabel} - Denúncias
+            {workflowLabel} - Acolhimentos
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Fluxo sigiloso em etapas, conforme ICA 30-13 (Arts. 47 a 57).
@@ -3148,8 +3293,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                     sx={{ mt: 0.5 }}
                   >
                     {pendingValidationCount === 1
-                      ? "denúncia aguardando validação"
-                      : "denúncias aguardando validação"}
+                      ? "acolhimento aguardando validação"
+                      : "acolhimentos aguardando validação"}
                   </Typography>
                 </Box>
               </Stack>
@@ -3212,7 +3357,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             <TextField
               select
               size="small"
-              label="Tipo de assédio ou violência"
+              label="Natureza do Relato"
               value={detailedViolenceType}
               onChange={(e) =>
                 updateParam("detailedViolenceType", e.target.value)
@@ -3221,7 +3366,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               SelectProps={{ MenuProps: LONG_SELECT_MENU_PROPS }}
             >
               <MenuItem value="">Todos</MenuItem>
-              {DETAILED_VIOLENCE_TYPE_OPTIONS.map((item) => (
+              {SELECTABLE_DETAILED_VIOLENCE_TYPE_OPTIONS.map((item) => (
                 <MenuItem key={item.value} value={item.value}>
                   {item.label}
                 </MenuItem>
@@ -3308,7 +3453,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                     }}
                   />
                   <Typography variant="body2" color="text.secondary">
-                    Linhas nesta cor indicam denúncias a serem validadas.
+                    Linhas nesta cor indicam acolhimentos a serem validados.
                   </Typography>
                 </Stack>
               )}
@@ -3413,7 +3558,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                   <CheckCircleIcon
                                     color="success"
                                     fontSize="small"
-                                    aria-label="Denúncia validada"
+                                    aria-label="Acolhimento validado"
                                   />
                                 </Tooltip>
                               )}
@@ -3582,7 +3727,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             rowsPerPage={pageSize}
             onRowsPerPageChange={handlePageSizeChange}
             rowsPerPageOptions={[20, 50, 100, { label: "Todas", value: -1 }]}
-            labelRowsPerPage="Denúncias por página"
+            labelRowsPerPage="Acolhimentos por página"
             labelDisplayedRows={({ from, to, count }) =>
               showAllRows
                 ? `1-${count} de ${count}`
@@ -3697,7 +3842,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                           Data e hora
                         </TableCell>
                         <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                          Denúncia
+                          Acolhimento
                         </TableCell>
                         <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
                           OM
@@ -3884,7 +4029,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                   onClick={() => setConfirmDeleteOpen(true)}
                   disabled={deleteCase.isPending || !selectedId}
                 >
-                  Excluir denúncia
+                  Excluir acolhimento
                 </Button>
               )}
               <Button variant="text" onClick={closeDrawer}>
@@ -3963,7 +4108,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                             <Typography variant="body2" color="text.secondary">
                               {selectedValidation?.isValidated
                                 ? getValidationTooltip(selectedValidation)
-                                : "Esta denúncia precisa de validação após a última atualização."}
+                                : "Este acolhimento precisa de validação após a última atualização."}
                             </Typography>
                           </Box>
                         </Stack>
@@ -4009,7 +4154,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 }}
                                 disabled={validateCpcaCase.isPending}
                               >
-                                Validar denúncia
+                                Validar acolhimento
                               </Button>
                             )}
                         </Stack>
@@ -4995,8 +5140,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <Stack spacing={2}>
             <Alert severity="error">
               {archiveReasonDialog?.isMissingReason
-                ? "Esta denúncia foi arquivada sem comentário registrado. Isso pode acontecer em registros antigos, anteriores à obrigatoriedade do motivo de arquivamento."
-                : "Motivo registrado para o arquivamento desta denúncia."}
+                ? "Este acolhimento foi arquivado sem comentário registrado. Isso pode acontecer em registros antigos, anteriores à obrigatoriedade do motivo de arquivamento."
+                : "Motivo registrado para o arquivamento deste acolhimento."}
             </Alert>
 
             {archiveReasonDialog?.caseNumber ? (
@@ -5045,11 +5190,11 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>Denúncias para validação</DialogTitle>
+        <DialogTitle>Acolhimentos para validação</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              A fila considera os filtros ativos e reúne denúncias criadas ou
+              A fila considera os filtros ativos e reúne acolhimentos criados ou
               atualizadas que ainda não receberam validação da comissão.
             </Typography>
 
@@ -5059,7 +5204,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               </Typography>
             ) : pendingValidationItems.length === 0 ? (
               <Alert severity="success">
-                Não há denúncias aguardando validação no filtro atual.
+                Não há acolhimentos aguardando validação no filtro atual.
               </Alert>
             ) : (
               <Stack spacing={1}>
@@ -5366,8 +5511,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         open={confirmDeleteOpen}
         onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
-        title={`Excluir denúncia ${workflowLabel}`}
-        message="Tem certeza que deseja excluir esta denúncia?"
+        title={`Excluir acolhimento ${workflowLabel}`}
+        message="Tem certeza que deseja excluir este acolhimento?"
         highlightText={
           selectedCaseQuery.data
             ? `${selectedCaseQuery.data.caseNumber} • ${formatOmLabel(
@@ -5387,8 +5532,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         onConfirm={() => {
           void confirmSelectedCaseValidation();
         }}
-        title="Validar denúncia"
-        message="Confirma a validação desta denúncia pela comissão?"
+        title="Validar acolhimento"
+        message="Confirma a validação deste acolhimento pela comissão?"
         highlightText={
           selectedCaseQuery.data
             ? `${formatComplaintCaseNumberForDisplay(
@@ -5396,9 +5541,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               )} • ${formatOmLabel(selectedCaseQuery.data.locality)}`
             : undefined
         }
-        note="O log registrará seu usuário, data e hora. Se a denúncia ou uma pendência for modificada depois, a validação será retirada."
+        note="O log registrará seu usuário, data e hora. Se o acolhimento ou uma pendência for modificado depois, a validação será retirada."
         confirmLabel={
-          validateCpcaCase.isPending ? "Validando..." : "Validar denúncia"
+          validateCpcaCase.isPending ? "Validando..." : "Validar acolhimento"
         }
         confirmLoading={validateCpcaCase.isPending}
         disableConfirm={!selectedId || Boolean(selectedValidation?.isValidated)}

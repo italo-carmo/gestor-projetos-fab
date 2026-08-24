@@ -149,7 +149,7 @@ function buildOmReason(item: any) {
   const reasons: string[] = [];
   const complaints = item?.complaints ?? {};
   if (Number(complaints?.openCases ?? 0) > 0) {
-    reasons.push(`${complaints.openCases} denúncia(s) aberta(s)`);
+    reasons.push(`${complaints.openCases} acolhimento(s) aberto(s)`);
   }
   if (Number(complaints?.retaliationCases ?? 0) > 0) {
     reasons.push(`${complaints.retaliationCases} com risco de retaliação`);
@@ -167,7 +167,7 @@ function buildOmReason(item: any) {
   }
   return (
     reasons.slice(0, 3).join(" • ") ||
-    "Risco composto por denúncias, cobertura e sinais BI."
+    "Risco composto por acolhimentos, cobertura e sinais BI."
   );
 }
 
@@ -601,9 +601,9 @@ export function ComgepStrategicTab() {
         </Grid>
         <Grid size={{ xs: 12, md: 6, xl: 3 }}>
           <SummaryCard
-            title="Denúncia sem pesquisa"
+            title="Acolhimento sem pesquisa"
             value={summary.complaintOmsWithoutResearchCount ?? 0}
-            subtitle="OMs com denúncia formal sem base de pesquisa comparável na mesma OM."
+            subtitle="OMs com acolhimento formal sem base de pesquisa comparável na mesma OM."
             color="#4E342E"
             icon={<HubRoundedIcon />}
             onClick={() => setDetailModal("confidence")}
@@ -613,7 +613,7 @@ export function ComgepStrategicTab() {
 
       <SectionCard
         title="Onde atuar agora"
-        subtitle="UFs priorizadas por denúncia formal, sinais de pesquisa com base mínima, cobertura CPCA e resposta operacional. Clique na linha para entender a posição no ranking."
+        subtitle="UFs priorizadas por acolhimento formal, sinais de pesquisa com base mínima, cobertura CPCA e resposta operacional. Clique na linha para entender a posição no ranking."
       >
         <Typography
           variant="caption"
@@ -739,7 +739,7 @@ export function ComgepStrategicTab() {
           color="text.secondary"
           sx={{ display: "block", mb: 1.2 }}
         >
-          O ranking prioriza denúncia formal e proteção, usa pesquisas com
+          O ranking prioriza acolhimento formal e proteção, usa pesquisas com
           ajuste por tamanho de amostra e sinaliza quando não há base
           comparável.
         </Typography>
@@ -861,8 +861,8 @@ export function ComgepStrategicTab() {
           />
           <MeaningBlock
             title="O que isso significa"
-            meaning="Este indicador mostra quantos casos abertos hoje carregam marcação de retaliação ou risco de retaliação. Ele não mede volume total de denúncias; ele destaca os casos mais sensíveis para proteção da vítima e ação imediata do gestor."
-            source="Fonte: denúncias abertas da base CPCA/SMIF consolidadas na Sala COMGEP."
+            meaning="Este indicador mostra quantos casos abertos hoje carregam marcação de retaliação ou risco de retaliação. Ele não mede volume total de acolhimentos; ele destaca os casos mais sensíveis para proteção da vítima e ação imediata do gestor."
+            source="Fonte: acolhimentos abertos da base CPCA/SMIF consolidados na Sala COMGEP."
           />
           <ComgepAccordionSection
             title="Resumo executivo"
@@ -882,7 +882,7 @@ export function ComgepStrategicTab() {
                 sx={{ lineHeight: 1.7 }}
               >
                 Este é um KPI de sensibilidade. O ponto principal não é quantas
-                denúncias existem, mas quantos casos demandam contenção de
+                acolhimentos existem, mas quantos casos demandam contenção de
                 risco, proteção de vítima e monitoramento mais próximo do fluxo.
               </Typography>
             </Stack>
@@ -960,7 +960,7 @@ export function ComgepStrategicTab() {
           <MeaningBlock
             title="O que isso significa"
             meaning="Este indicador soma os casos abertos há mais de 30 dias. Ele funciona como alerta de atraso de tratamento, risco de perda de confiança na resposta institucional e potencial de agravamento do passivo."
-            source="Fonte: denúncias abertas da base CPCA/SMIF, com cálculo de tempo desde o registro."
+            source="Fonte: acolhimentos abertos da base CPCA/SMIF, com cálculo de tempo desde o registro."
           />
           <ComgepAccordionSection
             title="Resumo executivo"
@@ -1059,8 +1059,8 @@ export function ComgepStrategicTab() {
           />
           <MeaningBlock
             title="O que isso significa"
-            meaning="Este KPI conta UFs em faixa crítica na matriz COMGEP. A classificação separa denúncia formal, pesquisas de escolas, violência doméstica, cobertura CPCA e resposta operacional; missões são amortecidas porque a série histórica ainda é inicial."
-            source="Fonte: matriz consolidada da Sala COMGEP, com cruzamento controlado entre denúncias CPCA/SMIF, BI normalizado e presença operacional."
+            meaning="Este KPI conta UFs em faixa crítica na matriz COMGEP. A classificação separa acolhimento formal, pesquisas de escolas, violência doméstica, cobertura CPCA e resposta operacional; missões são amortecidas porque a série histórica ainda é inicial."
+            source="Fonte: matriz consolidada da Sala COMGEP, com cruzamento controlado entre acolhimentos CPCA/SMIF, BI normalizado e presença operacional."
           />
           <ComgepAccordionSection
             title="Resumo executivo"
@@ -1173,7 +1173,7 @@ export function ComgepStrategicTab() {
           />
           <MeaningBlock
             title="O que isso significa"
-            meaning="Este indicador mostra onde existem denúncias formais sem pesquisa comparável na mesma OM e, em paralelo, mede quanto da base BI já está normalizada por OM ou UF. A ausência de pesquisa não reduz prioridade quando há denúncia; apenas impede inferência de subnotificação local."
+            meaning="Este indicador mostra onde existem acolhimentos formais sem pesquisa comparável na mesma OM e, em paralelo, mede quanto da base BI já está normalizada por OM ou UF. A ausência de pesquisa não reduz prioridade quando há acolhimento; apenas impede inferência de subnotificação local."
             source="Fonte: processo de normalização BI que vincula registros a OM e UF."
           />
           <ComgepAccordionSection
@@ -1192,7 +1192,7 @@ export function ComgepStrategicTab() {
                 value={summary.researchComparableOmCount ?? 0}
               />
               <ModalRow
-                label="OMs com denúncia sem pesquisa"
+                label="OMs com acolhimento sem pesquisa"
                 value={summary.complaintOmsWithoutResearchCount ?? 0}
                 color="#4E342E"
               />
@@ -1203,7 +1203,7 @@ export function ComgepStrategicTab() {
               >
                 Quanto mais registros vinculados a OM ou pelo menos UF, mais
                 confiável fica a leitura executiva. Onde não há pesquisa, o
-                painel mantém a denúncia formal como evidência principal e
+                painel mantém o acolhimento formal como evidência principal e
                 bloqueia comparações amostrais frágeis.
               </Typography>
             </Stack>
@@ -1284,8 +1284,8 @@ export function ComgepStrategicTab() {
           />
           <MeaningBlock
             title="O que isso significa"
-            meaning="Esta UF aparece como prioritária pela combinação entre denúncias formais, sinais de pesquisas normalizadas, cobertura CPCA e resposta operacional. As pesquisas só são usadas com indicação de base e ajuste conservador para reduzir viés de seleção."
-            source="Fonte: cruzamento entre pesquisas BI normalizadas por OM/UF, denúncias formais CPCA/SMIF e registros operacionais de missão e atividade."
+            meaning="Esta UF aparece como prioritária pela combinação entre acolhimentos formais, sinais de pesquisas normalizadas, cobertura CPCA e resposta operacional. As pesquisas só são usadas com indicação de base e ajuste conservador para reduzir viés de seleção."
+            source="Fonte: cruzamento entre pesquisas BI normalizadas por OM/UF, acolhimentos formais CPCA/SMIF e registros operacionais de missão e atividade."
           />
           <ComgepAccordionSection
             title="Resumo executivo"
@@ -1356,11 +1356,11 @@ export function ComgepStrategicTab() {
                 color="#6A1B9A"
               />
               <ModalRow
-                label="Denúncias formais"
+                label="Acolhimentos formais"
                 value={selectedPriorityUf?.complaints?.totalCases ?? 0}
               />
               <ModalRow
-                label="Denúncias abertas"
+                label="Acolhimentos abertos"
                 value={selectedPriorityUf?.complaints?.openCases ?? 0}
               />
               <ModalRow
@@ -1499,8 +1499,8 @@ export function ComgepStrategicTab() {
           />
           <MeaningBlock
             title="O que isso significa"
-            meaning="Esta OM aparece no ranking porque há demanda formal, sinal amostral com cobertura conhecida, lacuna de cobertura CPCA ou necessidade de presença institucional. Se não houver pesquisa na OM, o ranking não presume subnotificação; mantém a denúncia formal como evidência principal."
-            source="Fonte: cruzamento entre pesquisas BI normalizadas por OM/UF, denúncias formais CPCA/SMIF e presença operacional recente na UF."
+            meaning="Esta OM aparece no ranking porque há demanda formal, sinal amostral com cobertura conhecida, lacuna de cobertura CPCA ou necessidade de presença institucional. Se não houver pesquisa na OM, o ranking não presume subnotificação; mantém o acolhimento formal como evidência principal."
+            source="Fonte: cruzamento entre pesquisas BI normalizadas por OM/UF, acolhimentos formais CPCA/SMIF e presença operacional recente na UF."
           />
           <ComgepAccordionSection
             title="Resumo executivo"
@@ -1563,11 +1563,11 @@ export function ComgepStrategicTab() {
                 color="#6A1B9A"
               />
               <ModalRow
-                label="Denúncias formais"
+                label="Acolhimentos formais"
                 value={selectedRiskOm?.complaints?.totalCases ?? 0}
               />
               <ModalRow
-                label="Denúncias abertas"
+                label="Acolhimentos abertos"
                 value={selectedRiskOm?.complaints?.openCases ?? 0}
               />
               <ModalRow

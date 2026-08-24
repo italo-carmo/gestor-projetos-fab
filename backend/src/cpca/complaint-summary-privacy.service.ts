@@ -350,7 +350,7 @@ export class ComplaintSummaryPrivacyService {
           {
             role: 'system',
             content: [
-              'Você é um validador de privacidade para denúncias institucionais.',
+              'Você é um validador de privacidade para acolhimentos institucionais.',
               'Objetivo: identificar apenas trechos que possam expor nomes de militares no "Resumo do Fato".',
               'Regras obrigatórias:',
               '- posto/graduação sozinho NÃO é erro;',

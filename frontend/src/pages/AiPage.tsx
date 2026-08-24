@@ -84,7 +84,7 @@ const ANALYSIS_CARDS: {
     type: "situational",
     title: "Visão Geral",
     description:
-      "Leitura executiva dos indicadores-chave: pesquisas, denúncias, atividades e missões.",
+      "Leitura executiva dos indicadores-chave: pesquisas, acolhimentos, atividades e missões.",
     icon: <DashboardRoundedIcon />,
     color: "#2E7D32",
   },
@@ -167,7 +167,7 @@ const OPERATIONAL_QUICK_ACTIONS = [
 
 const CHATBOT_QUICK_PROMPTS = [
   "Quais são os principais pontos de atenção hoje em CIPAVD, SMIF e CPCA?",
-  "Explique a diferença entre denúncias CPCA e denúncias SMIF com base no sistema.",
+  "Explique a diferença entre acolhimentos CPCA e acolhimentos SMIF com base no sistema.",
   "Quais estados parecem concentrar mais pressão institucional ou operacional?",
   "Resuma o que o sistema mostra sobre missões, atividades e tarefas em andamento.",
 ] as const;

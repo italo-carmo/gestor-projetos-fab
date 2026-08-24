@@ -129,8 +129,8 @@ const REPORT_SECTION_LABELS: Record<AssistantReportSectionId, string> = {
   MISSION_SCHEDULE: 'Cronograma da missão',
   ACTIVITIES: 'Atividades executadas',
   TASKS: 'Tarefas e pendências',
-  CPCA_CASES: 'Denúncias CPCA',
-  SMIF_CASES: 'Denúncias SMIF',
+  CPCA_CASES: 'Acolhimentos CPCA',
+  SMIF_CASES: 'Acolhimentos SMIF',
   SURVEY_INSTITUTIONAL: 'Pesquisa institucional',
   SURVEY_DOMESTIC: 'Pesquisa de violência doméstica',
   RECOMMENDATIONS: 'Recomendações',
@@ -146,7 +146,7 @@ const REPORT_SECTION_DESCRIPTION: Record<AssistantReportSectionId, string> = {
     'Detalha as atividades de campo executadas e seus registros associados.',
   TASKS: 'Resume tarefas abertas, vencidas e concluídas relacionadas ao recorte.',
   CPCA_CASES:
-    'Apresenta volume, status e sinais principais das denúncias CPCA.',
+    'Apresenta volume, status e sinais principais dos acolhimentos CPCA.',
   SMIF_CASES:
     'Apresenta volume, status e ocorrências registradas no fluxo SMIF.',
   SURVEY_INSTITUTIONAL:
@@ -642,8 +642,8 @@ export class AiReportService {
         title: REPORT_SECTION_LABELS.CPCA_CASES,
         facts: [
           cpcaCases.length
-            ? `${cpcaCases.length} denúncia(s) CPCA/SMIF foram localizadas no mesmo recorte geográfico.`
-            : 'Nenhuma denúncia CPCA/SMIF foi localizada no recorte desta missão.',
+            ? `${cpcaCases.length} acolhimento(s) CPCA/SMIF foram localizados no mesmo recorte geográfico.`
+            : 'Nenhum acolhimento CPCA/SMIF foi localizado no recorte desta missão.',
           cpcaCases.filter((item) => item.retaliationRisk).length
             ? `${cpcaCases.filter((item) => item.retaliationRisk).length} caso(s) com risco de retaliação marcado.`
             : '',
@@ -657,8 +657,8 @@ export class AiReportService {
         title: REPORT_SECTION_LABELS.SMIF_CASES,
         facts: [
           smifCases.length
-            ? `${smifCases.length} denúncia(s) SMIF foram localizadas para a localidade da missão.`
-            : 'Nenhuma denúncia SMIF foi localizada para a localidade da missão.',
+            ? `${smifCases.length} acolhimento(s) SMIF foram localizados para a localidade da missão.`
+            : 'Nenhum acolhimento SMIF foi localizado para a localidade da missão.',
         ],
         chartIds: [],
         tableIds: [],
@@ -967,7 +967,7 @@ export class AiReportService {
       title: REPORT_SECTION_LABELS.STRATEGIC_OVERVIEW,
       facts: [
         `Painel situacional indica ${situational.localityCount} localidade(s) catalogada(s).`,
-        `${situational.complaints.totalCases} denúncia(s) formal(is) no consolidado estratégico.`,
+        `${situational.complaints.totalCases} acolhimento(s) formal(is) no consolidado estratégico.`,
         `Sala COMGEP aponta ${comgepRoom.summary.criticalUfCount} UF(s) crítica(s) e ${comgepRoom.summary.highRiskOmCount} OM(s) de alto risco.`,
         focusLabelResolved ? `Recorte solicitado: ${focusLabelResolved}.` : '',
       ].filter(Boolean),
@@ -1060,7 +1060,7 @@ export class AiReportService {
     sectionFacts.RECOMMENDATIONS = {
       title: REPORT_SECTION_LABELS.RECOMMENDATIONS,
       facts: [
-        'As recomendações devem refletir o cruzamento entre pesquisas, denúncias e presença operacional.',
+        'As recomendações devem refletir o cruzamento entre pesquisas, acolhimentos e presença operacional.',
       ],
       chartIds: [],
       tableIds: [],
@@ -1073,7 +1073,7 @@ export class AiReportService {
       );
       const complaintChart = this.createChartFromCounts(
         'cpca_status_chart',
-        'Denúncias CPCA/SMIF por status',
+        'Acolhimentos CPCA/SMIF por status',
         complaintStatusCounts,
         '#D32F2F',
       );

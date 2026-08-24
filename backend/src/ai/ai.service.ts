@@ -187,7 +187,7 @@ export const ANALYSIS_CATALOG: {
     type: 'situational',
     title: 'Análise Situacional',
     description:
-      'Panorama dos indicadores-chave: pesquisas, denúncias, atividades e missões.',
+      'Panorama dos indicadores-chave: pesquisas, acolhimentos, atividades e missões.',
     icon: 'Dashboard',
   },
   {
@@ -357,8 +357,8 @@ const ACTION_AGENT_SOURCE_LABELS: Partial<Record<AiKnowledgeSourceId, string>> =
   survey_best_practice_cycle: 'Pesquisa ciclo de boas práticas',
   survey_cpca_meeting: 'Pesquisa encontro CPCA',
   survey_gsd_evaluation: 'Pesquisa avaliação GSD',
-  complaints_cpca: 'Denúncias CPCA',
-  complaints_smif: 'Denúncias SMIF',
+  complaints_cpca: 'Acolhimentos CPCA',
+  complaints_smif: 'Acolhimentos SMIF',
 };
 
 type NarrativePdfBlock =
@@ -431,7 +431,7 @@ export class AiService {
     if (profile === 'cpca_agent') {
       return [
         'Responda como a IA analítica nacional da CPCA.',
-        'Priorize denúncias CPCA, workflow, inconsistências cadastrais e procedimentais, aderência normativa, risco institucional e rastreabilidade por OM e número do caso.',
+        'Priorize acolhimentos CPCA, workflow, inconsistências cadastrais e procedimentais, aderência normativa, risco institucional e rastreabilidade por OM e número do caso.',
         'Quando apontar inconsistência, diferencie fato cadastrado, leitura analítica e base normativa.',
       ].join(' ');
     }
@@ -439,7 +439,7 @@ export class AiService {
       executive:
         'Responda com leitura ampla do sistema, sintetizando o que for mais relevante para a pergunta.',
       situational:
-        'Responda com foco em panorama situacional: pesquisas, denúncias, atividades, missões e tarefas.',
+        'Responda com foco em panorama situacional: pesquisas, acolhimentos, atividades, missões e tarefas.',
       aggressor:
         'Responda com foco em perfil de assédio, violência, agressor, vítima e relações hierárquicas.',
       text: 'Responda com foco em análise textual, termos, tendências e padrões em textos livres.',
@@ -1815,11 +1815,11 @@ export class AiService {
     if (value.includes('/missions')) return 'Abrir missões';
     if (value.includes('/activities')) return 'Abrir atividades';
     if (value.includes('/cipavd-activities')) return 'Abrir atividades CIPAVD';
-    if (value.includes('/cpca-cases')) return 'Abrir denúncias CPCA';
+    if (value.includes('/cpca-cases')) return 'Abrir acolhimentos CPCA';
     if (value.includes('/cpca-ai')) return 'Abrir IA CPCA';
     if (value.includes('/cpca-commission')) return 'Abrir comissão CPCA';
     if (value.includes('/cpca-checklist')) return 'Abrir checklist CPCA';
-    if (value.includes('/smif-complaints')) return 'Abrir denúncias SMIF';
+    if (value.includes('/smif-complaints')) return 'Abrir acolhimentos SMIF';
     if (value.includes('/dashboard/estrategico')) return 'Abrir painel estratégico';
     if (value.includes('/ai')) return 'Abrir IA';
     return 'Abrir referência';
@@ -1843,8 +1843,8 @@ export class AiService {
       push('Abrir atividades SMIF', '/activities');
       push('Abrir atividades CIPAVD', '/cipavd-activities');
     }
-    if (/\b(cpca|denuncia cpca|denúncia cpca)\b/.test(normalized)) {
-      push('Abrir denúncias CPCA', '/cpca-cases');
+    if (/\b(cpca|acolhimento cpca|denuncia cpca|denúncia cpca)\b/.test(normalized)) {
+      push('Abrir acolhimentos CPCA', '/cpca-cases');
     }
     if (/\b(checklist|acoes da cpca|ações da cpca)\b/.test(normalized)) {
       push('Abrir checklist CPCA', '/cpca-checklist');
@@ -1855,8 +1855,8 @@ export class AiService {
     if (/\b(ia cpca|agente cpca|relatorio cpca|relatório cpca|inconsistencia cpca|inconsistência cpca)\b/.test(normalized)) {
       push('Abrir IA CPCA', '/cpca-ai');
     }
-    if (/\b(smif|denuncia smif|denúncia smif)\b/.test(normalized)) {
-      push('Abrir denúncias SMIF', '/smif-complaints');
+    if (/\b(smif|acolhimento smif|denuncia smif|denúncia smif)\b/.test(normalized)) {
+      push('Abrir acolhimentos SMIF', '/smif-complaints');
     }
     if (/\b(kpi|painel|estrategic|estrategico|estratégico|indicador)\b/.test(normalized)) {
       push('Abrir painel estratégico', '/dashboard/estrategico');
@@ -2156,7 +2156,7 @@ export class AiService {
     if (profileData) {
       payload.perfilDenuncias = this.compactAggressorProfile(profileData);
       summaryBlocks.push('');
-      summaryBlocks.push('## Denúncias e perfis');
+      summaryBlocks.push('## Acolhimentos e perfis');
       summaryBlocks.push(...this.buildAggressorHighlights(profileData));
     }
     if (textData) {
@@ -2208,7 +2208,7 @@ export class AiService {
       sourceLine,
       featureLine,
       args.profile === 'cpca_agent'
-        ? 'Quando mencionar denúncias CPCA, cite número do caso, OM e diferencie fato cadastrado, inconsistência detectada e base normativa.'
+        ? 'Quando mencionar acolhimentos CPCA, cite número do caso, OM e diferencie fato cadastrado, inconsistência detectada e base normativa.'
         : '',
       'Se a resposta depender de base não permitida ou dado ausente, diga isso claramente.',
       knowledgeContextText
@@ -2270,7 +2270,7 @@ export class AiService {
         includeComplaints: true,
         includeText: true,
         includeGeo: false,
-        focusSummary: 'gestão CPCA, denúncias e conformidade',
+        focusSummary: 'gestão CPCA, acolhimentos e conformidade',
       },
       executive: {
         includeOverview: true,
@@ -2291,7 +2291,7 @@ export class AiService {
         includeComplaints: true,
         includeText: false,
         includeGeo: false,
-        focusSummary: 'perfil de denúncias e violência',
+        focusSummary: 'perfil de acolhimentos e violência',
       },
       text: {
         includeOverview: false,
@@ -2327,8 +2327,8 @@ export class AiService {
           : mentionsText
             ? 'conteúdo textual, narrativas e sinais CPCA'
             : mentionsComplaints
-              ? 'workflow, inconsistências e denúncias CPCA'
-              : 'governança CPCA e denúncias',
+              ? 'workflow, inconsistências e acolhimentos CPCA'
+              : 'governança CPCA e acolhimentos',
       };
     }
 
@@ -2342,7 +2342,7 @@ export class AiService {
         : mentionsText
           ? 'textos livres e padrões'
           : mentionsComplaints
-            ? 'denúncias, CPCA e proteção'
+            ? 'acolhimentos, CPCA e proteção'
             : 'operações e execução',
     };
   }
@@ -2500,7 +2500,7 @@ export class AiService {
       '## Panorama situacional',
       ...this.buildSituationalHighlights(dashboard),
       '',
-      '## Perfil das denúncias',
+      '## Perfil dos acolhimentos',
       ...this.buildAggressorHighlights(profile),
       '',
       '## Sinais textuais',
@@ -2545,7 +2545,7 @@ export class AiService {
       this.buildAggressorRecommendation(profile),
       '',
       '## Nota técnica',
-      'Análise estruturada local produzida a partir do perfil consolidado de denúncias.',
+      'Análise estruturada local produzida a partir do perfil consolidado de acolhimentos.',
     ].join('\n');
   }
 
@@ -2599,7 +2599,7 @@ export class AiService {
 
     return `O sistema registra ${this.formatInt(
       complaints?.totalCases ?? 0,
-    )} denúncia(s), com ${this.formatInt(
+    )} acolhimento(s), com ${this.formatInt(
       complaints?.openCases ?? 0,
     )} em aberto, ${this.formatInt(
       activities?.totalActivities ?? 0,
@@ -2640,7 +2640,7 @@ export class AiService {
       )} e conhecimento do processo em ${this.formatPct(
         recruits?.knowReportProcessPercent ?? 0,
       )}.`,
-      `- Denúncias: ${this.formatInt(
+      `- Acolhimentos: ${this.formatInt(
         complaints?.totalCases ?? 0,
       )} total, ${this.formatInt(
         complaints?.openCases ?? 0,
@@ -2732,7 +2732,7 @@ export class AiService {
 
     return ranked.map(
       (item: any) =>
-        `- ${item.uf}: ${this.formatInt(item?.complaints ?? 0)} denúncia(s), ${this.formatInt(item?.activities ?? 0)} atividade(s) e ${this.formatInt(item?.missions ?? 0)} missão(ões).`,
+        `- ${item.uf}: ${this.formatInt(item?.complaints ?? 0)} acolhimento(s), ${this.formatInt(item?.activities ?? 0)} atividade(s) e ${this.formatInt(item?.missions ?? 0)} missão(ões).`,
     );
   }
 
@@ -2763,7 +2763,7 @@ export class AiService {
       : null;
 
     if (openCases > 0 || violenceRate >= 20 || domesticRate >= 10) {
-      return `O recorte indica necessidade de intervenção imediata, combinando acompanhamento das denúncias em aberto, reforço de ações preventivas e foco nas UFs ou localidades mais carregadas${
+      return `O recorte indica necessidade de intervenção imediata, combinando acompanhamento dos acolhimentos em aberto, reforço de ações preventivas e foco nas UFs ou localidades mais carregadas${
         topState?.uf ? `, com atenção especial para ${topState.uf}` : ''
       }.`;
     }
@@ -2771,7 +2771,7 @@ export class AiService {
       return 'O principal ponto de atenção está na confiança para denunciar. O encaminhamento prioritário é ampliar comunicação institucional e proteção percebida pelos militares.';
     }
     if (Number(profile?.totalCases ?? 0) > 0) {
-      return 'O cenário não aponta crise aguda, mas recomenda manutenção da vigilância institucional sobre o perfil das denúncias e monitoramento contínuo dos grupos mais expostos.';
+      return 'O cenário não aponta crise aguda, mas recomenda manutenção da vigilância institucional sobre o perfil dos acolhimentos e monitoramento contínuo dos grupos mais expostos.';
     }
     return 'O recorte atual sugere estabilidade relativa. O foco recomendado é manter cobertura institucional e monitorar sinais precoces nas pesquisas e textos livres.';
   }
@@ -2797,7 +2797,7 @@ export class AiService {
       ? textSummary.topWords[0]?.word ?? textSummary.topWords[0]?.label
       : null;
     return firstWord
-      ? `O termo "${firstWord}" deve ser usado como trilha inicial de investigação qualitativa e cruzado com denúncias, pesquisas e relatórios operacionais.`
+      ? `O termo "${firstWord}" deve ser usado como trilha inicial de investigação qualitativa e cruzado com acolhimentos, pesquisas e relatórios operacionais.`
       : 'Os textos devem ser lidos em conjunto com os indicadores quantitativos para identificar sinais precoces e temas recorrentes.';
   }
 
@@ -2818,7 +2818,7 @@ export class AiService {
       }))
       .sort((a: any, b: any) => Number(b.total ?? 0) - Number(a.total ?? 0))[0];
     return top?.uf
-      ? `O principal foco territorial do recorte está em ${top.uf}. O passo seguinte é cruzar esse estado com cobertura institucional, denúncias e presença operacional.`
+      ? `O principal foco territorial do recorte está em ${top.uf}. O passo seguinte é cruzar esse estado com cobertura institucional, acolhimentos e presença operacional.`
       : 'Use a distribuição por estado para ordenar onde concentrar análise e presença institucional.';
   }
 
@@ -3179,7 +3179,7 @@ export class AiService {
           y,
           cardW,
           String(dashboard.complaints?.totalCases ?? 0),
-          'Denúncias',
+          'Acolhimentos',
           RED,
         );
         valueCard(
@@ -4161,7 +4161,7 @@ export class AiService {
       lines.push('');
       lines.push('## Por que este recorte apareceu');
       lines.push(
-        `Hoje o sistema registra ${roomSummary?.resumo?.omsCobertasCpca ?? 0} de ${roomSummary?.resumo?.totalOms ?? 0} OMs cobertas (${coveragePercent.toFixed(1)}%), ${roomSummary?.resumo?.ufsCriticas ?? 0} UFs prioritárias, ${roomSummary?.resumo?.omsAltoRisco ?? 0} OMs de alto risco e ${roomSummary?.resumo?.denunciasAbertas ?? 0} denúncia(s) aberta(s).`,
+        `Hoje o sistema registra ${roomSummary?.resumo?.omsCobertasCpca ?? 0} de ${roomSummary?.resumo?.totalOms ?? 0} OMs cobertas (${coveragePercent.toFixed(1)}%), ${roomSummary?.resumo?.ufsCriticas ?? 0} UFs prioritárias, ${roomSummary?.resumo?.omsAltoRisco ?? 0} OMs de alto risco e ${roomSummary?.resumo?.denunciasAbertas ?? 0} acolhimento(s) aberto(s).`,
       );
       if (dominantRiskOm) {
         lines.push(
@@ -4178,7 +4178,7 @@ export class AiService {
         `No recorte de ${scopeLabel}, com foco em ${focusLabel}, o cenário exige atenção sobre cobertura CPCA, risco institucional e presença operacional.`,
       );
       lines.push(
-        `Hoje o sistema registra ${roomSummary?.resumo?.omsCobertasCpca ?? 0} de ${roomSummary?.resumo?.totalOms ?? 0} OMs cobertas (${coveragePercent.toFixed(1)}%), ${roomSummary?.resumo?.ufsCriticas ?? 0} UFs prioritárias, ${roomSummary?.resumo?.omsAltoRisco ?? 0} OMs de alto risco e ${roomSummary?.resumo?.denunciasAbertas ?? 0} denúncia(s) aberta(s).`,
+        `Hoje o sistema registra ${roomSummary?.resumo?.omsCobertasCpca ?? 0} de ${roomSummary?.resumo?.totalOms ?? 0} OMs cobertas (${coveragePercent.toFixed(1)}%), ${roomSummary?.resumo?.ufsCriticas ?? 0} UFs prioritárias, ${roomSummary?.resumo?.omsAltoRisco ?? 0} OMs de alto risco e ${roomSummary?.resumo?.denunciasAbertas ?? 0} acolhimento(s) aberto(s).`,
       );
       if (dominantRiskOm) {
         lines.push(
@@ -4221,7 +4221,7 @@ export class AiService {
             .join('; ')}.`,
         );
         lines.push(
-          'A priorização considera, nesta ordem, risco da OM, denúncias abertas ou retaliação, ausência de cobertura CPCA e diferença entre risco e presença operacional.',
+          'A priorização considera, nesta ordem, risco da OM, acolhimentos abertos ou retaliação, ausência de cobertura CPCA e diferença entre risco e presença operacional.',
         );
       } else {
         lines.push(
@@ -4456,8 +4456,8 @@ export class AiService {
       `${higher.uf} ficou acima de ${lower.uf} porque combina risco mais alto com piores condicionantes estruturais neste recorte.`,
       '',
       '## Comparação objetiva',
-      `- ${higher.uf}: risco ${higher.riskScore}, cobertura CPCA ${higher.coveragePercent}%, presença ${higher.presenceScore}, denúncias abertas ${higher.complaints?.openCases ?? 0}, retaliação ${higher.complaints?.retaliationCases ?? 0}.`,
-      `- ${lower.uf}: risco ${lower.riskScore}, cobertura CPCA ${lower.coveragePercent}%, presença ${lower.presenceScore}, denúncias abertas ${lower.complaints?.openCases ?? 0}, retaliação ${lower.complaints?.retaliationCases ?? 0}.`,
+      `- ${higher.uf}: risco ${higher.riskScore}, cobertura CPCA ${higher.coveragePercent}%, presença ${higher.presenceScore}, acolhimentos abertos ${higher.complaints?.openCases ?? 0}, retaliação ${higher.complaints?.retaliationCases ?? 0}.`,
+      `- ${lower.uf}: risco ${lower.riskScore}, cobertura CPCA ${lower.coveragePercent}%, presença ${lower.presenceScore}, acolhimentos abertos ${lower.complaints?.openCases ?? 0}, retaliação ${lower.complaints?.retaliationCases ?? 0}.`,
       '',
       '## Fatores que explicam a diferença',
       ...reasons.map((reason) => `- ${reason}`),
@@ -4586,8 +4586,8 @@ export class AiService {
         score: commandSeverity,
         reason:
           highRiskOms.length > 0
-            ? `${highRiskOms.length} OM(s) críticas com denúncias abertas ou risco de retaliação puxando o índice.`
-            : 'não há massa crítica suficiente de denúncias abertas neste recorte.',
+            ? `${highRiskOms.length} OM(s) críticas com acolhimentos abertos ou risco de retaliação puxando o índice.`
+            : 'não há massa crítica suficiente de acolhimentos abertos neste recorte.',
       },
     ].sort((a, b) => b.score - a.score);
 
@@ -4602,7 +4602,7 @@ export class AiService {
 
     if (ufRow) {
       lines.push(
-        `- ${ufRow.uf}: risco ${ufRow.riskScore}, cobertura ${ufRow.coveragePercent}%, presença ${ufRow.presenceScore}, denúncias abertas ${ufRow.complaints?.openCases ?? 0}.`,
+        `- ${ufRow.uf}: risco ${ufRow.riskScore}, cobertura ${ufRow.coveragePercent}%, presença ${ufRow.presenceScore}, acolhimentos abertos ${ufRow.complaints?.openCases ?? 0}.`,
       );
     }
 
@@ -4626,7 +4626,7 @@ export class AiService {
       `${row.uf} aparece como UF prioritária porque combina risco ${row.riskScore}, cobertura CPCA de ${row.coveragePercent}% e presença operacional ${row.presenceScore}.`,
       '',
       '## Fatores do score',
-      `- Denúncias abertas: ${row.complaints?.openCases ?? 0}.`,
+      `- Acolhimentos abertos: ${row.complaints?.openCases ?? 0}.`,
       `- Casos com retaliação: ${row.complaints?.retaliationCases ?? 0}.`,
       `- Taxa de violência em pesquisa: ${row.surveyRate}%.`,
       `- Taxa de violência doméstica: ${row.domesticRate}%.`,
@@ -4646,7 +4646,7 @@ export class AiService {
       '',
       '## Fatores do score',
       `- Cobertura CPCA: ${om.coverageType}.`,
-      `- Denúncias abertas: ${om.complaints?.openCases ?? 0}.`,
+      `- Acolhimentos abertos: ${om.complaints?.openCases ?? 0}.`,
       `- Casos com retaliação: ${om.complaints?.retaliationCases ?? 0}.`,
       `- Casos parados: ${om.complaints?.stalledCases ?? 0}.`,
       `- Casos sexuais: ${om.complaints?.sexualCases ?? 0}.`,
@@ -4676,8 +4676,8 @@ export class AiService {
       `${higher.code} ficou acima de ${lower.code} porque apresenta risco agregado maior e condicionantes mais críticos neste recorte.`,
       '',
       '## Comparação objetiva',
-      `- ${higher.code} - ${higher.name}: score ${higher.riskScore}, cobertura ${higher.coverageType}, denúncias abertas ${higher.complaints?.openCases ?? 0}, retaliação ${higher.complaints?.retaliationCases ?? 0}, pesquisa ${higher.surveyRate}%, violência doméstica ${higher.domesticRate}%.`,
-      `- ${lower.code} - ${lower.name}: score ${lower.riskScore}, cobertura ${lower.coverageType}, denúncias abertas ${lower.complaints?.openCases ?? 0}, retaliação ${lower.complaints?.retaliationCases ?? 0}, pesquisa ${lower.surveyRate}%, violência doméstica ${lower.domesticRate}%.`,
+      `- ${higher.code} - ${higher.name}: score ${higher.riskScore}, cobertura ${higher.coverageType}, acolhimentos abertos ${higher.complaints?.openCases ?? 0}, retaliação ${higher.complaints?.retaliationCases ?? 0}, pesquisa ${higher.surveyRate}%, violência doméstica ${higher.domesticRate}%.`,
+      `- ${lower.code} - ${lower.name}: score ${lower.riskScore}, cobertura ${lower.coverageType}, acolhimentos abertos ${lower.complaints?.openCases ?? 0}, retaliação ${lower.complaints?.retaliationCases ?? 0}, pesquisa ${lower.surveyRate}%, violência doméstica ${lower.domesticRate}%.`,
       '',
       '## Fatores que explicam a diferença',
       ...reasons.map((reason) => `- ${reason}`),
@@ -4801,7 +4801,7 @@ export class AiService {
     }
     if (Number(higher?.complaints?.openCases ?? 0) > Number(lower?.complaints?.openCases ?? 0)) {
       reasons.push(
-        `${higher.uf} tem mais denúncias abertas (${higher.complaints?.openCases ?? 0} vs ${lower.complaints?.openCases ?? 0}).`,
+        `${higher.uf} tem mais acolhimentos abertos (${higher.complaints?.openCases ?? 0} vs ${lower.complaints?.openCases ?? 0}).`,
       );
     }
     if (Number(higher?.coveragePercent ?? 0) < Number(lower?.coveragePercent ?? 0)) {
@@ -4841,7 +4841,7 @@ export class AiService {
     }
     if (Number(higher?.complaints?.openCases ?? 0) > Number(lower?.complaints?.openCases ?? 0)) {
       reasons.push(
-        `${higher.code} tem mais denúncias abertas (${higher.complaints?.openCases ?? 0} vs ${lower.complaints?.openCases ?? 0}).`,
+        `${higher.code} tem mais acolhimentos abertos (${higher.complaints?.openCases ?? 0} vs ${lower.complaints?.openCases ?? 0}).`,
       );
     }
     if (String(higher?.coverageType ?? '') !== String(lower?.coverageType ?? '')) {
@@ -5192,7 +5192,7 @@ export class AiService {
       `- Cobertura CPCA: ${roomSummary?.resumo?.omsCobertasCpca ?? 0}/${roomSummary?.resumo?.totalOms ?? 0} OMs (${roomSummary?.resumo?.percentualCoberturaCpca ?? 0}%).`,
       `- UFs críticas: ${roomSummary?.resumo?.ufsCriticas ?? 0}.`,
       `- OMs de alto risco: ${roomSummary?.resumo?.omsAltoRisco ?? 0}.`,
-      `- Denúncias abertas: ${roomSummary?.resumo?.denunciasAbertas ?? 0}.`,
+      `- Acolhimentos abertos: ${roomSummary?.resumo?.denunciasAbertas ?? 0}.`,
       `- Presença operacional: ${roomSummary?.resumo?.eventosPresencaOperacional ?? 0} eventos.`,
       `- Confiança do dado: ${roomSummary?.confiancaDado?.coberturaSuportadaPercentual ?? 0}% de cobertura suportada; ${roomSummary?.confiancaDado?.naoEncontrados ?? 0} não encontrados.`,
     ];
@@ -5446,7 +5446,7 @@ export class AiService {
     const domesticRate = Number(item?.domesticRate ?? 0);
     const reasons: string[] = [];
     if (safeProfile.allowComplaints && openCases > 0) {
-      reasons.push(`${openCases} denúncia(s) aberta(s)`);
+      reasons.push(`${openCases} acolhimento(s) aberto(s)`);
     }
     if (safeProfile.allowComplaints && retaliationCases > 0) {
       reasons.push(`${retaliationCases} risco(s) de retaliação`);
@@ -6123,7 +6123,7 @@ export class AiService {
     const domesticRate = Number(item?.domesticRate ?? 0);
 
     if (safeProfile.allowComplaints && openCases > 0) {
-      reasons.push(`${openCases} denúncia(s) aberta(s)`);
+      reasons.push(`${openCases} acolhimento(s) aberto(s)`);
     }
     if (safeProfile.allowComplaints && retaliationCases > 0) {
       reasons.push(`${retaliationCases} caso(s) com risco de retaliação`);
@@ -6163,7 +6163,7 @@ export class AiService {
     const domesticRate = Number(item?.domesticRate ?? 0);
 
     if (safeProfile.allowComplaints && openCases > 0) {
-      reasons.push(`${openCases} denúncia(s) aberta(s)`);
+      reasons.push(`${openCases} acolhimento(s) aberto(s)`);
     }
     if (safeProfile.allowComplaints && retaliationCases > 0) {
       reasons.push(`${retaliationCases} caso(s) com risco de retaliação`);
@@ -6305,13 +6305,13 @@ export class AiService {
 
     const defaultDescriptions: Record<AnalysisType, string> = {
       executive:
-        'Redija um resumo executivo completo para o comando, abordando panorama situacional, perfil de denúncias, destaques textuais e distribuição geográfica.',
+        'Redija um resumo executivo completo para o comando, abordando panorama situacional, perfil de acolhimentos, destaques textuais e distribuição geográfica.',
       situational:
-        'Analise o panorama situacional: pesquisas, taxas de violência, denúncias ativas, atividades e missões.',
+        'Analise o panorama situacional: pesquisas, taxas de violência, acolhimentos ativos, atividades e missões.',
       aggressor:
         'Analise o perfil de assédio e violência: tipos de ocorrência, perfil do agressor e da vítima, relações hierárquicas e contextos.',
       text: 'Analise os padrões e tendências identificados nos textos livres do sistema: termos mais frequentes, temas recorrentes e insights.',
-      geo: 'Analise a distribuição geográfica: estados com mais registros, concentração de denúncias, atividades e missões por região.',
+      geo: 'Analise a distribuição geográfica: estados com mais registros, concentração de acolhimentos, atividades e missões por região.',
     };
 
     const instruction = customPrompt?.trim() || defaultDescriptions[type];

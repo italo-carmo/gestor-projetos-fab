@@ -180,7 +180,7 @@ export function DashboardLocalityPage() {
             Panorama da localidade
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Conteúdos e registros vinculados a esta localidade em todo o sistema (exceto denúncias/CPCA).
+            Conteúdos e registros vinculados a esta localidade em todo o sistema (exceto acolhimentos/CPCA).
           </Typography>
 
           <Box
