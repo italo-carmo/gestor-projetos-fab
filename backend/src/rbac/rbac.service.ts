@@ -169,6 +169,11 @@ export class RbacService implements OnModuleInit {
   async updateRole(id: string, data: Prisma.RoleUpdateInput) {
     const existing = await this.prisma.role.findUnique({ where: { id } });
     if (!existing) throwError('NOT_FOUND');
+    if (this.isManagedOdgsaRole(existing)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'ODGSA_ROLE_MANAGED_AUTOMATICALLY',
+      });
+    }
 
     const nextName =
       typeof data.name === 'string' && data.name.trim().length > 0
@@ -202,6 +207,11 @@ export class RbacService implements OnModuleInit {
       include: { permissions: { include: { permission: true } } },
     });
     if (!role) throwError('NOT_FOUND');
+    if (this.isManagedOdgsaRole(role)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'ODGSA_ROLE_MANAGED_AUTOMATICALLY',
+      });
+    }
 
     const cloned = await this.prisma.role.create({
       data: {
@@ -241,6 +251,11 @@ export class RbacService implements OnModuleInit {
     if (!role) throwError('NOT_FOUND');
     if (this.isTiRoleName(role.name)) {
       throwError('VALIDATION_ERROR', { reason: 'ROLE_TI_FIXED_PERMISSIONS' });
+    }
+    if (this.isManagedOdgsaRole(role)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'ODGSA_ROLE_MANAGED_AUTOMATICALLY',
+      });
     }
 
     if (!permissions || permissions.length === 0) {
@@ -1368,6 +1383,15 @@ export class RbacService implements OnModuleInit {
 
   private isTiRoleName(roleName: string | null | undefined) {
     return normalizeRoleName(roleName) === TI_ROLE_NAME_NORMALIZED;
+  }
+
+  private isManagedOdgsaRole(role: { flagsJson?: unknown } | null | undefined) {
+    const flags = role?.flagsJson;
+    if (!flags || typeof flags !== 'object' || Array.isArray(flags)) {
+      return false;
+    }
+    const accessProfile = (flags as Record<string, unknown>).accessProfile;
+    return typeof accessProfile === 'string' && accessProfile === 'ODGSA';
   }
 
   private normalizeRoleWildcard(

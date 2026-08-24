@@ -106,6 +106,7 @@ type ComplaintHistoryFilters = ComplaintListFilters & {
 type ScopeConstraints = {
   localityId?: string;
   userId?: string;
+  odgsaRoleIds?: string[];
   cpcaCommissionScope?: boolean;
 };
 
@@ -4317,7 +4318,14 @@ export class CpcaService {
         if (!userId) {
           throwError('RBAC_FORBIDDEN');
         }
-        return { userId, cpcaCommissionScope: true };
+        return {
+          userId,
+          odgsaRoleIds: (user.roles ?? [])
+            .filter((role) => this.isOdgsaRole(role))
+            .map((role) => String(role.id ?? '').trim())
+            .filter(Boolean),
+          cpcaCommissionScope: true,
+        };
       }
 
       if (!user.omId) {
@@ -4497,6 +4505,34 @@ export class CpcaService {
       return null;
     }
 
+    const roleIds = Array.from(
+      new Set(
+        (constraints.odgsaRoleIds ?? [])
+          .map((roleId) => String(roleId ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    if (roleIds.length > 0) {
+      const odgsas = await this.prisma.odgsa.findMany({
+        where: { roleId: { in: roleIds } },
+        select: { id: true },
+      });
+      if (odgsas.length > 0) {
+        const odgsaIds = odgsas.map((odgsa) => odgsa.id);
+        const assignments = await this.prisma.odgsaOm.findMany({
+          where: { odgsaId: { in: odgsaIds } },
+          select: { omId: true },
+        });
+        return Array.from(
+          new Set(
+            assignments
+              .map((assignment) => String(assignment.omId ?? '').trim())
+              .filter(Boolean),
+          ),
+        );
+      }
+    }
+
     const managerLocalityIds = await this.resolveCpcaManagerLocalityIds(
       constraints,
       context,
@@ -4562,6 +4598,17 @@ export class CpcaService {
     }
 
     return Array.from(localityIds);
+  }
+
+  private isOdgsaRole(role: RbacUser['roles'][number]) {
+    const flags = role?.flagsJson;
+    if (flags && typeof flags === 'object' && !Array.isArray(flags)) {
+      const accessProfile = (flags as Record<string, unknown>).accessProfile;
+      if (typeof accessProfile === 'string' && accessProfile === 'ODGSA') {
+        return true;
+      }
+    }
+    return /^ODGSA\s*[·-]/i.test(String(role?.name ?? '').trim());
   }
 
   private normalizeCaseNumberLocalityToken(localityCode: string) {

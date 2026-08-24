@@ -306,6 +306,12 @@ const navSections: NavSection[] = [
         menuKey: "cpca_coverage",
       },
       {
+        label: "OMs do meu ODGSA",
+        to: "/odgsa/oms",
+        icon: <AccountTreeIcon fontSize="small" />,
+        menuKey: "odgsa_oms",
+      },
+      {
         label: "Checklist",
         to: "/cpca-checklist",
         icon: <FactCheckRoundedIcon fontSize="small" />,
@@ -334,6 +340,12 @@ const navSections: NavSection[] = [
         to: "/admin/rbac",
         icon: <PeopleIcon fontSize="small" />,
         menuKey: "admin_rbac",
+      },
+      {
+        label: "ODGSA",
+        to: "/admin/odgsas",
+        icon: <AccountTreeIcon fontSize="small" />,
+        menuKey: "odgsa_admin",
       },
       {
         label: "Logs",
@@ -524,7 +536,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       return can(me, "cpca_cases", "view");
     }
     if (item.to === "/cpca-commission") {
-      return can(me, "cpca_cases", "view");
+      return (
+        can(me, "cpca_cases", "view") &&
+        !can(me, "odgsa_oms", "view", "LOCALITY")
+      );
     }
     if (item.to === "/cpca-checklist") {
       return (
@@ -593,6 +608,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (item.to === "/cpca-coverage") {
       return can(me, "cpca_coverage", "view");
+    }
+    if (item.to === "/odgsa/oms") {
+      return can(me, "odgsa_oms", "view", "LOCALITY");
+    }
+    if (item.to === "/admin/odgsas") {
+      return can(me, "odgsa_admin", "view", "NATIONAL");
     }
     if (item.to === "/admin") {
       return canAccessAdministration(me);

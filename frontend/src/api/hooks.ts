@@ -2311,6 +2311,76 @@ export function useUpsertLdapUser() {
   });
 }
 
+/** ODGSA */
+export function useOdgsasAdmin(enabled = true) {
+  return useQuery({
+    queryKey: qk.odgsasAdmin,
+    queryFn: async () => (await api.get("/odgsas")).data,
+    enabled,
+  });
+}
+
+export function useCreateOdgsa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (payload: { code: string; name: string }) =>
+      (await api.post("/odgsas", payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.odgsasAdmin });
+      qc.invalidateQueries({ queryKey: qk.roles });
+    },
+  });
+}
+
+export function useUpdateOdgsa() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      id: string;
+      payload: { code?: string; name?: string };
+    }) => (await api.put(`/odgsas/${args.id}`, args.payload)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.odgsasAdmin });
+      qc.invalidateQueries({ queryKey: qk.roles });
+      qc.invalidateQueries({ queryKey: qk.myOdgsa });
+      qc.invalidateQueries({ queryKey: qk.me });
+    },
+  });
+}
+
+export function useMyOdgsa(enabled = true) {
+  return useQuery({
+    queryKey: qk.myOdgsa,
+    queryFn: async () => (await api.get("/odgsas/mine")).data,
+    enabled,
+  });
+}
+
+export function useMyOdgsaOms(enabled = true) {
+  return useQuery({
+    queryKey: qk.myOdgsaOms,
+    queryFn: async () => (await api.get("/odgsas/mine/oms")).data,
+    enabled,
+  });
+}
+
+export function useUpdateMyOdgsaOms() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: {
+      action: "ASSIGN" | "UNASSIGN";
+      omIds: string[];
+    }) => (await api.put("/odgsas/mine/oms/batch", args)).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.myOdgsa });
+      qc.invalidateQueries({ queryKey: qk.myOdgsaOms });
+      qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseStats"] });
+      qc.invalidateQueries({ queryKey: qk.cpcaCaseLocalityOptions() });
+    },
+  });
+}
+
 export function useUploadReport() {
   const qc = useQueryClient();
   return useMutation({

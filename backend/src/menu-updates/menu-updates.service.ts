@@ -37,6 +37,8 @@ const MENU_UPDATE_RESOURCES: Record<string, readonly string[]> = {
   cpca_checklist: [],
   cpca_president_approvals: [],
   cpca_emails: ['cpca_emails'],
+  odgsa_oms: ['odgsa_oms'],
+  odgsa_admin: ['odgsa_admin'],
   bi: ['bi', 'bi_survey'],
   admin_rbac: ['admin_rbac', 'roles', 'users'],
   admin_catalog: [

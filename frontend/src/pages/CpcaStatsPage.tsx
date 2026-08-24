@@ -36,13 +36,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { hasAnyRole, ROLE_TI } from "../app/roleAccess";
 import {
-  hasAnyRole,
-  ROLE_COMANDANTE_COMGEP,
-  ROLE_COORDENACAO_CIPAVD,
-  ROLE_TI,
-} from "../app/roleAccess";
-import { useCpcaCaseStats, useMe, useOmsCatalog } from "../api/hooks";
+  useCpcaCaseLocalityOptions,
+  useCpcaCaseStats,
+  useMe,
+} from "../api/hooks";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
@@ -270,12 +269,7 @@ export function CpcaStatsPage() {
   const [chartDetail, setChartDetail] = useState<CpcaChartDetailState>(null);
   const [kpiDetail, setKpiDetail] = useState<CpcaKpiDetailState>(null);
   const [kpiDetailSearch, setKpiDetailSearch] = useState("");
-  const isNationalScope = hasAnyRole(me, [
-    ROLE_COORDENACAO_CIPAVD,
-    ROLE_COMANDANTE_COMGEP,
-    ROLE_TI,
-  ]);
-  const localitiesQuery = useOmsCatalog(isNationalScope);
+  const localitiesQuery = useCpcaCaseLocalityOptions();
 
   const localityId = params.get("localityId") ?? "";
   const [from, setFrom] = useState("");
@@ -724,7 +718,7 @@ export function CpcaStatsPage() {
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Stack direction={{ xs: "column", md: "row" }} spacing={1.2}>
-            {isNationalScope && (
+            {localities.length > 1 && (
               <TextField
                 select
                 size="small"

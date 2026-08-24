@@ -281,6 +281,16 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     sidebarItems: ["Cobertura"],
     expectedActions: CRUD,
   },
+  odgsa_oms: {
+    menu: "CPCA",
+    menuOrder: 60,
+    title: "OMs do ODGSA",
+    description:
+      "Consulta e manutenção das OMs que compõem o escopo de acompanhamento do próprio ODGSA.",
+    route: "/odgsa/oms",
+    sidebarItems: ["OMs do meu ODGSA"],
+    expectedActions: VIEW_UPDATE,
+  },
   cpca_emails: {
     menu: "CPCA",
     menuOrder: 60,
@@ -411,6 +421,16 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     route: "/admin/rbac",
     sidebarItems: ["Usuarios e Permissoes"],
     expectedActions: ["update", "export", "import"],
+  },
+  odgsa_admin: {
+    menu: "Seguranca",
+    menuOrder: 90,
+    title: "Administração de ODGSA",
+    description:
+      "Cadastro dos ODGSA e geração automática dos seus papéis de acesso.",
+    route: "/admin/odgsas",
+    sidebarItems: ["ODGSA"],
+    expectedActions: ["view", "create", "update"],
   },
   search: {
     menu: "Seguranca",

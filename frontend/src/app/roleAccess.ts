@@ -117,6 +117,7 @@ export function resolveHomePath(user: MePayload | undefined) {
   const canSeeNotices = can(user, "notices", "view");
   const canSeeCpcaCases = can(user, "cpca_cases", "view");
   const canSeeCpcaCoverage = can(user, "cpca_coverage", "view");
+  const canSeeOdgsaOms = can(user, "odgsa_oms", "view", "LOCALITY");
   const canSeeCpcaChecklist =
     can(user, "cpca_checklist", "view") &&
     hasAnyRole(user, [ROLE_TI, ROLE_COMGEP, ROLE_COORDENACAO_CIPAVD]);
@@ -137,6 +138,7 @@ export function resolveHomePath(user: MePayload | undefined) {
     can(user, "roles", "permissions");
   const canSeeAudit = can(user, "audit_logs", "view");
   const canSeeAdministration = canAccessAdministration(user);
+  const canSeeOdgsaAdmin = can(user, "odgsa_admin", "view", "NATIONAL");
 
   if (isCpcaProfile) {
     const cpcaHomeCandidates: Array<[boolean, string]> = [
@@ -188,7 +190,9 @@ export function resolveHomePath(user: MePayload | undefined) {
     [canSeeCpcaChecklist, "/cpca-checklist"],
     [canSeeCpcaPresidentApprovals, "/cpca-president-approvals"],
     [canSeeCpcaEmails, "/cpca-emails"],
+    [canSeeOdgsaOms, "/odgsa/oms"],
     [canSeeAdminRbac, "/admin/rbac"],
+    [canSeeOdgsaAdmin, "/admin/odgsas"],
     [canSeeAudit, "/audit"],
     [canSeeAdministration, "/admin"],
   ];

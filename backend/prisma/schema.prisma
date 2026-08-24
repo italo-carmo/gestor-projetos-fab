@@ -110,6 +110,7 @@ model User {
   cpcaEmailTemplatesUpdated               CpcaEmailTemplate[]              @relation("CpcaEmailTemplateUpdatedBy")
   cpcaEmailDispatchesCreated              CpcaEmailDispatch[]              @relation("CpcaEmailDispatchCreatedBy")
   cpcaEmailDeliveriesReceived             CpcaEmailDelivery[]              @relation("CpcaEmailDeliveryPresidentUser")
+  odgsaOmAssignments                      OdgsaOm[]                        @relation("OdgsaOmAssignedBy")
   certificateEventsCreated                CertificateEvent[]               @relation("CertificateEventCreator")
   certificateTemplatesCreated             CertificateTemplate[]            @relation("CertificateTemplateCreator")
 }
@@ -138,6 +139,7 @@ model Om {
   biNormalizationLinks            BiNormalizationLink[]
   strategicRecommendations        StrategicRecommendation[]
   cpcaEmailDeliveries             CpcaEmailDelivery[]
+  odgsaAssignment                 OdgsaOm?
 
   @@index([hasCpca])
   @@index([uf])
@@ -171,6 +173,36 @@ model Role {
 
   permissions RolePermission[]
   users       UserRole[]
+  odgsa       Odgsa?
+}
+
+model Odgsa {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  roleId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  role Role      @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  oms  OdgsaOm[]
+
+  @@index([name])
+}
+
+model OdgsaOm {
+  id           String   @id @default(cuid())
+  odgsaId      String
+  omId         String   @unique
+  assignedById String?
+  assignedAt   DateTime @default(now())
+
+  odgsa      Odgsa @relation(fields: [odgsaId], references: [id], onDelete: Cascade)
+  om         Om    @relation(fields: [omId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("OdgsaOmAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@index([odgsaId])
+  @@index([assignedById])
 }
 
 model Permission {

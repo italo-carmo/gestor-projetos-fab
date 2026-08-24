@@ -12,6 +12,12 @@ function createPrismaMock() {
     cpcaCommissionMember: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    odgsa: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    odgsaOm: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     cpcComplaintCase: {
       findMany: jest.fn(),
     },
@@ -117,6 +123,80 @@ describe('CpcaService security scope', () => {
 
     expect(result).toEqual([]);
     expect(prisma.cpcaCommissionCoverageOm.findMany).not.toHaveBeenCalled();
+  });
+
+  it('restringe o papel ODGSA somente às OMs vinculadas ao seu ODGSA', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+
+    prisma.odgsa.findMany.mockResolvedValue([{ id: 'odgsa-1' }]);
+    prisma.odgsaOm.findMany.mockResolvedValue([
+      { omId: 'om-2' },
+      { omId: 'om-3' },
+    ]);
+
+    const result = await (service as any).resolveCpcaScopedLocalityIds(
+      {
+        userId: 'odgsa-user',
+        odgsaRoleIds: ['odgsa-role'],
+        cpcaCommissionScope: true,
+      },
+      CPCA_WORKFLOW_CONTEXT,
+    );
+
+    expect(result).toEqual(['om-2', 'om-3']);
+    expect(prisma.cpcaCommissionPresident.findMany).not.toHaveBeenCalled();
+    expect(prisma.cpcaCommissionCoverageOm.findMany).not.toHaveBeenCalled();
+  });
+
+  it('retorna escopo vazio no primeiro acesso de um ODGSA sem OMs', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+
+    prisma.odgsa.findMany.mockResolvedValue([{ id: 'odgsa-1' }]);
+
+    const result = await (service as any).resolveCpcaScopedLocalityIds(
+      {
+        userId: 'odgsa-user',
+        odgsaRoleIds: ['odgsa-role'],
+        cpcaCommissionScope: true,
+      },
+      CPCA_WORKFLOW_CONTEXT,
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  it('aplica o vínculo do ODGSA ao filtro real da listagem de denúncias', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+    const user = makeCpcaUser({ id: 'odgsa-user', omId: 'om-ldap' });
+    user.roles = [
+      {
+        id: 'odgsa-role',
+        name: 'ODGSA · TESTE',
+        permissions: [],
+      },
+    ] as any;
+
+    prisma.odgsa.findMany.mockResolvedValue([{ id: 'odgsa-1' }]);
+    prisma.odgsaOm.findMany.mockResolvedValue([
+      { omId: 'om-2' },
+      { omId: 'om-3' },
+    ]);
+
+    const where = await (service as any).buildComplaintWhere(
+      {},
+      user,
+      CPCA_WORKFLOW_CONTEXT,
+    );
+
+    expect(where).toEqual(
+      expect.objectContaining({
+        workflowScope: 'CPCA',
+        omId: { in: ['om-2', 'om-3'] },
+      }),
+    );
   });
 
   it('permite acesso local ao caso da OM em que o usuário é presidente formal', async () => {

@@ -45,6 +45,8 @@ import { BestPracticesPage } from "./pages/BestPracticesPage";
 import { LessonsLearnedPage } from "./pages/LessonsLearnedPage";
 import { CipavdReportsPage } from "./pages/CipavdReportsPage";
 import { InstitutionalPage } from "./pages/InstitutionalPage";
+import { OdgsaAdminPage } from "./pages/OdgsaAdminPage";
+import { OdgsaOmsPage } from "./pages/OdgsaOmsPage";
 import { RequireAuth } from "./app/RequireAuth";
 import { RequireRoleAccess } from "./app/RequireRoleAccess";
 import { can } from "./app/rbac";
@@ -328,7 +330,10 @@ function App() {
                   path="/cpca-commission"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => can(user, "cpca_cases", "view")}
+                      allow={(user) =>
+                        can(user, "cpca_cases", "view") &&
+                        !can(user, "odgsa_oms", "view", "LOCALITY")
+                      }
                     >
                       <CpcaCommissionPage />
                     </RequireRoleAccess>
@@ -384,6 +389,18 @@ function App() {
                       allow={(user) => can(user, "cpca_dashboard", "view")}
                     >
                       <CpcaStatsPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/odgsa/oms"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "odgsa_oms", "view", "LOCALITY")
+                      }
+                    >
+                      <OdgsaOmsPage />
                     </RequireRoleAccess>
                   }
                 />
@@ -634,6 +651,18 @@ function App() {
                       }
                     >
                       <AdminRbacPage />
+                    </RequireRoleAccess>
+                  }
+                />
+                <Route
+                  path="/admin/odgsas"
+                  element={
+                    <RequireRoleAccess
+                      allow={(user) =>
+                        can(user, "odgsa_admin", "view", "NATIONAL")
+                      }
+                    >
+                      <OdgsaAdminPage />
                     </RequireRoleAccess>
                   }
                 />

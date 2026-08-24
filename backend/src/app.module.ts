@@ -41,6 +41,7 @@ import { MailModule } from './mail/mail.module';
 import { CipavdReportsModule } from './cipavd-reports/cipavd-reports.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { InstitutionalModule } from './institutional/institutional.module';
+import { OdgsaModule } from './odgsa/odgsa.module';
 
 @Module({
   imports: [
@@ -89,6 +90,7 @@ import { InstitutionalModule } from './institutional/institutional.module';
     ManualsModule,
     AiModule,
     InstitutionalModule,
+    OdgsaModule,
   ],
   controllers: [AppController],
   providers: [AppService],
