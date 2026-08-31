@@ -66,6 +66,7 @@ import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { ComgepStrategicTab } from "../components/strategic/ComgepStrategicTab";
 import { StrategicTabGuideCard } from "../components/strategic/StrategicTabGuideCard";
+import { formatStrategicProfileLabel } from "../features/strategicProfileLabels";
 
 const COLORS = [
   "#1A3C6E",
@@ -82,11 +83,7 @@ const COLORS = [
   "#1B5E20",
 ];
 
-const GENDER_LABELS: Record<string, string> = {
-  MASCULINO: "Masculino",
-  FEMININO: "Feminino",
-  NAO_INFORMADO: "Não informado",
-};
+const STRATEGIC_TAB_KEYS = ["aggressor", "situational", "geo", "comgep"];
 
 function buildStrategicCopilotLinks(args: {
   label: string;
@@ -239,6 +236,7 @@ function HorizontalBarCard({
   color = "#1A3C6E",
   valueLabel = "Ocorrências",
   onItemClick,
+  labelFormatter,
 }: {
   title: string;
   data: { label: string; count: number; percent: number }[];
@@ -249,8 +247,12 @@ function HorizontalBarCard({
   onItemClick?:
     | ((item: { label: string; count: number; percent: number }) => void)
     | null;
+  labelFormatter?: (label: string) => string;
 }) {
-  const sliced = data.slice(0, maxItems);
+  const sliced = data.slice(0, maxItems).map((item) => ({
+    ...item,
+    label: labelFormatter ? labelFormatter(item.label) : item.label,
+  }));
   if (sliced.length === 0) return null;
   const chartHeight = Math.max(height, sliced.length * 32 + 40);
   return (
@@ -2413,7 +2415,7 @@ function AggressorProfileTab() {
       </KpiDetailModal>
 
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
-        Perfis apontados
+        Perfil dos supostos autores
       </Typography>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -2421,16 +2423,15 @@ function AggressorProfileTab() {
             title="Posto/graduação"
             data={data.aggressorProfile.byRank}
             color="#D32F2F"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
             title="Gênero"
-            data={data.aggressorProfile.byGender.map((d: any) => ({
-              ...d,
-              label: GENDER_LABELS[d.label] ?? d.label,
-            }))}
+            data={data.aggressorProfile.byGender}
             color="#ED6C02"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -2438,12 +2439,13 @@ function AggressorProfileTab() {
             title="Faixa etária"
             data={data.aggressorProfile.byAgeRange}
             color="#7B1FA2"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
       </Grid>
 
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
-        Perfis afetados
+        Perfil das possíveis vítimas
       </Typography>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -2451,16 +2453,15 @@ function AggressorProfileTab() {
             title="Posto/graduação"
             data={data.victimProfile.byRank}
             color="#0288D1"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
             title="Gênero"
-            data={data.victimProfile.byGender.map((d: any) => ({
-              ...d,
-              label: GENDER_LABELS[d.label] ?? d.label,
-            }))}
+            data={data.victimProfile.byGender}
             color="#00838F"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -2468,6 +2469,7 @@ function AggressorProfileTab() {
             title="Faixa etária"
             data={data.victimProfile.byAgeRange}
             color="#2E7D32"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
       </Grid>
@@ -2481,6 +2483,7 @@ function AggressorProfileTab() {
             title="Tipo detalhado"
             data={data.context.byViolenceType}
             color="#D32F2F"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -2488,6 +2491,7 @@ function AggressorProfileTab() {
             title="Contexto"
             data={data.context.byHarassmentContext}
             color="#7B1FA2"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -2495,6 +2499,7 @@ function AggressorProfileTab() {
             title="Local"
             data={data.context.byLocation}
             color="#4E342E"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -2502,6 +2507,7 @@ function AggressorProfileTab() {
             title="Frequência"
             data={data.context.byFrequency}
             color="#ED6C02"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -2509,6 +2515,7 @@ function AggressorProfileTab() {
             title="Forma da Ocorrência"
             data={data.context.byForm}
             color="#0288D1"
+            labelFormatter={formatStrategicProfileLabel}
           />
         </Grid>
       </Grid>
@@ -3949,31 +3956,24 @@ function GeoMapTab() {
 
 export function StrategicDashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentTabParam = String(searchParams.get("tab") ?? "situational");
+  const currentTabParam = String(searchParams.get("tab") ?? "aggressor");
   const normalizedTabParam =
     currentTabParam === "text" ? "situational" : currentTabParam;
-  const tabKeyByIndex = ["situational", "aggressor", "geo", "comgep"];
-  const initialIndex = Math.max(0, tabKeyByIndex.indexOf(normalizedTabParam));
-  const [tab, setTab] = useState(initialIndex);
+  const tab = Math.max(0, STRATEGIC_TAB_KEYS.indexOf(normalizedTabParam));
   const exportPdf = useExportExecutiveReportPdf();
 
   useEffect(() => {
     if (currentTabParam === "text") {
       const next = new URLSearchParams(searchParams);
-      next.delete("tab");
+      next.set("tab", "situational");
       setSearchParams(next, { replace: true });
-      return;
     }
-
-    const nextIndex = Math.max(0, tabKeyByIndex.indexOf(normalizedTabParam));
-    setTab((prev) => (prev === nextIndex ? prev : nextIndex));
-  }, [currentTabParam, normalizedTabParam, searchParams, setSearchParams]);
+  }, [currentTabParam, searchParams, setSearchParams]);
 
   const handleTabChange = (_: unknown, value: number) => {
-    setTab(value);
     const next = new URLSearchParams(searchParams);
-    const nextTabKey = tabKeyByIndex[value] ?? "situational";
-    if (nextTabKey === "situational") {
+    const nextTabKey = STRATEGIC_TAB_KEYS[value] ?? "aggressor";
+    if (nextTabKey === "aggressor") {
       next.delete("tab");
     } else {
       next.set("tab", nextTabKey);
@@ -4038,14 +4038,14 @@ export function StrategicDashboardPage() {
         sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}
       >
         <Tab
-          label="Visão Geral"
-          icon={<DashboardRoundedIcon />}
+          label="Perfil dos Casos"
+          icon={<FingerprintRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}
         />
         <Tab
-          label="Perfil dos Casos"
-          icon={<FingerprintRoundedIcon />}
+          label="Visão Geral"
+          icon={<DashboardRoundedIcon />}
           iconPosition="start"
           sx={{ textTransform: "none" }}
         />
@@ -4063,8 +4063,8 @@ export function StrategicDashboardPage() {
         />
       </Tabs>
 
-      {tab === 0 && <SituationalTab />}
-      {tab === 1 && <AggressorProfileTab />}
+      {tab === 0 && <AggressorProfileTab />}
+      {tab === 1 && <SituationalTab />}
       {tab === 2 && <GeoMapTab />}
       {tab === 3 && <ComgepStrategicTab />}
     </Box>
