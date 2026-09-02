@@ -249,6 +249,8 @@ const COMPLAINT_HISTORY_FIELD_LABELS: Record<string, string> = {
   preliminaryReportGenerated: 'Relatório preliminar gerado',
   preliminaryReportDate: 'Data do relatório preliminar',
   procedureReference: 'Referência do procedimento',
+  procedureStartDate: 'Data de início do procedimento',
+  procedureEndDate: 'Data de término do procedimento',
   procedureNotes: 'Notas do procedimento',
   womenLedHandlingPrioritized: 'Tratamento por mulheres priorizado',
   victimAccusedSeparationEvaluated: 'Separação vítima/acusado avaliada',
@@ -1919,6 +1921,21 @@ export class CpcaService {
       processOpened === false
         ? this.cleanOptional(payload.processNotOpenedReason)
         : null;
+    const procedureStartDate =
+      processOpened === false
+        ? null
+        : (this.parseOptionalIsoDateInput(
+            payload.procedureStartDate,
+            'procedureStartDate',
+          ) ?? null);
+    const procedureEndDate =
+      processOpened === false
+        ? null
+        : (this.parseOptionalIsoDateInput(
+            payload.procedureEndDate,
+            'procedureEndDate',
+          ) ?? null);
+    this.assertProcedureDateRange(procedureStartDate, procedureEndDate);
     this.assertProcessOpeningConsistency(
       processOpened,
       processNotOpenedReason,
@@ -2045,6 +2062,8 @@ export class CpcaService {
         processOpened === false
           ? null
           : this.cleanOptional(payload.procedureReference),
+      procedureStartDate,
+      procedureEndDate,
       procedureNotes:
         processOpened === false
           ? null
@@ -2228,6 +2247,8 @@ export class CpcaService {
         preliminaryReportGenerated: true,
         preliminaryReportDate: true,
         procedureReference: true,
+        procedureStartDate: true,
+        procedureEndDate: true,
         procedureNotes: true,
         womenLedHandlingPrioritized: true,
         victimAccusedSeparationEvaluated: true,
@@ -2344,6 +2365,25 @@ export class CpcaService {
               payload.preliminaryReportDate,
               'preliminaryReportDate',
             );
+    const nextProcedureStartDate =
+      nextProcessOpened === false
+        ? null
+        : payload.procedureStartDate === undefined
+          ? current.procedureStartDate
+          : this.parseOptionalIsoDateInput(
+              payload.procedureStartDate,
+              'procedureStartDate',
+            );
+    const nextProcedureEndDate =
+      nextProcessOpened === false
+        ? null
+        : payload.procedureEndDate === undefined
+          ? current.procedureEndDate
+          : this.parseOptionalIsoDateInput(
+              payload.procedureEndDate,
+              'procedureEndDate',
+            );
+    this.assertProcedureDateRange(nextProcedureStartDate, nextProcedureEndDate);
     const nextVictimAccusedSeparationEvaluated =
       payload.victimAccusedSeparationEvaluated ??
       current.victimAccusedSeparationEvaluated;
@@ -2555,6 +2595,8 @@ export class CpcaService {
             : payload.procedureReference !== undefined
               ? this.cleanOptional(payload.procedureReference)
               : undefined,
+        procedureStartDate: nextProcedureStartDate,
+        procedureEndDate: nextProcedureEndDate,
         procedureNotes:
           nextProcessOpened === false
             ? null
@@ -5368,6 +5410,22 @@ export class CpcaService {
       throwError('VALIDATION_ERROR', {
         field: 'archiveReason',
         reason: 'ARCHIVE_REASON_REQUIRED_FOR_ARCHIVE',
+      });
+    }
+  }
+
+  private assertProcedureDateRange(
+    procedureStartDate: Date | null | undefined,
+    procedureEndDate: Date | null | undefined,
+  ) {
+    if (
+      procedureStartDate &&
+      procedureEndDate &&
+      procedureEndDate.getTime() < procedureStartDate.getTime()
+    ) {
+      throwError('VALIDATION_ERROR', {
+        field: 'procedureEndDate',
+        reason: 'PROCEDURE_END_DATE_BEFORE_START_DATE',
       });
     }
   }

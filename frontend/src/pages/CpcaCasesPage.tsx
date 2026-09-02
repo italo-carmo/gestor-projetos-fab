@@ -85,6 +85,10 @@ import {
   ROLE_TI,
 } from "../app/roleAccess";
 import { useToast } from "../app/toast";
+import {
+  ProcedureSummaryDialog,
+  type ProcedureSummaryItem,
+} from "../components/complaints/ProcedureSummaryDialog";
 import { ConfirmDialog } from "../components/dialogs/ConfirmDialog";
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
@@ -117,6 +121,11 @@ import {
   resolveComplaintProcedureTypeForForm,
   resolveComplaintProcessOpenedValue,
 } from "../features/complaintProcessOpening";
+import {
+  COMPLAINT_OPENED_PROCEDURE_OPTIONS as OPENED_PROCEDURE_OPTIONS,
+  COMPLAINT_PROCEDURE_OPTIONS as PROCEDURE_OPTIONS,
+  COMPLAINT_PROCEDURE_RESULT_OPTIONS as PROCEDURE_CURRENT_SITUATION_OPTIONS,
+} from "../features/complaintProcedureOptions";
 import { buildComplaintWorkflowParams } from "../features/complaintsNavigation";
 
 const STATUS_OPTIONS = [
@@ -199,26 +208,6 @@ const NOTIFIER_TYPE_OPTIONS = [
   { value: "TESTEMUNHA", label: "Testemunha" },
   { value: "TERCEIRO", label: "Terceiro" },
 ];
-
-const PROCEDURE_OPTIONS = [
-  { value: "NOT_DEFINED", label: "Não definido" },
-  { value: "PATD", label: "PATD" },
-  { value: "APF", label: "APF" },
-  { value: "SINDICANCIA", label: "Sindicância" },
-  { value: "PAD", label: "PAD" },
-  { value: "IPM", label: "IPM" },
-  { value: "BOLETIM_OCORRENCIA", label: "Boletim de ocorrência" },
-  { value: "INQUERITO_CIVIL", label: "Inquérito civil" },
-  { value: "NAO_HOUVE", label: "Não houve" },
-  { value: "INQUERITO_POLICIAL_COMUM", label: "Inquérito Policial Comum" },
-  { value: "NOTICIA_FATO", label: "Notícia de Fato" },
-  { value: "CONSELHO_DISCIPLINA", label: "Conselho de Disciplina" },
-  { value: "CONSELHO_JUSTIFICACAO", label: "Conselho de Justificação" },
-];
-
-const OPENED_PROCEDURE_OPTIONS = PROCEDURE_OPTIONS.filter((item) =>
-  isValidOpenedComplaintProcedure(item.value),
-);
 
 const GENDER_OPTIONS = [
   { value: "MASCULINO", label: "Masculino" },
@@ -504,23 +493,7 @@ const MULTI_SELECT_CHECKBOX_SX = {
   },
 };
 
-const PROCEDURE_CURRENT_SITUATION_OPTIONS = [
-  {
-    value: "MEDIDA_DISCIPLINAR_APLICADA",
-    label: "Medida disciplinar aplicada",
-  },
-  { value: "OFERECIDA_DENUNCIA", label: "Oferecida a denúncia" },
-  { value: "ARQUIVADO_PELA_JUSTICA", label: "Arquivado pela justiça" },
-  {
-    value: "ARQUIVADO_PELA_ADMINISTRACAO",
-    label: "Arquivado pela administração",
-  },
-  { value: "CONDENADO_PELA_JUSTICA", label: "Condenado pela Justiça" },
-  { value: "OUTROS", label: "Outros" },
-  { value: "NAO_APLICAVEL", label: "Não aplicável" },
-];
-
-const SELECTABLE_PROCEDURE_CURRENT_SITUATIONS = new Set(
+const SELECTABLE_PROCEDURE_CURRENT_SITUATIONS = new Set<string>(
   PROCEDURE_CURRENT_SITUATION_OPTIONS.map((item) => item.value),
 );
 
@@ -566,7 +539,7 @@ const STEP_DEFS = [
     subtitle: "ICA Art. 51: análise preliminar e procedimento cabível.",
   },
   {
-    title: "4) Condução e encerramento",
+    title: "4) Acompanhamento",
     subtitle: "ICA Arts. 52 a 57: devolutivas, retaliação, defesa e conclusão.",
   },
 ];
@@ -654,9 +627,9 @@ function createDefaultForm() {
     socialSupportProvided: false,
     legalSupportProvided: false,
     contactRestrictionApplied: false,
-    preliminaryReportGenerated: false,
-    preliminaryReportDate: "",
     procedureReference: "",
+    procedureStartDate: "",
+    procedureEndDate: "",
     womenLedHandlingPrioritized: false,
     victimAccusedSeparationEvaluated: false,
     victimAccusedSeparationApplied: false,
@@ -1263,10 +1236,10 @@ export function CpcaCasesPage({
   const procedureSummaryData = procedureSummaryQuery.data as
     | {
         summary?: { procedureCaseCount?: number | null };
-        items?: any[];
+        items?: ProcedureSummaryItem[];
       }
     | undefined;
-  const procedureItems = (procedureSummaryData?.items ?? []) as any[];
+  const procedureItems = procedureSummaryData?.items ?? [];
   const procedureCaseCount = Math.max(
     0,
     Number(procedureSummaryData?.summary?.procedureCaseCount ?? 0) || 0,
@@ -1443,7 +1416,8 @@ export function CpcaCasesPage({
     toNullable(form.processOpened) ||
     toNullable(form.processNotOpenedReason) ||
     toNullable(form.procedureReference) ||
-    toNullable(form.preliminaryReportDate) ||
+    toNullable(form.procedureStartDate) ||
+    toNullable(form.procedureEndDate) ||
     toNullable(form.procedureCurrentSituation) ||
     form.procedureType !== "NOT_DEFINED",
   );
@@ -1562,11 +1536,9 @@ export function CpcaCasesPage({
       socialSupportProvided: Boolean(item.socialSupportProvided),
       legalSupportProvided: Boolean(item.legalSupportProvided),
       contactRestrictionApplied: Boolean(item.contactRestrictionApplied),
-      preliminaryReportGenerated: Boolean(item.preliminaryReportGenerated),
-      preliminaryReportDate: item.preliminaryReportDate
-        ? String(item.preliminaryReportDate).slice(0, 10)
-        : "",
       procedureReference: item.procedureReference ?? "",
+      procedureStartDate: toDateInputValue(item.procedureStartDate),
+      procedureEndDate: toDateInputValue(item.procedureEndDate),
       womenLedHandlingPrioritized: Boolean(item.womenLedHandlingPrioritized),
       victimAccusedSeparationEvaluated: Boolean(
         item.victimAccusedSeparationEvaluated,
@@ -1850,6 +1822,21 @@ export function CpcaCasesPage({
       return;
     }
 
+    if (
+      form.processOpened === "SIM" &&
+      form.procedureStartDate &&
+      form.procedureEndDate &&
+      form.procedureEndDate < form.procedureStartDate
+    ) {
+      setActiveStep(2);
+      toast.push({
+        message:
+          "A data de término do procedimento não pode ser anterior à data de início.",
+        severity: "warning",
+      });
+      return;
+    }
+
     const inferredComplaintType = inferMacroComplaintTypeFromDetailed(
       form.detailedViolenceType,
     );
@@ -1950,18 +1937,16 @@ export function CpcaCasesPage({
       socialSupportProvided: Boolean(form.socialSupportProvided),
       legalSupportProvided: Boolean(form.legalSupportProvided),
       contactRestrictionApplied: Boolean(form.contactRestrictionApplied),
-      preliminaryReportGenerated:
-        form.processOpened === "NAO"
-          ? false
-          : Boolean(toNullable(form.preliminaryReportDate)),
-      preliminaryReportDate:
-        form.processOpened === "NAO"
-          ? null
-          : toNullable(form.preliminaryReportDate),
       procedureReference:
         form.processOpened === "NAO"
           ? null
           : toNullable(form.procedureReference),
+      procedureStartDate:
+        form.processOpened === "NAO"
+          ? null
+          : toNullable(form.procedureStartDate),
+      procedureEndDate:
+        form.processOpened === "NAO" ? null : toNullable(form.procedureEndDate),
       victimAccusedSeparationEvaluated: Boolean(
         form.victimAccusedSeparationEvaluated,
       ),
@@ -2864,8 +2849,8 @@ export function CpcaCasesPage({
                       procedureType: "NOT_DEFINED",
                       procedureCurrentSituation: "",
                       procedureReference: "",
-                      preliminaryReportGenerated: false,
-                      preliminaryReportDate: "",
+                      procedureStartDate: "",
+                      procedureEndDate: "",
                     }
                   : {}),
                 ...(processOpened === "SIM" &&
@@ -2966,7 +2951,31 @@ export function CpcaCasesPage({
                     </MenuItem>
                   ))}
                 </TextField>
+              </Box>
 
+              <TextField
+                size="small"
+                label="Referência do processo"
+                value={form.procedureReference}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    procedureReference: e.target.value,
+                  }))
+                }
+                fullWidth
+              />
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    md: "repeat(3, minmax(0, 1fr))",
+                  },
+                  gap: 1.2,
+                }}
+              >
                 <TextField
                   select
                   size="small"
@@ -2991,38 +3000,48 @@ export function CpcaCasesPage({
                     </MenuItem>
                   ))}
                 </TextField>
-              </Box>
 
-              <TextField
-                size="small"
-                label="Referência do processo"
-                value={form.procedureReference}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    procedureReference: e.target.value,
-                  }))
-                }
-                fullWidth
-              />
-
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
                 <TextField
                   size="small"
                   type="date"
-                  label="Data do relatório"
+                  label="Data de início do procedimento"
                   InputLabelProps={{ shrink: true }}
-                  value={form.preliminaryReportDate}
+                  value={form.procedureStartDate}
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      preliminaryReportDate: e.target.value,
-                      preliminaryReportGenerated: Boolean(e.target.value),
+                      procedureStartDate: e.target.value,
                     }))
                   }
-                  sx={{ minWidth: 220 }}
                 />
-              </Stack>
+
+                <TextField
+                  size="small"
+                  type="date"
+                  label="Data de término do procedimento"
+                  InputLabelProps={{ shrink: true }}
+                  value={form.procedureEndDate}
+                  inputProps={{ min: form.procedureStartDate || undefined }}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      procedureEndDate: e.target.value,
+                    }))
+                  }
+                  error={Boolean(
+                    form.procedureStartDate &&
+                    form.procedureEndDate &&
+                    form.procedureEndDate < form.procedureStartDate,
+                  )}
+                  helperText={
+                    form.procedureStartDate &&
+                    form.procedureEndDate &&
+                    form.procedureEndDate < form.procedureStartDate
+                      ? "A data de término deve ser igual ou posterior à data de início."
+                      : " "
+                  }
+                />
+              </Box>
             </>
           )}
 
@@ -3437,6 +3456,8 @@ export function CpcaCasesPage({
             direction={{ xs: "column", md: "row" }}
             spacing={1}
             flexWrap="wrap"
+            useFlexGap
+            sx={{ rowGap: 1.5 }}
           >
             <TextField
               size="small"
@@ -4095,6 +4116,7 @@ export function CpcaCasesPage({
           sx={{
             height: "100%",
             overflowY: "auto",
+            overflowX: "hidden",
             px: { xs: 2, md: 3 },
             pt: { xs: 2.25, md: 3.25 },
             pb: 3,
@@ -4308,11 +4330,33 @@ export function CpcaCasesPage({
 
               <Card>
                 <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-                  <Box sx={{ overflowX: "auto", overflowY: "hidden", pb: 1 }}>
+                  <Box sx={{ width: "100%", minWidth: 0, pb: 1 }}>
                     <Stepper
                       nonLinear
                       activeStep={activeStep}
-                      sx={{ minWidth: 760 }}
+                      sx={{
+                        width: "100%",
+                        minWidth: 0,
+                        "& .MuiStep-root": {
+                          flex: "1 1 0",
+                          minWidth: 0,
+                          px: { xs: 0.25, sm: 0.5, md: 0.75 },
+                        },
+                        "& .MuiStepConnector-root": {
+                          mx: { xs: -0.25, sm: 0 },
+                        },
+                        "& .MuiStepLabel-root": {
+                          minWidth: 0,
+                          flexDirection: { xs: "column", sm: "row" },
+                          gap: { xs: 0.5, sm: 0 },
+                        },
+                        "& .MuiStepLabel-iconContainer": {
+                          pr: { xs: 0, sm: 0.75 },
+                        },
+                        "& .MuiStepLabel-labelContainer": {
+                          minWidth: 0,
+                        },
+                      }}
                     >
                       {STEP_DEFS.map((step, index) => (
                         <Step key={step.title}>
@@ -4322,9 +4366,19 @@ export function CpcaCasesPage({
                             onClick={() => setActiveStep(index)}
                             sx={{
                               minHeight: 44,
+                              minWidth: 0,
+                              px: { xs: 0.25, sm: 0.5 },
                               overflow: "visible",
                               "& .MuiStepLabel-label": {
-                                whiteSpace: "nowrap",
+                                whiteSpace: "normal",
+                                overflowWrap: "anywhere",
+                                textAlign: { xs: "center", sm: "left" },
+                                fontSize: {
+                                  xs: "0.68rem",
+                                  sm: "0.75rem",
+                                  md: "0.8125rem",
+                                },
+                                lineHeight: 1.2,
                               },
                             }}
                           >
@@ -5293,136 +5347,18 @@ export function CpcaCasesPage({
         </DialogActions>
       </Dialog>
 
-      <Dialog
+      <ProcedureSummaryDialog
         open={procedureModalOpen}
         onClose={() => setProcedureModalOpen(false)}
-        fullWidth
-        maxWidth="lg"
-      >
-        <DialogTitle>Reportes com procedimentos administrativos</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">
-              A relação considera os filtros ativos e apresenta somente os
-              reportes com processo apuratório e procedimento definido.
-            </Typography>
-
-            {procedureSummaryQuery.isLoading ? (
-              <Typography variant="body2" color="text.secondary">
-                Carregando procedimentos administrativos...
-              </Typography>
-            ) : procedureSummaryQuery.isError ? (
-              <Alert severity="error">
-                Não foi possível carregar os procedimentos administrativos.
-              </Alert>
-            ) : procedureItems.length === 0 ? (
-              <Alert severity="info">
-                Nenhum reporte com procedimento administrativo foi encontrado no
-                filtro atual.
-              </Alert>
-            ) : (
-              <Stack spacing={1}>
-                {procedureItems.map((item: any) => {
-                  const procedureLabel =
-                    PROCEDURE_OPTIONS.find(
-                      (entry) => entry.value === item.procedureType,
-                    )?.label ?? item.procedureType;
-                  const resultLabel = item.procedureCurrentSituation
-                    ? (PROCEDURE_CURRENT_SITUATION_OPTIONS.find(
-                        (entry) =>
-                          entry.value === item.procedureCurrentSituation,
-                      )?.label ?? item.procedureCurrentSituation)
-                    : "Resultado não informado";
-                  const statusLabel =
-                    STATUS_OPTIONS.find((entry) => entry.value === item.status)
-                      ?.label ?? item.status;
-                  const statusStyle = STATUS_CHIP_STYLES[item.status] ?? {
-                    bgcolor: "rgba(84, 110, 122, 0.12)",
-                    color: "#37474F",
-                    borderColor: "rgba(84, 110, 122, 0.25)",
-                  };
-
-                  return (
-                    <Box
-                      key={item.id}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        setProcedureModalOpen(false);
-                        openDetails(item.id);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setProcedureModalOpen(false);
-                          openDetails(item.id);
-                        }
-                      }}
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 2.5,
-                        border: "1px solid",
-                        borderColor: "divider",
-                        cursor: "pointer",
-                        transition: "background-color 120ms ease",
-                        "&:hover": { bgcolor: "action.hover" },
-                      }}
-                    >
-                      <Stack spacing={0.85}>
-                        <Stack
-                          direction={{ xs: "column", sm: "row" }}
-                          spacing={1}
-                          justifyContent="space-between"
-                        >
-                          <Typography fontWeight={700}>
-                            {formatComplaintCaseNumberForDisplay(
-                              item.caseNumber,
-                            )}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Recebido em {formatDateTimePtBr(item.reportedAt)}
-                          </Typography>
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatOmLabel(item.locality)}
-                        </Typography>
-                        <Stack direction="row" spacing={1} flexWrap="wrap">
-                          <Chip
-                            size="small"
-                            label={procedureLabel}
-                            color="primary"
-                            variant="outlined"
-                            sx={{ fontWeight: 700 }}
-                          />
-                          <Chip
-                            size="small"
-                            label={statusLabel}
-                            sx={{
-                              fontWeight: 700,
-                              bgcolor: statusStyle.bgcolor,
-                              color: statusStyle.color,
-                              border: "1px solid",
-                              borderColor: statusStyle.borderColor,
-                            }}
-                          />
-                          <Chip
-                            size="small"
-                            label={resultLabel}
-                            variant="outlined"
-                          />
-                        </Stack>
-                      </Stack>
-                    </Box>
-                  );
-                })}
-              </Stack>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setProcedureModalOpen(false)}>Fechar</Button>
-        </DialogActions>
-      </Dialog>
+        items={procedureItems}
+        isLoading={procedureSummaryQuery.isLoading}
+        isError={procedureSummaryQuery.isError}
+        description="A relação considera os filtros ativos e apresenta somente os reportes visíveis para o seu perfil com processo apuratório e procedimento definido."
+        onSelectItem={(item) => {
+          setProcedureModalOpen(false);
+          openDetails(item.id);
+        }}
+      />
 
       <Dialog
         open={validationModalOpen}

@@ -1822,6 +1822,8 @@ model CpcComplaintCase {
   preliminaryReportGenerated       Boolean                   @default(false)
   preliminaryReportDate            DateTime?
   procedureReference               String?
+  procedureStartDate               DateTime?
+  procedureEndDate                 DateTime?
   procedureNotes                   String?
   womenLedHandlingPrioritized      Boolean?
   victimAccusedSeparationEvaluated Boolean                   @default(false)

@@ -386,6 +386,14 @@ export class CreateCpcaCaseDto {
   procedureReference?: string;
 
   @IsOptional()
+  @IsISO8601()
+  procedureStartDate?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  procedureEndDate?: string;
+
+  @IsOptional()
   @IsString()
   @MaxLength(4000)
   procedureNotes?: string;

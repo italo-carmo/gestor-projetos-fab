@@ -55,11 +55,23 @@ import {
 import {
   useStrategicDashboard,
   useAggressorProfile,
+  useCpcaCaseProcedureSummary,
   useGeoMap,
   useExportExecutiveReportPdf,
+  useMe,
+  useSmifComplaintProcedureSummary,
 } from "../api/hooks";
+import { can } from "../app/rbac";
 import { buildAiCopilotPath } from "../app/aiCopilotLaunch";
-import { Link as RouterLink, useSearchParams } from "react-router-dom";
+import {
+  Link as RouterLink,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
+import {
+  ProcedureSummaryDialog,
+  type ProcedureSummaryItem,
+} from "../components/complaints/ProcedureSummaryDialog";
 import { AiCopilotCtaRow } from "../components/strategic/AiCopilotCtaRow";
 import { SkeletonState } from "../components/states/SkeletonState";
 import { EmptyState } from "../components/states/EmptyState";
@@ -2115,7 +2127,54 @@ function SituationalTab() {
 
 function AggressorProfileTab() {
   const { data, isLoading, error } = useAggressorProfile();
+  const { data: me, isLoading: meLoading } = useMe();
+  const navigate = useNavigate();
   const [detailModal, setDetailModal] = useState<string | null>(null);
+  const procedureFilters = useMemo(() => ({}), []);
+  const canViewCpcaProcedures = can(me, "cpca_cases", "view");
+  const canViewSmifProcedures = can(me, "smif_complaints", "view");
+  const cpcaProcedureQuery = useCpcaCaseProcedureSummary(
+    procedureFilters,
+    canViewCpcaProcedures,
+  );
+  const smifProcedureQuery = useSmifComplaintProcedureSummary(
+    procedureFilters,
+    canViewSmifProcedures,
+  );
+
+  const cpcaProcedureItems = useMemo(
+    () =>
+      (
+        ((cpcaProcedureQuery.data as { items?: ProcedureSummaryItem[] })
+          ?.items ?? []) as ProcedureSummaryItem[]
+      ).map((item) => ({
+        ...item,
+        workflowScope: item.workflowScope || "CPCA",
+      })),
+    [cpcaProcedureQuery.data],
+  );
+  const smifProcedureItems = useMemo(
+    () =>
+      (
+        ((smifProcedureQuery.data as { items?: ProcedureSummaryItem[] })
+          ?.items ?? []) as ProcedureSummaryItem[]
+      ).map((item) => ({
+        ...item,
+        workflowScope: item.workflowScope || "SMIF",
+      })),
+    [smifProcedureQuery.data],
+  );
+  const procedureItems = useMemo(
+    () => [...cpcaProcedureItems, ...smifProcedureItems],
+    [cpcaProcedureItems, smifProcedureItems],
+  );
+  const procedureIsLoading =
+    meLoading ||
+    (canViewCpcaProcedures && cpcaProcedureQuery.isLoading) ||
+    (canViewSmifProcedures && smifProcedureQuery.isLoading);
+  const procedureIsError =
+    (canViewCpcaProcedures && cpcaProcedureQuery.isError) ||
+    (canViewSmifProcedures && smifProcedureQuery.isError);
 
   const guideCard = (
     <StrategicTabGuideCard
@@ -2192,17 +2251,21 @@ function AggressorProfileTab() {
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
-            title="Assimetria hierárquica"
-            value={`${data.hierarchicalRelation.percent}%`}
-            subtitle={`${data.hierarchicalRelation.count} casos com superior hierárquico`}
+            title="Procedimentos administrativos"
+            value={procedureIsLoading ? "..." : procedureItems.length}
+            subtitle={
+              procedureItems.length === 1
+                ? "reporte com procedimento instaurado"
+                : "reportes com procedimento instaurado"
+            }
             color="#7B1FA2"
-            onClick={() => setDetailModal("hierarchical")}
+            onClick={() => setDetailModal("procedures")}
           />
         </Grid>
       </Grid>
 
       <KpiDetailModal
-        open={!!detailModal}
+        open={!!detailModal && detailModal !== "procedures"}
         title={
           detailModal === "total"
             ? "Visão Geral dos Casos"
@@ -2413,6 +2476,23 @@ function AggressorProfileTab() {
           </Stack>
         )}
       </KpiDetailModal>
+
+      <ProcedureSummaryDialog
+        open={detailModal === "procedures"}
+        onClose={() => setDetailModal(null)}
+        items={procedureItems}
+        isLoading={procedureIsLoading}
+        isError={procedureIsError}
+        description="Os indicadores consolidam CPCA e SMIF, respeitando as permissões e o escopo organizacional do usuário conectado."
+        onSelectItem={(item) => {
+          setDetailModal(null);
+          const caseNumber = String(item.caseNumber ?? "").trim();
+          const search = new URLSearchParams();
+          if (item.workflowScope === "SMIF") search.set("scope", "SMIF");
+          if (caseNumber) search.set("q", caseNumber);
+          navigate(`/cpca-cases?${search.toString()}`);
+        }}
+      />
 
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
         Perfil dos supostos autores
