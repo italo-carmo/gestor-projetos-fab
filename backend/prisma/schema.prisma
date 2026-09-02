@@ -1833,6 +1833,8 @@ model CpcComplaintCase {
   victimFeedbackSummary            String?
   notifierFeedbackDate             DateTime?
   victimFeedbackDate               DateTime?
+  victimInformedOfOutcome          Boolean                   @default(false)
+  accusedInformedOfOutcome         Boolean                   @default(false)
   retaliationRisk                  Boolean                   @default(false)
   retaliationNotes                 String?
   outsourcedAccused                Boolean                   @default(false)

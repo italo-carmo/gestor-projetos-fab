@@ -92,7 +92,7 @@ describe('CpcaService viewer notifications', () => {
         tracked: true,
         isNew: true,
         reason: 'NEW_COMPLAINT',
-        label: 'Novo acolhimento',
+        label: 'Novo reporte',
         seenAt: null,
       },
     });

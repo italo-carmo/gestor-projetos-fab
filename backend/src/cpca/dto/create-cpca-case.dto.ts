@@ -163,14 +163,11 @@ export const CPCA_ADMIN_PROCEDURES = [
   'CONSELHO_JUSTIFICACAO',
 ] as const;
 export const CPCA_PROCEDURE_CURRENT_SITUATIONS = [
-  'EM_ANDAMENTO',
   'MEDIDA_DISCIPLINAR_APLICADA',
   'OFERECIDA_DENUNCIA',
   'ARQUIVADO_PELA_JUSTICA',
+  'ARQUIVADO_PELA_ADMINISTRACAO',
   'CONDENADO_PELA_JUSTICA',
-  'TRANSFERENCIA_ACUSADO',
-  'TRANSFERENCIA_ACUSADOR',
-  'MEDIDA_PROTETIVA',
   'OUTROS',
   'NAO_APLICAVEL',
 ] as const;
@@ -436,6 +433,14 @@ export class CreateCpcaCaseDto {
   @IsOptional()
   @IsISO8601()
   victimFeedbackDate?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  victimInformedOfOutcome?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  accusedInformedOfOutcome?: boolean;
 
   @IsOptional()
   @IsBoolean()

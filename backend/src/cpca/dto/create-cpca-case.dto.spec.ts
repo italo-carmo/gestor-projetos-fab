@@ -1,5 +1,6 @@
 import {
   CPCA_DETAILED_VIOLENCE_TYPES,
+  CPCA_PROCEDURE_CURRENT_SITUATIONS,
   CPCA_SELECTABLE_DETAILED_VIOLENCE_TYPES,
 } from './create-cpca-case.dto';
 
@@ -25,5 +26,21 @@ describe('CPCA_DETAILED_VIOLENCE_TYPES', () => {
       'IMPORTUNACAO_SEXUAL',
       'DISCRIMINACAO',
     ]);
+  });
+});
+
+describe('CPCA_PROCEDURE_CURRENT_SITUATIONS', () => {
+  it('expõe somente os resultados atuais da triagem e apuração', () => {
+    expect(CPCA_PROCEDURE_CURRENT_SITUATIONS).toContain(
+      'ARQUIVADO_PELA_ADMINISTRACAO',
+    );
+    expect(CPCA_PROCEDURE_CURRENT_SITUATIONS).not.toContain('EM_ANDAMENTO');
+    expect(CPCA_PROCEDURE_CURRENT_SITUATIONS).not.toContain(
+      'TRANSFERENCIA_ACUSADO',
+    );
+    expect(CPCA_PROCEDURE_CURRENT_SITUATIONS).not.toContain(
+      'TRANSFERENCIA_ACUSADOR',
+    );
+    expect(CPCA_PROCEDURE_CURRENT_SITUATIONS).not.toContain('MEDIDA_PROTETIVA');
   });
 });

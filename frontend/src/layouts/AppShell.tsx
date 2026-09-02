@@ -192,12 +192,6 @@ const navSections: NavSection[] = [
         menuKey: "activities_smif",
       },
       {
-        label: "Acolhimentos",
-        to: "/smif-complaints",
-        icon: <PolicyRoundedIcon fontSize="small" />,
-        menuKey: "smif_complaints",
-      },
-      {
         label: "GSD e Recrutas",
         to: "/gsd-recruits",
         icon: <PeopleIcon fontSize="small" />,
@@ -288,10 +282,10 @@ const navSections: NavSection[] = [
     label: "CPCA",
     items: [
       {
-        label: "Acolhimentos",
+        label: "Reportes",
         to: "/cpca-cases",
         icon: <PolicyRoundedIcon fontSize="small" />,
-        menuKey: "cpca_cases",
+        menuKeys: ["cpca_cases", "smif_complaints"],
       },
       {
         label: "Comissão CPCA",
@@ -526,14 +520,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (item.to === "/dashboard/bi-avaliacao-gsd") {
       return can(me, "bi", "view");
     }
-    if (item.to === "/smif-complaints") {
-      return can(me, "smif_complaints", "view");
-    }
     if (item.to === "/missions") {
       return can(me, "missions", "view");
     }
     if (item.to === "/cpca-cases") {
-      return can(me, "cpca_cases", "view");
+      return (
+        can(me, "cpca_cases", "view") || can(me, "smif_complaints", "view")
+      );
     }
     if (item.to === "/cpca-commission") {
       return (

@@ -347,7 +347,7 @@ describe('CpcaService CIPAVD threads', () => {
       expect.objectContaining({
         to: 'presidente@fab.mil.br',
         subject:
-          'INTEGRA | Pendência registrada em acolhimento CPCA | CCA BR',
+          'INTEGRA | Pendência registrada em reporte CPCA | CCA BR',
         html: expect.stringContaining('Pendência registrada'),
         text: expect.stringContaining('Caso: CPCA-2026-BACO-00001'),
       }),
@@ -622,7 +622,7 @@ describe('CpcaService CIPAVD threads', () => {
       expect.objectContaining({
         to: 'presidente@fab.mil.br',
         subject:
-          'INTEGRA | Pendência atualizada em acolhimento CPCA | CCA BR',
+          'INTEGRA | Pendência atualizada em reporte CPCA | CCA BR',
         text: expect.stringContaining(
           'Texto da pendência: Atentar para o nome no registro do fato.',
         ),
@@ -757,7 +757,7 @@ describe('CpcaService CIPAVD threads', () => {
     expect(mail.sendMail).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'presidente@fab.mil.br',
-        subject: 'INTEGRA | Pendência reaberta em acolhimento CPCA | CCA BR',
+        subject: 'INTEGRA | Pendência reaberta em reporte CPCA | CCA BR',
         text: expect.stringContaining(
           'Texto da pendência: Ainda falta complementar o despacho final.',
         ),
@@ -883,7 +883,7 @@ describe('CpcaService CIPAVD threads', () => {
       expect.objectContaining({
         to: 'presidente@fab.mil.br',
         subject:
-          'INTEGRA | Pendência finalizada com sucesso em acolhimento CPCA | CCA BR',
+          'INTEGRA | Pendência finalizada com sucesso em reporte CPCA | CCA BR',
         html: expect.stringContaining('Pendência finalizada'),
         text: expect.stringContaining(
           'Validação da gestão: Validação concluída pela gestão nacional.',

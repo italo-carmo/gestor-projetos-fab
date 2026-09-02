@@ -26,7 +26,7 @@ import {
 } from './dto/create-cpca-case.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
 import {
-  isJudicialArchiveProcedureSituation,
+  isArchiveProcedureSituation,
   syncWorkflowStatusWithProcedureSituation,
 } from './cpca-workflow';
 
@@ -208,10 +208,10 @@ const COMPLAINT_HISTORY_FIELD_LABELS: Record<string, string> = {
   complaintType: 'Tipo',
   notifierType: 'Tipo de noticiante',
   status: 'Status',
-  processOpened: 'Abriu processo',
+  processOpened: 'Abriu processo apuratório',
   processNotOpenedReason: 'Justificativa para não abertura de processo',
   procedureType: 'Procedimento administrativo',
-  procedureCurrentSituation: 'Situação do procedimento',
+  procedureCurrentSituation: 'Resultado',
   reportedAt: 'Data de recebimento',
   incidentDate: 'Data do fato',
   aggressorRank: 'Posto/graduação do agressor',
@@ -261,6 +261,8 @@ const COMPLAINT_HISTORY_FIELD_LABELS: Record<string, string> = {
   victimFeedbackSummary: 'Retorno à vítima',
   notifierFeedbackDate: 'Data do retorno ao noticiante',
   victimFeedbackDate: 'Data do retorno à vítima',
+  victimInformedOfOutcome: 'Vítima informada do resultado',
+  accusedInformedOfOutcome: 'Acusado informado do resultado',
   retaliationRisk: 'Risco de retaliação',
   retaliationNotes: 'Notas sobre retaliação',
   outsourcedAccused: 'Acusado terceirizado',
@@ -800,6 +802,61 @@ export class CpcaService {
           validation: serialized.validation,
         };
       }),
+    };
+  }
+
+  async procedureSummary(
+    filters: ComplaintListFilters,
+    user?: RbacUser,
+    context: ComplaintWorkflowContext = CPCA_WORKFLOW_CONTEXT,
+  ) {
+    const workflowContext = this.resolveContext(context);
+    const where = await this.buildComplaintWhere(
+      filters,
+      user,
+      workflowContext,
+    );
+    const procedureWhere = {
+      AND: [
+        where,
+        {
+          processOpened: true,
+          procedureType: { notIn: ['NOT_DEFINED', 'NAO_HOUVE'] },
+        },
+      ],
+    };
+    const complaintModel = (this.prisma as any).cpcComplaintCase;
+
+    const [procedureCaseCount, items] = await Promise.all([
+      complaintModel.count({ where: procedureWhere }),
+      complaintModel.findMany({
+        where: procedureWhere,
+        orderBy: [{ reportedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          caseNumber: true,
+          workflowScope: true,
+          complaintType: true,
+          detailedViolenceType: true,
+          status: true,
+          processOpened: true,
+          procedureType: true,
+          procedureCurrentSituation: true,
+          reportedAt: true,
+          updatedAt: true,
+          omId: true,
+          localityId: true,
+          om: { select: { id: true, code: true, name: true } },
+          locality: { select: { id: true, code: true, name: true } },
+        },
+      }),
+    ]);
+
+    return {
+      summary: {
+        procedureCaseCount: Number(procedureCaseCount ?? 0),
+      },
+      items: (items ?? []).map((item: any) => this.serializeComplaint(item)),
     };
   }
 
@@ -1862,7 +1919,11 @@ export class CpcaService {
       processOpened === false
         ? this.cleanOptional(payload.processNotOpenedReason)
         : null;
-    this.assertProcessOpeningConsistency(processOpened, processNotOpenedReason);
+    this.assertProcessOpeningConsistency(
+      processOpened,
+      processNotOpenedReason,
+      requestedProcedureType,
+    );
     const procedureType =
       processOpened === false ? 'NOT_DEFINED' : requestedProcedureType;
     if (status === 'CONCLUDED' || status === 'ARCHIVED') {
@@ -2013,6 +2074,8 @@ export class CpcaService {
           payload.victimFeedbackDate,
           'victimFeedbackDate',
         ) ?? null,
+      victimInformedOfOutcome: payload.victimInformedOfOutcome ?? false,
+      accusedInformedOfOutcome: payload.accusedInformedOfOutcome ?? false,
       retaliationRisk: payload.retaliationRisk ?? false,
       retaliationNotes: this.cleanOptional(payload.retaliationNotes),
       outsourcedAccused: payload.outsourcedAccused ?? false,
@@ -2179,6 +2242,8 @@ export class CpcaService {
         victimFeedbackSummary: true,
         notifierFeedbackDate: true,
         victimFeedbackDate: true,
+        victimInformedOfOutcome: true,
+        accusedInformedOfOutcome: true,
         retaliationRisk: true,
         retaliationNotes: true,
         archivedAt: true,
@@ -2243,6 +2308,7 @@ export class CpcaService {
     this.assertProcessOpeningConsistency(
       nextProcessOpened,
       nextProcessNotOpenedReason,
+      requestedNextProcedure,
     );
     const nextProcedureCurrentSituation =
       nextProcessOpened === false
@@ -2532,6 +2598,8 @@ export class CpcaService {
                 'victimFeedbackDate',
               )
             : undefined,
+        victimInformedOfOutcome: payload.victimInformedOfOutcome,
+        accusedInformedOfOutcome: payload.accusedInformedOfOutcome,
         retaliationRisk: payload.retaliationRisk,
         retaliationNotes:
           payload.retaliationNotes !== undefined
@@ -3680,11 +3748,11 @@ export class CpcaService {
   private describeComplaintHistoryAction(action: string) {
     switch (action) {
       case 'create':
-        return 'Acolhimento criado';
+        return 'Reporte criado';
       case 'update':
-        return 'Acolhimento atualizado';
+        return 'Reporte atualizado';
       case 'delete':
-        return 'Acolhimento excluído';
+        return 'Reporte excluído';
       case 'comment':
         return 'Comentário inserido';
       case 'cipavd_comment_create':
@@ -3728,7 +3796,7 @@ export class CpcaService {
     switch (action) {
       case 'comment':
       case 'cipavd_comment_create':
-        return 'Comentário registrado no acolhimento.';
+        return 'Comentário registrado no reporte.';
       case 'cipavd_pendency_create':
         return 'Nova pendência registrada pela gestão.';
       case 'cipavd_pendency_resolve':
@@ -3736,9 +3804,9 @@ export class CpcaService {
       case 'cipavd_pendency_reopen':
         return 'Pendência reaberta pela gestão.';
       case 'cipavd_pendency_delete':
-        return 'Pendência removida do acolhimento.';
+        return 'Pendência removida do reporte.';
       case 'validation':
-        return 'Acolhimento validado pela comissão.';
+        return 'Reporte validado pela comissão.';
       default:
         return 'Movimentação registrada.';
     }
@@ -4022,7 +4090,7 @@ export class CpcaService {
       label:
         reason === 'PENDENCY_RESOLVED'
           ? 'Solução de pendência'
-          : 'Novo acolhimento',
+          : 'Novo reporte',
     };
   }
 
@@ -4837,36 +4905,36 @@ export class CpcaService {
         created: {
           actorLabel: 'Registrada por',
           dateLabel: 'Registrada em',
-          heading: `Pendência registrada em acolhimento ${workflowLabel}`,
+          heading: `Pendência registrada em reporte ${workflowLabel}`,
           badgeLabel: 'Pendência registrada',
-          intro: `A gestão nacional registrou uma pendência em um acolhimento ${workflowLabel} vinculado à sua comissão.`,
+          intro: `A gestão nacional registrou uma pendência em um reporte ${workflowLabel} vinculado à sua comissão.`,
           bodyText:
             'Este aviso indica que há uma pendência aberta para análise e resposta no sistema.',
         },
         updated: {
           actorLabel: 'Atualizada por',
           dateLabel: 'Atualizada em',
-          heading: `Pendência atualizada em acolhimento ${workflowLabel}`,
+          heading: `Pendência atualizada em reporte ${workflowLabel}`,
           badgeLabel: 'Pendência atualizada',
-          intro: `A gestão nacional atualizou uma pendência em um acolhimento ${workflowLabel} vinculado à sua comissão.`,
+          intro: `A gestão nacional atualizou uma pendência em um reporte ${workflowLabel} vinculado à sua comissão.`,
           bodyText:
             'Este aviso indica que o texto da pendência foi ajustado e precisa ser observado no sistema.',
         },
         reopened: {
           actorLabel: 'Reaberta por',
           dateLabel: 'Reaberta em',
-          heading: `Pendência reaberta em acolhimento ${workflowLabel}`,
+          heading: `Pendência reaberta em reporte ${workflowLabel}`,
           badgeLabel: 'Pendência reaberta',
-          intro: `A gestão nacional reabriu uma pendência em um acolhimento ${workflowLabel} vinculado à sua comissão.`,
+          intro: `A gestão nacional reabriu uma pendência em um reporte ${workflowLabel} vinculado à sua comissão.`,
           bodyText:
             'Este aviso indica que há nova análise pendente de resposta pela comissão no sistema.',
         },
         finalized: {
           actorLabel: 'Finalizada por',
           dateLabel: 'Finalizada em',
-          heading: `Pendência finalizada com sucesso em acolhimento ${workflowLabel}`,
+          heading: `Pendência finalizada com sucesso em reporte ${workflowLabel}`,
           badgeLabel: 'Pendência finalizada',
-          intro: `A gestão nacional validou e finalizou uma pendência em um acolhimento ${workflowLabel} vinculado à sua comissão.`,
+          intro: `A gestão nacional validou e finalizou uma pendência em um reporte ${workflowLabel} vinculado à sua comissão.`,
           bodyText:
             'Este aviso confirma que a solução registrada pela comissão foi aceita e a pendência foi encerrada no sistema.',
         },
@@ -4899,7 +4967,7 @@ export class CpcaService {
       );
 
       const message = buildCpcaApprovalDecisionEmail({
-        requestTypeLabel: `Pendência em acolhimento ${workflowLabel}`,
+        requestTypeLabel: `Pendência em reporte ${workflowLabel}`,
         recipientName: target.president.user.name,
         status: isFinalized ? 'APPROVED' : 'REJECTED',
         locality: target.complaintOm,
@@ -4911,17 +4979,17 @@ export class CpcaService {
         reasonLabel: isFinalized ? null : 'Texto da pendência',
         nextSteps: isFinalized
           ? [
-              `Acesse o menu Acolhimentos ${workflowLabel} no sistema se precisar consultar o histórico.`,
+              `Acesse o menu Reportes e selecione a aba ${workflowLabel} se precisar consultar o histórico.`,
               caseNumber
                 ? `Localize o caso ${caseNumber} e abra a área de pendências.`
-                : 'Abra o acolhimento correspondente e consulte a área de pendências.',
+                : 'Abra o reporte correspondente e consulte a área de pendências.',
               'Mantenha o registro para consulta futura, se necessário.',
             ]
           : [
-              `Acesse o menu Acolhimentos ${workflowLabel} no sistema.`,
+              `Acesse o menu Reportes e selecione a aba ${workflowLabel}.`,
               caseNumber
                 ? `Localize o caso ${caseNumber} e abra a área de pendências.`
-                : 'Abra o acolhimento correspondente e consulte a área de pendências.',
+                : 'Abra o reporte correspondente e consulte a área de pendências.',
               'Registre a resposta da comissão para que a gestão nacional possa validar a solução.',
             ],
         extraDetails: details,
@@ -5277,7 +5345,7 @@ export class CpcaService {
 
     if (
       (input.status === 'CONCLUDED' || input.status === 'ARCHIVED') &&
-      !isJudicialArchiveProcedureSituation(input.procedureCurrentSituation)
+      !isArchiveProcedureSituation(input.procedureCurrentSituation)
     ) {
       if (!this.cleanOptional(input.outcomeSummary)) {
         throwError('VALIDATION_ERROR', {
@@ -5307,6 +5375,7 @@ export class CpcaService {
   private assertProcessOpeningConsistency(
     processOpened: boolean | null | undefined,
     processNotOpenedReason: string | null | undefined,
+    procedureType: string | null | undefined,
   ) {
     if (
       processOpened === false &&
@@ -5315,6 +5384,18 @@ export class CpcaService {
       throwError('VALIDATION_ERROR', {
         field: 'processNotOpenedReason',
         reason: 'PROCESS_NOT_OPENED_REASON_REQUIRED',
+      });
+    }
+
+    if (
+      processOpened === true &&
+      (!this.cleanOptional(procedureType) ||
+        procedureType === 'NOT_DEFINED' ||
+        procedureType === 'NAO_HOUVE')
+    ) {
+      throwError('VALIDATION_ERROR', {
+        field: 'procedureType',
+        reason: 'PROCESS_OPENED_REQUIRES_DEFINED_PROCEDURE',
       });
     }
   }
@@ -5327,7 +5408,7 @@ export class CpcaService {
     if (!nextStatus || currentStatus === nextStatus) return;
     if (
       nextStatus === 'ARCHIVED' &&
-      isJudicialArchiveProcedureSituation(nextProcedureCurrentSituation)
+      isArchiveProcedureSituation(nextProcedureCurrentSituation)
     ) {
       return;
     }

@@ -1513,7 +1513,7 @@ export class StrategicService {
         }
         if (complaintsStats.openCases > 0) {
           rankingReasons.push(
-            `${complaintsStats.openCases} acolhimento(s) formal(is) aberto(s)`,
+            `${complaintsStats.openCases} reporte(s) formal(is) aberto(s)`,
           );
         }
         if (complaintsStats.retaliationCases > 0) {
@@ -1532,7 +1532,7 @@ export class StrategicService {
           );
         } else if (researchTotal === 0 && complaintsStats.totalCases > 0) {
           rankingReasons.push(
-            'há acolhimento formal, mas não há pesquisa normalizada para comparação nesta OM',
+            'há reporte formal, mas não há pesquisa normalizada para comparação nesta OM',
           );
         } else if (researchTotal > 0 && researchTotal < 10) {
           rankingReasons.push(
@@ -1832,7 +1832,7 @@ export class StrategicService {
       }
       if (item.complaints?.openCases > 0) {
         rankingReasons.push(
-          `${item.complaints.openCases} acolhimento(s) formal(is) aberto(s)`,
+          `${item.complaints.openCases} reporte(s) formal(is) aberto(s)`,
         );
       }
       if (item.underreport?.eligible && item.underreport?.percent >= 40) {
@@ -1844,7 +1844,7 @@ export class StrategicService {
         Number(item.underreport?.researchTotal ?? 0) === 0
       ) {
         rankingReasons.push(
-          'há acolhimento formal na UF, mas não há pesquisa normalizada para comparação',
+          'há reporte formal na UF, mas não há pesquisa normalizada para comparação',
         );
       } else if (
         Number(item.underreport?.researchTotal ?? 0) > 0 &&
@@ -2731,7 +2731,7 @@ export class StrategicService {
       );
       return {
         id: id || `aggressor-${caseNumber || 'case'}`,
-        title: caseNumber ? `Acolhimento ${caseNumber}` : 'Acolhimento',
+        title: caseNumber ? `Reporte ${caseNumber}` : 'Reporte',
         subtitle: [
           scope,
           String(row?.complaintType ?? '').trim()
@@ -2751,7 +2751,7 @@ export class StrategicService {
         badge: String(row?.status ?? '').trim() || undefined,
         link:
           scope === 'SMIF'
-            ? `/smif-complaints?q=${encodeURIComponent(caseNumber)}`
+            ? `/cpca-cases?scope=SMIF&q=${encodeURIComponent(caseNumber)}`
             : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`,
       };
     };
@@ -3384,13 +3384,13 @@ export class StrategicService {
           const workflow = String(item?.workflowScope ?? 'CPCA').toUpperCase();
           const href =
             workflow === 'SMIF'
-              ? `/smif-complaints?q=${encodeURIComponent(caseNumber)}`
+              ? `/cpca-cases?scope=SMIF&q=${encodeURIComponent(caseNumber)}`
               : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`;
           const status = String(item?.status ?? '').trim();
           const date = fmtDate(item?.reportedAt);
           pushRef(
             `complaint-${item?.id ?? caseNumber}`,
-            `Acolhimento ${caseNumber}`,
+            `Reporte ${caseNumber}`,
             href,
             [workflow, status, date].filter(Boolean).join(' • '),
           );
@@ -3551,7 +3551,7 @@ export class StrategicService {
     const system =
       'Você é analista institucional da FAB (CIPAVD/SMIF). ' +
       'Responda em português do Brasil, tom técnico e objetivo, sem inventar números que não constem no JSON. ' +
-      'Estruture em 3 a 5 parágrafos curtos: síntese situacional, riscos/padrões nos acolhimentos (se houver casos), ' +
+      'Estruture em 3 a 5 parágrafos curtos: síntese situacional, riscos/padrões nos reportes (se houver casos), ' +
       'destaques da análise textual e distribuição geográfica quando relevante.';
 
     try {
@@ -3773,7 +3773,7 @@ export class StrategicService {
         kw,
         44,
         String(dashboard.complaints.totalCases),
-        'Acolhimentos Registrados',
+        'Reportes Registrados',
         RED,
       );
       kpiBox(
@@ -3953,9 +3953,9 @@ export class StrategicService {
 
       doc.y = actY + 82;
 
-      // ======================== 4. ACOLHIMENTOS ========================
+      // ======================== 4. REPORTES ========================
       ensureSpace(100);
-      sectionHeader('04', 'PANORAMA DE ACOLHIMENTOS');
+      sectionHeader('04', 'PANORAMA DE REPORTES');
       doc.moveDown(0.3);
 
       const compY = doc.y;
@@ -3973,7 +3973,7 @@ export class StrategicService {
       doc
         .fontSize(7)
         .fillColor(GRAY)
-        .text('Total de acolhimentos', LEFT + 8, compY + 32, {
+        .text('Total de reportes', LEFT + 8, compY + 32, {
           width: thirdW - 16,
           align: 'center',
         });
@@ -4408,7 +4408,7 @@ export class StrategicService {
             .fontSize(7)
             .fillColor(GRAY)
             .text(
-              `Destaques por UF — Acolhimentos: ${topByComplaints?.uf ?? '-'} (${topByComplaints?.complaints ?? 0}) | ` +
+              `Destaques por UF — Reportes: ${topByComplaints?.uf ?? '-'} (${topByComplaints?.complaints ?? 0}) | ` +
                 `Pressão: ${topByPressure?.uf ?? '-'} (${Number(topByPressure?.pressureScore ?? 0).toFixed(1)}) | ` +
                 `Atividades: ${topByActivities?.uf ?? '-'} (${topByActivities?.activities ?? 0}) | ` +
                 `Missões: ${topByMissions?.uf ?? '-'} (${topByMissions?.missions ?? 0}) como cobertura inicial.`,
@@ -4888,11 +4888,11 @@ export class StrategicService {
           .toUpperCase();
         const link =
           scope === 'SMIF'
-            ? `/smif-complaints?q=${encodeURIComponent(caseNumber)}`
+            ? `/cpca-cases?scope=SMIF&q=${encodeURIComponent(caseNumber)}`
             : `/cpca-cases?q=${encodeURIComponent(caseNumber)}`;
         return {
           id: id || `complaint-${caseNumber}`,
-          title: caseNumber ? `Acolhimento ${caseNumber}` : 'Acolhimento',
+          title: caseNumber ? `Reporte ${caseNumber}` : 'Reporte',
           subtitle: [scope, String(row?.locality?.name ?? '').trim()]
             .filter(Boolean)
             .join(' • '),

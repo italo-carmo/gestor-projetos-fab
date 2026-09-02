@@ -192,7 +192,7 @@ export function OdgsaOmsPage() {
       {ownCount === 0 && (
         <Alert severity="info">
           Este ODGSA ainda não possui OMs. Enquanto a lista estiver vazia, as
-          telas de acolhimentos e indicadores CPCA não exibirão registros.
+          telas de reportes e indicadores CPCA não exibirão registros.
         </Alert>
       )}
 
@@ -430,8 +430,8 @@ export function OdgsaOmsPage() {
         }
         message={
           confirmation?.action === "ASSIGN"
-            ? "Os acolhimentos dessas OMs passarão a compor o acompanhamento e os indicadores do seu ODGSA."
-            : "As OMs ficarão sem ODGSA e seus acolhimentos deixarão de aparecer no seu acompanhamento."
+            ? "Os reportes dessas OMs passarão a compor o acompanhamento e os indicadores do seu ODGSA."
+            : "As OMs ficarão sem ODGSA e seus reportes deixarão de aparecer no seu acompanhamento."
         }
         highlightText={`${confirmation?.omIds.length ?? 0} OM(s) selecionada(s)`}
         severity={confirmation?.action === "UNASSIGN" ? "warning" : "primary"}

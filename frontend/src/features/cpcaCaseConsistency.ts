@@ -17,15 +17,21 @@ type MinimalCpcaCase = {
   incidentDate?: string | null;
 };
 
-export const CPCA_JUDICIAL_ARCHIVE_SITUATION = "ARQUIVADO_PELA_JUSTICA";
+export const CPCA_ARCHIVE_SITUATIONS = new Set([
+  "ARQUIVADO_PELA_JUSTICA",
+  "ARQUIVADO_PELA_ADMINISTRACAO",
+]);
 
 export function syncCpcaWorkflowStatus(
   status: string | null | undefined,
   procedureCurrentSituation: string | null | undefined,
 ) {
   if (
-    String(procedureCurrentSituation ?? "").trim().toUpperCase() ===
-    CPCA_JUDICIAL_ARCHIVE_SITUATION
+    CPCA_ARCHIVE_SITUATIONS.has(
+      String(procedureCurrentSituation ?? "")
+        .trim()
+        .toUpperCase(),
+    )
   ) {
     return "ARCHIVED";
   }
@@ -65,16 +71,16 @@ export function getCpcaCaseInconsistencies(
   referenceNow = new Date(),
 ): CpcaCaseInconsistency[] {
   const inconsistencies: CpcaCaseInconsistency[] = [];
-  const complaintType = String(item.complaintType ?? "").trim().toUpperCase();
+  const complaintType = String(item.complaintType ?? "")
+    .trim()
+    .toUpperCase();
   const detailedViolenceType = String(item.detailedViolenceType ?? "")
     .trim()
     .toUpperCase();
   const incidentFrequency = String(item.incidentFrequency ?? "")
     .trim()
     .toUpperCase();
-  const hierarchicalRelation = String(
-    item.hierarchicalFunctionalRelation ?? "",
-  )
+  const hierarchicalRelation = String(item.hierarchicalFunctionalRelation ?? "")
     .trim()
     .toUpperCase();
   const todayKey = toDateKey(referenceNow.toISOString());
@@ -97,24 +103,20 @@ export function getCpcaCaseInconsistencies(
       summary: `O cadastro contém data futura: ${futureFields.join(" e ")}.`,
       referenceTitle: "Revisão cronológica do cadastro",
       referenceBody:
-        "Revise as datas informadas no acolhimento. Datas de recebimento ou do ocorrido posteriores à data atual normalmente indicam erro de lançamento ou de importação.",
+        "Revise as datas informadas no reporte. Datas de recebimento ou do ocorrido posteriores à data atual normalmente indicam erro de lançamento ou de importação.",
       tone: "warning",
     });
   }
 
-  if (
-    reportedAtKey &&
-    incidentDateKey &&
-    incidentDateKey > reportedAtKey
-  ) {
+  if (reportedAtKey && incidentDateKey && incidentDateKey > reportedAtKey) {
     inconsistencies.push({
       code: "INCIDENT_AFTER_REPORT",
       badgeLabel: "Cronologia",
       headline: "Ocorrido posterior ao recebimento",
-      summary: `A data do ocorrido (${formatDateKey(incidentDateKey)}) está posterior à data de recebimento do acolhimento (${formatDateKey(reportedAtKey)}).`,
+      summary: `A data do ocorrido (${formatDateKey(incidentDateKey)}) está posterior à data de recebimento do reporte (${formatDateKey(reportedAtKey)}).`,
       referenceTitle: "Revisão cronológica do cadastro",
       referenceBody:
-        "Revise a ordem das datas informadas. Em regra, a data do fato não deve ficar posterior à data em que o acolhimento foi recebido/registrado.",
+        "Revise a ordem das datas informadas. Em regra, a data do fato não deve ficar posterior à data em que o reporte foi recebido/registrado.",
       tone: "warning",
     });
   }

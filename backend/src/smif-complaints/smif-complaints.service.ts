@@ -54,6 +54,20 @@ export class SmifComplaintsService {
     return this.cpca.pendingSummary(filters, user, SMIF_WORKFLOW_CONTEXT);
   }
 
+  async procedureSummary(
+    filters: {
+      localityId?: string;
+      status?: string;
+      complaintType?: string;
+      detailedViolenceType?: string;
+      procedureType?: string;
+      q?: string;
+    },
+    user?: RbacUser,
+  ) {
+    return this.cpca.procedureSummary(filters, user, SMIF_WORKFLOW_CONTEXT);
+  }
+
   async create(payload: CreateCpcaCaseDto, user?: RbacUser) {
     return this.cpca.create(payload, user, SMIF_WORKFLOW_CONTEXT);
   }

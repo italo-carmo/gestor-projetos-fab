@@ -83,6 +83,31 @@ export class SmifComplaintsController {
     );
   }
 
+  @Get('procedure-summary')
+  @RequirePermission('smif_complaints', 'view')
+  procedureSummary(
+    @Query('omId') omId: string | undefined,
+    @Query('localityId') localityId: string | undefined,
+    @Query('status') status: string | undefined,
+    @Query('complaintType') complaintType: string | undefined,
+    @Query('detailedViolenceType') detailedViolenceType: string | undefined,
+    @Query('procedureType') procedureType: string | undefined,
+    @Query('q') q: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.smifComplaints.procedureSummary(
+      {
+        localityId: omId ?? localityId,
+        status,
+        complaintType,
+        detailedViolenceType,
+        procedureType,
+        q,
+      },
+      user,
+    );
+  }
+
   @Get(':id')
   @RequirePermission('smif_complaints', 'view')
   getById(@Param('id') id: string, @CurrentUser() user: RbacUser) {

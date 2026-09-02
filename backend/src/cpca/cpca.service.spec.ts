@@ -19,6 +19,7 @@ function createPrismaMock() {
       findMany: jest.fn().mockResolvedValue([]),
     },
     cpcComplaintCase: {
+      count: jest.fn(),
       findMany: jest.fn(),
     },
     om: {
@@ -285,6 +286,64 @@ describe('CpcaService security scope', () => {
         CPCA_WORKFLOW_CONTEXT,
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('CpcaService procedure summary', () => {
+  it('conta e detalha somente reportes com processo e procedimento válidos', async () => {
+    const prisma = createPrismaMock();
+    const service = new CpcaService(prisma, createAuditMock() as any);
+    const scopedWhere = { workflowScope: 'CPCA', omId: 'om-1' };
+
+    jest
+      .spyOn(service as any, 'buildComplaintWhere')
+      .mockResolvedValue(scopedWhere);
+    prisma.cpcComplaintCase.count.mockResolvedValue(1);
+    prisma.cpcComplaintCase.findMany.mockResolvedValue([
+      {
+        id: 'case-1',
+        caseNumber: 'CPCA-2026-BACG-00001',
+        workflowScope: 'CPCA',
+        status: 'INVESTIGATION',
+        processOpened: true,
+        procedureType: 'SINDICANCIA',
+        procedureCurrentSituation: 'MEDIDA_DISCIPLINAR_APLICADA',
+        reportedAt: new Date('2026-08-20T12:00:00.000Z'),
+        updatedAt: new Date('2026-08-22T12:00:00.000Z'),
+        omId: 'om-1',
+        localityId: null,
+        om: { id: 'om-1', code: 'BACG', name: 'Base Aérea' },
+        locality: null,
+      },
+    ]);
+
+    const result = await service.procedureSummary(
+      { status: 'INVESTIGATION' },
+      makeCpcaUser({ omId: 'om-1', national: true }) as any,
+    );
+
+    const expectedProcedureFilter = {
+      AND: [
+        scopedWhere,
+        {
+          processOpened: true,
+          procedureType: { notIn: ['NOT_DEFINED', 'NAO_HOUVE'] },
+        },
+      ],
+    };
+    expect(prisma.cpcComplaintCase.count).toHaveBeenCalledWith({
+      where: expectedProcedureFilter,
+    });
+    expect(prisma.cpcComplaintCase.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expectedProcedureFilter }),
+    );
+    expect(result.summary.procedureCaseCount).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      id: 'case-1',
+      procedureType: 'SINDICANCIA',
+      localityId: 'om-1',
+      locality: { code: 'BACG' },
+    });
   });
 });
 

@@ -117,13 +117,13 @@ export const AI_KNOWLEDGE_SOURCE_CATALOG: ReadonlyArray<{
   },
   {
     id: AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_CPCA,
-    label: 'Acolhimentos CPCA',
-    description: 'Acolhimentos de CPCA no fluxo de atendimento.',
+    label: 'Reportes CPCA',
+    description: 'Reportes de CPCA no fluxo de atendimento.',
   },
   {
     id: AI_KNOWLEDGE_SOURCE_IDS.COMPLAINTS_SMIF,
-    label: 'Acolhimentos SMIF',
-    description: 'Acolhimentos de SMIF no fluxo de atendimento.',
+    label: 'Reportes SMIF',
+    description: 'Reportes de SMIF no fluxo de atendimento.',
   },
 ] as const;
 
@@ -207,13 +207,13 @@ export const AI_PROFILE_FEATURE_CATALOG: ReadonlyArray<{
     id: AI_PROFILE_FEATURE_IDS.STRUCTURED_SITUATIONAL,
     label: 'Panorama situacional',
     description:
-      'Permite usar panorama estruturado com pesquisas, acolhimentos, missões, atividades e tarefas.',
+      'Permite usar panorama estruturado com pesquisas, reportes, missões, atividades e tarefas.',
   },
   {
     id: AI_PROFILE_FEATURE_IDS.STRUCTURED_COMPLAINTS,
-    label: 'Perfis de acolhimentos',
+    label: 'Perfis de reportes',
     description:
-      'Permite usar perfis de agressor, vítima, relações hierárquicas e estatísticas de acolhimentos.',
+      'Permite usar perfis de agressor, vítima, relações hierárquicas e estatísticas de reportes.',
   },
   {
     id: AI_PROFILE_FEATURE_IDS.STRUCTURED_TEXT,
@@ -255,7 +255,7 @@ export const AI_PROFILE_FEATURE_CATALOG: ReadonlyArray<{
     id: AI_PROFILE_FEATURE_IDS.CPCA_CASE_INCONSISTENCIES,
     label: 'Inconsistências CPCA',
     description:
-      'Libera a camada analítica de inconsistências cadastrais, cronológicas e normativas nos acolhimentos CPCA.',
+      'Libera a camada analítica de inconsistências cadastrais, cronológicas e normativas nos reportes CPCA.',
   },
   {
     id: AI_PROFILE_FEATURE_IDS.COMGEP_ROOM,

@@ -286,6 +286,14 @@ export class UpdateCpcaCaseDto {
 
   @IsOptional()
   @IsBoolean()
+  victimInformedOfOutcome?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  accusedInformedOfOutcome?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   retaliationRisk?: boolean;
 
   @IsOptional()

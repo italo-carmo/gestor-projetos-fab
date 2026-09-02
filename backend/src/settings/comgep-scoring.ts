@@ -38,9 +38,9 @@ export const COMGEP_SCORING_DEFINITIONS: ComgepScoringDefinition[] = [
   {
     key: 'riskOpenCases',
     group: 'risk',
-    label: 'Acolhimentos formais abertos',
+    label: 'Reportes formais abertos',
     description:
-      'Peso aplicado a cada acolhimento formal ainda aberto. Quanto maior o valor, mais o passivo atual empurra a OM e a UF para o topo do ranking.',
+      'Peso aplicado a cada reporte formal ainda aberto. Quanto maior o valor, mais o passivo atual empurra a OM e a UF para o topo do ranking.',
     impact:
       'Afeta diretamente OMs de maior risco e UFs com atuação prioritária.',
     appliesTo: 'OM e UF',
@@ -101,7 +101,7 @@ export const COMGEP_SCORING_DEFINITIONS: ComgepScoringDefinition[] = [
     description:
       'Peso por ponto percentual da taxa de relatos na pesquisa institucional normalizada por OM/UF.',
     impact:
-      'Faz a pesquisa influenciar o ranking mesmo quando ainda não há acolhimento formal.',
+      'Faz a pesquisa influenciar o ranking mesmo quando ainda não há reporte formal.',
     appliesTo: 'OM e UF',
     unitLabel: 'pontos por 1% relatado',
     defaultValue: 0.7,
@@ -174,7 +174,7 @@ export const COMGEP_SCORING_DEFINITIONS: ComgepScoringDefinition[] = [
     group: 'risk',
     label: 'Subnotificação estimada',
     description:
-      'Peso por ponto percentual da subnotificação estimada ao comparar relatos em pesquisa com acolhimentos formais.',
+      'Peso por ponto percentual da subnotificação estimada ao comparar relatos em pesquisa com reportes formais.',
     impact:
       'Ajuda a subir no ranking localidades com sinais fortes nas pesquisas, mas pouca formalização.',
     appliesTo: 'OM e UF',

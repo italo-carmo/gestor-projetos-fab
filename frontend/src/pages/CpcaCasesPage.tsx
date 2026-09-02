@@ -32,10 +32,12 @@ import {
   Typography,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import FactCheckIcon from "@mui/icons-material/FactCheck";
+import ForumOutlinedIcon from "@mui/icons-material/ForumOutlined";
 import PendingActionsIcon from "@mui/icons-material/PendingActions";
 import { useEffect, useMemo, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   useCpcaCase,
@@ -43,6 +45,7 @@ import {
   useCpcaCaseHistory,
   useCpcaCaseLocalityOptions,
   useCpcaCasePendingSummary,
+  useCpcaCaseProcedureSummary,
   useCpcaCaseValidationSummary,
   useCreateCpcaCaseCipavdThread,
   useCreateCpcaCase,
@@ -59,6 +62,7 @@ import {
   useSmifComplaintCase,
   useSmifComplaintCases,
   useSmifComplaintPendingSummary,
+  useSmifComplaintProcedureSummary,
   useCreateSmifComplaintCaseCipavdThread,
   useCreateSmifComplaintCase,
   useDeleteSmifComplaintCase,
@@ -108,7 +112,12 @@ import {
   getComplaintArchiveReasonMeta,
   isComplaintArchiveReasonRequired,
 } from "../features/complaintArchiveReason";
-import { resolveComplaintProcessOpenedValue } from "../features/complaintProcessOpening";
+import {
+  isValidOpenedComplaintProcedure,
+  resolveComplaintProcedureTypeForForm,
+  resolveComplaintProcessOpenedValue,
+} from "../features/complaintProcessOpening";
+import { buildComplaintWorkflowParams } from "../features/complaintsNavigation";
 
 const STATUS_OPTIONS = [
   { value: "RECEIVED", label: "Recebida" },
@@ -206,6 +215,10 @@ const PROCEDURE_OPTIONS = [
   { value: "CONSELHO_DISCIPLINA", label: "Conselho de Disciplina" },
   { value: "CONSELHO_JUSTIFICACAO", label: "Conselho de Justificação" },
 ];
+
+const OPENED_PROCEDURE_OPTIONS = PROCEDURE_OPTIONS.filter((item) =>
+  isValidOpenedComplaintProcedure(item.value),
+);
 
 const GENDER_OPTIONS = [
   { value: "MASCULINO", label: "Masculino" },
@@ -492,20 +505,24 @@ const MULTI_SELECT_CHECKBOX_SX = {
 };
 
 const PROCEDURE_CURRENT_SITUATION_OPTIONS = [
-  { value: "EM_ANDAMENTO", label: "Em andamento" },
   {
     value: "MEDIDA_DISCIPLINAR_APLICADA",
     label: "Medida disciplinar aplicada",
   },
   { value: "OFERECIDA_DENUNCIA", label: "Oferecida a denúncia" },
   { value: "ARQUIVADO_PELA_JUSTICA", label: "Arquivado pela justiça" },
+  {
+    value: "ARQUIVADO_PELA_ADMINISTRACAO",
+    label: "Arquivado pela administração",
+  },
   { value: "CONDENADO_PELA_JUSTICA", label: "Condenado pela Justiça" },
-  { value: "TRANSFERENCIA_ACUSADO", label: "Transferência do acusado" },
-  { value: "TRANSFERENCIA_ACUSADOR", label: "Transferência do acusador" },
-  { value: "MEDIDA_PROTETIVA", label: "Medida Protetiva" },
   { value: "OUTROS", label: "Outros" },
   { value: "NAO_APLICAVEL", label: "Não aplicável" },
 ];
+
+const SELECTABLE_PROCEDURE_CURRENT_SITUATIONS = new Set(
+  PROCEDURE_CURRENT_SITUATION_OPTIONS.map((item) => item.value),
+);
 
 const RETALIATION_REPORTED_OPTIONS = [
   { value: "SIM", label: "Sim" },
@@ -648,8 +665,8 @@ function createDefaultForm() {
     archiveReason: "",
     notifierFeedbackSummary: "",
     victimFeedbackSummary: "",
-    notifierFeedbackDate: "",
-    victimFeedbackDate: "",
+    victimInformedOfOutcome: false,
+    accusedInformedOfOutcome: false,
     retaliationRisk: false,
     retaliationReported: "NAO_INFORMADO",
     retaliationAgainst: "",
@@ -729,8 +746,7 @@ function withCivilAfterRecruta(items: string[]) {
     new Set(items.map((item) => String(item ?? "").trim()).filter(Boolean)),
   );
   const withoutCivil = normalizedItems.filter(
-    (item) =>
-      item.toLowerCase() !== CIVIL_RANK_VALUE.toLowerCase(),
+    (item) => item.toLowerCase() !== CIVIL_RANK_VALUE.toLowerCase(),
   );
   return [...withoutCivil, CIVIL_RANK_VALUE];
 }
@@ -788,7 +804,7 @@ function getValidationActorName(validation: any) {
 }
 
 function getValidationTooltip(validation: any) {
-  if (!validation?.isValidated) return "Acolhimento aguardando validação";
+  if (!validation?.isValidated) return "Reporte aguardando validação";
   return `Validada por ${getValidationActorName(validation)} em ${formatDateTimePtBr(
     validation.validatedAt,
   )}`;
@@ -800,11 +816,119 @@ function statusOptionsForStep(step: number, currentStatus: string) {
   return STATUS_OPTIONS.filter((item) => allowed.has(item.value));
 }
 
+const REPORT_KPI_CARD_SX = {
+  height: "100%",
+  minHeight: 184,
+  borderRadius: 4,
+  border: "1px solid rgba(139, 184, 207, 0.42)",
+  bgcolor: "rgb(83, 127, 151)",
+  backgroundImage: "none",
+  color: "#F4FAFD",
+  boxShadow: "0 16px 30px rgba(15, 44, 59, 0.24)",
+  cursor: "pointer",
+  transition: "transform 150ms ease, box-shadow 150ms ease",
+  "&:hover": {
+    transform: "translateY(-2px)",
+    boxShadow: "0 20px 36px rgba(15, 44, 59, 0.3)",
+  },
+  "&:focus-visible": {
+    outline: "3px solid rgba(83, 127, 151, 0.35)",
+    outlineOffset: 3,
+  },
+  "& .MuiTypography-root": { color: "inherit" },
+  "& .MuiTypography-overline, & .MuiTypography-body2": {
+    color: "rgba(244, 250, 253, 0.9)",
+  },
+} as const;
+
+const REPORT_KPI_CHIP_SX = {
+  fontWeight: 700,
+  color: "#F4FAFD",
+  bgcolor: "rgba(255, 255, 255, 0.14)",
+  border: "1px solid rgba(255, 255, 255, 0.24)",
+} as const;
+
+function ReportKpiCard({
+  title,
+  value,
+  description,
+  icon,
+  accessory,
+  onClick,
+}: {
+  title: string;
+  value: ReactNode;
+  description: string;
+  icon: ReactNode;
+  accessory?: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <Card
+      sx={REPORT_KPI_CARD_SX}
+      role="button"
+      tabIndex={0}
+      aria-label={`${title}: ${String(value)}`}
+      onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+    >
+      <CardContent sx={{ height: "100%" }}>
+        <Stack height="100%" spacing={1.1}>
+          <Stack direction="row" spacing={1.25} alignItems="center">
+            <Box
+              sx={{
+                width: 42,
+                height: 42,
+                borderRadius: 2,
+                display: "grid",
+                placeItems: "center",
+                flexShrink: 0,
+                bgcolor: "rgba(255, 255, 255, 0.14)",
+                color: "#F4FAFD",
+              }}
+            >
+              {icon}
+            </Box>
+            <Typography variant="overline" fontWeight={700} lineHeight={1.3}>
+              {title}
+            </Typography>
+          </Stack>
+          <Typography variant="h4" fontWeight={800} lineHeight={1}>
+            {value}
+          </Typography>
+          <Typography variant="body2">{description}</Typography>
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mt: "auto !important" }}
+          >
+            <Box>{accessory}</Box>
+            <Typography variant="caption" sx={{ color: "inherit" }}>
+              Ver detalhes
+            </Typography>
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
 type CpcaCasesPageProps = {
   workflow?: "CPCA" | "SMIF";
+  workflowNavigation?: ReactNode;
 };
 
-export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
+export function CpcaCasesPage({
+  workflow = "CPCA",
+  workflowNavigation,
+}: CpcaCasesPageProps) {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   const { data: me, isLoading: meLoading } = useMe();
@@ -881,6 +1005,17 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
   const pendingSummaryQuery = isSmifWorkflow
     ? smifPendingSummaryQuery
     : cpcaPendingSummaryQuery;
+  const cpcaProcedureSummaryQuery = useCpcaCaseProcedureSummary(
+    filters,
+    canAccessByRole && !isSmifWorkflow,
+  );
+  const smifProcedureSummaryQuery = useSmifComplaintProcedureSummary(
+    filters,
+    canAccessByRole && isSmifWorkflow,
+  );
+  const procedureSummaryQuery = isSmifWorkflow
+    ? smifProcedureSummaryQuery
+    : cpcaProcedureSummaryQuery;
   const validationSummaryQuery = useCpcaCaseValidationSummary(
     filters,
     canAccessByRole && canValidateCpcaCase,
@@ -941,6 +1076,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     label?: string;
   } | null>(null);
   const [pendingModalOpen, setPendingModalOpen] = useState(false);
+  const [procedureModalOpen, setProcedureModalOpen] = useState(false);
   const [form, setForm] = useState(() => createDefaultForm());
   const [cipavdDraft, setCipavdDraft] = useState("");
   const [cipavdDraftIsPending, setCipavdDraftIsPending] = useState(true);
@@ -1090,7 +1226,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     setParams(next, { replace: true });
   };
 
-  const clearFilters = () => setParams({}, { replace: true });
+  const clearFilters = () =>
+    setParams(buildComplaintWorkflowParams(params, workflow), {
+      replace: true,
+    });
 
   const items = casesQuery.data?.items ?? [];
   const totalItems = Number(casesQuery.data?.total ?? 0);
@@ -1121,6 +1260,22 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     0,
     Number(pendingSummaryData?.summary?.resolvedPendingCount ?? 0) || 0,
   );
+  const procedureSummaryData = procedureSummaryQuery.data as
+    | {
+        summary?: { procedureCaseCount?: number | null };
+        items?: any[];
+      }
+    | undefined;
+  const procedureItems = (procedureSummaryData?.items ?? []) as any[];
+  const procedureCaseCount = Math.max(
+    0,
+    Number(procedureSummaryData?.summary?.procedureCaseCount ?? 0) || 0,
+  );
+  const procedureTypeCount = new Set(
+    procedureItems
+      .map((item) => String(item.procedureType ?? ""))
+      .filter(Boolean),
+  ).size;
   const validationSummaryData = validationSummaryQuery.data as
     | {
         summary?: {
@@ -1345,6 +1500,16 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     );
     const notifierType = item.notifierType ?? "VITIMA";
     const nextNotifierIsVictim = notifierType === "VITIMA";
+    const processOpened = resolveComplaintProcessOpenedValue(item);
+    const savedProcedureCurrentSituation = String(
+      item.procedureCurrentSituation ?? "",
+    ).trim();
+    const procedureCurrentSituation =
+      SELECTABLE_PROCEDURE_CURRENT_SITUATIONS.has(
+        savedProcedureCurrentSituation,
+      )
+        ? savedProcedureCurrentSituation
+        : "";
     setForm({
       reportedAt: toDateInputValue(item.reportedAt),
       localityId: item.localityId ?? "",
@@ -1352,11 +1517,14 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       notifierType,
       status: syncCpcaWorkflowStatus(
         item.status ?? "RECEIVED",
-        item.procedureCurrentSituation ?? "",
+        procedureCurrentSituation,
       ),
-      processOpened: resolveComplaintProcessOpenedValue(item),
+      processOpened,
       processNotOpenedReason: item.processNotOpenedReason ?? "",
-      procedureType: item.procedureType ?? "NOT_DEFINED",
+      procedureType: resolveComplaintProcedureTypeForForm({
+        processOpened,
+        procedureType: item.procedureType,
+      }),
       incidentDate: toDateInputValue(item.incidentDate),
       aggressorRank: item.aggressorRank ?? "",
       aggressorGender: item.aggressorGender ?? "NAO_INFORMADO",
@@ -1380,7 +1548,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           : item.occurrenceForm
             ? [String(item.occurrenceForm)]
             : [],
-      procedureCurrentSituation: item.procedureCurrentSituation ?? "",
+      procedureCurrentSituation,
       evidenceSummary: item.evidenceSummary ?? "",
       confidentialityTermSigned: Boolean(item.confidentialityTermSigned),
       confidentialityHandlingNotes: item.confidentialityHandlingNotes ?? "",
@@ -1411,12 +1579,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       archiveReason: item.archiveReason ?? "",
       notifierFeedbackSummary: item.notifierFeedbackSummary ?? "",
       victimFeedbackSummary: item.victimFeedbackSummary ?? "",
-      notifierFeedbackDate: item.notifierFeedbackDate
-        ? String(item.notifierFeedbackDate).slice(0, 10)
-        : "",
-      victimFeedbackDate: item.victimFeedbackDate
-        ? String(item.victimFeedbackDate).slice(0, 10)
-        : "",
+      victimInformedOfOutcome:
+        item.victimInformedOfOutcome ??
+        Boolean(
+          item.victimFeedbackDate ||
+          (nextNotifierIsVictim && item.notifierFeedbackDate),
+        ),
+      accusedInformedOfOutcome: Boolean(item.accusedInformedOfOutcome),
       retaliationRisk: Boolean(item.retaliationRisk),
       retaliationReported:
         item.retaliationReported ?? (item.retaliationRisk ? "SIM" : "NAO"),
@@ -1669,6 +1838,18 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       return;
     }
 
+    if (
+      form.processOpened === "SIM" &&
+      !isValidOpenedComplaintProcedure(form.procedureType)
+    ) {
+      setActiveStep(2);
+      toast.push({
+        message: "Selecione o procedimento apuratório aberto.",
+        severity: "warning",
+      });
+      return;
+    }
+
     const inferredComplaintType = inferMacroComplaintTypeFromDetailed(
       form.detailedViolenceType,
     );
@@ -1686,7 +1867,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       setActiveStep(2);
       toast.push({
         message:
-          "Preencha o motivo do arquivamento antes de salvar o acolhimento arquivado.",
+          "Preencha o motivo do arquivamento antes de salvar o reporte arquivado.",
         severity: "warning",
       });
       return;
@@ -1792,8 +1973,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       archiveReason: toNullable(form.archiveReason),
       notifierFeedbackSummary: toNullable(form.notifierFeedbackSummary),
       victimFeedbackSummary: toNullable(form.victimFeedbackSummary),
-      notifierFeedbackDate: toNullable(form.notifierFeedbackDate),
-      victimFeedbackDate: toNullable(form.victimFeedbackDate),
+      victimInformedOfOutcome: Boolean(form.victimInformedOfOutcome),
+      accusedInformedOfOutcome: Boolean(form.accusedInformedOfOutcome),
       retaliationRisk,
       retaliationReported: toNullable(form.retaliationReported),
       retaliationAgainst: toNullable(form.retaliationAgainst),
@@ -1860,8 +2041,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     const normalizedId = String(caseId ?? "").trim();
     if (!normalizedId || !canValidateCpcaCase || isSmifWorkflow) {
       toast.push({
-        message:
-          "Seu perfil ativo não possui permissão para validar acolhimentos.",
+        message: "Seu perfil ativo não possui permissão para validar reportes.",
         severity: "warning",
       });
       return;
@@ -1871,14 +2051,13 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       const result = await validateCpcaCase.mutateAsync(normalizedId);
       toast.push({
         message: result?.alreadyValidated
-          ? "Acolhimento já estava validado."
-          : "Acolhimento validado pela comissão.",
+          ? "Reporte já estava validado."
+          : "Reporte validado pela comissão.",
         severity: "success",
       });
     } catch (error) {
       toast.push({
-        message:
-          parseApiError(error).message ?? "Erro ao validar o acolhimento.",
+        message: parseApiError(error).message ?? "Erro ao validar o reporte.",
         severity: "error",
       });
     }
@@ -1906,14 +2085,14 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       toast.push({
         message: cipavdDraftIsPending
           ? "Pendência registrada."
-          : "Comentário da CIPAVD registrado.",
+          : "Comentário COMGEP registrado.",
         severity: "success",
       });
     } catch (error) {
       toast.push({
         message:
           parseApiError(error).message ??
-          "Erro ao registrar comentário da CIPAVD.",
+          "Erro ao registrar comentário COMGEP.",
         severity: "error",
       });
     }
@@ -2025,12 +2204,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
     if (!selectedId) return;
     try {
       await deleteCase.mutateAsync(selectedId);
-      toast.push({ message: "Acolhimento excluído.", severity: "success" });
+      toast.push({ message: "Reporte excluído.", severity: "success" });
       setConfirmDeleteOpen(false);
       closeDrawer();
     } catch (error) {
       toast.push({
-        message: parseApiError(error).message ?? "Erro ao excluir acolhimento.",
+        message: parseApiError(error).message ?? "Erro ao excluir reporte.",
         severity: "error",
       });
     }
@@ -2673,7 +2852,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <TextField
             select
             size="small"
-            label="Abriu processo?"
+            label="Abriu processo apuratório?"
             value={form.processOpened}
             onChange={(e) => {
               const processOpened = e.target.value;
@@ -2688,6 +2867,10 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                       preliminaryReportGenerated: false,
                       preliminaryReportDate: "",
                     }
+                  : {}),
+                ...(processOpened === "SIM" &&
+                !isValidOpenedComplaintProcedure(prev.procedureType)
+                  ? { procedureType: "" }
                   : {}),
                 ...(processOpened !== "NAO"
                   ? { processNotOpenedReason: "" }
@@ -2744,8 +2927,18 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                       procedureType: e.target.value,
                     }))
                   }
+                  required
+                  error={!isValidOpenedComplaintProcedure(form.procedureType)}
+                  helperText={
+                    !isValidOpenedComplaintProcedure(form.procedureType)
+                      ? "Selecione o procedimento apuratório aberto."
+                      : " "
+                  }
                 >
-                  {PROCEDURE_OPTIONS.map((item) => (
+                  <MenuItem value="" disabled>
+                    Selecionar
+                  </MenuItem>
+                  {OPENED_PROCEDURE_OPTIONS.map((item) => (
                     <MenuItem key={item.value} value={item.value}>
                       {item.label}
                     </MenuItem>
@@ -2777,7 +2970,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                 <TextField
                   select
                   size="small"
-                  label="Situação atual do procedimento"
+                  label="Resultado"
                   value={form.procedureCurrentSituation}
                   onChange={(e) => {
                     const nextProcedureCurrentSituation = e.target.value;
@@ -2847,7 +3040,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               error={archiveReasonMeta.isMissingReason}
               helperText={
                 archiveReasonMeta.isMissingReason
-                  ? "Preencha o motivo do arquivamento para salvar o acolhimento como arquivado."
+                  ? "Preencha o motivo do arquivamento para salvar o reporte como arquivado."
                   : "Explique de forma objetiva o fundamento do arquivamento."
               }
               fullWidth
@@ -3069,40 +3262,36 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           />
         )}
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
-            gap: 1.2,
-          }}
-        >
-          <TextField
-            size="small"
-            type="date"
-            label="Retorno ao noticiante"
-            InputLabelProps={{ shrink: true }}
-            value={form.notifierFeedbackDate}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                notifierFeedbackDate: e.target.value,
-              }))
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={form.victimInformedOfOutcome}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    victimInformedOfOutcome: e.target.checked,
+                  }))
+                }
+              />
             }
+            label="Vítima informada do resultado"
           />
-          <TextField
-            size="small"
-            type="date"
-            label="Retorno à vítima"
-            InputLabelProps={{ shrink: true }}
-            value={form.victimFeedbackDate}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                victimFeedbackDate: e.target.value,
-              }))
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={form.accusedInformedOfOutcome}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    accusedInformedOfOutcome: e.target.checked,
+                  }))
+                }
+              />
             }
+            label="Acusado informado do resultado"
           />
-        </Box>
+        </Stack>
 
         <TextField
           size="small"
@@ -3144,10 +3333,12 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       >
         <Box>
           <Typography variant="h4" fontWeight={700}>
-            {workflowLabel} - Acolhimentos
+            {workflowNavigation ? "Reportes" : `${workflowLabel} - Reportes`}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Fluxo sigiloso em etapas, conforme ICA 30-13 (Arts. 47 a 57).
+            {workflowNavigation
+              ? "Gestão dos fluxos sigilosos de CPCA e SMIF, conforme ICA 30-13 (Arts. 47 a 57)."
+              : "Fluxo sigiloso em etapas, conforme ICA 30-13 (Arts. 47 a 57)."}
           </Typography>
         </Box>
         {canCreateCase && (
@@ -3157,170 +3348,88 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         )}
       </Stack>
 
-      <Card
+      {workflowNavigation}
+
+      <Box
         sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr",
+            md: canValidateCpcaCase
+              ? "repeat(3, minmax(0, 1fr))"
+              : "repeat(2, minmax(0, 1fr))",
+          },
+          gap: 2,
           mb: 2,
-          borderRadius: 4,
-          border: "1px solid",
-          borderColor: "divider",
-          background:
-            "linear-gradient(135deg, rgba(15,23,42,0.035), rgba(148,163,184,0.08))",
-          cursor: "pointer",
-        }}
-        role="button"
-        tabIndex={0}
-        onClick={() => setPendingModalOpen(true)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            setPendingModalOpen(true);
-          }
         }}
       >
-        <CardContent>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={1.5}
-            justifyContent="space-between"
-            alignItems={{ xs: "flex-start", md: "center" }}
-          >
-            <Box>
-              <Typography variant="overline" color="text.secondary">
-                Comentários da CIPAVD
-              </Typography>
-              <Typography variant="h4" fontWeight={800} lineHeight={1}>
-                {openPendingCount}
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.5 }}
-              >
-                {getComplaintPendingKpiLabel(openPendingCount)}
-              </Typography>
-            </Box>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1}
-              alignItems={{ xs: "flex-start", sm: "center" }}
-            >
-              {resolvedPendingCount > 0 && (
-                <Chip
-                  size="small"
-                  label={`${resolvedPendingCount} resolvida${resolvedPendingCount > 1 ? "s" : ""}`}
-                  sx={{
-                    fontWeight: 700,
-                    color: "#166534",
-                    bgcolor: "rgba(34, 197, 94, 0.12)",
-                    border: "1px solid rgba(34, 197, 94, 0.24)",
-                  }}
-                />
-              )}
-              <Typography variant="body2" color="text.secondary">
-                Clique para listar as pendências do filtro atual.
-              </Typography>
-            </Stack>
-          </Stack>
-        </CardContent>
-      </Card>
+        <ReportKpiCard
+          title="Procedimentos administrativos"
+          value={procedureSummaryQuery.isLoading ? "..." : procedureCaseCount}
+          description={
+            procedureCaseCount === 1
+              ? "reporte com procedimento instaurado"
+              : "reportes com procedimento instaurado"
+          }
+          icon={<AssignmentOutlinedIcon fontSize="small" />}
+          accessory={
+            procedureTypeCount > 0 ? (
+              <Chip
+                size="small"
+                label={`${procedureTypeCount} tipo${procedureTypeCount === 1 ? "" : "s"}`}
+                sx={REPORT_KPI_CHIP_SX}
+              />
+            ) : undefined
+          }
+          onClick={() => setProcedureModalOpen(true)}
+        />
 
-      {canValidateCpcaCase && (
-        <Card
-          sx={{
-            mb: 2,
-            borderRadius: 4,
-            border: "1px solid",
-            borderColor:
-              pendingValidationCount > 0
-                ? "rgba(217, 119, 6, 0.35)"
-                : "rgba(22, 163, 74, 0.28)",
-            bgcolor:
-              pendingValidationCount > 0
-                ? "rgba(245, 158, 11, 0.06)"
-                : "rgba(34, 197, 94, 0.05)",
-            cursor: "pointer",
-          }}
-          role="button"
-          tabIndex={0}
-          onClick={() => setValidationModalOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              setValidationModalOpen(true);
+        <ReportKpiCard
+          title="Comentários COMGEP"
+          value={pendingSummaryQuery.isLoading ? "..." : openPendingCount}
+          description={getComplaintPendingKpiLabel(openPendingCount)}
+          icon={<ForumOutlinedIcon fontSize="small" />}
+          accessory={
+            resolvedPendingCount > 0 ? (
+              <Chip
+                size="small"
+                label={`${resolvedPendingCount} resolvida${resolvedPendingCount === 1 ? "" : "s"}`}
+                sx={REPORT_KPI_CHIP_SX}
+              />
+            ) : undefined
+          }
+          onClick={() => setPendingModalOpen(true)}
+        />
+
+        {canValidateCpcaCase && (
+          <ReportKpiCard
+            title="Validação da comissão"
+            value={
+              validationSummaryQuery.isLoading ? "..." : pendingValidationCount
             }
-          }}
-        >
-          <CardContent>
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={1.5}
-              justifyContent="space-between"
-              alignItems={{ xs: "flex-start", md: "center" }}
-            >
-              <Stack direction="row" spacing={1.25} alignItems="center">
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 2,
-                    display: "grid",
-                    placeItems: "center",
-                    bgcolor:
-                      pendingValidationCount > 0
-                        ? "rgba(245, 158, 11, 0.16)"
-                        : "rgba(34, 197, 94, 0.14)",
-                    color: pendingValidationCount > 0 ? "#B45309" : "#166534",
-                  }}
-                >
-                  {pendingValidationCount > 0 ? (
-                    <PendingActionsIcon fontSize="small" />
-                  ) : (
-                    <FactCheckIcon fontSize="small" />
-                  )}
-                </Box>
-                <Box>
-                  <Typography variant="overline" color="text.secondary">
-                    Validação da comissão
-                  </Typography>
-                  <Typography variant="h4" fontWeight={800} lineHeight={1}>
-                    {validationSummaryQuery.isLoading
-                      ? "..."
-                      : pendingValidationCount}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    {pendingValidationCount === 1
-                      ? "acolhimento aguardando validação"
-                      : "acolhimentos aguardando validação"}
-                  </Typography>
-                </Box>
-              </Stack>
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1}
-                alignItems={{ xs: "flex-start", sm: "center" }}
-              >
-                <Chip
-                  size="small"
-                  label={`${validatedCount} validada${validatedCount === 1 ? "" : "s"}`}
-                  sx={{
-                    fontWeight: 700,
-                    color: "#166534",
-                    bgcolor: "rgba(34, 197, 94, 0.12)",
-                    border: "1px solid rgba(34, 197, 94, 0.24)",
-                  }}
-                />
-                <Typography variant="body2" color="text.secondary">
-                  Clique para revisar a fila do filtro atual.
-                </Typography>
-              </Stack>
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
+            description={
+              pendingValidationCount === 1
+                ? "reporte aguardando validação"
+                : "reportes aguardando validação"
+            }
+            icon={
+              pendingValidationCount > 0 ? (
+                <PendingActionsIcon fontSize="small" />
+              ) : (
+                <FactCheckIcon fontSize="small" />
+              )
+            }
+            accessory={
+              <Chip
+                size="small"
+                label={`${validatedCount} validada${validatedCount === 1 ? "" : "s"}`}
+                sx={REPORT_KPI_CHIP_SX}
+              />
+            }
+            onClick={() => setValidationModalOpen(true)}
+          />
+        )}
+      </Box>
 
       <Card sx={{ mb: 2 }}>
         <CardContent>
@@ -3453,7 +3562,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                     }}
                   />
                   <Typography variant="body2" color="text.secondary">
-                    Linhas nesta cor indicam acolhimentos a serem validados.
+                    Linhas nesta cor indicam reportes a serem validados.
                   </Typography>
                 </Stack>
               )}
@@ -3558,7 +3667,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                   <CheckCircleIcon
                                     color="success"
                                     fontSize="small"
-                                    aria-label="Acolhimento validado"
+                                    aria-label="Reporte validado"
                                   />
                                 </Tooltip>
                               )}
@@ -3727,7 +3836,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
             rowsPerPage={pageSize}
             onRowsPerPageChange={handlePageSizeChange}
             rowsPerPageOptions={[20, 50, 100, { label: "Todas", value: -1 }]}
-            labelRowsPerPage="Acolhimentos por página"
+            labelRowsPerPage="Reportes por página"
             labelDisplayedRows={({ from, to, count }) =>
               showAllRows
                 ? `1-${count} de ${count}`
@@ -3842,7 +3951,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                           Data e hora
                         </TableCell>
                         <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
-                          Acolhimento
+                          Reporte
                         </TableCell>
                         <TableCell sx={{ color: "#fff", fontWeight: 700 }}>
                           OM
@@ -3976,7 +4085,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         onClose={closeDrawer}
         PaperProps={{
           sx: {
-            width: { xs: "100%", md: 900 },
+            width: { xs: "100%", md: "min(1200px, 100vw)" },
             top: 76,
             height: "calc(100% - 76px)",
           },
@@ -4029,7 +4138,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                   onClick={() => setConfirmDeleteOpen(true)}
                   disabled={deleteCase.isPending || !selectedId}
                 >
-                  Excluir acolhimento
+                  Excluir reporte
                 </Button>
               )}
               <Button variant="text" onClick={closeDrawer}>
@@ -4108,7 +4217,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                             <Typography variant="body2" color="text.secondary">
                               {selectedValidation?.isValidated
                                 ? getValidationTooltip(selectedValidation)
-                                : "Este acolhimento precisa de validação após a última atualização."}
+                                : "Este reporte precisa de validação após a última atualização."}
                             </Typography>
                           </Box>
                         </Stack>
@@ -4154,7 +4263,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                                 }}
                                 disabled={validateCpcaCase.isPending}
                               >
-                                Validar acolhimento
+                                Validar reporte
                               </Button>
                             )}
                         </Stack>
@@ -4397,7 +4506,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                       >
                         <Box>
                           <Typography variant="subtitle1" fontWeight={800}>
-                            Comentários da CIPAVD
+                            Comentários COMGEP
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
                             Fluxo de alinhamento entre a gestão nacional e a
@@ -4465,7 +4574,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
                               label={
                                 cipavdDraftIsPending
                                   ? "Nova pendência"
-                                  : "Novo comentário da CIPAVD"
+                                  : "Novo comentário COMGEP"
                               }
                               value={cipavdDraft}
                               onChange={(event) =>
@@ -4501,7 +4610,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
 
                       {selectedCipavdThreads.length === 0 ? (
                         <Typography variant="body2" color="text.secondary">
-                          Nenhuma interação da CIPAVD registrada até o momento.
+                          Nenhuma interação do COMGEP registrada até o momento.
                         </Typography>
                       ) : (
                         <Stack spacing={1.5}>
@@ -5140,8 +5249,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
           <Stack spacing={2}>
             <Alert severity="error">
               {archiveReasonDialog?.isMissingReason
-                ? "Este acolhimento foi arquivado sem comentário registrado. Isso pode acontecer em registros antigos, anteriores à obrigatoriedade do motivo de arquivamento."
-                : "Motivo registrado para o arquivamento deste acolhimento."}
+                ? "Este reporte foi arquivado sem comentário registrado. Isso pode acontecer em registros antigos, anteriores à obrigatoriedade do motivo de arquivamento."
+                : "Motivo registrado para o arquivamento deste reporte."}
             </Alert>
 
             {archiveReasonDialog?.caseNumber ? (
@@ -5185,16 +5294,147 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
       </Dialog>
 
       <Dialog
+        open={procedureModalOpen}
+        onClose={() => setProcedureModalOpen(false)}
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle>Reportes com procedimentos administrativos</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              A relação considera os filtros ativos e apresenta somente os
+              reportes com processo apuratório e procedimento definido.
+            </Typography>
+
+            {procedureSummaryQuery.isLoading ? (
+              <Typography variant="body2" color="text.secondary">
+                Carregando procedimentos administrativos...
+              </Typography>
+            ) : procedureSummaryQuery.isError ? (
+              <Alert severity="error">
+                Não foi possível carregar os procedimentos administrativos.
+              </Alert>
+            ) : procedureItems.length === 0 ? (
+              <Alert severity="info">
+                Nenhum reporte com procedimento administrativo foi encontrado no
+                filtro atual.
+              </Alert>
+            ) : (
+              <Stack spacing={1}>
+                {procedureItems.map((item: any) => {
+                  const procedureLabel =
+                    PROCEDURE_OPTIONS.find(
+                      (entry) => entry.value === item.procedureType,
+                    )?.label ?? item.procedureType;
+                  const resultLabel = item.procedureCurrentSituation
+                    ? (PROCEDURE_CURRENT_SITUATION_OPTIONS.find(
+                        (entry) =>
+                          entry.value === item.procedureCurrentSituation,
+                      )?.label ?? item.procedureCurrentSituation)
+                    : "Resultado não informado";
+                  const statusLabel =
+                    STATUS_OPTIONS.find((entry) => entry.value === item.status)
+                      ?.label ?? item.status;
+                  const statusStyle = STATUS_CHIP_STYLES[item.status] ?? {
+                    bgcolor: "rgba(84, 110, 122, 0.12)",
+                    color: "#37474F",
+                    borderColor: "rgba(84, 110, 122, 0.25)",
+                  };
+
+                  return (
+                    <Box
+                      key={item.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        setProcedureModalOpen(false);
+                        openDetails(item.id);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setProcedureModalOpen(false);
+                          openDetails(item.id);
+                        }
+                      }}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2.5,
+                        border: "1px solid",
+                        borderColor: "divider",
+                        cursor: "pointer",
+                        transition: "background-color 120ms ease",
+                        "&:hover": { bgcolor: "action.hover" },
+                      }}
+                    >
+                      <Stack spacing={0.85}>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={1}
+                          justifyContent="space-between"
+                        >
+                          <Typography fontWeight={700}>
+                            {formatComplaintCaseNumberForDisplay(
+                              item.caseNumber,
+                            )}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Recebido em {formatDateTimePtBr(item.reportedAt)}
+                          </Typography>
+                        </Stack>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatOmLabel(item.locality)}
+                        </Typography>
+                        <Stack direction="row" spacing={1} flexWrap="wrap">
+                          <Chip
+                            size="small"
+                            label={procedureLabel}
+                            color="primary"
+                            variant="outlined"
+                            sx={{ fontWeight: 700 }}
+                          />
+                          <Chip
+                            size="small"
+                            label={statusLabel}
+                            sx={{
+                              fontWeight: 700,
+                              bgcolor: statusStyle.bgcolor,
+                              color: statusStyle.color,
+                              border: "1px solid",
+                              borderColor: statusStyle.borderColor,
+                            }}
+                          />
+                          <Chip
+                            size="small"
+                            label={resultLabel}
+                            variant="outlined"
+                          />
+                        </Stack>
+                      </Stack>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setProcedureModalOpen(false)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
         open={validationModalOpen}
         onClose={() => setValidationModalOpen(false)}
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>Acolhimentos para validação</DialogTitle>
+        <DialogTitle>Reportes para validação</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              A fila considera os filtros ativos e reúne acolhimentos criados ou
+              A fila considera os filtros ativos e reúne reportes criados ou
               atualizadas que ainda não receberam validação da comissão.
             </Typography>
 
@@ -5204,7 +5444,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               </Typography>
             ) : pendingValidationItems.length === 0 ? (
               <Alert severity="success">
-                Não há acolhimentos aguardando validação no filtro atual.
+                Não há reportes aguardando validação no filtro atual.
               </Alert>
             ) : (
               <Stack spacing={1}>
@@ -5298,7 +5538,7 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         fullWidth
         maxWidth="md"
       >
-        <DialogTitle>Pendências da CIPAVD</DialogTitle>
+        <DialogTitle>Interações COMGEP</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
@@ -5511,8 +5751,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         open={confirmDeleteOpen}
         onCancel={() => setConfirmDeleteOpen(false)}
         onConfirm={handleConfirmDelete}
-        title={`Excluir acolhimento ${workflowLabel}`}
-        message="Tem certeza que deseja excluir este acolhimento?"
+        title={`Excluir reporte ${workflowLabel}`}
+        message="Tem certeza que deseja excluir este reporte?"
         highlightText={
           selectedCaseQuery.data
             ? `${selectedCaseQuery.data.caseNumber} • ${formatOmLabel(
@@ -5532,8 +5772,8 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
         onConfirm={() => {
           void confirmSelectedCaseValidation();
         }}
-        title="Validar acolhimento"
-        message="Confirma a validação deste acolhimento pela comissão?"
+        title="Validar reporte"
+        message="Confirma a validação deste reporte pela comissão?"
         highlightText={
           selectedCaseQuery.data
             ? `${formatComplaintCaseNumberForDisplay(
@@ -5541,9 +5781,9 @@ export function CpcaCasesPage({ workflow = "CPCA" }: CpcaCasesPageProps) {
               )} • ${formatOmLabel(selectedCaseQuery.data.locality)}`
             : undefined
         }
-        note="O log registrará seu usuário, data e hora. Se o acolhimento ou uma pendência for modificado depois, a validação será retirada."
+        note="O log registrará seu usuário, data e hora. Se o reporte ou uma pendência for modificado depois, a validação será retirada."
         confirmLabel={
-          validateCpcaCase.isPending ? "Validando..." : "Validar acolhimento"
+          validateCpcaCase.isPending ? "Validando..." : "Validar reporte"
         }
         confirmLoading={validateCpcaCase.isPending}
         disableConfirm={!selectedId || Boolean(selectedValidation?.isValidated)}

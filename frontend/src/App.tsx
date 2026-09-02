@@ -33,7 +33,7 @@ import { ManualCipavdPage } from "./pages/ManualCipavdPage";
 import { ComgepSituationRoomPage } from "./pages/ComgepSituationRoomPage";
 import { MissionsPage } from "./pages/MissionsPage";
 import { SocialCommunicationPage } from "./pages/SocialCommunicationPage";
-import { CpcaCasesPage } from "./pages/CpcaCasesPage";
+import { ComplaintsPage } from "./pages/ComplaintsPage";
 import { CpcaChecklistPage } from "./pages/CpcaChecklistPage";
 import { CpcaCommissionPage } from "./pages/CpcaCommissionPage";
 import { CpcaPresidentApprovalsPage } from "./pages/CpcaPresidentApprovalsPage";
@@ -307,9 +307,12 @@ function App() {
                   path="/cpca-cases"
                   element={
                     <RequireRoleAccess
-                      allow={(user) => can(user, "cpca_cases", "view")}
+                      allow={(user) =>
+                        can(user, "cpca_cases", "view") ||
+                        can(user, "smif_complaints", "view")
+                      }
                     >
-                      <CpcaCasesPage />
+                      <ComplaintsPage />
                     </RequireRoleAccess>
                   }
                 />

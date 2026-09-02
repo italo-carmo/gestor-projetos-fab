@@ -78,7 +78,7 @@ export function getCpcaCaseInconsistencies(
       summary: `O cadastro contém data futura: ${futureFields.join(' e ')}.`,
       referenceTitle: 'Revisão cronológica do cadastro',
       referenceBody:
-        'Revise as datas informadas no acolhimento. Datas de recebimento ou do ocorrido posteriores à data atual normalmente indicam erro de lançamento ou de importação.',
+        'Revise as datas informadas no reporte. Datas de recebimento ou do ocorrido posteriores à data atual normalmente indicam erro de lançamento ou de importação.',
       tone: 'warning',
     });
   }
@@ -88,10 +88,10 @@ export function getCpcaCaseInconsistencies(
       code: 'INCIDENT_AFTER_REPORT',
       badgeLabel: 'Cronologia',
       headline: 'Ocorrido posterior ao recebimento',
-      summary: `A data do ocorrido (${formatDateKey(incidentDateKey)}) está posterior à data de recebimento do acolhimento (${formatDateKey(reportedAtKey)}).`,
+      summary: `A data do ocorrido (${formatDateKey(incidentDateKey)}) está posterior à data de recebimento do reporte (${formatDateKey(reportedAtKey)}).`,
       referenceTitle: 'Revisão cronológica do cadastro',
       referenceBody:
-        'Revise a ordem das datas informadas. Em regra, a data do fato não deve ficar posterior à data em que o acolhimento foi recebido ou registrado.',
+        'Revise a ordem das datas informadas. Em regra, a data do fato não deve ficar posterior à data em que o reporte foi recebido ou registrado.',
       tone: 'warning',
     });
   }

@@ -166,6 +166,8 @@ export const qk = {
     ["cpcaCaseStats", filters] as const,
   cpcaCasePendingSummary: (filters: Record<string, any>) =>
     ["cpcaCasePendingSummary", filters] as const,
+  cpcaCaseProcedureSummary: (filters: Record<string, any>) =>
+    ["cpcaCaseProcedureSummary", filters] as const,
   cpcaCaseValidationSummary: (filters: Record<string, any>) =>
     ["cpcaCaseValidationSummary", filters] as const,
   cpcaCommissionOverview: (localityId: string) =>
@@ -189,6 +191,8 @@ export const qk = {
   smifComplaintCase: (id: string) => ["smifComplaintCase", id] as const,
   smifComplaintPendingSummary: (filters: Record<string, any>) =>
     ["smifComplaintPendingSummary", filters] as const,
+  smifComplaintProcedureSummary: (filters: Record<string, any>) =>
+    ["smifComplaintProcedureSummary", filters] as const,
   knowledgeBases: ["admin", "knowledgeBases"] as const,
   knowledgeBasesSelectable: ["admin", "knowledgeBases", "selectable"] as const,
   knowledgeBaseDocuments: (knowledgeBaseId: string) =>

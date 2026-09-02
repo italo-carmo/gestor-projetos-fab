@@ -247,7 +247,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
       "Abertura de casos, operação da comissão CPCA e fluxo de homologações.",
     route: "/cpca-cases",
     routeAliases: ["/cpca-commission", "/cpca-president-approvals"],
-    sidebarItems: ["Acolhimentos", "Comissão CPCA", "Homologações CPCA"],
+    sidebarItems: ["Reportes", "Comissão CPCA", "Homologações CPCA"],
     expectedActions: CRUD_COMMENT,
   },
   cpca_checklist: {
@@ -264,7 +264,7 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
     menu: "CPCA",
     menuOrder: 60,
     title: "Dashboard CPCA",
-    description: "Visualização do painel analítico de acolhimentos CPCA.",
+    description: "Visualização do painel analítico de reportes CPCA.",
     route: "/dashboard/cpca",
     routeAliases: ["/cpca-stats"],
     sidebarItems: ["CPCA"],
@@ -304,10 +304,11 @@ const RESOURCE_META: Record<string, PermissionResourceMeta> = {
   smif_complaints: {
     menu: "CPCA",
     menuOrder: 60,
-    title: "Acolhimentos SMIF",
-    description: "Gestao de acolhimentos SMIF e seu fluxo de tratativa.",
-    route: "/smif-complaints",
-    sidebarItems: ["Acolhimentos"],
+    title: "Reportes SMIF",
+    description: "Gestao de reportes SMIF e seu fluxo de tratativa.",
+    route: "/cpca-cases?scope=SMIF",
+    routeAliases: ["/smif-complaints"],
+    sidebarItems: ["Reportes"],
     expectedActions: CRUD_COMMENT,
   },
   elos: {

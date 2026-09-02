@@ -49,14 +49,14 @@ describe('buildCpcaApprovalDecisionEmail', () => {
 
   it('permite personalizar o rotulo do bloco vermelho', () => {
     const message = buildCpcaApprovalDecisionEmail({
-      requestTypeLabel: 'Pendência em acolhimento CPCA',
+      requestTypeLabel: 'Pendência em reporte CPCA',
       recipientName: 'Maj Silva',
       status: 'REJECTED',
       locality: {
         code: 'CCA BR',
         name: 'CCA BR',
       },
-      heading: 'Pendência registrada em acolhimento CPCA',
+      heading: 'Pendência registrada em reporte CPCA',
       decisionReason: 'Ajustar documentação pendente.',
       reasonLabel: 'Texto da pendência',
     });

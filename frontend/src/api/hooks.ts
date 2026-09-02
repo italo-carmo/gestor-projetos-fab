@@ -3787,6 +3787,20 @@ export function useCpcaCasePendingSummary(
   });
 }
 
+export function useCpcaCaseProcedureSummary(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.cpcaCaseProcedureSummary(filters),
+    queryFn: async () =>
+      (await api.get("/cpca-cases/procedure-summary", { params: filters }))
+        .data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useCpcaCaseValidationSummary(
   filters: Record<string, any>,
   enabled = true,
@@ -3831,6 +3845,7 @@ export function useCreateCpcaCase() {
       (await api.post("/cpca-cases", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseProcedureSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
@@ -3844,6 +3859,7 @@ export function useUpdateCpcaCase() {
       (await api.put(`/cpca-cases/${args.id}`, args.payload)).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseProcedureSummary"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(args.id) });
       qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
     },
@@ -3857,6 +3873,7 @@ export function useValidateCpcaCase() {
       (await api.post(`/cpca-cases/${encodeURIComponent(id)}/validate`)).data,
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseProcedureSummary"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(id) });
       qc.invalidateQueries({ queryKey: ["cpcaCaseValidationSummary"] });
       qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
@@ -3871,6 +3888,7 @@ export function useDeleteCpcaCase() {
       (await api.delete(`/cpca-cases/${id}`)).data,
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["cpcaCases"] });
+      qc.invalidateQueries({ queryKey: ["cpcaCaseProcedureSummary"] });
       qc.invalidateQueries({ queryKey: qk.cpcaCase(id) });
       qc.invalidateQueries({ queryKey: ["cpcaCaseHistory"] });
     },
@@ -4408,6 +4426,23 @@ export function useSmifComplaintPendingSummary(
   });
 }
 
+export function useSmifComplaintProcedureSummary(
+  filters: Record<string, any>,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: qk.smifComplaintProcedureSummary(filters),
+    queryFn: async () =>
+      (
+        await api.get("/smif-complaints/procedure-summary", {
+          params: filters,
+        })
+      ).data,
+    enabled,
+    staleTime: 10_000,
+  });
+}
+
 export function useCreateSmifComplaintCase() {
   const qc = useQueryClient();
   return useMutation({
@@ -4415,6 +4450,7 @@ export function useCreateSmifComplaintCase() {
       (await api.post("/smif-complaints", payload)).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: ["smifComplaintProcedureSummary"] });
       qc.invalidateQueries({ queryKey: ["menuUpdates"] });
     },
   });
@@ -4427,6 +4463,7 @@ export function useUpdateSmifComplaintCase() {
       (await api.put(`/smif-complaints/${args.id}`, args.payload)).data,
     onSuccess: (_data, args) => {
       qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: ["smifComplaintProcedureSummary"] });
       qc.invalidateQueries({ queryKey: qk.smifComplaintCase(args.id) });
     },
   });
@@ -4439,6 +4476,7 @@ export function useDeleteSmifComplaintCase() {
       (await api.delete(`/smif-complaints/${id}`)).data,
     onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: ["smifComplaints"] });
+      qc.invalidateQueries({ queryKey: ["smifComplaintProcedureSummary"] });
       qc.invalidateQueries({ queryKey: qk.smifComplaintCase(id) });
     },
   });

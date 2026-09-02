@@ -52,9 +52,12 @@ describe("cpcaCaseConsistency", () => {
     );
   });
 
-  it("sincroniza o status para arquivado quando a situação do procedimento é arquivado pela justiça", () => {
+  it("sincroniza o status para arquivado quando o resultado arquiva o procedimento", () => {
+    expect(syncCpcaWorkflowStatus("RECEIVED", "ARQUIVADO_PELA_JUSTICA")).toBe(
+      "ARCHIVED",
+    );
     expect(
-      syncCpcaWorkflowStatus("RECEIVED", "ARQUIVADO_PELA_JUSTICA"),
+      syncCpcaWorkflowStatus("INVESTIGATION", "ARQUIVADO_PELA_ADMINISTRACAO"),
     ).toBe("ARCHIVED");
     expect(syncCpcaWorkflowStatus("INVESTIGATION", "EM_ANDAMENTO")).toBe(
       "INVESTIGATION",

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveComplaintProcessOpenedValue } from "./complaintProcessOpening";
+import {
+  isValidOpenedComplaintProcedure,
+  resolveComplaintProcedureTypeForForm,
+  resolveComplaintProcessOpenedValue,
+} from "./complaintProcessOpening";
 
 describe("resolveComplaintProcessOpenedValue", () => {
   it("preserva as respostas explícitas", () => {
@@ -28,5 +32,35 @@ describe("resolveComplaintProcessOpenedValue", () => {
       resolveComplaintProcessOpenedValue({ procedureType: "NOT_DEFINED" }),
     ).toBe("");
     expect(resolveComplaintProcessOpenedValue({})).toBe("");
+  });
+});
+
+describe("procedure type when a process was opened", () => {
+  it("rejects undefined and no-procedure options", () => {
+    expect(isValidOpenedComplaintProcedure("NOT_DEFINED")).toBe(false);
+    expect(isValidOpenedComplaintProcedure("NAO_HOUVE")).toBe(false);
+    expect(isValidOpenedComplaintProcedure("")).toBe(false);
+    expect(isValidOpenedComplaintProcedure("SINDICANCIA")).toBe(true);
+  });
+
+  it("loads an invalid saved procedure as blank so it must be adjusted", () => {
+    expect(
+      resolveComplaintProcedureTypeForForm({
+        processOpened: "SIM",
+        procedureType: "NOT_DEFINED",
+      }),
+    ).toBe("");
+    expect(
+      resolveComplaintProcedureTypeForForm({
+        processOpened: "SIM",
+        procedureType: "NAO_HOUVE",
+      }),
+    ).toBe("");
+    expect(
+      resolveComplaintProcedureTypeForForm({
+        processOpened: "SIM",
+        procedureType: "IPM",
+      }),
+    ).toBe("IPM");
   });
 });

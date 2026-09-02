@@ -163,7 +163,7 @@ export function resolveHomePath(user: MePayload | undefined) {
     [canSeeSocialCommunication, "/social-communication"],
     [canSeeLibrary, "/library"],
     [canSeeActivities, "/activities"],
-    [canSeeSmifComplaints, "/smif-complaints"],
+    [canSeeSmifComplaints, "/cpca-cases?scope=SMIF"],
     [canSeeGsdRecruits, "/gsd-recruits"],
     [canSeeElos, "/elos"],
     [canSeeBestPractices, "/best-practices"],

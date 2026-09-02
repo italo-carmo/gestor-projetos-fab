@@ -21,6 +21,12 @@ describe("complaintArchiveReason", () => {
         procedureCurrentSituation: "ARQUIVADO_PELA_JUSTICA",
       }),
     ).toBe(true);
+    expect(
+      isComplaintArchiveReasonRequired({
+        status: "INVESTIGATION",
+        procedureCurrentSituation: "ARQUIVADO_PELA_ADMINISTRACAO",
+      }),
+    ).toBe(true);
   });
 
   it("builds the red badge state for archived complaints with and without comment", () => {

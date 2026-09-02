@@ -130,6 +130,33 @@ export class CpcaController {
     );
   }
 
+  @Get('procedure-summary')
+  @RequirePermission('cpca_cases', 'view')
+  procedureSummary(
+    @Query('omId') omId: string | undefined,
+    @Query('localityId') localityId: string | undefined,
+    @Query('status') status: string | undefined,
+    @Query('complaintType') complaintType: string | undefined,
+    @Query('detailedViolenceType') detailedViolenceType: string | undefined,
+    @Query('procedureType') procedureType: string | undefined,
+    @Query('validationStatus') validationStatus: string | undefined,
+    @Query('q') q: string | undefined,
+    @CurrentUser() user: RbacUser,
+  ) {
+    return this.cpca.procedureSummary(
+      {
+        localityId: omId ?? localityId,
+        status,
+        complaintType,
+        detailedViolenceType,
+        procedureType,
+        validationStatus,
+        q,
+      },
+      user,
+    );
+  }
+
   @Get('history')
   @RequirePermission('cpca_cases', 'view')
   history(
