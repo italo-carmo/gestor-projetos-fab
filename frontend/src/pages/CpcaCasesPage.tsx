@@ -588,6 +588,19 @@ function toDateInputValue(value: unknown) {
   return formatDateInputValue(parsed);
 }
 
+function createEmptySubsequentProcedureForm() {
+  return {
+    subsequentProcedureOpened: "",
+    subsequentProcedureNotOpenedReason: "",
+    subsequentProcedureType: "",
+    subsequentProcedureStatus: "",
+    subsequentProcedureReference: "",
+    subsequentProcedureCurrentSituation: "",
+    subsequentProcedureStartDate: "",
+    subsequentProcedureEndDate: "",
+  };
+}
+
 function createDefaultForm() {
   return {
     localityId: "",
@@ -630,6 +643,7 @@ function createDefaultForm() {
     procedureReference: "",
     procedureStartDate: "",
     procedureEndDate: "",
+    ...createEmptySubsequentProcedureForm(),
     womenLedHandlingPrioritized: false,
     victimAccusedSeparationEvaluated: false,
     victimAccusedSeparationApplied: false,
@@ -1246,7 +1260,12 @@ export function CpcaCasesPage({
   );
   const procedureTypeCount = new Set(
     procedureItems
-      .map((item) => String(item.procedureType ?? ""))
+      .flatMap((item) => [
+        String(item.procedureType ?? ""),
+        item.subsequentProcedureOpened
+          ? String(item.subsequentProcedureType ?? "")
+          : "",
+      ])
       .filter(Boolean),
   ).size;
   const validationSummaryData = validationSummaryQuery.data as
@@ -1419,6 +1438,13 @@ export function CpcaCasesPage({
     toNullable(form.procedureStartDate) ||
     toNullable(form.procedureEndDate) ||
     toNullable(form.procedureCurrentSituation) ||
+    toNullable(form.subsequentProcedureOpened) ||
+    toNullable(form.subsequentProcedureNotOpenedReason) ||
+    toNullable(form.subsequentProcedureType) ||
+    toNullable(form.subsequentProcedureReference) ||
+    toNullable(form.subsequentProcedureCurrentSituation) ||
+    toNullable(form.subsequentProcedureStartDate) ||
+    toNullable(form.subsequentProcedureEndDate) ||
     form.procedureType !== "NOT_DEFINED",
   );
   const dataUnlockedStep = hasStep3Progress
@@ -1484,6 +1510,15 @@ export function CpcaCasesPage({
       )
         ? savedProcedureCurrentSituation
         : "";
+    const savedSubsequentProcedureCurrentSituation = String(
+      item.subsequentProcedureCurrentSituation ?? "",
+    ).trim();
+    const subsequentProcedureCurrentSituation =
+      SELECTABLE_PROCEDURE_CURRENT_SITUATIONS.has(
+        savedSubsequentProcedureCurrentSituation,
+      )
+        ? savedSubsequentProcedureCurrentSituation
+        : "";
     setForm({
       reportedAt: toDateInputValue(item.reportedAt),
       localityId: item.localityId ?? "",
@@ -1539,6 +1574,27 @@ export function CpcaCasesPage({
       procedureReference: item.procedureReference ?? "",
       procedureStartDate: toDateInputValue(item.procedureStartDate),
       procedureEndDate: toDateInputValue(item.procedureEndDate),
+      subsequentProcedureOpened:
+        item.subsequentProcedureOpened === true
+          ? "SIM"
+          : item.subsequentProcedureOpened === false
+            ? "NAO"
+            : "",
+      subsequentProcedureNotOpenedReason:
+        item.subsequentProcedureNotOpenedReason ?? "",
+      subsequentProcedureType: item.subsequentProcedureType ?? "",
+      subsequentProcedureStatus: syncCpcaWorkflowStatus(
+        item.subsequentProcedureStatus ?? "PROCEDURE_DEFINED",
+        subsequentProcedureCurrentSituation,
+      ),
+      subsequentProcedureReference: item.subsequentProcedureReference ?? "",
+      subsequentProcedureCurrentSituation,
+      subsequentProcedureStartDate: toDateInputValue(
+        item.subsequentProcedureStartDate,
+      ),
+      subsequentProcedureEndDate: toDateInputValue(
+        item.subsequentProcedureEndDate,
+      ),
       womenLedHandlingPrioritized: Boolean(item.womenLedHandlingPrioritized),
       victimAccusedSeparationEvaluated: Boolean(
         item.victimAccusedSeparationEvaluated,
@@ -1837,6 +1893,51 @@ export function CpcaCasesPage({
       return;
     }
 
+    const supportsSubsequentProcedure =
+      form.processOpened === "SIM" && form.procedureType === "SINDICANCIA";
+    if (
+      supportsSubsequentProcedure &&
+      form.subsequentProcedureOpened === "NAO" &&
+      !toNullable(form.subsequentProcedureNotOpenedReason)
+    ) {
+      setActiveStep(2);
+      toast.push({
+        message:
+          "Justifique por que não foi aberto um novo procedimento ao final da Sindicância.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    if (
+      supportsSubsequentProcedure &&
+      form.subsequentProcedureOpened === "SIM" &&
+      !isValidOpenedComplaintProcedure(form.subsequentProcedureType)
+    ) {
+      setActiveStep(2);
+      toast.push({
+        message: "Selecione o novo procedimento administrativo aberto.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    if (
+      supportsSubsequentProcedure &&
+      form.subsequentProcedureOpened === "SIM" &&
+      form.subsequentProcedureStartDate &&
+      form.subsequentProcedureEndDate &&
+      form.subsequentProcedureEndDate < form.subsequentProcedureStartDate
+    ) {
+      setActiveStep(2);
+      toast.push({
+        message:
+          "A data de conclusão do novo procedimento não pode ser anterior à data de início.",
+        severity: "warning",
+      });
+      return;
+    }
+
     const inferredComplaintType = inferMacroComplaintTypeFromDetailed(
       form.detailedViolenceType,
     );
@@ -1947,6 +2048,44 @@ export function CpcaCasesPage({
           : toNullable(form.procedureStartDate),
       procedureEndDate:
         form.processOpened === "NAO" ? null : toNullable(form.procedureEndDate),
+      subsequentProcedureOpened: supportsSubsequentProcedure
+        ? form.subsequentProcedureOpened === "SIM"
+          ? true
+          : form.subsequentProcedureOpened === "NAO"
+            ? false
+            : null
+        : null,
+      subsequentProcedureNotOpenedReason:
+        supportsSubsequentProcedure && form.subsequentProcedureOpened === "NAO"
+          ? toNullable(form.subsequentProcedureNotOpenedReason)
+          : null,
+      subsequentProcedureType:
+        supportsSubsequentProcedure && form.subsequentProcedureOpened === "SIM"
+          ? toNullable(form.subsequentProcedureType)
+          : null,
+      subsequentProcedureStatus:
+        supportsSubsequentProcedure && form.subsequentProcedureOpened === "SIM"
+          ? syncCpcaWorkflowStatus(
+              form.subsequentProcedureStatus || "PROCEDURE_DEFINED",
+              form.subsequentProcedureCurrentSituation,
+            )
+          : null,
+      subsequentProcedureReference:
+        supportsSubsequentProcedure && form.subsequentProcedureOpened === "SIM"
+          ? toNullable(form.subsequentProcedureReference)
+          : null,
+      subsequentProcedureCurrentSituation:
+        supportsSubsequentProcedure && form.subsequentProcedureOpened === "SIM"
+          ? toNullable(form.subsequentProcedureCurrentSituation)
+          : null,
+      subsequentProcedureStartDate:
+        supportsSubsequentProcedure && form.subsequentProcedureOpened === "SIM"
+          ? toNullable(form.subsequentProcedureStartDate)
+          : null,
+      subsequentProcedureEndDate:
+        supportsSubsequentProcedure && form.subsequentProcedureOpened === "SIM"
+          ? toNullable(form.subsequentProcedureEndDate)
+          : null,
       victimAccusedSeparationEvaluated: Boolean(
         form.victimAccusedSeparationEvaluated,
       ),
@@ -2851,6 +2990,7 @@ export function CpcaCasesPage({
                       procedureReference: "",
                       procedureStartDate: "",
                       procedureEndDate: "",
+                      ...createEmptySubsequentProcedureForm(),
                     }
                   : {}),
                 ...(processOpened === "SIM" &&
@@ -2906,12 +3046,16 @@ export function CpcaCasesPage({
                   size="small"
                   label="Procedimento administrativo"
                   value={form.procedureType}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const procedureType = e.target.value;
                     setForm((prev) => ({
                       ...prev,
-                      procedureType: e.target.value,
-                    }))
-                  }
+                      procedureType,
+                      ...(procedureType !== "SINDICANCIA"
+                        ? createEmptySubsequentProcedureForm()
+                        : {}),
+                    }));
+                  }}
                   required
                   error={!isValidOpenedComplaintProcedure(form.procedureType)}
                   helperText={
@@ -3042,6 +3186,243 @@ export function CpcaCasesPage({
                   }
                 />
               </Box>
+
+              {form.procedureType === "SINDICANCIA" && (
+                <Box
+                  sx={{
+                    mt: 0.5,
+                    p: { xs: 1.5, sm: 2 },
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 2.5,
+                    bgcolor: "rgba(26, 60, 110, 0.035)",
+                  }}
+                >
+                  <Stack spacing={1.2}>
+                    <Typography variant="subtitle2" fontWeight={800}>
+                      Procedimento posterior à Sindicância
+                    </Typography>
+
+                    <TextField
+                      select
+                      size="small"
+                      label="Abriu novo procedimento ao final da Sindicância?"
+                      value={form.subsequentProcedureOpened}
+                      onChange={(e) => {
+                        const subsequentProcedureOpened = e.target.value;
+                        setForm((prev) => ({
+                          ...prev,
+                          ...createEmptySubsequentProcedureForm(),
+                          subsequentProcedureOpened,
+                          subsequentProcedureStatus:
+                            subsequentProcedureOpened === "SIM"
+                              ? "PROCEDURE_DEFINED"
+                              : "",
+                        }));
+                      }}
+                      fullWidth
+                    >
+                      <MenuItem value="">Selecione</MenuItem>
+                      <MenuItem value="SIM">Sim</MenuItem>
+                      <MenuItem value="NAO">Não</MenuItem>
+                    </TextField>
+
+                    {form.subsequentProcedureOpened === "NAO" && (
+                      <TextField
+                        size="small"
+                        label="Justificativa para não abertura de novo procedimento"
+                        value={form.subsequentProcedureNotOpenedReason}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            subsequentProcedureNotOpenedReason: e.target.value,
+                          }))
+                        }
+                        required
+                        error={
+                          !toNullable(form.subsequentProcedureNotOpenedReason)
+                        }
+                        helperText="Informe por que não houve outro procedimento ao final da Sindicância."
+                        fullWidth
+                        multiline
+                        minRows={3}
+                      />
+                    )}
+
+                    {form.subsequentProcedureOpened === "SIM" && (
+                      <>
+                        <Box
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: {
+                              xs: "1fr",
+                              md: "repeat(2, minmax(0, 1fr))",
+                            },
+                            gap: 1.2,
+                          }}
+                        >
+                          <TextField
+                            select
+                            size="small"
+                            label="Novo procedimento administrativo"
+                            value={form.subsequentProcedureType}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                subsequentProcedureType: e.target.value,
+                              }))
+                            }
+                            required
+                            error={
+                              !isValidOpenedComplaintProcedure(
+                                form.subsequentProcedureType,
+                              )
+                            }
+                            helperText={
+                              !isValidOpenedComplaintProcedure(
+                                form.subsequentProcedureType,
+                              )
+                                ? "Selecione o novo procedimento aberto."
+                                : " "
+                            }
+                          >
+                            <MenuItem value="" disabled>
+                              Selecionar
+                            </MenuItem>
+                            {OPENED_PROCEDURE_OPTIONS.map((item) => (
+                              <MenuItem key={item.value} value={item.value}>
+                                {item.label}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+
+                          <TextField
+                            select
+                            size="small"
+                            label="Status do novo procedimento"
+                            value={form.subsequentProcedureStatus}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                subsequentProcedureStatus:
+                                  syncCpcaWorkflowStatus(
+                                    e.target.value,
+                                    prev.subsequentProcedureCurrentSituation,
+                                  ),
+                              }))
+                            }
+                          >
+                            {statusOptionsForStep(
+                              2,
+                              form.subsequentProcedureStatus,
+                            ).map((item) => (
+                              <MenuItem key={item.value} value={item.value}>
+                                {item.label}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        </Box>
+
+                        <TextField
+                          size="small"
+                          label="Referência do novo processo"
+                          value={form.subsequentProcedureReference}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              subsequentProcedureReference: e.target.value,
+                            }))
+                          }
+                          fullWidth
+                        />
+
+                        <Box
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: {
+                              xs: "1fr",
+                              md: "repeat(3, minmax(0, 1fr))",
+                            },
+                            gap: 1.2,
+                          }}
+                        >
+                          <TextField
+                            select
+                            size="small"
+                            label="Resultado do novo procedimento"
+                            value={form.subsequentProcedureCurrentSituation}
+                            onChange={(e) => {
+                              const result = e.target.value;
+                              setForm((prev) => ({
+                                ...prev,
+                                subsequentProcedureCurrentSituation: result,
+                                subsequentProcedureStatus:
+                                  syncCpcaWorkflowStatus(
+                                    prev.subsequentProcedureStatus,
+                                    result,
+                                  ),
+                              }));
+                            }}
+                          >
+                            <MenuItem value="">Selecionar</MenuItem>
+                            {PROCEDURE_CURRENT_SITUATION_OPTIONS.map((item) => (
+                              <MenuItem key={item.value} value={item.value}>
+                                {item.label}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+
+                          <TextField
+                            size="small"
+                            type="date"
+                            label="Data de início"
+                            InputLabelProps={{ shrink: true }}
+                            value={form.subsequentProcedureStartDate}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                subsequentProcedureStartDate: e.target.value,
+                              }))
+                            }
+                          />
+
+                          <TextField
+                            size="small"
+                            type="date"
+                            label="Data de conclusão"
+                            InputLabelProps={{ shrink: true }}
+                            value={form.subsequentProcedureEndDate}
+                            inputProps={{
+                              min:
+                                form.subsequentProcedureStartDate || undefined,
+                            }}
+                            onChange={(e) =>
+                              setForm((prev) => ({
+                                ...prev,
+                                subsequentProcedureEndDate: e.target.value,
+                              }))
+                            }
+                            error={Boolean(
+                              form.subsequentProcedureStartDate &&
+                              form.subsequentProcedureEndDate &&
+                              form.subsequentProcedureEndDate <
+                                form.subsequentProcedureStartDate,
+                            )}
+                            helperText={
+                              form.subsequentProcedureStartDate &&
+                              form.subsequentProcedureEndDate &&
+                              form.subsequentProcedureEndDate <
+                                form.subsequentProcedureStartDate
+                                ? "A conclusão deve ser igual ou posterior ao início."
+                                : " "
+                            }
+                          />
+                        </Box>
+                      </>
+                    )}
+                  </Stack>
+                </Box>
+              )}
             </>
           )}
 
@@ -5353,7 +5734,6 @@ export function CpcaCasesPage({
         items={procedureItems}
         isLoading={procedureSummaryQuery.isLoading}
         isError={procedureSummaryQuery.isError}
-        description="A relação considera os filtros ativos e apresenta somente os reportes visíveis para o seu perfil com processo apuratório e procedimento definido."
         onSelectItem={(item) => {
           setProcedureModalOpen(false);
           openDetails(item.id);

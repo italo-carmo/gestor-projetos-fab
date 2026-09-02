@@ -38,6 +38,13 @@ export type ProcedureSummaryItem = {
   procedureType?: string | null;
   procedureCurrentSituation?: string | null;
   status?: string | null;
+  subsequentProcedureOpened?: boolean | null;
+  subsequentProcedureType?: string | null;
+  subsequentProcedureStatus?: string | null;
+  subsequentProcedureReference?: string | null;
+  subsequentProcedureCurrentSituation?: string | null;
+  subsequentProcedureStartDate?: string | null;
+  subsequentProcedureEndDate?: string | null;
   reportedAt?: string | null;
   locality?: ProcedureSummaryLocality | null;
   om?: ProcedureSummaryLocality | null;
@@ -50,7 +57,6 @@ type ProcedureSummaryDialogProps = {
   isLoading?: boolean;
   isError?: boolean;
   onSelectItem?: (item: ProcedureSummaryItem) => void;
-  description?: string;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -144,7 +150,6 @@ export function ProcedureSummaryDialog({
   isLoading = false,
   isError = false,
   onSelectItem,
-  description = "A relação apresenta somente os reportes visíveis para o seu perfil com processo apuratório e procedimento definido.",
 }: ProcedureSummaryDialogProps) {
   const [selectedProcedure, setSelectedProcedure] = useState<string | null>(
     null,
@@ -163,9 +168,15 @@ export function ProcedureSummaryDialog({
   const procedureCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const item of items) {
-      const procedureType = String(item.procedureType ?? "").trim();
-      if (!procedureType) continue;
-      counts.set(procedureType, (counts.get(procedureType) ?? 0) + 1);
+      const procedureTypes = [
+        String(item.procedureType ?? "").trim(),
+        item.subsequentProcedureOpened
+          ? String(item.subsequentProcedureType ?? "").trim()
+          : "",
+      ].filter(Boolean);
+      for (const procedureType of procedureTypes) {
+        counts.set(procedureType, (counts.get(procedureType) ?? 0) + 1);
+      }
     }
     return counts;
   }, [items]);
@@ -193,7 +204,12 @@ export function ProcedureSummaryDialog({
   const filteredItems = useMemo(
     () =>
       selectedProcedure
-        ? items.filter((item) => item.procedureType === selectedProcedure)
+        ? items.filter(
+            (item) =>
+              item.procedureType === selectedProcedure ||
+              (item.subsequentProcedureOpened &&
+                item.subsequentProcedureType === selectedProcedure),
+          )
         : items,
     [items, selectedProcedure],
   );
@@ -227,35 +243,6 @@ export function ProcedureSummaryDialog({
 
       <DialogContent dividers sx={{ bgcolor: "#F8FAFD" }}>
         <Stack spacing={2.25}>
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: { xs: "column", sm: "row" },
-              alignItems: { sm: "center" },
-              justifyContent: "space-between",
-              gap: 1.5,
-              p: 2,
-              borderRadius: 3,
-              color: "#FFFFFF",
-              background: "linear-gradient(135deg, #163A69 0%, #24588E 100%)",
-            }}
-          >
-            <Box>
-              <Typography
-                variant="overline"
-                sx={{ opacity: 0.82, letterSpacing: 0.8 }}
-              >
-                Total no recorte acessível
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9, maxWidth: 680 }}>
-                {description}
-              </Typography>
-            </Box>
-            <Typography variant="h3" fontWeight={800} lineHeight={1}>
-              {isLoading ? "—" : items.length}
-            </Typography>
-          </Box>
-
           {isLoading ? (
             <Stack alignItems="center" spacing={1.25} sx={{ py: 5 }}>
               <CircularProgress size={30} />
@@ -388,6 +375,12 @@ export function ProcedureSummaryDialog({
                       const scope = String(item.workflowScope ?? "")
                         .trim()
                         .toUpperCase();
+                      const subsequentStatus = String(
+                        item.subsequentProcedureStatus ?? "",
+                      ).trim();
+                      const subsequentStatusStyle =
+                        STATUS_CHIP_STYLES[subsequentStatus] ??
+                        DEFAULT_STATUS_STYLE;
 
                       return (
                         <Box
@@ -495,6 +488,93 @@ export function ProcedureSummaryDialog({
                                 variant="outlined"
                               />
                             </Stack>
+                            {item.subsequentProcedureOpened &&
+                            item.subsequentProcedureType ? (
+                              <Box
+                                sx={{
+                                  mt: 0.25,
+                                  p: 1,
+                                  borderRadius: 2,
+                                  bgcolor: "rgba(26, 60, 110, 0.045)",
+                                }}
+                              >
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  fontWeight={800}
+                                  sx={{ display: "block", mb: 0.75 }}
+                                >
+                                  Procedimento posterior à Sindicância
+                                </Typography>
+                                <Stack
+                                  direction="row"
+                                  spacing={0.75}
+                                  flexWrap="wrap"
+                                  useFlexGap
+                                >
+                                  <Chip
+                                    size="small"
+                                    label={getComplaintProcedureLabel(
+                                      item.subsequentProcedureType,
+                                    )}
+                                    color="secondary"
+                                    variant="outlined"
+                                    sx={{ fontWeight: 700 }}
+                                  />
+                                  {subsequentStatus ? (
+                                    <Chip
+                                      size="small"
+                                      label={
+                                        STATUS_LABELS[subsequentStatus] ??
+                                        subsequentStatus
+                                      }
+                                      sx={{
+                                        fontWeight: 700,
+                                        bgcolor: subsequentStatusStyle.bgcolor,
+                                        color: subsequentStatusStyle.color,
+                                        border: "1px solid",
+                                        borderColor:
+                                          subsequentStatusStyle.borderColor,
+                                      }}
+                                    />
+                                  ) : null}
+                                  <Chip
+                                    size="small"
+                                    label={getComplaintProcedureResultLabel(
+                                      item.subsequentProcedureCurrentSituation,
+                                    )}
+                                    variant="outlined"
+                                  />
+                                </Stack>
+                                {item.subsequentProcedureReference ? (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: "block", mt: 0.75 }}
+                                  >
+                                    Referência:{" "}
+                                    {item.subsequentProcedureReference}
+                                  </Typography>
+                                ) : null}
+                                {item.subsequentProcedureStartDate ||
+                                item.subsequentProcedureEndDate ? (
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: "block", mt: 0.25 }}
+                                  >
+                                    Início:{" "}
+                                    {formatDateTimePtBr(
+                                      item.subsequentProcedureStartDate,
+                                    )}
+                                    {" · "}Conclusão:{" "}
+                                    {formatDateTimePtBr(
+                                      item.subsequentProcedureEndDate,
+                                    )}
+                                  </Typography>
+                                ) : null}
+                              </Box>
+                            ) : null}
                           </Stack>
                         </Box>
                       );

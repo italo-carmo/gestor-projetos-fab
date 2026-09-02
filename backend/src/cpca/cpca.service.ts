@@ -54,6 +54,12 @@ const CPCA_PROCEDURE_ORDER = [
   'CONSELHO_DISCIPLINA',
   'CONSELHO_JUSTIFICACAO',
 ] as const;
+const CPCA_OPENED_PROCEDURE_SET = new Set<string>(
+  CPCA_PROCEDURE_ORDER.filter(
+    (procedureType) =>
+      procedureType !== 'NOT_DEFINED' && procedureType !== 'NAO_HOUVE',
+  ),
+);
 const CPCA_COMPLAINT_TYPE_ORDER = ['MORAL', 'SEXUAL'] as const;
 const CPCA_SELECTABLE_DETAILED_VIOLENCE_TYPE_SET = new Set<string>(
   CPCA_SELECTABLE_DETAILED_VIOLENCE_TYPES,
@@ -251,6 +257,15 @@ const COMPLAINT_HISTORY_FIELD_LABELS: Record<string, string> = {
   procedureReference: 'Referência do procedimento',
   procedureStartDate: 'Data de início do procedimento',
   procedureEndDate: 'Data de término do procedimento',
+  subsequentProcedureOpened: 'Abriu novo procedimento ao final da Sindicância',
+  subsequentProcedureNotOpenedReason:
+    'Justificativa para não abertura de novo procedimento',
+  subsequentProcedureType: 'Novo procedimento administrativo',
+  subsequentProcedureStatus: 'Status do novo procedimento',
+  subsequentProcedureReference: 'Referência do novo procedimento',
+  subsequentProcedureCurrentSituation: 'Resultado do novo procedimento',
+  subsequentProcedureStartDate: 'Data de início do novo procedimento',
+  subsequentProcedureEndDate: 'Data de conclusão do novo procedimento',
   procedureNotes: 'Notas do procedimento',
   womenLedHandlingPrioritized: 'Tratamento por mulheres priorizado',
   victimAccusedSeparationEvaluated: 'Separação vítima/acusado avaliada',
@@ -844,6 +859,13 @@ export class CpcaService {
           processOpened: true,
           procedureType: true,
           procedureCurrentSituation: true,
+          subsequentProcedureOpened: true,
+          subsequentProcedureType: true,
+          subsequentProcedureStatus: true,
+          subsequentProcedureReference: true,
+          subsequentProcedureCurrentSituation: true,
+          subsequentProcedureStartDate: true,
+          subsequentProcedureEndDate: true,
           reportedAt: true,
           updatedAt: true,
           omId: true,
@@ -1943,6 +1965,56 @@ export class CpcaService {
     );
     const procedureType =
       processOpened === false ? 'NOT_DEFINED' : requestedProcedureType;
+    const subsequentProcedureOpened =
+      processOpened === true && procedureType === 'SINDICANCIA'
+        ? (payload.subsequentProcedureOpened ?? null)
+        : null;
+    const subsequentProcedureNotOpenedReason =
+      subsequentProcedureOpened === false
+        ? this.cleanOptional(payload.subsequentProcedureNotOpenedReason)
+        : null;
+    const subsequentProcedureType =
+      subsequentProcedureOpened === true
+        ? this.cleanOptional(payload.subsequentProcedureType)
+        : null;
+    const subsequentProcedureReference =
+      subsequentProcedureOpened === true
+        ? this.cleanOptional(payload.subsequentProcedureReference)
+        : null;
+    const subsequentProcedureCurrentSituation =
+      subsequentProcedureOpened === true
+        ? this.cleanOptional(payload.subsequentProcedureCurrentSituation)
+        : null;
+    const subsequentProcedureStatus =
+      subsequentProcedureOpened === true
+        ? syncWorkflowStatusWithProcedureSituation({
+            status:
+              payload.subsequentProcedureStatus ?? 'PROCEDURE_DEFINED',
+            procedureCurrentSituation: subsequentProcedureCurrentSituation,
+          })
+        : null;
+    const subsequentProcedureStartDate =
+      subsequentProcedureOpened === true
+        ? (this.parseOptionalIsoDateInput(
+            payload.subsequentProcedureStartDate,
+            'subsequentProcedureStartDate',
+          ) ?? null)
+        : null;
+    const subsequentProcedureEndDate =
+      subsequentProcedureOpened === true
+        ? (this.parseOptionalIsoDateInput(
+            payload.subsequentProcedureEndDate,
+            'subsequentProcedureEndDate',
+          ) ?? null)
+        : null;
+    this.assertSubsequentProcedureConsistency({
+      mainProcedureType: procedureType,
+      opened: subsequentProcedureOpened,
+      notOpenedReason: subsequentProcedureNotOpenedReason,
+      procedureType: subsequentProcedureType,
+      startDate: subsequentProcedureStartDate,
+      endDate: subsequentProcedureEndDate,
+    });
     if (status === 'CONCLUDED' || status === 'ARCHIVED') {
       throwError('VALIDATION_ERROR', {
         field: 'status',
@@ -2064,6 +2136,14 @@ export class CpcaService {
           : this.cleanOptional(payload.procedureReference),
       procedureStartDate,
       procedureEndDate,
+      subsequentProcedureOpened,
+      subsequentProcedureNotOpenedReason,
+      subsequentProcedureType,
+      subsequentProcedureStatus,
+      subsequentProcedureReference,
+      subsequentProcedureCurrentSituation,
+      subsequentProcedureStartDate,
+      subsequentProcedureEndDate,
       procedureNotes:
         processOpened === false
           ? null
@@ -2249,6 +2329,14 @@ export class CpcaService {
         procedureReference: true,
         procedureStartDate: true,
         procedureEndDate: true,
+        subsequentProcedureOpened: true,
+        subsequentProcedureNotOpenedReason: true,
+        subsequentProcedureType: true,
+        subsequentProcedureStatus: true,
+        subsequentProcedureReference: true,
+        subsequentProcedureCurrentSituation: true,
+        subsequentProcedureStartDate: true,
+        subsequentProcedureEndDate: true,
         procedureNotes: true,
         womenLedHandlingPrioritized: true,
         victimAccusedSeparationEvaluated: true,
@@ -2384,6 +2472,73 @@ export class CpcaService {
               'procedureEndDate',
             );
     this.assertProcedureDateRange(nextProcedureStartDate, nextProcedureEndDate);
+    const canHaveSubsequentProcedure =
+      nextProcessOpened === true && nextProcedure === 'SINDICANCIA';
+    const nextSubsequentProcedureOpened = canHaveSubsequentProcedure
+      ? payload.subsequentProcedureOpened === undefined
+        ? current.subsequentProcedureOpened
+        : payload.subsequentProcedureOpened
+      : null;
+    const nextSubsequentProcedureNotOpenedReason =
+      nextSubsequentProcedureOpened === false
+        ? payload.subsequentProcedureNotOpenedReason === undefined
+          ? this.cleanOptional(current.subsequentProcedureNotOpenedReason)
+          : this.cleanOptional(payload.subsequentProcedureNotOpenedReason)
+        : null;
+    const nextSubsequentProcedureType =
+      nextSubsequentProcedureOpened === true
+        ? payload.subsequentProcedureType === undefined
+          ? this.cleanOptional(current.subsequentProcedureType)
+          : this.cleanOptional(payload.subsequentProcedureType)
+        : null;
+    const nextSubsequentProcedureCurrentSituation =
+      nextSubsequentProcedureOpened === true
+        ? payload.subsequentProcedureCurrentSituation === undefined
+          ? this.cleanOptional(current.subsequentProcedureCurrentSituation)
+          : this.cleanOptional(payload.subsequentProcedureCurrentSituation)
+        : null;
+    const nextSubsequentProcedureStatus =
+      nextSubsequentProcedureOpened === true
+        ? syncWorkflowStatusWithProcedureSituation({
+            status:
+              payload.subsequentProcedureStatus === undefined
+                ? current.subsequentProcedureStatus
+                : payload.subsequentProcedureStatus,
+            procedureCurrentSituation: nextSubsequentProcedureCurrentSituation,
+          })
+        : null;
+    const nextSubsequentProcedureReference =
+      nextSubsequentProcedureOpened === true
+        ? payload.subsequentProcedureReference === undefined
+          ? this.cleanOptional(current.subsequentProcedureReference)
+          : this.cleanOptional(payload.subsequentProcedureReference)
+        : null;
+    const nextSubsequentProcedureStartDate =
+      nextSubsequentProcedureOpened === true
+        ? payload.subsequentProcedureStartDate === undefined
+          ? current.subsequentProcedureStartDate
+          : this.parseOptionalIsoDateInput(
+              payload.subsequentProcedureStartDate,
+              'subsequentProcedureStartDate',
+            )
+        : null;
+    const nextSubsequentProcedureEndDate =
+      nextSubsequentProcedureOpened === true
+        ? payload.subsequentProcedureEndDate === undefined
+          ? current.subsequentProcedureEndDate
+          : this.parseOptionalIsoDateInput(
+              payload.subsequentProcedureEndDate,
+              'subsequentProcedureEndDate',
+            )
+        : null;
+    this.assertSubsequentProcedureConsistency({
+      mainProcedureType: nextProcedure,
+      opened: nextSubsequentProcedureOpened,
+      notOpenedReason: nextSubsequentProcedureNotOpenedReason,
+      procedureType: nextSubsequentProcedureType,
+      startDate: nextSubsequentProcedureStartDate,
+      endDate: nextSubsequentProcedureEndDate,
+    });
     const nextVictimAccusedSeparationEvaluated =
       payload.victimAccusedSeparationEvaluated ??
       current.victimAccusedSeparationEvaluated;
@@ -2597,6 +2752,16 @@ export class CpcaService {
               : undefined,
         procedureStartDate: nextProcedureStartDate,
         procedureEndDate: nextProcedureEndDate,
+        subsequentProcedureOpened: nextSubsequentProcedureOpened,
+        subsequentProcedureNotOpenedReason:
+          nextSubsequentProcedureNotOpenedReason,
+        subsequentProcedureType: nextSubsequentProcedureType,
+        subsequentProcedureStatus: nextSubsequentProcedureStatus,
+        subsequentProcedureReference: nextSubsequentProcedureReference,
+        subsequentProcedureCurrentSituation:
+          nextSubsequentProcedureCurrentSituation,
+        subsequentProcedureStartDate: nextSubsequentProcedureStartDate,
+        subsequentProcedureEndDate: nextSubsequentProcedureEndDate,
         procedureNotes:
           nextProcessOpened === false
             ? null
@@ -5417,6 +5582,8 @@ export class CpcaService {
   private assertProcedureDateRange(
     procedureStartDate: Date | null | undefined,
     procedureEndDate: Date | null | undefined,
+    field = 'procedureEndDate',
+    reason = 'PROCEDURE_END_DATE_BEFORE_START_DATE',
   ) {
     if (
       procedureStartDate &&
@@ -5424,9 +5591,47 @@ export class CpcaService {
       procedureEndDate.getTime() < procedureStartDate.getTime()
     ) {
       throwError('VALIDATION_ERROR', {
-        field: 'procedureEndDate',
-        reason: 'PROCEDURE_END_DATE_BEFORE_START_DATE',
+        field,
+        reason,
       });
+    }
+  }
+
+  private assertSubsequentProcedureConsistency(input: {
+    mainProcedureType: string | null | undefined;
+    opened: boolean | null | undefined;
+    notOpenedReason: string | null | undefined;
+    procedureType: string | null | undefined;
+    startDate: Date | null | undefined;
+    endDate: Date | null | undefined;
+  }) {
+    if (input.mainProcedureType !== 'SINDICANCIA') return;
+
+    if (input.opened === false && !this.cleanOptional(input.notOpenedReason)) {
+      throwError('VALIDATION_ERROR', {
+        field: 'subsequentProcedureNotOpenedReason',
+        reason: 'SUBSEQUENT_PROCEDURE_NOT_OPENED_REASON_REQUIRED',
+      });
+    }
+
+    if (
+      input.opened === true &&
+      (!input.procedureType ||
+        !CPCA_OPENED_PROCEDURE_SET.has(input.procedureType))
+    ) {
+      throwError('VALIDATION_ERROR', {
+        field: 'subsequentProcedureType',
+        reason: 'SUBSEQUENT_PROCEDURE_REQUIRES_DEFINED_TYPE',
+      });
+    }
+
+    if (input.opened === true) {
+      this.assertProcedureDateRange(
+        input.startDate,
+        input.endDate,
+        'subsequentProcedureEndDate',
+        'SUBSEQUENT_PROCEDURE_END_DATE_BEFORE_START_DATE',
+      );
     }
   }
 

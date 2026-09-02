@@ -1824,6 +1824,14 @@ model CpcComplaintCase {
   procedureReference               String?
   procedureStartDate               DateTime?
   procedureEndDate                 DateTime?
+  subsequentProcedureOpened        Boolean?
+  subsequentProcedureNotOpenedReason String?
+  subsequentProcedureType          CpcProcedureType?
+  subsequentProcedureStatus        CpcComplaintStatus?
+  subsequentProcedureReference     String?
+  subsequentProcedureCurrentSituation String?
+  subsequentProcedureStartDate     DateTime?
+  subsequentProcedureEndDate       DateTime?
   procedureNotes                   String?
   womenLedHandlingPrioritized      Boolean?
   victimAccusedSeparationEvaluated Boolean                   @default(false)

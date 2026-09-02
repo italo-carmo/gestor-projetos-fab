@@ -2483,7 +2483,6 @@ function AggressorProfileTab() {
         items={procedureItems}
         isLoading={procedureIsLoading}
         isError={procedureIsError}
-        description="Os indicadores consolidam CPCA e SMIF, respeitando as permissões e o escopo organizacional do usuário conectado."
         onSelectItem={(item) => {
           setDetailModal(null);
           const caseNumber = String(item.caseNumber ?? "").trim();

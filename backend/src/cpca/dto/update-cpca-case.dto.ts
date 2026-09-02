@@ -244,6 +244,40 @@ export class UpdateCpcaCaseDto {
   procedureEndDate?: string;
 
   @IsOptional()
+  @IsBoolean()
+  subsequentProcedureOpened?: boolean | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  subsequentProcedureNotOpenedReason?: string;
+
+  @IsOptional()
+  @IsIn(CPCA_PROCEDURE_TYPES)
+  subsequentProcedureType?: (typeof CPCA_PROCEDURE_TYPES)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_CASE_STATUSES)
+  subsequentProcedureStatus?: (typeof CPCA_CASE_STATUSES)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  subsequentProcedureReference?: string;
+
+  @IsOptional()
+  @IsIn(CPCA_PROCEDURE_CURRENT_SITUATIONS)
+  subsequentProcedureCurrentSituation?: (typeof CPCA_PROCEDURE_CURRENT_SITUATIONS)[number];
+
+  @IsOptional()
+  @IsISO8601()
+  subsequentProcedureStartDate?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  subsequentProcedureEndDate?: string;
+
+  @IsOptional()
   @IsString()
   @MaxLength(4000)
   procedureNotes?: string;
