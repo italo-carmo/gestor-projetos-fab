@@ -465,7 +465,7 @@ const OCCURRENCE_FORM_OPTIONS = [
 
 const NOT_INFORMED_RANK_VALUE = "NAO INFORMADO";
 const NOT_INFORMED_RANK_LABEL = "Não informado";
-const CIVIL_RANK_VALUE = "Civil";
+const ADDITIONAL_RANK_VALUES = ["Civil", "Cadete", "Aluno"];
 const LONG_SELECT_MENU_PROPS = {
   PaperProps: {
     sx: {
@@ -728,14 +728,17 @@ function getRankOptionLabel(value: string) {
   return normalized;
 }
 
-function withCivilAfterRecruta(items: string[]) {
+function withAdditionalRanks(items: string[]) {
   const normalizedItems = Array.from(
     new Set(items.map((item) => String(item ?? "").trim()).filter(Boolean)),
   );
-  const withoutCivil = normalizedItems.filter(
-    (item) => item.toLowerCase() !== CIVIL_RANK_VALUE.toLowerCase(),
+  const otherRanks = normalizedItems.filter(
+    (item) =>
+      !ADDITIONAL_RANK_VALUES.some(
+        (rank) => rank.toLowerCase() === item.toLowerCase(),
+      ),
   );
-  return [...withoutCivil, CIVIL_RANK_VALUE];
+  return [...otherRanks, ...ADDITIONAL_RANK_VALUES];
 }
 
 function getComplaintTypeLabel(value: string | null | undefined) {
@@ -1383,7 +1386,7 @@ export function CpcaCasesPage({
   );
   const rankOptionsWithUnknown = useMemo(
     () =>
-      withCivilAfterRecruta(
+      withAdditionalRanks(
         Array.from(
           new Set(
             [NOT_INFORMED_RANK_VALUE, ...rankOptions]
