@@ -133,7 +133,11 @@ export function validateCpcaPresidentBulletinUpload(
     });
   }
 
-  if (!typeConfig.mimeTypes.includes(declaredMimeType)) {
+  if (
+    declaredMimeType !== '' &&
+    declaredMimeType !== 'application/octet-stream' &&
+    !typeConfig.mimeTypes.includes(declaredMimeType)
+  ) {
     throwError('FILE_TYPE_INVALID', {
       reason: 'CPCA_PRESIDENT_BULLETIN_MIME_MISMATCH',
       detectedKind,
@@ -181,10 +185,8 @@ function sanitizeOriginalFileName(value: string | null | undefined) {
 }
 
 function detectBulletinKind(buffer: Buffer): BulletinDetectedKind | null {
-  if (
-    buffer.length >= 5 &&
-    buffer.subarray(0, 5).toString('ascii') === '%PDF-'
-  ) {
+  // Keep the same bounded, whitespace-only prefix tolerance as the browser.
+  if (/^[\t\n\f\r ]*%PDF-/.test(buffer.subarray(0, 1024).toString('latin1'))) {
     return 'pdf';
   }
 

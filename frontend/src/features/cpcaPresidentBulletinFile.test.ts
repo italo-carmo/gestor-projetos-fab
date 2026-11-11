@@ -32,6 +32,37 @@ describe("cpcaPresidentBulletinFile helpers", () => {
     });
   });
 
+  it.each(["application/pdf", "application/octet-stream", ""])(
+    "accepts a PDF with leading CRLF and MIME %s",
+    async (type) => {
+      const file = makeFile(
+        Array.from(new TextEncoder().encode("\r\n%PDF-1.3\n")),
+        "boletim.pdf",
+        type,
+      );
+      await expect(
+        validateCpcaPresidentBulletinFile(file),
+      ).resolves.toMatchObject({
+        ok: true,
+        mimeType: "application/pdf",
+      });
+    },
+  );
+
+  it.each(["MZ\r\n%PDF-1.3", "<html>%PDF-1.3"])(
+    "rejects non-whitespace before a PDF header: %s",
+    async (content) => {
+      const file = makeFile(
+        Array.from(new TextEncoder().encode(content)),
+        "boletim.pdf",
+        "application/pdf",
+      );
+      await expect(
+        validateCpcaPresidentBulletinFile(file),
+      ).resolves.toMatchObject({ ok: false, reason: "MAGIC_INVALID" });
+    },
+  );
+
   it("rejects a disguised file with renamed extension", async () => {
     const file = makeFile(
       [0x4d, 0x5a, 0x00, 0x01],

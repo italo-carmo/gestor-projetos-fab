@@ -59,6 +59,33 @@ describe('cpca president bulletin file validation', () => {
     );
   });
 
+  it.each(['application/pdf', 'application/octet-stream', ''])(
+    'accepts a PDF with leading CRLF and MIME %s',
+    (mimeType) => {
+      const content = Buffer.from('\r\n%PDF-1.3\n');
+      const validated = validateCpcaPresidentBulletinUpload(
+        makeUpload({ name: 'boletim.pdf', mimeType, content }),
+      );
+      expect(validated.mimeType).toBe('application/pdf');
+      expect(validated.buffer).toEqual(content);
+    },
+  );
+
+  it.each(['MZ\r\n%PDF-1.3', '<html>%PDF-1.3'])(
+    'rejects non-whitespace before a PDF header: %s',
+    (content) => {
+      expect(() =>
+        validateCpcaPresidentBulletinUpload(
+          makeUpload({
+            name: 'boletim.pdf',
+            mimeType: 'application/pdf',
+            content: Buffer.from(content),
+          }),
+        ),
+      ).toThrow();
+    },
+  );
+
   it('rejects a file that only fakes the extension and mime type', () => {
     expect(() =>
       validateCpcaPresidentBulletinUpload(

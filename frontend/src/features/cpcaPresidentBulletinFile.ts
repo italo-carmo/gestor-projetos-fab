@@ -85,7 +85,7 @@ export async function validateCpcaPresidentBulletinFile(
   const mimeType = String(file.type ?? "")
     .trim()
     .toLowerCase();
-  const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const header = new Uint8Array(await file.slice(0, 1024).arrayBuffer());
   const detectedKind = detectCpcaPresidentBulletinKind(header);
 
   if (!detectedKind) {
@@ -108,7 +108,11 @@ export async function validateCpcaPresidentBulletinFile(
     };
   }
 
-  if (!config.mimeTypes.includes(mimeType)) {
+  if (
+    mimeType !== "" &&
+    mimeType !== "application/octet-stream" &&
+    !config.mimeTypes.includes(mimeType)
+  ) {
     return {
       ok: false,
       reason: "MIME_MISMATCH",
@@ -156,14 +160,9 @@ function getFileExtension(value: string) {
 function detectCpcaPresidentBulletinKind(
   header: Uint8Array,
 ): CpcaPresidentBulletinKind | null {
-  if (
-    header.length >= 5 &&
-    header[0] === 0x25 &&
-    header[1] === 0x50 &&
-    header[2] === 0x44 &&
-    header[3] === 0x46 &&
-    header[4] === 0x2d
-  ) {
+  // Some PDF generators prepend whitespace before the PDF header.
+  const pdfHeader = String.fromCharCode(...header);
+  if (/^[\t\n\f\r ]*%PDF-/.test(pdfHeader)) {
     return "pdf";
   }
 
