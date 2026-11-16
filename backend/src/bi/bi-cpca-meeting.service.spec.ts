@@ -52,7 +52,7 @@ function makePrismaMock() {
   const responseDeleteMany = jest.fn().mockResolvedValue({ count: 0 });
   const batchDeleteMany = jest.fn().mockResolvedValue({ count: 0 });
 
-  return {
+  const prisma = {
     biCpcaMeetingResponse: {
       findFirst: jest.fn().mockResolvedValue(null),
       createMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -68,10 +68,11 @@ function makePrismaMock() {
       }),
       deleteMany: batchDeleteMany,
     },
-    $transaction: jest.fn((items: Array<Promise<unknown>>) =>
-      Promise.all(items),
+    $transaction: jest.fn(async (items: any) =>
+      typeof items === 'function' ? items(prisma) : Promise.all(items),
     ),
   };
+  return prisma;
 }
 
 function makeNormalizationMock() {

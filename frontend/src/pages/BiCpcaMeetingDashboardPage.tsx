@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useBiOdgsaId } from "../features/useBiOdgsaId";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -466,6 +467,15 @@ function DistributionCard({
 
 export function BiCpcaMeetingDashboardPage() {
   const toast = useToast();
+  const odgsaId = useBiOdgsaId();
+  const [importFeedback, setImportFeedback] = useState<{
+    message: string;
+    severity: "info" | "success" | "warning" | "error";
+  } | null>(null);
+  const notifyImport = (payload: NonNullable<typeof importFeedback>) => {
+    setImportFeedback(payload);
+    toast.push(payload);
+  };
   const { data: me } = useMe();
 
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
@@ -496,12 +506,18 @@ export function BiCpcaMeetingDashboardPage() {
     columnFilters: {} as Record<string, string>,
   });
 
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+  }, [odgsaId]);
+
   const dashboardFilters = useMemo(() => {
     const hasColumnFilters = Object.values(filters.columnFilters).some(
       (value) => Boolean(String(value ?? "").trim()),
     );
 
     return {
+      odgsaId,
       from: filters.from || undefined,
       to: filters.to || undefined,
       q: filters.q || undefined,
@@ -510,7 +526,7 @@ export function BiCpcaMeetingDashboardPage() {
         ? JSON.stringify(filters.columnFilters)
         : undefined,
     };
-  }, [filters]);
+  }, [filters, odgsaId]);
 
   const dashboardQuery = useBiCpcaMeetingDashboard(dashboardFilters);
   const responsesQuery = useBiCpcaMeetingResponses({
@@ -710,22 +726,43 @@ export function BiCpcaMeetingDashboardPage() {
   };
 
   const handleImport = async () => {
+    setImportFeedback({
+      severity: "info",
+      message: "Processando importação. Aguarde a conclusão...",
+    });
     try {
       const result = await previewImportMutation.mutateAsync({
         replace: replaceOnImport,
       });
+      if (result?.sync?.fetchedRows === 0 && !replaceOnImport) {
+        await Promise.all([
+          dashboardQuery.refetch(),
+          responsesQuery.refetch(),
+          importsQuery.refetch(),
+        ]);
+        setImportFeedback({
+          severity: "info",
+          message:
+            "A API do Google Sheets não retornou novos registros nesta consulta.",
+        });
+        return;
+      }
       const preview = (result?.normalization ??
         null) as BiImportNormalizationPreview | null;
       if (!preview) {
         throw new Error("A prévia de normalização não foi retornada.");
       }
       setImportPreview(preview);
+      setImportFeedback({
+        severity: "info",
+        message: "Consulta concluída. Revise a prévia e confirme a importação.",
+      });
       setSelectedNormalizationIds(
         (preview.suggestions ?? []).map((item) => item.id),
       );
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({
+      notifyImport({
         message: payload.message ?? "Falha ao importar dados da API.",
         severity: "error",
       });
@@ -734,10 +771,15 @@ export function BiCpcaMeetingDashboardPage() {
 
   const closeImportPreview = () => {
     setImportPreview(null);
+    setImportFeedback(null);
     setSelectedNormalizationIds([]);
   };
 
   const confirmImport = async (applyNormalization: boolean) => {
+    setImportFeedback({
+      severity: "info",
+      message: "Processando importação. Aguarde a conclusão...",
+    });
     try {
       const result = await importMutation.mutateAsync({
         replace: replaceOnImport,
@@ -751,7 +793,7 @@ export function BiCpcaMeetingDashboardPage() {
           : { decisions: [] },
       });
       closeImportPreview();
-      toast.push({
+      notifyImport({
         message:
           `Importação concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
           `Duplicados: ${result?.batch?.duplicateRows ?? 0}. ` +
@@ -761,7 +803,7 @@ export function BiCpcaMeetingDashboardPage() {
       });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({
+      notifyImport({
         message: payload.message ?? "Falha ao importar dados da API.",
         severity: "error",
       });
@@ -1057,7 +1099,12 @@ export function BiCpcaMeetingDashboardPage() {
           <Grid size={{ xs: 12, md: 8 }}>
             <Stack spacing={1.2}>
               <Stack direction="row" spacing={1} flexWrap="wrap">
-                <Button
+                {importFeedback ? (
+                <Alert severity={importFeedback.severity} role="status">
+                  {importFeedback.message}
+                </Alert>
+              ) : null}
+              <Button
                   size="small"
                   variant="contained"
                   startIcon={<SyncRoundedIcon />}
@@ -1106,7 +1153,7 @@ export function BiCpcaMeetingDashboardPage() {
                       onChange={(event) =>
                         setReplaceOnImport(event.target.checked)
                       }
-                      disabled={!canUpload}
+                      disabled={!canUpload || previewImportMutation.isPending || importMutation.isPending || Boolean(importPreview)}
                     />
                   }
                   label="Zerar base antes de importar"

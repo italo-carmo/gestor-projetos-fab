@@ -213,6 +213,7 @@ describe('ActivitiesService activity types', () => {
           isActive: true,
           roles: { some: { roleId: 'role-cipavd' } },
         }),
+        orderBy: [{ commissionSeniority: 'asc' }, { name: 'asc' }],
       }),
     );
   });

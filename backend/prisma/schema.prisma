@@ -1791,6 +1791,7 @@ model CpcComplaintCase {
   victimRank                       String
   victimGender                     CpcGender
   victimAgeRange                   String?
+  victims                          Json?
   victimIsNotifier                 Boolean                   @default(true)
   notifierRank                     String                    @default("NAO INFORMADO")
   notifierGender                   CpcGender                 @default(NAO_INFORMADO)

@@ -69,9 +69,16 @@ export class BiController {
     }
   }
 
+  @Get('odgsas')
+  @RequirePermission('bi', 'view')
+  listOdgsas() {
+    return this.bi.listOdgsaFilterOptions();
+  }
+
   @Get('surveys/dashboard')
   @RequirePermission('bi', 'view')
   dashboard(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('mission') mission: string | undefined,
@@ -85,6 +92,7 @@ export class BiController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.bi.dashboard({
+      odgsaId,
       from,
       to,
       mission,
@@ -101,6 +109,7 @@ export class BiController {
   @Get('surveys/dashboard/pdf')
   @RequirePermission('bi', 'view')
   async dashboardPdf(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('mission') mission: string | undefined,
@@ -114,6 +123,7 @@ export class BiController {
     @Res() res: Response,
   ) {
     const buffer = await this.biPdf.surveysDashboardPdf({
+      odgsaId,
       from,
       to,
       mission,
@@ -171,6 +181,7 @@ export class BiController {
   @Get('surveys/responses')
   @RequirePermission('bi', 'view')
   listResponses(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('mission') mission: string | undefined,
@@ -188,6 +199,7 @@ export class BiController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.bi.listResponses({
+      odgsaId,
       from,
       to,
       mission,
@@ -208,6 +220,7 @@ export class BiController {
   @Get('surveys/questions')
   @RequirePermission('bi', 'view')
   listQuestions(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('mission') mission: string | undefined,
@@ -222,6 +235,7 @@ export class BiController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.bi.listQuestions({
+      odgsaId,
       from,
       to,
       mission,
@@ -302,6 +316,7 @@ export class BiController {
     body: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       mission?: string;

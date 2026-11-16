@@ -74,6 +74,7 @@ export class BiDomesticViolenceController {
   @Get('dashboard')
   @RequirePermission('bi', 'view')
   dashboard(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('organization') organization: string | undefined,
@@ -103,6 +104,7 @@ export class BiDomesticViolenceController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.biDomesticViolence.dashboard({
+      odgsaId,
       from,
       to,
       organization,
@@ -135,6 +137,7 @@ export class BiDomesticViolenceController {
   @Get('dashboard/pdf')
   @RequirePermission('bi', 'view')
   async dashboardPdf(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('organization') organization: string | undefined,
@@ -163,6 +166,7 @@ export class BiDomesticViolenceController {
     @Res() res: Response,
   ) {
     const buffer = await this.biPdf.domesticViolenceDashboardPdf({
+      odgsaId,
       from,
       to,
       organization,
@@ -201,6 +205,7 @@ export class BiDomesticViolenceController {
   @Get('responses')
   @RequirePermission('bi', 'view')
   listResponses(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('organization') organization: string | undefined,
@@ -231,6 +236,7 @@ export class BiDomesticViolenceController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.biDomesticViolence.listResponses({
+      odgsaId,
       from,
       to,
       organization,
@@ -344,6 +350,7 @@ export class BiDomesticViolenceController {
     body: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       organization?: string;

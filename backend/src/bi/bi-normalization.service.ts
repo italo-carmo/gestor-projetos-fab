@@ -507,6 +507,32 @@ export class BiNormalizationService {
     private readonly litellm?: LitellmService,
   ) {}
 
+  async listOdgsaFilterOptions() {
+    return this.prisma.odgsa.findMany({
+      select: { id: true, code: true, name: true },
+      orderBy: { code: 'asc' },
+    });
+  }
+
+  async odgsaResponseIds(
+    sourceType: BiNormalizationSourceTypeValue,
+    odgsaId?: string,
+  ): Promise<string[] | null> {
+    const id = odgsaId?.trim();
+    if (!id) return null;
+    // Resolve the current assignment, so moving an OM updates every BI panel
+    // without reimporting or changing the original survey answers.
+    const links = await this.prisma.biNormalizationLink.findMany({
+      where: {
+        sourceType,
+        status: 'MATCHED',
+        om: { odgsaAssignment: { odgsaId: id } },
+      },
+      select: { sourceRecordId: true },
+    });
+    return links.map((link) => link.sourceRecordId);
+  }
+
   async previewImportRows(params: {
     sourceType: BiNormalizationSourceTypeValue;
     rows: BiImportNormalizationInputRow[];

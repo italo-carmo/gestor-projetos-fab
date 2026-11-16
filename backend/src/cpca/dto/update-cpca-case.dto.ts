@@ -1,4 +1,5 @@
 import {
+  ArrayMinSize,
   ArrayUnique,
   IsBoolean,
   IsArray,
@@ -9,8 +10,11 @@ import {
   IsString,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import {
+  ComplaintVictimDto,
   CPCA_ADMIN_PROCEDURES,
   CPCA_AGE_RANGES,
   CPCA_CASE_STATUSES,
@@ -96,6 +100,13 @@ export class UpdateCpcaCaseDto {
   @IsOptional()
   @IsIn(CPCA_AGE_RANGES)
   victimAgeRange?: (typeof CPCA_AGE_RANGES)[number];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => ComplaintVictimDto)
+  victims?: ComplaintVictimDto[];
 
   @IsOptional()
   @IsBoolean()

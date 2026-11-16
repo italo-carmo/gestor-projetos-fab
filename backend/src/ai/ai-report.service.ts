@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { RbacUser } from '../rbac/rbac.types';
 import { StrategicService } from '../strategic/strategic.service';
 import { resolveBestOmByFabOm } from '../catalog/om-resolver';
+import { getComplaintReportStatus } from '../cpca/cpca-workflow';
 
 export type AssistantReportKind = 'MISSION' | 'STRATEGIC' | 'OPERATIONAL';
 export type AssistantReportTone = 'EXECUTIVE' | 'ANALYTICAL' | 'OPERATIONAL';
@@ -533,6 +534,7 @@ export class AiReportService {
           workflowScope: true,
           complaintType: true,
           status: true,
+          procedureCurrentSituation: true,
           retaliationRisk: true,
           reportedAt: true,
           om: { select: { code: true, name: true, uf: true } },
@@ -747,7 +749,7 @@ export class AiReportService {
             item.caseNumber,
             String(item.workflowScope),
             item.complaintType,
-            this.translateComplaintStatus(item.status),
+            this.translateComplaintStatus(item.status, item.procedureCurrentSituation),
             item.om?.code ?? item.locality?.code ?? item.locality?.name ?? '-',
           ]),
           note:
@@ -861,6 +863,7 @@ export class AiReportService {
           workflowScope: true,
           complaintType: true,
           status: true,
+          procedureCurrentSituation: true,
           retaliationRisk: true,
           reportedAt: true,
           om: { select: { code: true, name: true, uf: true } },
@@ -927,7 +930,7 @@ export class AiReportService {
     ]);
 
     const totalCpca = cpcaCases.length;
-    const openCpca = cpcaCases.filter((item: any) => !['CONCLUDED', 'ARCHIVED'].includes(String(item.status))).length;
+    const openCpca = cpcaCases.filter((item: any) => getComplaintReportStatus(item) === 'INVESTIGATION').length;
     const totalSmif = smifCases.length;
     const openSmif = smifCases.filter((item: any) => String(item.status) !== 'COMPLETED').length;
     const signedReports = activities.filter((item: any) => Boolean(item.report?.signedAt)).length;
@@ -1069,7 +1072,7 @@ export class AiReportService {
 
     if (includeCharts) {
       const complaintStatusCounts = this.countByLabel(
-        cpcaCases.map((item: any) => this.translateComplaintStatus(item.status)),
+        cpcaCases.map((item: any) => this.translateComplaintStatus(item.status, item.procedureCurrentSituation)),
       );
       const complaintChart = this.createChartFromCounts(
         'cpca_status_chart',
@@ -1160,7 +1163,7 @@ export class AiReportService {
             item.caseNumber,
             String(item.workflowScope),
             item.complaintType,
-            this.translateComplaintStatus(item.status),
+            this.translateComplaintStatus(item.status, item.procedureCurrentSituation),
             item.om?.code ?? item.locality?.code ?? item.locality?.name ?? '-',
           ]),
           note: cpcaCases.length > 15 ? `Mostrando 15 de ${cpcaCases.length} casos.` : null,
@@ -2301,25 +2304,10 @@ export class AiReportService {
     }
   }
 
-  private translateComplaintStatus(status: string) {
-    switch (String(status ?? '').toUpperCase()) {
-      case 'RECEIVED':
-        return 'Recebida';
-      case 'PROTECTION_MEASURES':
-        return 'Medidas protetivas';
-      case 'PRELIMINARY_ANALYSIS':
-        return 'Análise preliminar';
-      case 'PROCEDURE_DEFINED':
-        return 'Procedimento definido';
-      case 'INVESTIGATION':
-        return 'Em apuração';
-      case 'CONCLUDED':
-        return 'Concluída';
-      case 'ARCHIVED':
-        return 'Arquivada';
-      default:
-        return status || '—';
-    }
+  private translateComplaintStatus(status: string, procedureCurrentSituation?: string | null) {
+    return getComplaintReportStatus({ status, procedureCurrentSituation }) === 'CONCLUDED'
+      ? 'Concluído'
+      : 'Em apuração';
   }
 
   private hasMilitaryLink(value: string | null | undefined) {

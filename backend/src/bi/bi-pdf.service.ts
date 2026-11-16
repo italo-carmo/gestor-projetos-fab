@@ -160,6 +160,7 @@ export class BiPdfService {
   }
 
   private async buildSurveysDashboardDefinition(filters: Record<string, unknown>) {
+    filters = await this.withOdgsaLabel(filters);
     const dashboard = await this.surveys.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
 
@@ -333,6 +334,7 @@ export class BiPdfService {
   private async buildDomesticViolenceDashboardDefinition(
     filters: Record<string, unknown>,
   ) {
+    filters = await this.withOdgsaLabel(filters);
     const dashboard = await this.domesticViolence.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
 
@@ -551,6 +553,7 @@ export class BiPdfService {
   }
 
   private async buildRecruitsDashboardDefinition(filters: Record<string, unknown>) {
+    filters = await this.withOdgsaLabel(filters);
     const dashboard = await this.recruits.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
 
@@ -754,6 +757,7 @@ export class BiPdfService {
   private async buildBestPracticesCycleDashboardDefinition(
     filters: Record<string, unknown>,
   ) {
+    filters = await this.withOdgsaLabel(filters);
     const dashboard = await this.bestPracticesCycle.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
 
@@ -949,6 +953,7 @@ export class BiPdfService {
   private async buildCpcaMeetingDashboardDefinition(
     filters: Record<string, unknown>,
   ) {
+    filters = await this.withOdgsaLabel(filters);
     const dashboard = await this.cpcaMeeting.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
     const columnsMeta = dashboard?.columnsMeta ?? [];
@@ -1097,6 +1102,7 @@ export class BiPdfService {
   private async buildGsdEvaluationDashboardDefinition(
     filters: Record<string, unknown>,
   ) {
+    filters = await this.withOdgsaLabel(filters);
     const dashboard = await this.gsdEvaluation.dashboard(filters as any);
     const cardSettings = dashboard?.cardSettings ?? [];
     const columnsMeta = dashboard?.columnsMeta ?? [];
@@ -1317,11 +1323,22 @@ export class BiPdfService {
     };
   }
 
+  private async withOdgsaLabel(filters: Record<string, unknown>) {
+    const id = this.cleanText(filters.odgsaId);
+    if (!id) return filters;
+    const options = await this.surveys.listOdgsaFilterOptions();
+    return { ...filters, odgsaLabel: options.find((option) => option.id === id)?.code ?? id };
+  }
+
   private buildFilterBadges(
     filters: Record<string, unknown>,
     labels: FilterLabelMap,
   ): PdfFilterBadge[] {
     const badges: PdfFilterBadge[] = [];
+    const odgsaId = this.cleanText(filters.odgsaId);
+    if (odgsaId) {
+      badges.push({ label: 'ODGSA', value: this.cleanText(filters.odgsaLabel) || odgsaId });
+    }
     const from = this.cleanText(filters?.from);
     const to = this.cleanText(filters?.to);
     if (from || to) {
@@ -1816,12 +1833,14 @@ export class BiPdfService {
             const endAngle = startAngle + angle;
             const startRadians = (Math.PI / 180) * startAngle;
             (doc as any)
-              .moveTo(chartCenterX, chartCenterY)
-              .lineTo(
-                chartCenterX + Math.cos(startRadians) * radius,
-                chartCenterY + Math.sin(startRadians) * radius,
+              .arc(
+                chartCenterX,
+                chartCenterY,
+                radius,
+                startRadians,
+                (Math.PI / 180) * endAngle,
               )
-              .arc(chartCenterX, chartCenterY, radius, startAngle, endAngle)
+              .lineTo(chartCenterX, chartCenterY)
               .closePath()
               .fill(slice.color);
             startAngle = endAngle;
@@ -2099,12 +2118,13 @@ export class BiPdfService {
             return Math.max(max, Math.max(86, 52 + labelHeight + noteHeight));
           }, 86);
           ensureSpace(rowHeight + 8);
-
+          statsCursorY = doc.y;
           rowItems.forEach((stat, columnIndex) => {
             const x = LEFT + columnIndex * (statWidth + statGap);
             drawStatCard(x, statsCursorY, statWidth, stat, rowHeight);
           });
           statsCursorY += rowHeight + 10;
+          doc.y = statsCursorY;
         }
         doc.y = statsCursorY + 2;
 
@@ -2131,11 +2151,13 @@ export class BiPdfService {
             return Math.max(max, Math.max(76, 26 + titleHeight + valueHeight + detailHeight));
           }, 76);
           ensureSpace(rowHeight + 8);
+          insightsCursorY = doc.y;
           rowItems.forEach((insight, columnIndex) => {
             const x = LEFT + columnIndex * (insightWidth + 8);
             drawInsightCard(x, insightsCursorY, insightWidth, insight, rowHeight);
           });
           insightsCursorY += rowHeight + 8;
+          doc.y = insightsCursorY;
         }
         doc.y = insightsCursorY + 2;
 
@@ -2172,6 +2194,8 @@ export class BiPdfService {
       const pageRange = doc.bufferedPageRange();
       for (let i = 0; i < pageRange.count; i += 1) {
         doc.switchToPage(i);
+        const bottomMargin = doc.page.margins.bottom;
+        doc.page.margins.bottom = 0;
         doc
           .font('Helvetica')
           .fontSize(8)
@@ -2180,8 +2204,9 @@ export class BiPdfService {
             `${footerLabel} • Página ${i + 1}/${pageRange.count}`,
             LEFT,
             doc.page.height - 24,
-            { width: WIDTH, align: 'center' },
+            { width: WIDTH, align: 'center', lineBreak: false },
           );
+        doc.page.margins.bottom = bottomMargin;
       }
 
       doc.end();

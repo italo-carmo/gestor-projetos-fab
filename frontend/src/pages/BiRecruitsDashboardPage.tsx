@@ -1,3 +1,4 @@
+import { useBiOdgsaId } from "../features/useBiOdgsaId";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -566,6 +567,15 @@ function DistributionCard({
 
 export function BiRecruitsDashboardPage() {
   const toast = useToast();
+  const odgsaId = useBiOdgsaId();
+  const [importFeedback, setImportFeedback] = useState<{
+    message: string;
+    severity: "info" | "success" | "warning" | "error";
+  } | null>(null);
+  const notifyImport = (payload: NonNullable<typeof importFeedback>) => {
+    setImportFeedback(payload);
+    toast.push(payload);
+  };
   const [searchParams] = useSearchParams();
   const responseIdFromUrl = String(searchParams.get("responseId") ?? "").trim();
   const { data: me } = useMe();
@@ -612,6 +622,11 @@ export function BiRecruitsDashboardPage() {
       setResponsesExpanded(true);
     }
   }, [responseIdFromUrl]);
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+  }, [odgsaId]);
 
   const dashboardFilters = useMemo(
     () => ({
@@ -802,14 +817,35 @@ export function BiRecruitsDashboardPage() {
   };
 
   const handleImport = async () => {
+    setImportFeedback({
+      severity: "info",
+      message: "Processando importação. Aguarde a conclusão...",
+    });
     try {
       const result = (await previewImportMutation.mutateAsync({
         replace: replaceOnImport,
       })) as RecruitsApiImportPreview;
+      if (result?.sync?.fetchedRows === 0 && !replaceOnImport) {
+        await Promise.all([
+          dashboardQuery.refetch(),
+          responsesQuery.refetch(),
+          importsQuery.refetch(),
+        ]);
+        setImportFeedback({
+          severity: "info",
+          message:
+            "A API do Google Sheets não retornou novos registros nesta consulta.",
+        });
+        return;
+      }
       setApiImportPreview(result);
+      setImportFeedback({
+        severity: "info",
+        message: "Consulta concluída. Revise a prévia e confirme a importação.",
+      });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({
+      notifyImport({
         message: payload.message ?? "Falha ao sincronizar dados da API.",
         severity: "error",
       });
@@ -818,15 +854,20 @@ export function BiRecruitsDashboardPage() {
 
   const closeApiImportPreview = () => {
     setApiImportPreview(null);
+    setImportFeedback(null);
   };
 
   const confirmApiImport = async () => {
+    setImportFeedback({
+      severity: "info",
+      message: "Processando importação. Aguarde a conclusão...",
+    });
     try {
       const result = await importMutation.mutateAsync({
         replace: replaceOnImport,
       });
       closeApiImportPreview();
-      toast.push({
+      notifyImport({
         message:
           `Sincronização concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
           `Duplicados: ${result?.batch?.duplicateRows ?? 0}. Inválidos: ${result?.batch?.invalidRows ?? 0}. ` +
@@ -835,7 +876,7 @@ export function BiRecruitsDashboardPage() {
       });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({
+      notifyImport({
         message: payload.message ?? "Falha ao sincronizar dados da API.",
         severity: "error",
       });
@@ -1177,7 +1218,12 @@ export function BiRecruitsDashboardPage() {
           <Grid size={{ xs: 12, md: 8 }}>
             <Stack spacing={1.2}>
               <Stack direction="row" spacing={1} flexWrap="wrap">
-                <Button
+                {importFeedback ? (
+                <Alert severity={importFeedback.severity} role="status">
+                  {importFeedback.message}
+                </Alert>
+              ) : null}
+              <Button
                   size="small"
                   variant="contained"
                   startIcon={<SyncRoundedIcon />}
@@ -1228,7 +1274,7 @@ export function BiRecruitsDashboardPage() {
                         onChange={(event) =>
                           setReplaceOnImport(event.target.checked)
                         }
-                        disabled={!canUpload}
+                        disabled={!canUpload || previewImportMutation.isPending || importMutation.isPending || Boolean(apiImportPreview)}
                       />
                     }
                     label="Zerar base antes de importar"

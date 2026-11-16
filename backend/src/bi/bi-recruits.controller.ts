@@ -59,6 +59,7 @@ export class BiRecruitsController {
   @Get('dashboard')
   @RequirePermission('bi', 'view')
   dashboard(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('education') education: string | undefined,
@@ -78,6 +79,7 @@ export class BiRecruitsController {
   ) {
     this.assertRecruitsAccess(user);
     return this.biRecruits.dashboard({
+      odgsaId,
       from,
       to,
       education,
@@ -98,6 +100,7 @@ export class BiRecruitsController {
   @Get('dashboard/pdf')
   @RequirePermission('bi', 'view')
   async dashboardPdf(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('education') education: string | undefined,
@@ -117,6 +120,7 @@ export class BiRecruitsController {
   ) {
     this.assertRecruitsAccess(user);
     const buffer = await this.biPdf.recruitsDashboardPdf({
+      odgsaId,
       from,
       to,
       education,
@@ -143,6 +147,7 @@ export class BiRecruitsController {
   @Get('responses')
   @RequirePermission('bi', 'view')
   listResponses(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('education') education: string | undefined,
@@ -163,6 +168,7 @@ export class BiRecruitsController {
   ) {
     this.assertRecruitsAccess(user);
     return this.biRecruits.listResponses({
+      odgsaId,
       from,
       to,
       education,
@@ -264,6 +270,7 @@ export class BiRecruitsController {
     body: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       education?: string;

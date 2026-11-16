@@ -277,7 +277,7 @@ export class ActivitiesService {
         specialtyId: true,
         eloRoleId: true,
       },
-      orderBy: { name: 'asc' },
+      orderBy: [{ commissionSeniority: 'asc' }, { name: 'asc' }],
     });
 
     return {

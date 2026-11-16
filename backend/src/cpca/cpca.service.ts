@@ -26,19 +26,18 @@ import {
 } from './dto/create-cpca-case.dto';
 import { UpdateCpcaCaseDto } from './dto/update-cpca-case.dto';
 import {
+  readComplaintVictims,
+  resolveComplaintVictims,
+} from './complaint-victims';
+import {
+  getComplaintReportStatus,
+  getComplaintStatusFilter,
+  CPCA_OPEN_STATUSES,
   isArchiveProcedureSituation,
   syncWorkflowStatusWithProcedureSituation,
 } from './cpca-workflow';
 
-const CPCA_STATUS_ORDER = [
-  'RECEIVED',
-  'PROTECTION_MEASURES',
-  'PRELIMINARY_ANALYSIS',
-  'PROCEDURE_DEFINED',
-  'INVESTIGATION',
-  'CONCLUDED',
-  'ARCHIVED',
-] as const;
+const CPCA_STATUS_ORDER = ['INVESTIGATION', 'CONCLUDED'] as const;
 const CPCA_PROCEDURE_ORDER = [
   'NOT_DEFINED',
   'PATD',
@@ -76,10 +75,8 @@ const CPCA_TRIAGE_STATUS_SET = new Set<string>([
   'PROTECTION_MEASURES',
   'PRELIMINARY_ANALYSIS',
 ]);
-const CPCA_INVESTIGATION_STATUS_SET = new Set<string>([
-  'PROCEDURE_DEFINED',
-  'INVESTIGATION',
-]);
+// The fourth workflow step (Acompanhamento) uses this legacy status name.
+const CPCA_FOLLOW_UP_STATUS = 'INVESTIGATION';
 const CIPAVD_MANAGEMENT_ROLES = [
   ROLE_COORDENACAO_CIPAVD,
   ROLE_COMANDANTE_COMGEP,
@@ -224,6 +221,7 @@ const COMPLAINT_HISTORY_FIELD_LABELS: Record<string, string> = {
   aggressorGender: 'Gênero do agressor',
   aggressorAgeRange: 'Faixa etária do agressor',
   victimRank: 'Posto/graduação da vítima',
+  victims: 'Vítimas e características das ocorrências',
   victimGender: 'Gênero da vítima',
   victimAgeRange: 'Faixa etária da vítima',
   victimIsNotifier: 'Noticiante é a vítima',
@@ -514,8 +512,12 @@ export class CpcaService {
       whereClauses.push(Prisma.sql`${omExpression} = ${requestedLocalityId}`);
     }
     if (filters.status) {
+      const statusExpression = Prisma.sql`CASE WHEN
+        COALESCE(c."status"::text, al."diffJson"->>'status') IN ('CONCLUDED', 'ARCHIVED')
+        OR COALESCE(c."procedureCurrentSituation", al."diffJson"->>'procedureCurrentSituation') IN ('ARQUIVADO_PELA_JUSTICA', 'ARQUIVADO_PELA_ADMINISTRACAO')
+        THEN 'CONCLUDED' ELSE 'INVESTIGATION' END`;
       whereClauses.push(
-        Prisma.sql`COALESCE(c."status"::text, al."diffJson"->>'status') = ${filters.status}`,
+        Prisma.sql`${statusExpression} = ${getComplaintReportStatus({ status: filters.status })}`,
       );
     }
     if (filters.complaintType) {
@@ -963,6 +965,7 @@ export class CpcaService {
         complaintType: true,
         status: true,
         procedureType: true,
+        procedureCurrentSituation: true,
         reportedAt: true,
         updatedAt: true,
         archivedAt: true,
@@ -970,6 +973,7 @@ export class CpcaService {
         aggressorRank: true,
         aggressorAgeRange: true,
         victimRank: true,
+        victims: true,
         victimAgeRange: true,
         detailedViolenceType: true,
         om: {
@@ -1008,6 +1012,7 @@ export class CpcaService {
         generatedAt: new Date().toISOString(),
         summary: {
           totalCases: 0,
+          totalVictims: 0,
           openCases: 0,
           concludedCases: 0,
           archivedCases: 0,
@@ -1018,6 +1023,8 @@ export class CpcaService {
           retaliationRiskCases: 0,
           triageOver7Days: 0,
           investigationOver30Days: 0,
+          followUpOver30Days: 0,
+          followUpWithoutStartDate: 0,
           stalledOver30Days: 0,
           stalledOver60Days: 0,
           noUpdateOver14Days: 0,
@@ -1062,6 +1069,7 @@ export class CpcaService {
           averageClosureTime: [],
           triageOver7Days: [],
           investigationOver30Days: [],
+          followUpOver30Days: [],
         },
       };
     }
@@ -1091,6 +1099,34 @@ export class CpcaService {
     }
 
     const now = new Date();
+    const followUpTransitions = await historyModel.findMany({
+      where: {
+        complaintCaseId: {
+          in: items
+            .filter((item: any) => item.status === CPCA_FOLLOW_UP_STATUS)
+            .map((item: any) => item.id),
+        },
+      },
+      select: {
+        complaintCaseId: true,
+        fromStatus: true,
+        toStatus: true,
+        changedAt: true,
+      },
+      orderBy: { changedAt: 'asc' },
+    });
+    const followUpStartedAtByCaseId = new Map<string, Date>();
+    for (const entry of followUpTransitions ?? []) {
+      if (entry.toStatus !== CPCA_FOLLOW_UP_STATUS) {
+        followUpStartedAtByCaseId.delete(entry.complaintCaseId);
+      } else if (entry.fromStatus !== CPCA_FOLLOW_UP_STATUS) {
+        if (entry.changedAt instanceof Date && !Number.isNaN(entry.changedAt.getTime())) {
+          followUpStartedAtByCaseId.set(entry.complaintCaseId, entry.changedAt);
+        } else {
+          followUpStartedAtByCaseId.delete(entry.complaintCaseId);
+        }
+      }
+    }
     const KPI_DETAILS_LIMIT = 300;
     const toDateIso = (value: Date | null | undefined) =>
       value instanceof Date && !Number.isNaN(value.getTime())
@@ -1120,7 +1156,7 @@ export class CpcaService {
         (status === 'ARCHIVED'
           ? (item.archivedAt ?? updatedAt ?? null)
           : status === 'CONCLUDED'
-            ? (updatedAt ?? null)
+            ? (item.archivedAt ?? updatedAt ?? null)
             : null);
       const daysToClosure =
         reportedAt &&
@@ -1144,6 +1180,10 @@ export class CpcaService {
         updatedAt: toDateIso(updatedAt),
         closedAt: toDateIso(closedAt instanceof Date ? closedAt : null),
         openDays,
+        followUpStartedAt: toDateIso(followUpStartedAtByCaseId.get(item.id)),
+        followUpDays: followUpStartedAtByCaseId.has(item.id)
+          ? this.daysBetween(followUpStartedAtByCaseId.get(item.id)!, now)
+          : null,
         idleDays,
         daysToClosure,
       };
@@ -1189,12 +1229,13 @@ export class CpcaService {
           Number(item.openDays ?? 0) > 7,
       )
       .slice(0, KPI_DETAILS_LIMIT);
-    const investigationOver30CaseDetailItems = openCaseDetailItems
+    const investigationOver30CaseDetailItems = caseDetailItems
       .filter(
         (item: any) =>
-          CPCA_INVESTIGATION_STATUS_SET.has(String(item.status ?? '')) &&
-          Number(item.openDays ?? 0) > 30,
+          item.status === CPCA_FOLLOW_UP_STATUS &&
+          item.followUpDays != null && item.followUpDays > 30,
       )
+      .sort((a: any, b: any) => b.followUpDays - a.followUpDays)
       .slice(0, KPI_DETAILS_LIMIT);
 
     const monthCounter = new Map<
@@ -1247,10 +1288,11 @@ export class CpcaService {
 
     let openCases = 0;
     let concludedCases = 0;
-    let archivedCases = 0;
+    const archivedCases = 0;
     let retaliationRiskCases = 0;
     let triageOver7Days = 0;
     let investigationOver30Days = 0;
+    let followUpWithoutStartDate = 0;
     let stalledOver30Days = 0;
     let stalledOver60Days = 0;
     let noUpdateOver14Days = 0;
@@ -1263,7 +1305,8 @@ export class CpcaService {
       const complaintType = String(item.complaintType ?? '');
       const detailedViolenceType = String(item.detailedViolenceType ?? '');
 
-      statusCounter.set(status, (statusCounter.get(status) ?? 0) + 1);
+      const reportStatus = getComplaintReportStatus(item);
+      statusCounter.set(reportStatus, (statusCounter.get(reportStatus) ?? 0) + 1);
       procedureCounter.set(
         procedureType,
         (procedureCounter.get(procedureType) ?? 0) + 1,
@@ -1285,12 +1328,14 @@ export class CpcaService {
           (aggressorAgeRangeCounter.get(key) ?? 0) + 1,
         );
       }
-      if (item.victimAgeRange) {
-        const key = String(item.victimAgeRange);
-        victimAgeRangeCounter.set(
-          key,
-          (victimAgeRangeCounter.get(key) ?? 0) + 1,
-        );
+      for (const victim of readComplaintVictims(item)) {
+        if (victim.victimAgeRange) {
+          const key = victim.victimAgeRange;
+          victimAgeRangeCounter.set(
+            key,
+            (victimAgeRangeCounter.get(key) ?? 0) + 1,
+          );
+        }
       }
 
       if (item.retaliationRisk) {
@@ -1325,18 +1370,17 @@ export class CpcaService {
       if (item.retaliationRisk) localityEntry.retaliationRiskCases += 1;
 
       const aggressorRank = this.normalizeRankForStats(item.aggressorRank);
-      const victimRank = this.normalizeRankForStats(item.victimRank);
       if (aggressorRank) {
         aggressorRankCounter.set(
           aggressorRank,
           (aggressorRankCounter.get(aggressorRank) ?? 0) + 1,
         );
       }
-      if (victimRank) {
-        victimRankCounter.set(
-          victimRank,
-          (victimRankCounter.get(victimRank) ?? 0) + 1,
-        );
+      for (const victim of readComplaintVictims(item)) {
+        const rank = this.normalizeRankForStats(victim.victimRank);
+        if (rank) {
+          victimRankCounter.set(rank, (victimRankCounter.get(rank) ?? 0) + 1);
+        }
       }
 
       if (CPCA_OPEN_STATUS_SET.has(status)) {
@@ -1357,8 +1401,12 @@ export class CpcaService {
         if (CPCA_TRIAGE_STATUS_SET.has(status) && openDays > 7) {
           triageOver7Days += 1;
         }
-        if (CPCA_INVESTIGATION_STATUS_SET.has(status) && openDays > 30) {
-          investigationOver30Days += 1;
+        if (status === CPCA_FOLLOW_UP_STATUS) {
+          const startedAt = followUpStartedAtByCaseId.get(item.id);
+          if (!startedAt) followUpWithoutStartDate += 1;
+          else if (this.daysBetween(startedAt, now) > 30) {
+            investigationOver30Days += 1;
+          }
         }
         if (openDays > 30) {
           stalledOver30Days += 1;
@@ -1390,7 +1438,6 @@ export class CpcaService {
         });
       } else {
         if (status === 'CONCLUDED') concludedCases += 1;
-        if (status === 'ARCHIVED') archivedCases += 1;
       }
 
       const closedAt =
@@ -1398,7 +1445,7 @@ export class CpcaService {
         (status === 'ARCHIVED'
           ? (item.archivedAt ?? item.updatedAt ?? null)
           : status === 'CONCLUDED'
-            ? (item.updatedAt ?? null)
+            ? (item.archivedAt ?? item.updatedAt ?? null)
             : null);
       if (closedAt instanceof Date && !Number.isNaN(closedAt.getTime())) {
         closureDaysTotal += this.daysBetween(item.reportedAt, closedAt);
@@ -1452,6 +1499,10 @@ export class CpcaService {
       generatedAt: now.toISOString(),
       summary: {
         totalCases,
+        totalVictims: items.reduce(
+          (total: number, item: any) => total + readComplaintVictims(item).length,
+          0,
+        ),
         openCases,
         concludedCases,
         archivedCases,
@@ -1466,6 +1517,8 @@ export class CpcaService {
         retaliationRiskCases,
         triageOver7Days,
         investigationOver30Days,
+        followUpOver30Days: investigationOver30Days,
+        followUpWithoutStartDate,
         stalledOver30Days,
         stalledOver60Days,
         noUpdateOver14Days,
@@ -1521,6 +1574,7 @@ export class CpcaService {
         averageClosureTime: closedCaseDetailItems,
         triageOver7Days: triageOver7CaseDetailItems,
         investigationOver30Days: investigationOver30CaseDetailItems,
+        followUpOver30Days: investigationOver30CaseDetailItems,
       },
     };
   }
@@ -1544,6 +1598,7 @@ export class CpcaService {
         complaintType: true,
         detailedViolenceType: true,
         incidentFrequency: true,
+        victims: true,
         hierarchicalFunctionalRelation: true,
         status: true,
         procedureType: true,
@@ -1583,11 +1638,11 @@ export class CpcaService {
     let sexualCases = 0;
     let openCases = 0;
     let concludedCases = 0;
-    let archivedCases = 0;
+    const archivedCases = 0;
 
     const caseItems: CpcaAiContextCase[] = (rows ?? []).map((raw: any) => {
       const item = this.serializeComplaint(raw);
-      const status = String(item.status ?? '').trim();
+      const status = getComplaintReportStatus(item);
       const complaintType = String(item.complaintType ?? '').trim();
       const reportedAt =
         item.reportedAt instanceof Date &&
@@ -1609,6 +1664,7 @@ export class CpcaService {
             {
               complaintType,
               detailedViolenceType: item.detailedViolenceType,
+              victims: item.victims,
               incidentFrequency: item.incidentFrequency,
               hierarchicalFunctionalRelation:
                 item.hierarchicalFunctionalRelation,
@@ -1633,7 +1689,6 @@ export class CpcaService {
       if (complaintType === 'SEXUAL') sexualCases += 1;
       if (isOpen) openCases += 1;
       if (status === 'CONCLUDED') concludedCases += 1;
-      if (status === 'ARCHIVED') archivedCases += 1;
       if (omId) {
         const current = omCounter.get(omId) ?? { omId, omLabel, count: 0 };
         current.count += 1;
@@ -1962,6 +2017,7 @@ export class CpcaService {
       processOpened,
       processNotOpenedReason,
       requestedProcedureType,
+      procedureStartDate,
     );
     const procedureType =
       processOpened === false ? 'NOT_DEFINED' : requestedProcedureType;
@@ -2042,21 +2098,23 @@ export class CpcaService {
       accusedDefenseEnsured: payload.accusedDefenseEnsured ?? false,
     });
 
-    const victimRank = this.cleanText(payload.victimRank);
-    const victimGender = payload.victimGender;
-    const victimAgeRange = this.cleanOptional(payload.victimAgeRange);
+    const victims = resolveComplaintVictims(payload);
+    const primaryVictim = victims[0];
+    const notifyingVictim =
+      victims.find((victim) => victim.isNotifier) ?? primaryVictim;
+    const victimRank = primaryVictim.victimRank;
+    const victimGender = primaryVictim.victimGender;
+    const victimAgeRange = primaryVictim.victimAgeRange;
     const notifierProfile = this.resolveNotifierProfile({
       victimIsNotifier: payload.victimIsNotifier ?? true,
-      victimRank,
-      victimGender,
-      victimAgeRange,
+      victimRank: notifyingVictim.victimRank,
+      victimGender: notifyingVictim.victimGender,
+      victimAgeRange: notifyingVictim.victimAgeRange,
       notifierRank: payload.notifierRank,
       notifierGender: payload.notifierGender,
       notifierAgeRange: payload.notifierAgeRange,
     });
-    const occurrenceForms = this.cleanMultiSelect(
-      payload.occurrenceForms ?? payload.occurrenceForm,
-    );
+    const occurrenceForms = primaryVictim.occurrenceForms;
 
     const createData = {
       complaintType: payload.complaintType,
@@ -2077,6 +2135,7 @@ export class CpcaService {
       victimRank,
       victimGender,
       victimAgeRange,
+      victims,
       victimIsNotifier: notifierProfile.victimIsNotifier,
       notifierRank: notifierProfile.notifierRank,
       notifierGender: notifierProfile.notifierGender,
@@ -2084,10 +2143,9 @@ export class CpcaService {
       detailedViolenceType: this.cleanOptional(payload.detailedViolenceType),
       harassmentContext: this.cleanOptional(payload.harassmentContext),
       occurrenceLocation: this.cleanOptional(payload.occurrenceLocation),
-      incidentFrequency: this.cleanOptional(payload.incidentFrequency),
-      hierarchicalFunctionalRelation: this.cleanOptional(
-        payload.hierarchicalFunctionalRelation,
-      ),
+      incidentFrequency: primaryVictim.incidentFrequency,
+      hierarchicalFunctionalRelation:
+        primaryVictim.hierarchicalFunctionalRelation,
       occurrenceForm: occurrenceForms[0] ?? null,
       occurrenceForms,
       administrativeProcedure:
@@ -2292,6 +2350,7 @@ export class CpcaService {
         evidenceSummary: true,
         victimIsNotifier: true,
         victimRank: true,
+        victims: true,
         victimGender: true,
         victimAgeRange: true,
         notifierRank: true,
@@ -2414,11 +2473,6 @@ export class CpcaService {
           ? this.cleanOptional(current.processNotOpenedReason)
           : this.cleanOptional(payload.processNotOpenedReason)
         : null;
-    this.assertProcessOpeningConsistency(
-      nextProcessOpened,
-      nextProcessNotOpenedReason,
-      requestedNextProcedure,
-    );
     const nextProcedureCurrentSituation =
       nextProcessOpened === false
         ? null
@@ -2429,6 +2483,9 @@ export class CpcaService {
       status: payload.status ?? current.status,
       procedureCurrentSituation: nextProcedureCurrentSituation,
     });
+    const hasArchiveResult =
+      payload.status === 'ARCHIVED' ||
+      isArchiveProcedureSituation(nextProcedureCurrentSituation);
     const nextProcedure =
       nextProcessOpened === false ? 'NOT_DEFINED' : requestedNextProcedure;
     this.assertStatusTransition(
@@ -2462,6 +2519,12 @@ export class CpcaService {
               payload.procedureStartDate,
               'procedureStartDate',
             );
+    this.assertProcessOpeningConsistency(
+      nextProcessOpened,
+      nextProcessNotOpenedReason,
+      requestedNextProcedure,
+      nextProcedureStartDate,
+    );
     const nextProcedureEndDate =
       nextProcessOpened === false
         ? null
@@ -2561,31 +2624,29 @@ export class CpcaService {
         ? current.outcomeSummary
         : this.cleanOptional(payload.outcomeSummary);
     const nextArchiveReason =
-      nextStatus === 'ARCHIVED'
+      hasArchiveResult || current.archiveReason
         ? payload.archiveReason === undefined
           ? this.cleanOptional(current.archiveReason)
           : this.cleanOptional(payload.archiveReason)
         : null;
-    const nextVictimRank =
-      payload.victimRank === undefined
-        ? current.victimRank
-        : this.cleanText(payload.victimRank);
+    const victims = resolveComplaintVictims(payload, current);
+    const primaryVictim = victims[0];
+    const notifyingVictim =
+      victims.find((victim) => victim.isNotifier) ?? primaryVictim;
+    const nextVictimRank = primaryVictim.victimRank;
     if (!nextVictimRank) {
       throwError('VALIDATION_ERROR', {
         field: 'victimRank',
         reason: 'required',
       });
     }
-    const nextVictimGender = payload.victimGender ?? current.victimGender;
-    const nextVictimAgeRange =
-      payload.victimAgeRange === undefined
-        ? current.victimAgeRange
-        : this.cleanOptional(payload.victimAgeRange);
+    const nextVictimGender = primaryVictim.victimGender;
+    const nextVictimAgeRange = primaryVictim.victimAgeRange;
     const notifierProfile = this.resolveNotifierProfile({
       victimIsNotifier: payload.victimIsNotifier ?? current.victimIsNotifier,
-      victimRank: nextVictimRank,
-      victimGender: nextVictimGender,
-      victimAgeRange: nextVictimAgeRange,
+      victimRank: notifyingVictim.victimRank,
+      victimGender: notifyingVictim.victimGender,
+      victimAgeRange: notifyingVictim.victimAgeRange,
       notifierRank:
         payload.notifierRank === undefined
           ? current.notifierRank
@@ -2599,19 +2660,14 @@ export class CpcaService {
           ? current.notifierAgeRange
           : payload.notifierAgeRange,
     });
-    const nextOccurrenceForms =
-      payload.occurrenceForms !== undefined
-        ? this.cleanMultiSelect(payload.occurrenceForms)
-        : payload.occurrenceForm !== undefined
-          ? this.cleanMultiSelect(payload.occurrenceForm)
-          : undefined;
+    const nextOccurrenceForms = primaryVictim.occurrenceForms;
     const nextEvidenceSummary =
       payload.evidenceSummary === undefined
         ? current.evidenceSummary
         : this.cleanOptional(payload.evidenceSummary);
 
     this.assertIcaConsistency({
-      status: nextStatus,
+      status: hasArchiveResult ? 'ARCHIVED' : nextStatus,
       complaintType: nextComplaintType,
       confidentialityTermSigned: nextConfidentialityTermSigned,
       preliminaryReportGenerated: nextPreliminaryReportGenerated,
@@ -2661,6 +2717,7 @@ export class CpcaService {
         victimRank: nextVictimRank,
         victimGender: nextVictimGender,
         victimAgeRange: nextVictimAgeRange,
+        victims,
         victimIsNotifier: notifierProfile.victimIsNotifier,
         notifierRank: notifierProfile.notifierRank,
         notifierGender: notifierProfile.notifierGender,
@@ -2677,14 +2734,9 @@ export class CpcaService {
           payload.occurrenceLocation !== undefined
             ? this.cleanOptional(payload.occurrenceLocation)
             : undefined,
-        incidentFrequency:
-          payload.incidentFrequency !== undefined
-            ? this.cleanOptional(payload.incidentFrequency)
-            : undefined,
+        incidentFrequency: primaryVictim.incidentFrequency,
         hierarchicalFunctionalRelation:
-          payload.hierarchicalFunctionalRelation !== undefined
-            ? this.cleanOptional(payload.hierarchicalFunctionalRelation)
-            : undefined,
+          primaryVictim.hierarchicalFunctionalRelation,
         occurrenceForm:
           nextOccurrenceForms !== undefined
             ? (nextOccurrenceForms[0] ?? null)
@@ -2777,12 +2829,7 @@ export class CpcaService {
           payload.outcomeSummary !== undefined
             ? this.cleanOptional(payload.outcomeSummary)
             : undefined,
-        archiveReason:
-          nextStatus === 'ARCHIVED'
-            ? nextArchiveReason
-            : current.archiveReason
-              ? null
-              : undefined,
+        archiveReason: nextArchiveReason,
         notifierFeedbackSummary:
           payload.notifierFeedbackSummary !== undefined
             ? this.cleanOptional(payload.notifierFeedbackSummary)
@@ -2827,7 +2874,7 @@ export class CpcaService {
         archivedAt:
           payload.archivedAt !== undefined
             ? this.parseOptionalIsoDateInput(payload.archivedAt, 'archivedAt')
-            : nextStatus === 'ARCHIVED'
+            : nextStatus === 'CONCLUDED'
               ? (current.archivedAt ?? new Date())
               : undefined,
         updatedBy: { connect: { id: actorId } },
@@ -4158,7 +4205,9 @@ export class CpcaService {
       }
     }
 
-    if (filters.status) where.status = filters.status;
+    if (filters.status) {
+      andConditions.push(getComplaintStatusFilter(filters.status));
+    }
     if (filters.complaintType) where.complaintType = filters.complaintType;
     if (filters.detailedViolenceType) {
       where.detailedViolenceType = filters.detailedViolenceType;
@@ -5268,12 +5317,19 @@ export class CpcaService {
     const procedureType = String(item?.procedureType ?? 'NOT_DEFINED');
     return {
       ...item,
+      victims: readComplaintVictims(item),
       processOpened:
         item?.processOpened ?? (procedureType !== 'NOT_DEFINED' ? true : null),
       status: syncWorkflowStatusWithProcedureSituation({
         status: item?.status,
         procedureCurrentSituation: item?.procedureCurrentSituation,
       }),
+      subsequentProcedureStatus: item?.subsequentProcedureStatus
+        ? syncWorkflowStatusWithProcedureSituation({
+            status: item.subsequentProcedureStatus,
+            procedureCurrentSituation: item.subsequentProcedureCurrentSituation,
+          })
+        : item?.subsequentProcedureStatus,
       localityId: item?.omId ?? item?.localityId ?? null,
       locality: item?.om ?? item?.locality ?? null,
       validation:
@@ -5639,6 +5695,7 @@ export class CpcaService {
     processOpened: boolean | null | undefined,
     processNotOpenedReason: string | null | undefined,
     procedureType: string | null | undefined,
+    procedureStartDate: Date | null | undefined,
   ) {
     if (
       processOpened === false &&
@@ -5661,6 +5718,12 @@ export class CpcaService {
         reason: 'PROCESS_OPENED_REQUIRES_DEFINED_PROCEDURE',
       });
     }
+    if (processOpened === true && !procedureStartDate) {
+      throwError('VALIDATION_ERROR', {
+        field: 'procedureStartDate',
+        reason: 'PROCESS_OPENED_REQUIRES_START_DATE',
+      });
+    }
   }
 
   private assertStatusTransition(
@@ -5668,9 +5731,14 @@ export class CpcaService {
     nextStatus: string,
     nextProcedureCurrentSituation?: string | null,
   ) {
+    if (currentStatus === 'ARCHIVED') currentStatus = 'CONCLUDED';
     if (!nextStatus || currentStatus === nextStatus) return;
     if (
-      nextStatus === 'ARCHIVED' &&
+      nextStatus === 'CONCLUDED' &&
+      CPCA_OPEN_STATUSES.includes(currentStatus)
+    ) return;
+    if (
+      nextStatus === 'CONCLUDED' &&
       isArchiveProcedureSituation(nextProcedureCurrentSituation)
     ) {
       return;
@@ -5682,7 +5750,7 @@ export class CpcaService {
       PRELIMINARY_ANALYSIS: ['PROCEDURE_DEFINED', 'INVESTIGATION'],
       PROCEDURE_DEFINED: ['INVESTIGATION', 'CONCLUDED'],
       INVESTIGATION: ['CONCLUDED'],
-      CONCLUDED: ['ARCHIVED'],
+      CONCLUDED: [],
       ARCHIVED: [],
     };
 

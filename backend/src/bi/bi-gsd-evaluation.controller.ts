@@ -45,6 +45,7 @@ export class BiGsdEvaluationController {
   @Get('dashboard')
   @RequirePermission('bi', 'view')
   dashboard(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('q') q: string | undefined,
@@ -53,6 +54,7 @@ export class BiGsdEvaluationController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.biGsdEvaluation.dashboard({
+      odgsaId,
       from,
       to,
       q,
@@ -64,6 +66,7 @@ export class BiGsdEvaluationController {
   @Get('dashboard/pdf')
   @RequirePermission('bi', 'view')
   async dashboardPdf(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('q') q: string | undefined,
@@ -72,6 +75,7 @@ export class BiGsdEvaluationController {
     @Res() res: Response,
   ) {
     const buffer = await this.biPdf.gsdEvaluationDashboardPdf({
+      odgsaId,
       from,
       to,
       q,
@@ -90,6 +94,7 @@ export class BiGsdEvaluationController {
   @Get('responses')
   @RequirePermission('bi', 'view')
   listResponses(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('q') q: string | undefined,
@@ -100,6 +105,7 @@ export class BiGsdEvaluationController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.biGsdEvaluation.listResponses({
+      odgsaId,
       from,
       to,
       q,
@@ -177,6 +183,7 @@ export class BiGsdEvaluationController {
     body: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       q?: string;

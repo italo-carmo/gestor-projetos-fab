@@ -1,3 +1,4 @@
+import { BiOdgsaFilter } from "../components/bi/BiOdgsaFilter";
 import { useEffect, useMemo, type ReactElement } from "react";
 import {
   Box,
@@ -133,10 +134,13 @@ export function BusinessIntelligencePage() {
               />
             </Stack>
 
+            <BiOdgsaFilter activeTab={activeTab} />
+
             <Tabs
               value={activeTab}
               onChange={(_event, nextTab: BusinessIntelligenceTabKey) => {
-                const next = new URLSearchParams(searchParams);
+                // Preserve a filter selected while the router is still rendering.
+                const next = new URLSearchParams(window.location.search);
                 next.set("tab", nextTab);
                 setSearchParams(next);
               }}

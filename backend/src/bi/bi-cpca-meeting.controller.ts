@@ -74,6 +74,7 @@ export class BiCpcaMeetingController {
   @Get('dashboard')
   @RequirePermission('bi', 'view')
   dashboard(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('q') q: string | undefined,
@@ -82,6 +83,7 @@ export class BiCpcaMeetingController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.biCpcaMeeting.dashboard({
+      odgsaId,
       from,
       to,
       q,
@@ -93,6 +95,7 @@ export class BiCpcaMeetingController {
   @Get('dashboard/pdf')
   @RequirePermission('bi', 'view')
   async dashboardPdf(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('q') q: string | undefined,
@@ -101,6 +104,7 @@ export class BiCpcaMeetingController {
     @Res() res: Response,
   ) {
     const buffer = await this.biPdf.cpcaMeetingDashboardPdf({
+      odgsaId,
       from,
       to,
       q,
@@ -119,6 +123,7 @@ export class BiCpcaMeetingController {
   @Get('responses')
   @RequirePermission('bi', 'view')
   listResponses(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('q') q: string | undefined,
@@ -129,6 +134,7 @@ export class BiCpcaMeetingController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.biCpcaMeeting.listResponses({
+      odgsaId,
       from,
       to,
       q,
@@ -222,6 +228,7 @@ export class BiCpcaMeetingController {
     body: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       q?: string;

@@ -1,3 +1,4 @@
+import { fetchBiApiPage } from './bi-api-fetch';
 import crypto from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { BiImportFormat } from '@prisma/client';
@@ -14,6 +15,7 @@ import {
 } from './bi-normalization.service';
 
 type CpcaMeetingFilters = {
+  odgsaId?: string;
   from?: string;
   to?: string;
   q?: string;
@@ -99,6 +101,7 @@ type ColumnMeta = {
 };
 
 type CompiledFilters = {
+  odgsaIds: Set<string> | null;
   from: Date | null;
   to: Date | null;
   query: string | null;
@@ -263,6 +266,14 @@ export class BiCpcaMeetingService {
       parsed.push(row.value);
     }
 
+    if (parsed.length === 0 || (replaceAll && invalidRows > 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
+        invalidRows,
+        validRows: parsed.length,
+      });
+    }
+
     const normalizationPreview =
       await this.buildCpcaMeetingNormalizationPreview(parsed);
 
@@ -282,73 +293,78 @@ export class BiCpcaMeetingService {
     );
     const rowsToInsert = normalizedImport.rows;
 
-    const responseModel = (this.prisma as any).biCpcaMeetingResponse;
-    const importModel = (this.prisma as any).biCpcaMeetingImportBatch;
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        const responseModel = (tx as any).biCpcaMeetingResponse;
+        const importModel = (tx as any).biCpcaMeetingImportBatch;
 
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        responseModel.deleteMany(),
-        importModel.deleteMany(),
-      ]);
-    }
+        if (replaceAll) {
+          await responseModel.deleteMany();
+          await importModel.deleteMany();
+        }
 
-    const columnsJson: ColumnSettingsJson = {
-      order: headerDefs.map((item) => item.key),
-      labels: headerDefs.reduce<Record<string, string>>((acc, item) => {
-        acc[item.key] = item.label;
-        return acc;
-      }, {}),
-      submittedAtKey,
-    };
+        const columnsJson: ColumnSettingsJson = {
+          order: headerDefs.map((item) => item.key),
+          labels: headerDefs.reduce<Record<string, string>>((acc, item) => {
+            acc[item.key] = item.label;
+            return acc;
+          }, {}),
+          submittedAtKey,
+        };
 
-    const batch = await importModel.create({
-      data: {
-        id: this.makeId('bicmib_'),
-        fileName: file.originalname,
-        format,
-        sheetName,
-        columnsJson,
-        totalRows: rowsToInsert.length,
-        insertedRows: 0,
-        duplicateRows: 0,
-        invalidRows,
-        importedById: user?.id ?? null,
+        const batch = await importModel.create({
+          data: {
+            id: this.makeId('bicmib_'),
+            fileName: file.originalname,
+            format,
+            sheetName,
+            columnsJson,
+            totalRows: rowsToInsert.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
+          },
+        });
+
+        let insertedRows = 0;
+
+        if (rowsToInsert.length > 0) {
+          const created = await responseModel.createMany({
+            data: rowsToInsert.map((row) => ({
+              id: this.makeId('bicmr_'),
+              batchId: batch.id,
+              apiId: row.apiId,
+              submittedAt: row.submittedAt,
+              answersJson: row.answers,
+              rawPayload: row.rawPayload,
+              sourceRow: row.sourceRow,
+              sourceHash: row.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+          insertedRows = Number(created?.count ?? 0);
+        }
+
+        const duplicateRows = rowsToInsert.length - insertedRows;
+
+        const updatedBatch = await importModel.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
-    });
-
-    let insertedRows = 0;
-
-    if (rowsToInsert.length > 0) {
-      const created = await responseModel.createMany({
-        data: rowsToInsert.map((row) => ({
-          id: this.makeId('bicmr_'),
-          batchId: batch.id,
-          apiId: row.apiId,
-          submittedAt: row.submittedAt,
-          answersJson: row.answers,
-          rawPayload: row.rawPayload,
-          sourceRow: row.sourceRow,
-          sourceHash: row.sourceHash,
-        })),
-        skipDuplicates: true,
-      });
-      insertedRows = Number(created?.count ?? 0);
-    }
-
-    const duplicateRows = rowsToInsert.length - insertedRows;
-
-    const updatedBatch = await importModel.update({
-      where: { id: batch.id },
-      data: {
-        insertedRows,
-        duplicateRows,
-      },
-      include: {
-        importedBy: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
+      { timeout: 30_000 },
+    );
 
     await this.normalization.rebuild({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.CPCA_MEETING,
@@ -384,6 +400,14 @@ export class BiCpcaMeetingService {
       organizationHeader,
     );
 
+    if (invalidRows > 0 || (replaceAll && parsed.length === 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
+        invalidRows,
+        validRows: parsed.length,
+      });
+    }
+
     const normalizationPreview =
       await this.buildCpcaMeetingNormalizationPreview(parsed);
 
@@ -404,80 +428,85 @@ export class BiCpcaMeetingService {
     );
     const rowsToInsert = normalizedImport.rows;
 
-    const responseModel = (this.prisma as any).biCpcaMeetingResponse;
-    const importModel = (this.prisma as any).biCpcaMeetingImportBatch;
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        const responseModel = (tx as any).biCpcaMeetingResponse;
+        const importModel = (tx as any).biCpcaMeetingImportBatch;
 
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        responseModel.deleteMany(),
-        importModel.deleteMany(),
-      ]);
-    }
+        if (replaceAll) {
+          await responseModel.deleteMany();
+          await importModel.deleteMany();
+        }
 
-    const columnsJson: ColumnSettingsJson = {
-      order: headerDefs.map((item) => item.key),
-      labels: headerDefs.reduce<Record<string, string>>((acc, item) => {
-        acc[item.key] = item.label;
-        return acc;
-      }, {}),
-      submittedAtKey,
-    };
+        const columnsJson: ColumnSettingsJson = {
+          order: headerDefs.map((item) => item.key),
+          labels: headerDefs.reduce<Record<string, string>>((acc, item) => {
+            acc[item.key] = item.label;
+            return acc;
+          }, {}),
+          submittedAtKey,
+        };
 
-    const batch = await importModel.create({
-      data: {
-        id: this.makeId('bicmib_'),
-        fileName: 'Google Sheets API - Encontro CPCA',
-        format: BiImportFormat.API,
-        sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
-        columnsJson,
-        totalRows: rowsToInsert.length,
-        insertedRows: 0,
-        duplicateRows: 0,
-        invalidRows,
-        importedById: user?.id ?? null,
-        apiSinceId: apiResult.sync.sinceId,
-        apiNextSinceId: apiResult.sync.nextSinceId,
-        apiLastIdAvailable: apiResult.sync.lastIdAvailable,
-        apiHasMore: apiResult.sync.hasMore,
-        apiUpdatedAt: apiResult.sync.updatedAt
-          ? new Date(apiResult.sync.updatedAt)
-          : null,
+        const batch = await importModel.create({
+          data: {
+            id: this.makeId('bicmib_'),
+            fileName: 'Google Sheets API - Encontro CPCA',
+            format: BiImportFormat.API,
+            sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
+            columnsJson,
+            totalRows: rowsToInsert.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
+            apiSinceId: apiResult.sync.sinceId,
+            apiNextSinceId: apiResult.sync.nextSinceId,
+            apiLastIdAvailable: apiResult.sync.lastIdAvailable,
+            apiHasMore: apiResult.sync.hasMore,
+            apiUpdatedAt: apiResult.sync.updatedAt
+              ? new Date(apiResult.sync.updatedAt)
+              : null,
+          },
+        });
+
+        let insertedRows = 0;
+
+        if (rowsToInsert.length > 0) {
+          const created = await responseModel.createMany({
+            data: rowsToInsert.map((row) => ({
+              id: this.makeId('bicmr_'),
+              batchId: batch.id,
+              apiId: row.apiId,
+              submittedAt: row.submittedAt,
+              answersJson: row.answers,
+              rawPayload: row.rawPayload,
+              sourceRow: row.sourceRow,
+              sourceHash: row.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+          insertedRows = Number(created?.count ?? 0);
+        }
+
+        const duplicateRows = rowsToInsert.length - insertedRows;
+
+        const updatedBatch = await importModel.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
-    });
-
-    let insertedRows = 0;
-
-    if (rowsToInsert.length > 0) {
-      const created = await responseModel.createMany({
-        data: rowsToInsert.map((row) => ({
-          id: this.makeId('bicmr_'),
-          batchId: batch.id,
-          apiId: row.apiId,
-          submittedAt: row.submittedAt,
-          answersJson: row.answers,
-          rawPayload: row.rawPayload,
-          sourceRow: row.sourceRow,
-          sourceHash: row.sourceHash,
-        })),
-        skipDuplicates: true,
-      });
-      insertedRows = Number(created?.count ?? 0);
-    }
-
-    const duplicateRows = rowsToInsert.length - insertedRows;
-
-    const updatedBatch = await importModel.update({
-      where: { id: batch.id },
-      data: {
-        insertedRows,
-        duplicateRows,
-      },
-      include: {
-        importedBy: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
+      { timeout: 30_000 },
+    );
 
     await this.normalization.rebuild({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.CPCA_MEETING,
@@ -531,7 +560,7 @@ export class BiCpcaMeetingService {
       pageSize?: string;
     },
   ) {
-    const compiled = this.compileFilters(filters);
+    const compiled = await this.compileFilters(filters);
     const allRows = await this.fetchRows();
     const filteredRows = allRows.filter((row) =>
       this.matchesFilters(row, compiled),
@@ -595,7 +624,7 @@ export class BiCpcaMeetingService {
       };
     }
 
-    const compiled = this.compileFilters(payload);
+    const compiled = await this.compileFilters(payload);
     const allRows = await this.fetchRows();
     const filteredIds = allRows
       .filter((row) => this.matchesFilters(row, compiled))
@@ -691,7 +720,7 @@ export class BiCpcaMeetingService {
   }
 
   async dashboard(filters: CpcaMeetingFilters) {
-    const compiled = this.compileFilters(filters);
+    const compiled = await this.compileFilters(filters);
     const responseModel = (this.prisma as any).biCpcaMeetingResponse;
     const importModel = (this.prisma as any).biCpcaMeetingImportBatch;
     const cardSettingModel = (this.prisma as any).biCpcaMeetingCardSetting;
@@ -731,7 +760,7 @@ export class BiCpcaMeetingService {
 
     const allRows: MeetingRow[] = (allRowsRaw as any[]).map((row: any) =>
       this.mapRow(row),
-    );
+    ).filter((row) => !compiled.odgsaIds || compiled.odgsaIds.has(row.id));
     const filteredRows: MeetingRow[] = allRows.filter((row: MeetingRow) =>
       this.matchesFilters(row, compiled),
     );
@@ -1286,7 +1315,10 @@ export class BiCpcaMeetingService {
       .map(([label]) => label);
   }
 
-  private compileFilters(filters: CpcaMeetingFilters): CompiledFilters {
+  private async compileFilters(filters: CpcaMeetingFilters): Promise<CompiledFilters> {
+    const ids = filters.odgsaId?.trim()
+      ? await this.normalization.odgsaResponseIds(BI_NORMALIZATION_SOURCE_TYPES.CPCA_MEETING, filters.odgsaId)
+      : null;
     const from = this.parseDate(filters.from);
     const to = this.parseDate(filters.to);
     const query = this.cleanCell(filters.q);
@@ -1294,6 +1326,7 @@ export class BiCpcaMeetingService {
     const columnFilters = this.parseColumnFilters(filters.columnFilters);
 
     return {
+      odgsaIds: ids === null ? null : new Set(ids),
       from,
       to,
       query,
@@ -1303,6 +1336,7 @@ export class BiCpcaMeetingService {
   }
 
   private matchesFilters(row: MeetingRow, filters: CompiledFilters) {
+    if (filters.odgsaIds && !filters.odgsaIds.has(row.id)) return false;
     if (filters.from || filters.to) {
       if (!row.submittedAt) return false;
       if (filters.from && row.submittedAt < filters.from) return false;
@@ -1517,57 +1551,12 @@ export class BiCpcaMeetingService {
   }
 
   private async fetchApiPage(sinceId: number): Promise<CpcaMeetingApiPage> {
-    const url = this.buildApiUrl(sinceId);
-    const timeoutMs =
+    return fetchBiApiPage<CpcaMeetingApiPage>(
+      this.buildApiUrl(sinceId),
+      'cpca_meeting_api',
       this.parsePositiveInteger(process.env.BI_CPCA_MEETING_API_TIMEOUT_MS) ??
-      30_000;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    let response: Response;
-    try {
-      response = await fetch(url, { signal: controller.signal });
-    } catch (error) {
-      throwError('VALIDATION_ERROR', {
-        reason:
-          error instanceof Error && error.name === 'AbortError'
-            ? 'cpca_meeting_api_timeout'
-            : 'cpca_meeting_api_request_failed',
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    if (!response.ok) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'cpca_meeting_api_http_error',
-        status: response.status,
-      });
-    }
-
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      throwError('VALIDATION_ERROR', {
-        reason: 'cpca_meeting_api_invalid_json',
-      });
-    }
-
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'cpca_meeting_api_invalid_payload',
-      });
-    }
-
-    const page = payload as CpcaMeetingApiPage;
-    if (page.ok !== true || !Array.isArray(page.dados)) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'cpca_meeting_api_unsuccessful_payload',
-      });
-    }
-
-    return page;
+        30_000,
+    );
   }
 
   private buildApiUrl(sinceId: number) {
@@ -1590,7 +1579,7 @@ export class BiCpcaMeetingService {
     }
 
     const token = String(process.env.BI_CPCA_MEETING_API_TOKEN ?? '').trim();
-    if (token && !url.searchParams.has('token')) {
+    if (token) {
       url.searchParams.set('token', token);
     }
     url.searchParams.set('since_id', String(Math.max(0, sinceId)));

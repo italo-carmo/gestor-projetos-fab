@@ -1,3 +1,4 @@
+import { useBiOdgsaId } from "../features/useBiOdgsaId";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -455,6 +456,15 @@ function buildBiCardTextDefaults(
 
 export function BiSurveyDashboardPage() {
   const toast = useToast();
+  const odgsaId = useBiOdgsaId();
+  const [importFeedback, setImportFeedback] = useState<{
+    message: string;
+    severity: "info" | "success" | "warning" | "error";
+  } | null>(null);
+  const notifyImport = (payload: NonNullable<typeof importFeedback>) => {
+    setImportFeedback(payload);
+    toast.push(payload);
+  };
   const [searchParams] = useSearchParams();
   const responseIdFromUrl = String(searchParams.get("responseId") ?? "").trim();
   const { data: me } = useMe();
@@ -565,8 +575,14 @@ export function BiSurveyDashboardPage() {
     }
   };
 
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+  }, [odgsaId]);
+
   const dashboardFilters = useMemo(
     () => ({
+      odgsaId,
       from: filters.from || undefined,
       to: filters.to || undefined,
       mission: filters.mission || undefined,
@@ -578,7 +594,7 @@ export function BiSurveyDashboardPage() {
       responseId: filters.responseId || undefined,
       combineMode: filters.combineMode || undefined,
     }),
-    [filters],
+    [filters, odgsaId],
   );
 
   const dashboardQuery = useBiSurveyDashboard(dashboardFilters);
@@ -631,13 +647,17 @@ export function BiSurveyDashboardPage() {
 
   const handleImport = async () => {
     if (!file) {
-      toast.push({
+      notifyImport({
         message: "Selecione um arquivo CSV ou XLSX.",
         severity: "warning",
       });
       return;
     }
 
+    setImportFeedback({
+      severity: "info",
+      message: "Processando importação. Aguarde a conclusão...",
+    });
     try {
       const result = await previewImportMutation.mutateAsync({
         file,
@@ -649,12 +669,16 @@ export function BiSurveyDashboardPage() {
         throw new Error("A prévia de normalização não foi retornada.");
       }
       setImportPreview(preview);
+      setImportFeedback({
+        severity: "info",
+        message: "Consulta concluída. Revise a prévia e confirme a importação.",
+      });
       setSelectedNormalizationIds(
         (preview.suggestions ?? []).map((item) => item.id),
       );
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({
+      notifyImport({
         message: payload.message ?? "Falha ao importar arquivo.",
         severity: "error",
       });
@@ -663,6 +687,7 @@ export function BiSurveyDashboardPage() {
 
   const closeImportPreview = () => {
     setImportPreview(null);
+    setImportFeedback(null);
     setSelectedNormalizationIds([]);
   };
 
@@ -672,6 +697,10 @@ export function BiSurveyDashboardPage() {
       return;
     }
 
+    setImportFeedback({
+      severity: "info",
+      message: "Processando importação. Aguarde a conclusão...",
+    });
     try {
       const result = await importMutation.mutateAsync({
         file,
@@ -691,7 +720,7 @@ export function BiSurveyDashboardPage() {
       const normalizedFields = Number(
         result?.normalization?.updatedFields ?? 0,
       );
-      toast.push({
+      notifyImport({
         message:
           `Base substituída com sucesso. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
           `Menções de violência: ${mentions}. Campos normalizados: ${normalizedFields}.`,
@@ -699,7 +728,7 @@ export function BiSurveyDashboardPage() {
       });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({
+      notifyImport({
         message: payload.message ?? "Falha ao importar arquivo.",
         severity: "error",
       });
@@ -1298,6 +1327,7 @@ export function BiSurveyDashboardPage() {
             <input
               hidden
               type="file"
+              disabled={previewImportMutation.isPending || importMutation.isPending || Boolean(importPreview)}
               accept=".csv,.xlsx,.xls"
               onChange={(event) => {
                 const selected = event.target.files?.[0] ?? null;
@@ -1305,7 +1335,12 @@ export function BiSurveyDashboardPage() {
               }}
             />
           </Button>
-          <Button
+          {importFeedback ? (
+                <Alert severity={importFeedback.severity} role="status">
+                  {importFeedback.message}
+                </Alert>
+              ) : null}
+              <Button
             variant="contained"
             size="small"
             onClick={handleImport}

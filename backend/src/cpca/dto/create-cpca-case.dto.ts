@@ -1,4 +1,5 @@
 import {
+  ArrayMinSize,
   ArrayUnique,
   IsBoolean,
   IsArray,
@@ -9,7 +10,9 @@ import {
   IsString,
   MaxLength,
   Min,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export const CPCA_COMPLAINT_TYPES = ['MORAL', 'SEXUAL'] as const;
 export const CPCA_NOTIFIER_TYPES = [
@@ -184,7 +187,50 @@ export const CPCA_RETALIATION_AGAINST_OPTIONS = [
   'NAO_OCORREU_RETALIACAO',
 ] as const;
 
+export class ComplaintVictimDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  id?: string;
+
+  @IsString()
+  @MaxLength(120)
+  victimRank: string;
+
+  @IsIn(CPCA_GENDERS)
+  victimGender: (typeof CPCA_GENDERS)[number];
+
+  @IsOptional()
+  @IsIn(CPCA_AGE_RANGES)
+  victimAgeRange?: (typeof CPCA_AGE_RANGES)[number] | null;
+
+  @IsOptional()
+  @IsIn(CPCA_INCIDENT_FREQUENCIES)
+  incidentFrequency?: (typeof CPCA_INCIDENT_FREQUENCIES)[number] | null;
+
+  @IsOptional()
+  @IsIn(CPCA_HIERARCHICAL_RELATIONS)
+  hierarchicalFunctionalRelation?:
+    | (typeof CPCA_HIERARCHICAL_RELATIONS)[number]
+    | null;
+
+  @IsArray()
+  @ArrayUnique()
+  @IsIn(CPCA_OCCURRENCE_FORMS, { each: true })
+  occurrenceForms: (typeof CPCA_OCCURRENCE_FORMS)[number][];
+
+  @IsBoolean()
+  isNotifier: boolean;
+}
+
 export class CreateCpcaCaseDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => ComplaintVictimDto)
+  victims?: ComplaintVictimDto[];
+
   @IsOptional()
   @IsString()
   omId?: string;

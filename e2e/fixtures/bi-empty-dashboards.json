@@ -1,0 +1,312 @@
+{
+  "schools": {
+    "kpis": {
+      "totalResponses": 0,
+      "totalRowsInDb": 0,
+      "yesCount": 0,
+      "noCount": 0,
+      "unknownCount": 0,
+      "violenceRatePercent": 0,
+      "totalViolenceMentions": 0,
+      "averageTypesPerVictim": 0
+    },
+    "filters": {
+      "mission": [],
+      "om": [],
+      "posto": [],
+      "postoGraduacao": [],
+      "autodeclara": [],
+      "violenceTypes": [],
+      "suffered": [
+        { "value": "SIM", "label": "Sim" },
+        { "value": "NAO", "label": "Não" }
+      ]
+    },
+    "charts": {
+      "omViolencePercent": [],
+      "omDistribution": [],
+      "postoDistribution": [],
+      "postoGraduacaoDistribution": [],
+      "autodeclaraDistribution": [],
+      "yesNoDonut": [
+        { "label": "Não", "count": 0, "percent": 0 },
+        { "label": "Sim", "count": 0, "percent": 0 },
+        { "label": "Não informado", "count": 0, "percent": 0 }
+      ],
+      "violenceTypePercent": [],
+      "violenceTypeByOmPercent": { "types": [], "items": [] },
+      "violenceTypeByPostoPercent": { "types": [], "items": [] },
+      "monthlyTrend": []
+    },
+    "insights": {
+      "mostCommonType": null,
+      "riskiestOm": null,
+      "topMissionByMentions": null,
+      "topProfileByMentions": null
+    },
+    "cardSettings": [],
+    "latestImport": null
+  },
+  "domestic-violence": {
+    "kpis": {
+      "totalResponses": 0,
+      "totalRowsInDb": 0,
+      "lifetimeYesCount": 0,
+      "lifetimeNoCount": 0,
+      "lifetimeUnknownCount": 0,
+      "last12MonthsYesCount": 0,
+      "last12MonthsNoCount": 0,
+      "last12MonthsUnknownCount": 0,
+      "soughtHelpYesCount": 0,
+      "soughtHelpRatePercent": 0,
+      "recurringCount": 0,
+      "recurringRatePercent": 0,
+      "totalViolenceMentions": 0,
+      "avgTypesPerVictim": 0
+    },
+    "filters": {
+      "organization": [],
+      "rank": [],
+      "maritalStatus": [],
+      "education": [],
+      "naturality": [],
+      "fabBond": [],
+      "situationScope": [],
+      "frequency": [],
+      "affectiveBond": [],
+      "violenceTypes": [],
+      "authorRelation": [],
+      "impactIntensity": [],
+      "impactAreas": [],
+      "complaintChannels": [],
+      "noComplaintReasons": [],
+      "authorMilitaryLink": [],
+      "occurrencePlace": [],
+      "sufferedLifetime": [
+        { "value": "SIM", "label": "Sim" },
+        { "value": "NAO", "label": "Não" }
+      ],
+      "sufferedLast12Months": [
+        { "value": "SIM", "label": "Sim" },
+        { "value": "NAO", "label": "Não" }
+      ],
+      "soughtHelp": [
+        { "value": "SIM", "label": "Sim" },
+        { "value": "NAO", "label": "Não" }
+      ],
+      "witnesses": [
+        { "value": "SIM", "label": "Sim" },
+        { "value": "NAO", "label": "Não" }
+      ]
+    },
+    "charts": {
+      "lifetimeDonut": [
+        { "label": "Não", "count": 0, "percent": 0 },
+        { "label": "Sim", "count": 0, "percent": 0 },
+        { "label": "Não informado", "count": 0, "percent": 0 }
+      ],
+      "last12MonthsDonut": [
+        { "label": "Não", "count": 0, "percent": 0 },
+        { "label": "Sim", "count": 0, "percent": 0 },
+        { "label": "Não informado", "count": 0, "percent": 0 }
+      ],
+      "violenceTypeDistribution": [],
+      "organizationDistribution": [],
+      "rankDistribution": [],
+      "maritalStatusDistribution": [],
+      "educationDistribution": [],
+      "naturalityDistribution": [],
+      "fabBondDistribution": [],
+      "ageRangeDistribution": [],
+      "situationScopeDistribution": [],
+      "frequencyDistribution": [],
+      "affectiveBondDistribution": [],
+      "authorRelationDistribution": [],
+      "authorMilitaryLinkDistribution": [],
+      "occurrencePlaceDistribution": [],
+      "witnessesDistribution": [],
+      "soughtHelpDistribution": [],
+      "impactIntensityDistribution": [],
+      "impactAreaDistribution": [],
+      "complaintChannelDistribution": [],
+      "noComplaintReasonDistribution": [],
+      "violenceByOrganization": { "types": [], "items": [] },
+      "responseTrend": []
+    },
+    "insights": {
+      "topViolenceType": null,
+      "highestOrganizationRisk": null,
+      "mostImpactedArea": null,
+      "mainNoReportReason": null,
+      "preferredChannel": null
+    },
+    "cardSettings": [],
+    "latestImport": null
+  },
+  "recruits": {
+    "kpis": {
+      "totalResponses": 0,
+      "totalRowsInDb": 0,
+      "secureGuidanceCount": 0,
+      "secureGuidanceRatePercent": 0,
+      "secureReportCount": 0,
+      "secureReportRatePercent": 0,
+      "knowOrientationYesCount": 0,
+      "knowOrientationYesRatePercent": 0,
+      "knowReportYesCount": 0,
+      "knowReportYesRatePercent": 0
+    },
+    "filters": {
+      "education": [],
+      "gender": [],
+      "identifyHarassment": [],
+      "conductLimits": [],
+      "knowOrientation": [],
+      "knowReportProcess": [],
+      "willingnessOrientation": [],
+      "willingnessReport": [],
+      "enlistmentDecisionInfluence": []
+    },
+    "charts": {
+      "educationDistribution": [],
+      "genderDistribution": [],
+      "identifyHarassmentDistribution": [],
+      "conductLimitsDistribution": [],
+      "knowOrientationDistribution": [],
+      "knowReportProcessDistribution": [],
+      "willingnessOrientationDistribution": [],
+      "willingnessReportDistribution": [],
+      "enlistmentDecisionInfluenceDistribution": [],
+      "responseTrend": []
+    },
+    "textColumns": {
+      "suggestionComment": { "total": 0, "displayed": 0, "items": [] }
+    },
+    "insights": {
+      "topEducation": null,
+      "topDecisionDriver": null,
+      "weakestPoint": {
+        "title": "Conhecimento sobre registro formal",
+        "affectedCount": 0,
+        "affectedRatePercent": 0
+      }
+    },
+    "cardSettings": [],
+    "latestImport": null
+  },
+  "best-practices-cycle": {
+    "kpis": {
+      "totalResponses": 0,
+      "totalRowsInDb": 0,
+      "preparedPositiveCount": 0,
+      "preparedPositiveRatePercent": 0,
+      "interactionYesCount": 0,
+      "interactionYesRatePercent": 0,
+      "supportFrequentCount": 0,
+      "supportFrequentRatePercent": 0,
+      "lowPreparednessCount": 0,
+      "lowPreparednessRatePercent": 0
+    },
+    "filters": {
+      "technicalRigorPerception": [],
+      "preparednessToLeadMixedClass": [],
+      "genderBiasImpact": [],
+      "interactionDifference": [],
+      "supportNeedRecognition": [],
+      "mainChallengeOptions": [],
+      "identification": [],
+      "specialty": []
+    },
+    "charts": {
+      "technicalRigorDistribution": [],
+      "preparednessDistribution": [],
+      "genderBiasDistribution": [],
+      "interactionDifferenceDistribution": [],
+      "supportNeedDistribution": [],
+      "mainChallengeDistribution": [],
+      "preparednessTrendByDay": { "options": [], "items": [] }
+    },
+    "textColumns": {
+      "interactionDifferenceComment": {
+        "total": 0,
+        "displayed": 0,
+        "items": []
+      },
+      "specialtyFreeText": {
+        "totalUnique": 0,
+        "totalResponses": 0,
+        "displayed": 0,
+        "items": []
+      }
+    },
+    "insights": {
+      "topChallenge": null,
+      "mostFrequentSpecialty": null,
+      "preparednessAttentionPoint": {
+        "title": "Grupo que ainda demanda reforço de preparo",
+        "affectedCount": 0,
+        "affectedRatePercent": 0
+      }
+    },
+    "latestImport": null,
+    "cardSettings": []
+  },
+  "cpca-meeting": {
+    "kpis": {
+      "totalResponses": 0,
+      "totalRowsInDb": 0,
+      "completionRatePercent": 0,
+      "categoricalQuestions": 0,
+      "freeTextQuestions": 0
+    },
+    "filters": { "columns": [] },
+    "charts": {
+      "categoricalDistributions": [],
+      "question2TrendByDay": {
+        "questionKey": null,
+        "questionLabel": null,
+        "options": [],
+        "items": []
+      }
+    },
+    "textColumns": { "freeTextLists": [] },
+    "insights": {
+      "topDistribution": null,
+      "topFreeText": null,
+      "completion": {
+        "title": "Taxa de preenchimento do recorte",
+        "answeredRatePercent": 0,
+        "filledCells": 0,
+        "totalCells": 0
+      }
+    },
+    "latestImport": null,
+    "cardSettings": [],
+    "columnsMeta": []
+  },
+  "gsd-evaluation": {
+    "kpis": {
+      "totalResponses": 0,
+      "totalRowsInDb": 0,
+      "completionRatePercent": 0,
+      "categoricalQuestions": 0,
+      "freeTextQuestions": 0
+    },
+    "filters": { "columns": [] },
+    "charts": { "categoricalDistributions": [] },
+    "textColumns": { "freeTextLists": [] },
+    "insights": {
+      "topDistribution": null,
+      "topFreeText": null,
+      "completion": {
+        "title": "Taxa de preenchimento do recorte",
+        "answeredRatePercent": 0,
+        "filledCells": 0,
+        "totalCells": 0
+      }
+    },
+    "latestImport": null,
+    "cardSettings": [],
+    "columnsMeta": []
+  }
+}

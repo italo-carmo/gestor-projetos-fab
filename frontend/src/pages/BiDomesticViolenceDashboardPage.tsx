@@ -1,3 +1,4 @@
+import { useBiOdgsaId } from "../features/useBiOdgsaId";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -576,6 +577,7 @@ function metricValue(mode: MetricMode, count: number, percent: number) {
 
 export function BiDomesticViolenceDashboardPage() {
   const toast = useToast();
+  const odgsaId = useBiOdgsaId();
   const [searchParams] = useSearchParams();
   const responseIdFromUrl = String(searchParams.get("responseId") ?? "").trim();
   const { data: me } = useMe();
@@ -591,6 +593,10 @@ export function BiDomesticViolenceDashboardPage() {
     string[]
   >([]);
   const [replaceOnImport, setReplaceOnImport] = useState(false);
+  const [importFeedback, setImportFeedback] = useState<{
+    severity: "info" | "success" | "error";
+    message: string;
+  } | null>(null);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteConfirmMode, setDeleteConfirmMode] =
@@ -638,8 +644,14 @@ export function BiDomesticViolenceDashboardPage() {
     }
   }, [responseIdFromUrl]);
 
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+  }, [odgsaId]);
+
   const dashboardFilters = useMemo(
     () => ({
+      odgsaId,
       from: filters.from || undefined,
       to: filters.to || undefined,
       organization: filters.organization || undefined,
@@ -667,7 +679,7 @@ export function BiDomesticViolenceDashboardPage() {
       q: filters.q || undefined,
       combineMode: filters.combineMode || undefined,
     }),
-    [filters],
+    [filters, odgsaId],
   );
 
   const dashboardQuery = useBiDomesticViolenceDashboard(dashboardFilters);
@@ -953,23 +965,47 @@ export function BiDomesticViolenceDashboardPage() {
   };
 
   const handleImport = async () => {
+    setImportFeedback({
+      severity: "info",
+      message: "Consultando novos registros no Google Sheets...",
+    });
     try {
       const result = await previewImportMutation.mutateAsync({
         replace: replaceOnImport,
       });
       const preview = (result?.normalization ??
         null) as BiImportNormalizationPreview | null;
+      if (result?.sync?.fetchedRows === 0 && !replaceOnImport) {
+        await Promise.all([
+          dashboardQuery.refetch(),
+          responsesQuery.refetch(),
+          importsQuery.refetch(),
+        ]);
+        setImportFeedback({
+          severity: "info",
+          message: "A API do Google Sheets não retornou novos registros nesta consulta.",
+        });
+        return;
+      }
       if (!preview) {
         throw new Error("A prévia de normalização não foi retornada.");
       }
       setImportPreview(preview);
+      setImportFeedback({
+        severity: "info",
+        message: `${result?.sync?.fetchedRows ?? preview.totalRows} registro(s) recebido(s). Revise a prévia e confirme a importação.`,
+      });
       setSelectedNormalizationIds(
         (preview.suggestions ?? []).map((item) => item.id),
       );
     } catch (error) {
       const payload = parseApiError(error);
+      setImportFeedback({
+        severity: "error",
+        message: payload.message ?? "Falha ao consultar ou importar do Google Sheets.",
+      });
       toast.push({
-        message: payload.message ?? "Falha ao importar o arquivo.",
+        message: payload.message ?? "Falha ao consultar ou importar do Google Sheets.",
         severity: "error",
       });
     }
@@ -981,6 +1017,10 @@ export function BiDomesticViolenceDashboardPage() {
   };
 
   const confirmImport = async (applyNormalization: boolean) => {
+    setImportFeedback({
+      severity: "info",
+      message: "Importando registros do Google Sheets...",
+    });
     try {
       const result = await importMutation.mutateAsync({
         replace: replaceOnImport,
@@ -994,6 +1034,10 @@ export function BiDomesticViolenceDashboardPage() {
           : { decisions: [] },
       });
       closeImportPreview();
+      setImportFeedback({
+        severity: "success",
+        message: `Importação concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. Duplicados: ${result?.batch?.duplicateRows ?? 0}. Inválidos: ${result?.batch?.invalidRows ?? 0}.`,
+      });
       toast.push({
         message:
           `Importação concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
@@ -1003,8 +1047,12 @@ export function BiDomesticViolenceDashboardPage() {
       });
     } catch (error) {
       const payload = parseApiError(error);
+      setImportFeedback({
+        severity: "error",
+        message: payload.message ?? "Falha ao consultar ou importar do Google Sheets.",
+      });
       toast.push({
-        message: payload.message ?? "Falha ao importar o arquivo.",
+        message: payload.message ?? "Falha ao consultar ou importar do Google Sheets.",
         severity: "error",
       });
     }
@@ -1315,6 +1363,11 @@ export function BiDomesticViolenceDashboardPage() {
         <Grid container spacing={2} sx={{ pt: 1.2 }}>
           <Grid size={{ xs: 12, md: 8 }}>
             <Stack spacing={1.2}>
+              {importFeedback ? (
+                <Alert severity={importFeedback.severity} role="status">
+                  {importFeedback.message}
+                </Alert>
+              ) : null}
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 <Button
                   size="small"
@@ -1367,7 +1420,12 @@ export function BiDomesticViolenceDashboardPage() {
                         onChange={(event) =>
                           setReplaceOnImport(event.target.checked)
                         }
-                        disabled={!canUpload}
+                        disabled={
+                          !canUpload ||
+                          previewImportMutation.isPending ||
+                          importMutation.isPending ||
+                          Boolean(importPreview)
+                        }
                       />
                     }
                     label="Zerar base antes de importar"
@@ -3204,7 +3262,10 @@ export function BiDomesticViolenceDashboardPage() {
                   contentStyle={tooltipContentStyle}
                   labelStyle={tooltipLabelStyle}
                 />
-                <Legend wrapperStyle={legendWrapperStyle} />
+                <Legend
+                  wrapperStyle={legendWrapperStyle}
+                  formatter={(value: string) => value.replace(/__(count|percent)$/, "")}
+                />
                 {(violenceByOrganization?.types ?? []).map((type, index) => (
                   <Bar
                     key={type}

@@ -193,8 +193,7 @@ export function MeetingsPage() {
           .join(' • ');
         return { id, name, details };
       })
-      .filter((item): item is MeetingParticipantOption => Boolean(item))
-      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      .filter((item): item is MeetingParticipantOption => Boolean(item));
   }, [participantOptionsQuery.data?.items]);
 
   const participantOptionIds = useMemo(

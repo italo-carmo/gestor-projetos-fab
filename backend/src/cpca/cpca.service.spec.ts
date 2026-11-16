@@ -414,7 +414,8 @@ describe('CpcaService AI context', () => {
 
     expect(result.summary.totalCases).toBe(2);
     expect(result.summary.openCases).toBe(1);
-    expect(result.summary.archivedCases).toBe(1);
+    expect(result.summary.archivedCases).toBe(0);
+    expect(result.summary.concludedCases).toBe(1);
     expect(result.summary.inconsistentCases).toBe(2);
     expect(result.inconsistencySummary.map((item) => item.code)).toEqual(
       expect.arrayContaining([

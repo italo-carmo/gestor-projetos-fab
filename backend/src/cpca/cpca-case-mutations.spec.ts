@@ -131,6 +131,7 @@ function makePersistedComplaintFromCreate(
     occurrenceForm: data.occurrenceForm ?? null,
     occurrenceForms: data.occurrenceForms ?? [],
     victimIsNotifier: data.victimIsNotifier,
+    victims: data.victims,
     notifierRank: data.notifierRank,
     notifierGender: data.notifierGender,
     notifierAgeRange: data.notifierAgeRange,
@@ -184,6 +185,7 @@ function makePersistedComplaintFromUpdate(
         ? data.occurrenceForms
         : (extras.occurrenceForms ?? []),
     victimIsNotifier: data.victimIsNotifier ?? extras.victimIsNotifier ?? true,
+    victims: data.victims ?? extras.victims,
     notifierRank: data.notifierRank ?? extras.notifierRank ?? '2S',
     notifierGender: data.notifierGender ?? extras.notifierGender ?? 'FEMININO',
     notifierAgeRange:
@@ -232,6 +234,230 @@ describe('CpcaService case mutations', () => {
   afterEach(() => {
     jest.useRealTimers();
   });
+
+  it.each([CPCA_WORKFLOW_CONTEXT, SMIF_WORKFLOW_CONTEXT])(
+    '$workflowScope: salva vítimas e ocorrências próprias e deriva os dados da vítima noticiante',
+    async (context) => {
+      const prisma = createPrismaMock();
+      const audit = createAuditMock();
+      const service = new CpcaService(prisma, audit as any);
+      jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+      jest
+        .spyOn(service as any, 'assertCaseAccess')
+        .mockResolvedValue(undefined);
+      const victims = [
+        {
+          id: 'v1',
+          victimRank: '2S',
+          victimGender: 'FEMININO',
+          victimAgeRange: '19_25',
+          incidentFrequency: 'DUAS_VEZES',
+          hierarchicalFunctionalRelation: 'SUPERIOR_HIERARQUICO',
+          occurrenceForms: ['HUMILHACAO_PUBLICA'],
+          isNotifier: false,
+        },
+        {
+          id: 'v2',
+          victimRank: '1T',
+          victimGender: 'MASCULINO',
+          victimAgeRange: '31_35',
+          incidentFrequency: 'UMA_VEZ',
+          hierarchicalFunctionalRelation: 'MESMA_GRADUACAO',
+          occurrenceForms: ['AMEACAS_INTIMIDACAO'],
+          isNotifier: true,
+        },
+      ];
+      prisma.cpcComplaintCase.findUnique.mockResolvedValue(
+        makeCurrentComplaint({ workflowScope: context.workflowScope }),
+      );
+      prisma.cpcComplaintCase.update.mockImplementation(async ({ data }: any) =>
+        makePersistedComplaintFromUpdate(data),
+      );
+      const result = await service.update(
+        'case-1',
+        { victims } as any,
+        makeUser() as any,
+        context,
+      );
+      const data = prisma.cpcComplaintCase.update.mock.calls[0][0].data;
+      expect(data.victims).toEqual(victims);
+      expect(data).toMatchObject({
+        victimRank: '2S',
+        victimGender: 'FEMININO',
+        incidentFrequency: 'DUAS_VEZES',
+        occurrenceForms: ['HUMILHACAO_PUBLICA'],
+        notifierRank: '1T',
+        notifierGender: 'MASCULINO',
+        notifierAgeRange: '31_35',
+      });
+      expect(result.victims).toEqual(victims);
+
+      prisma.cpcComplaintCase.findUnique.mockResolvedValue(
+        makeCurrentComplaint({ workflowScope: context.workflowScope, victims }),
+      );
+      const legacyUpdate = await service.update(
+        'case-1',
+        { victimRank: 'CAP' },
+        makeUser() as any,
+        context,
+      );
+      expect(legacyUpdate.victims).toHaveLength(2);
+      expect(legacyUpdate.victims[1]).toEqual(victims[1]);
+
+      const removed = await service.update(
+        'case-1',
+        { victims: [victims[1]] } as any,
+        makeUser() as any,
+        context,
+      );
+      expect(removed.victims).toEqual([victims[1]]);
+      expect(
+        prisma.cpcComplaintCase.update.mock.calls.at(-1)[0].data,
+      ).toMatchObject({
+        victimRank: '1T',
+        incidentFrequency: 'UMA_VEZ',
+        occurrenceForms: ['AMEACAS_INTIMIDACAO'],
+      });
+      expect(audit.log).toHaveBeenCalled();
+    },
+  );
+
+  it.each([CPCA_WORKFLOW_CONTEXT, SMIF_WORKFLOW_CONTEXT])(
+    '$workflowScope: exige início do procedimento na criação quando o processo está aberto',
+    async (context) => {
+      const prisma = createPrismaMock();
+      const service = new CpcaService(prisma, createAuditMock() as any);
+      jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+      jest
+        .spyOn(service as any, 'getScopeConstraints')
+        .mockReturnValue({ localityId: 'om-1' });
+      jest
+        .spyOn(service as any, 'resolveTargetLocalityId')
+        .mockResolvedValue('om-1');
+      jest
+        .spyOn(service as any, 'resolveCpcaManagerLocalityCode')
+        .mockResolvedValue('BACG');
+      jest
+        .spyOn(service as any, 'generateCaseNumber')
+        .mockResolvedValue('TESTE-001');
+      prisma.om.findUnique.mockResolvedValue({ id: 'om-1', code: 'BACG' });
+      prisma.cpcComplaintCase.create.mockImplementation(async ({ data }: any) =>
+        makePersistedComplaintFromCreate(data),
+      );
+      const payload = {
+        complaintType: 'MORAL',
+        aggressorRank: '1S',
+        aggressorGender: 'MASCULINO',
+        victimRank: '2S',
+        victimGender: 'FEMININO',
+        processOpened: true,
+        procedureType: 'IPM',
+      };
+      for (const procedureStartDate of [undefined, null, '']) {
+        await expectReason(
+          service.create(
+            { ...payload, procedureStartDate } as any,
+            makeUser() as any,
+            context,
+          ),
+          'PROCESS_OPENED_REQUIRES_START_DATE',
+        );
+      }
+      expect(prisma.cpcComplaintCase.create).not.toHaveBeenCalled();
+      await service.create(
+        { ...payload, procedureStartDate: '2026-11-10' } as any,
+        makeUser() as any,
+        context,
+      );
+      expect(
+        prisma.cpcComplaintCase.create.mock.calls[0][0].data.procedureStartDate.toISOString(),
+      ).toContain('2026-11-10');
+
+      const victims = [
+        {
+          id: 'first',
+          victimRank: '2S',
+          victimGender: 'FEMININO',
+          victimAgeRange: '19_25',
+          incidentFrequency: 'DUAS_VEZES',
+          hierarchicalFunctionalRelation: 'SUPERIOR_HIERARQUICO',
+          occurrenceForms: ['HUMILHACAO_PUBLICA'],
+          isNotifier: false,
+        },
+        {
+          id: 'second',
+          victimRank: '1T',
+          victimGender: 'MASCULINO',
+          victimAgeRange: '31_35',
+          incidentFrequency: 'UMA_VEZ',
+          hierarchicalFunctionalRelation: 'MESMA_GRADUACAO',
+          occurrenceForms: ['AMEACAS_INTIMIDACAO'],
+          isNotifier: true,
+        },
+      ];
+      const created = await service.create(
+        { ...payload, victims, procedureStartDate: '2026-11-10' } as any,
+        makeUser() as any,
+        context,
+      );
+      expect(created.victims).toEqual(victims);
+      expect(
+        prisma.cpcComplaintCase.create.mock.calls.at(-1)[0].data,
+      ).toMatchObject({
+        victims,
+        victimRank: '2S',
+        victimGender: 'FEMININO',
+        occurrenceForms: ['HUMILHACAO_PUBLICA'],
+        notifierRank: '1T',
+        notifierGender: 'MASCULINO',
+      });
+    },
+  );
+
+  it.each([CPCA_WORKFLOW_CONTEXT, SMIF_WORKFLOW_CONTEXT])(
+    '$workflowScope: mantém a data existente e rejeita remoção ou edição de processo aberto sem início',
+    async (context) => {
+      const prisma = createPrismaMock();
+      const service = new CpcaService(prisma, createAuditMock() as any);
+      jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
+      jest
+        .spyOn(service as any, 'assertCaseAccess')
+        .mockResolvedValue(undefined);
+      const current = makeCurrentComplaint({
+        workflowScope: context.workflowScope,
+        processOpened: true,
+        procedureType: 'IPM',
+        procedureStartDate: new Date('2026-11-10T12:00:00Z'),
+      });
+      prisma.cpcComplaintCase.findUnique.mockResolvedValue(current);
+      prisma.cpcComplaintCase.update.mockImplementation(async ({ data }: any) =>
+        makePersistedComplaintFromUpdate(data),
+      );
+      await service.update('case-1', {}, makeUser() as any, context);
+      expect(
+        prisma.cpcComplaintCase.update.mock.calls[0][0].data.procedureStartDate,
+      ).toEqual(current.procedureStartDate);
+      prisma.cpcComplaintCase.update.mockClear();
+      await expectReason(
+        service.update(
+          'case-1',
+          { procedureStartDate: null } as any,
+          makeUser() as any,
+          context,
+        ),
+        'PROCESS_OPENED_REQUIRES_START_DATE',
+      );
+      prisma.cpcComplaintCase.findUnique.mockResolvedValue({
+        ...current,
+        procedureStartDate: null,
+      });
+      await expectReason(
+        service.update('case-1', {}, makeUser() as any, context),
+        'PROCESS_OPENED_REQUIRES_START_DATE',
+      );
+      expect(prisma.cpcComplaintCase.update).not.toHaveBeenCalled();
+    },
+  );
 
   it('cria denúncia CPCA com defaults, vínculo em OM e histórico inicial', async () => {
     const prisma = createPrismaMock();
@@ -882,6 +1108,7 @@ describe('CpcaService case mutations', () => {
         status: 'INVESTIGATION',
         processOpened: true,
         procedureType: 'SINDICANCIA',
+        procedureStartDate: new Date('2026-08-02T12:00:00Z'),
       }),
     );
     jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
@@ -908,6 +1135,7 @@ describe('CpcaService case mutations', () => {
         status: 'INVESTIGATION',
         processOpened: true,
         procedureType: 'SINDICANCIA',
+        procedureStartDate: new Date('2026-08-02T12:00:00Z'),
       }),
     );
     prisma.cpcComplaintCase.update.mockImplementation(async ({ data }: any) =>
@@ -962,6 +1190,7 @@ describe('CpcaService case mutations', () => {
         status: 'INVESTIGATION',
         processOpened: true,
         procedureType: 'SINDICANCIA',
+        procedureStartDate: new Date('2026-08-02T12:00:00Z'),
         subsequentProcedureOpened: true,
         subsequentProcedureType: 'IPM',
         subsequentProcedureStatus: 'INVESTIGATION',
@@ -996,7 +1225,7 @@ describe('CpcaService case mutations', () => {
     });
   });
 
-  it('registra histórico e archivedAt ao arquivar uma denúncia já concluída', async () => {
+  it('converte o status legado de arquivamento em conclusão com histórico e data', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-04-23T12:00:00.000Z'));
 
     const prisma = createPrismaMock();
@@ -1005,8 +1234,9 @@ describe('CpcaService case mutations', () => {
 
     prisma.cpcComplaintCase.findUnique.mockResolvedValue(
       makeCurrentComplaint({
-        status: 'CONCLUDED',
+        status: 'INVESTIGATION',
         procedureType: 'SINDICANCIA',
+        procedureStartDate: new Date('2026-04-01T12:00:00Z'),
         caseNumber: 'CPCA-2026-BACG-00019',
       }),
     );
@@ -1036,7 +1266,7 @@ describe('CpcaService case mutations', () => {
     );
 
     const updateCall = prisma.cpcComplaintCase.update.mock.calls[0]?.[0];
-    expect(updateCall.data.status).toBe('ARCHIVED');
+    expect(updateCall.data.status).toBe('CONCLUDED');
     expect(updateCall.data.archiveReason).toBe(
       'Arquivada após conclusão da apuração e encerramento formal do caso.',
     );
@@ -1047,17 +1277,17 @@ describe('CpcaService case mutations', () => {
     expect(prisma.cpcComplaintStatusHistory.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         complaintCaseId: 'case-1',
-        fromStatus: 'CONCLUDED',
-        toStatus: 'ARCHIVED',
+        fromStatus: 'INVESTIGATION',
+        toStatus: 'CONCLUDED',
         fromProcedure: 'SINDICANCIA',
         toProcedure: 'SINDICANCIA',
         note: 'Encerrado após validação final.',
       }),
     });
-    expect(result.status).toBe('ARCHIVED');
+    expect(result.status).toBe('CONCLUDED');
   });
 
-  it('sincroniza o status para arquivado quando a situação do procedimento é judicial', async () => {
+  it('sincroniza o status para concluído quando o resultado do procedimento é arquivamento judicial', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-04-23T15:00:00.000Z'));
 
     const prisma = createPrismaMock();
@@ -1094,7 +1324,7 @@ describe('CpcaService case mutations', () => {
     );
 
     const updateCall = prisma.cpcComplaintCase.update.mock.calls[0]?.[0];
-    expect(updateCall.data.status).toBe('ARCHIVED');
+    expect(updateCall.data.status).toBe('CONCLUDED');
     expect(updateCall.data.archiveReason).toBe(
       'Arquivamento determinado por decisão judicial superveniente.',
     );
@@ -1105,11 +1335,11 @@ describe('CpcaService case mutations', () => {
     expect(prisma.cpcComplaintStatusHistory.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         fromStatus: 'RECEIVED',
-        toStatus: 'ARCHIVED',
+        toStatus: 'CONCLUDED',
         note: 'Arquivamento determinado por decisão judicial.',
       }),
     });
-    expect(result.status).toBe('ARCHIVED');
+    expect(result.status).toBe('CONCLUDED');
   });
 
   it('rejeita arquivamento sem motivo informado', async () => {
@@ -1121,6 +1351,7 @@ describe('CpcaService case mutations', () => {
       makeCurrentComplaint({
         status: 'CONCLUDED',
         procedureType: 'SINDICANCIA',
+        procedureStartDate: new Date('2026-04-01T12:00:00Z'),
       }),
     );
 
@@ -1182,7 +1413,7 @@ describe('CpcaService case mutations', () => {
     const service = new CpcaService(prisma, audit as any);
 
     prisma.cpcComplaintCase.findUnique.mockResolvedValue(
-      makeCurrentComplaint(),
+      makeCurrentComplaint({ status: 'CONCLUDED' }),
     );
 
     jest.spyOn(service as any, 'requireUserId').mockReturnValue('user-1');
@@ -1192,7 +1423,7 @@ describe('CpcaService case mutations', () => {
       service.update(
         'case-1',
         {
-          status: 'ARCHIVED',
+          status: 'INVESTIGATION',
         } as any,
         makeUser() as any,
       ),

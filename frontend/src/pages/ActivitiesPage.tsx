@@ -909,12 +909,10 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   }, [isCreateMode, activityForm.localityIds, activityForm.responsibleUserId]);
 
   const responsibleOptions = useMemo(() => {
-    const filtered = allResponsibleUsers.filter((user: any) => {
+    return allResponsibleUsers.filter((user: any) => {
       if (!String(user?.id ?? '').trim() || !String(user?.name ?? '').trim()) return false;
       return true;
     });
-
-    return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
   }, [allResponsibleUsers]);
 
   const responsibleOptionIds = useMemo(
@@ -950,11 +948,10 @@ export function ActivitiesPage({ scope = 'smif' }: { scope?: ActivitiesPageScope
   ]);
 
   const batchResponsibleOptions = useMemo(() => {
-    const filtered = allResponsibleUsers.filter((user: any) => {
+    return allResponsibleUsers.filter((user: any) => {
       if (!String(user?.id ?? '').trim() || !String(user?.name ?? '').trim()) return false;
       return true;
     });
-    return filtered.sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
   }, [allResponsibleUsers]);
   const specialtyNameById = useMemo(() => {
     const map = new Map<string, string>();

@@ -15,6 +15,7 @@ import {
 } from "@mui/material";
 import MenuBookRoundedIcon from "@mui/icons-material/MenuBookRounded";
 import { alpha } from "@mui/material/styles";
+import { useBiOdgsaId } from "../../features/useBiOdgsaId";
 
 export type BiExecutiveNotebookPanelKey =
   | "surveys"
@@ -98,6 +99,7 @@ export function BiExecutiveNotebookDialog({
   currentPanelKey,
   currentPanelFilters,
 }: BiExecutiveNotebookDialogProps) {
+  const odgsaId = useBiOdgsaId();
   const [selectedKeys, setSelectedKeys] = useState<BiExecutiveNotebookPanelKey[]>(
     [currentPanelKey],
   );
@@ -143,10 +145,12 @@ export function BiExecutiveNotebookDialog({
       selectedKeys.includes(panel.key),
     ).map((panel) => ({
       key: panel.key,
-      filters:
-        panel.key === currentPanelKey && applyCurrentFilters
+      filters: {
+        ...(panel.key === currentPanelKey && applyCurrentFilters
           ? currentPanelFilters
-          : undefined,
+          : {}),
+        odgsaId: panel.key === "recruits" ? undefined : odgsaId,
+      },
     }));
 
     await onSubmit({
@@ -256,6 +260,13 @@ export function BiExecutiveNotebookDialog({
               }}
             />
           </Stack>
+
+          {odgsaId ? (
+            <Typography variant="body2" color="text.secondary">
+              O ODGSA selecionado será aplicado aos painéis deste caderno, exceto
+              Recrutas, que não identifica a OM das respostas.
+            </Typography>
+          ) : null}
 
           <Box
             sx={{

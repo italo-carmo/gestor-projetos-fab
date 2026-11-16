@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useBiOdgsaId } from "../features/useBiOdgsaId";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -542,6 +543,15 @@ function DistributionCard({
 
 export function BiBestPracticesCycleDashboardPage() {
   const toast = useToast();
+  const odgsaId = useBiOdgsaId();
+  const [importFeedback, setImportFeedback] = useState<{
+    message: string;
+    severity: "info" | "success" | "warning" | "error";
+  } | null>(null);
+  const notifyImport = (payload: NonNullable<typeof importFeedback>) => {
+    setImportFeedback(payload);
+    toast.push(payload);
+  };
   const { data: me } = useMe();
 
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
@@ -579,8 +589,14 @@ export function BiBestPracticesCycleDashboardPage() {
     combineMode: "AND" as CombineMode,
   });
 
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+  }, [odgsaId]);
+
   const dashboardFilters = useMemo(
     () => ({
+      odgsaId,
       from: filters.from || undefined,
       to: filters.to || undefined,
       technicalRigorPerception: filters.technicalRigorPerception || undefined,
@@ -595,7 +611,7 @@ export function BiBestPracticesCycleDashboardPage() {
       q: filters.q || undefined,
       combineMode: filters.combineMode || undefined,
     }),
-    [filters],
+    [filters, odgsaId],
   );
 
   const dashboardQuery = useBiBestPracticesCycleDashboard(dashboardFilters);
@@ -755,22 +771,43 @@ export function BiBestPracticesCycleDashboardPage() {
   };
 
   const handleImport = async () => {
+    setImportFeedback({
+      severity: "info",
+      message: "Processando importação. Aguarde a conclusão...",
+    });
     try {
       const result = await previewImportMutation.mutateAsync({
         replace: replaceOnImport,
       });
+      if (result?.sync?.fetchedRows === 0 && !replaceOnImport) {
+        await Promise.all([
+          dashboardQuery.refetch(),
+          responsesQuery.refetch(),
+          importsQuery.refetch(),
+        ]);
+        setImportFeedback({
+          severity: "info",
+          message:
+            "A API do Google Sheets não retornou novos registros nesta consulta.",
+        });
+        return;
+      }
       const preview = (result?.normalization ??
         null) as BiImportNormalizationPreview | null;
       if (!preview) {
         throw new Error("A prévia de normalização não foi retornada.");
       }
       setImportPreview(preview);
+      setImportFeedback({
+        severity: "info",
+        message: "Consulta concluída. Revise a prévia e confirme a importação.",
+      });
       setSelectedNormalizationIds(
         (preview.suggestions ?? []).map((item) => item.id),
       );
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({
+      notifyImport({
         message: payload.message ?? "Falha ao sincronizar dados da API.",
         severity: "error",
       });
@@ -779,10 +816,15 @@ export function BiBestPracticesCycleDashboardPage() {
 
   const closeImportPreview = () => {
     setImportPreview(null);
+    setImportFeedback(null);
     setSelectedNormalizationIds([]);
   };
 
   const confirmImport = async (applyNormalization: boolean) => {
+    setImportFeedback({
+      severity: "info",
+      message: "Processando importação. Aguarde a conclusão...",
+    });
     try {
       const result = await importMutation.mutateAsync({
         replace: replaceOnImport,
@@ -796,7 +838,7 @@ export function BiBestPracticesCycleDashboardPage() {
           : { decisions: [] },
       });
       closeImportPreview();
-      toast.push({
+      notifyImport({
         message:
           `Sincronização concluída. Inseridos: ${result?.batch?.insertedRows ?? 0}. ` +
           `Duplicados: ${result?.batch?.duplicateRows ?? 0}. ` +
@@ -806,7 +848,7 @@ export function BiBestPracticesCycleDashboardPage() {
       });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({
+      notifyImport({
         message: payload.message ?? "Falha ao sincronizar dados da API.",
         severity: "error",
       });
@@ -1135,12 +1177,17 @@ export function BiBestPracticesCycleDashboardPage() {
           <Grid size={{ xs: 12, md: 8 }}>
             <Stack spacing={1.2}>
               <Stack direction="row" spacing={1} flexWrap="wrap">
-                <Button
+                {importFeedback ? (
+                <Alert severity={importFeedback.severity} role="status">
+                  {importFeedback.message}
+                </Alert>
+              ) : null}
+              <Button
                   size="small"
                   variant="contained"
                   startIcon={<SyncRoundedIcon />}
                   onClick={handleImport}
-                  disabled={!canUpload || anyImportPending}
+                  disabled={!canUpload || anyImportPending || Boolean(importPreview)}
                   sx={{
                     height: 40,
                     px: 2,
@@ -1182,7 +1229,7 @@ export function BiBestPracticesCycleDashboardPage() {
                       onChange={(event) =>
                         setReplaceOnImport(event.target.checked)
                       }
-                      disabled={!canUpload || anyImportPending}
+                      disabled={!canUpload || anyImportPending || Boolean(importPreview)}
                     />
                   }
                   label="Zerar base antes de importar"

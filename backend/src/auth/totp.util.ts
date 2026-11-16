@@ -16,6 +16,7 @@ const BCRYPT_ROUNDS = 10;
 const TOTP_ISSUER = 'INTEGRA';
 const TOTP_PERIOD = 30;
 const TOTP_DIGITS = 6;
+const TOTP_VALIDATION_WINDOW = 1;
 
 function deriveKey(secret: string): Buffer {
   return createHash('sha256').update(secret).digest();
@@ -90,7 +91,10 @@ export function verifyTotpCode(secretBase32: string, code: string): boolean {
     period: TOTP_PERIOD,
     secret: OTPAuth.Secret.fromBase32(secretBase32),
   });
-  const delta = totp.validate({ token: code.trim(), window: 3 });
+  const delta = totp.validate({
+    token: code.trim(),
+    window: TOTP_VALIDATION_WINDOW,
+  });
   return delta !== null;
 }
 

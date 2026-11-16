@@ -1,3 +1,4 @@
+import { fetchBiApiPage } from './bi-api-fetch';
 import crypto from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { BiImportFormat } from '@prisma/client';
@@ -13,6 +14,7 @@ import {
 } from './bi-normalization.service';
 
 type BestPracticeCycleFilters = {
+  odgsaId?: string;
   from?: string;
   to?: string;
   technicalRigorPerception?: string;
@@ -186,6 +188,14 @@ export class BiBestPracticesCycleService {
       parsed.push(parsedRow.value);
     }
 
+    if (parsed.length === 0 || (replaceAll && invalidRows > 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
+        invalidRows,
+        validRows: parsed.length,
+      });
+    }
+
     const normalizationPreview = await this.normalization.previewImportRows({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.BEST_PRACTICE_CYCLE,
       rows: parsed.map((item) => ({
@@ -232,71 +242,76 @@ export class BiBestPracticesCycleService {
     );
     const rowsToInsert = normalizedImport.rows;
 
-    const responseModel = (this.prisma as any).biBestPracticeCycleResponse;
-    const importModel = (this.prisma as any).biBestPracticeCycleImportBatch;
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        const responseModel = (tx as any).biBestPracticeCycleResponse;
+        const importModel = (tx as any).biBestPracticeCycleImportBatch;
 
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        responseModel.deleteMany(),
-        importModel.deleteMany(),
-      ]);
-    }
+        if (replaceAll) {
+          await responseModel.deleteMany();
+          await importModel.deleteMany();
+        }
 
-    const batch = await importModel.create({
-      data: {
-        id: this.makeId('bibpcib_'),
-        fileName: file.originalname,
-        format,
-        sheetName,
-        totalRows: rowsToInsert.length,
-        insertedRows: 0,
-        duplicateRows: 0,
-        invalidRows,
-        importedById: user?.id ?? null,
+        const batch = await importModel.create({
+          data: {
+            id: this.makeId('bibpcib_'),
+            fileName: file.originalname,
+            format,
+            sheetName,
+            totalRows: rowsToInsert.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
+          },
+        });
+
+        let insertedRows = 0;
+
+        if (rowsToInsert.length > 0) {
+          const created = await responseModel.createMany({
+            data: rowsToInsert.map((item) => ({
+              id: this.makeId('bibpcr_'),
+              batchId: batch.id,
+              apiId: item.apiId ?? null,
+              submittedAt: item.submittedAt,
+              technicalRigorPerception: item.technicalRigorPerception,
+              preparednessToLeadMixedClass: item.preparednessToLeadMixedClass,
+              genderBiasImpact: item.genderBiasImpact,
+              interactionDifference: item.interactionDifference,
+              interactionDifferenceComment: item.interactionDifferenceComment,
+              supportNeedRecognition: item.supportNeedRecognition,
+              mainChallengeOptions: item.mainChallengeOptions,
+              identification: item.identification,
+              specialty: item.specialty,
+              rawPayload: item.rawPayload,
+              sourceRow: item.sourceRow,
+              sourceHash: item.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+          insertedRows = Number(created?.count ?? 0);
+        }
+
+        const duplicateRows = rowsToInsert.length - insertedRows;
+
+        const updatedBatch = await importModel.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
-    });
-
-    let insertedRows = 0;
-
-    if (rowsToInsert.length > 0) {
-      const created = await responseModel.createMany({
-        data: rowsToInsert.map((item) => ({
-          id: this.makeId('bibpcr_'),
-          batchId: batch.id,
-          apiId: item.apiId ?? null,
-          submittedAt: item.submittedAt,
-          technicalRigorPerception: item.technicalRigorPerception,
-          preparednessToLeadMixedClass: item.preparednessToLeadMixedClass,
-          genderBiasImpact: item.genderBiasImpact,
-          interactionDifference: item.interactionDifference,
-          interactionDifferenceComment: item.interactionDifferenceComment,
-          supportNeedRecognition: item.supportNeedRecognition,
-          mainChallengeOptions: item.mainChallengeOptions,
-          identification: item.identification,
-          specialty: item.specialty,
-          rawPayload: item.rawPayload,
-          sourceRow: item.sourceRow,
-          sourceHash: item.sourceHash,
-        })),
-        skipDuplicates: true,
-      });
-      insertedRows = Number(created?.count ?? 0);
-    }
-
-    const duplicateRows = rowsToInsert.length - insertedRows;
-
-    const updatedBatch = await importModel.update({
-      where: { id: batch.id },
-      data: {
-        insertedRows,
-        duplicateRows,
-      },
-      include: {
-        importedBy: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
+      { timeout: 30_000 },
+    );
 
     await this.normalization.rebuild({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.BEST_PRACTICE_CYCLE,
@@ -332,6 +347,14 @@ export class BiBestPracticesCycleService {
     const sinceId = replaceAll ? 0 : await this.resolveLastImportedApiId();
     const apiResult = await this.fetchApiRecords(sinceId);
     const { parsed, invalidRows } = this.parseApiRecords(apiResult.records);
+    // Never advance the saved cursor past rows we could not interpret.
+    if (invalidRows > 0 || (replaceAll && parsed.length === 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
+        invalidRows,
+        validRows: parsed.length,
+      });
+    }
 
     const normalizationPreview = await this.normalization.previewImportRows({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.BEST_PRACTICE_CYCLE,
@@ -371,78 +394,83 @@ export class BiBestPracticesCycleService {
     );
     const rowsToInsert = normalizedImport.rows;
 
-    const responseModel = (this.prisma as any).biBestPracticeCycleResponse;
-    const importModel = (this.prisma as any).biBestPracticeCycleImportBatch;
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        const responseModel = (tx as any).biBestPracticeCycleResponse;
+        const importModel = (tx as any).biBestPracticeCycleImportBatch;
 
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        responseModel.deleteMany(),
-        importModel.deleteMany(),
-      ]);
-    }
+        if (replaceAll) {
+          await responseModel.deleteMany();
+          await importModel.deleteMany();
+        }
 
-    const batch = await importModel.create({
-      data: {
-        id: this.makeId('bibpcib_'),
-        fileName: 'Google Forms API - Ciclo de Boas Práticas',
-        format: BiImportFormat.API,
-        sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
-        totalRows: rowsToInsert.length,
-        insertedRows: 0,
-        duplicateRows: 0,
-        invalidRows,
-        importedById: user?.id ?? null,
-        apiSinceId: apiResult.sync.sinceId,
-        apiNextSinceId: apiResult.sync.nextSinceId,
-        apiLastIdAvailable: apiResult.sync.lastIdAvailable,
-        apiHasMore: apiResult.sync.hasMore,
-        apiUpdatedAt: apiResult.sync.updatedAt
-          ? new Date(apiResult.sync.updatedAt)
-          : null,
+        const batch = await importModel.create({
+          data: {
+            id: this.makeId('bibpcib_'),
+            fileName: 'Google Forms API - Ciclo de Boas Práticas',
+            format: BiImportFormat.API,
+            sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
+            totalRows: rowsToInsert.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
+            apiSinceId: apiResult.sync.sinceId,
+            apiNextSinceId: apiResult.sync.nextSinceId,
+            apiLastIdAvailable: apiResult.sync.lastIdAvailable,
+            apiHasMore: apiResult.sync.hasMore,
+            apiUpdatedAt: apiResult.sync.updatedAt
+              ? new Date(apiResult.sync.updatedAt)
+              : null,
+          },
+        });
+
+        let insertedRows = 0;
+
+        if (rowsToInsert.length > 0) {
+          const created = await responseModel.createMany({
+            data: rowsToInsert.map((item) => ({
+              id: this.makeId('bibpcr_'),
+              batchId: batch.id,
+              apiId: item.apiId ?? null,
+              submittedAt: item.submittedAt,
+              technicalRigorPerception: item.technicalRigorPerception,
+              preparednessToLeadMixedClass: item.preparednessToLeadMixedClass,
+              genderBiasImpact: item.genderBiasImpact,
+              interactionDifference: item.interactionDifference,
+              interactionDifferenceComment: item.interactionDifferenceComment,
+              supportNeedRecognition: item.supportNeedRecognition,
+              mainChallengeOptions: item.mainChallengeOptions,
+              identification: item.identification,
+              specialty: item.specialty,
+              rawPayload: item.rawPayload,
+              sourceRow: item.sourceRow,
+              sourceHash: item.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+          insertedRows = Number(created?.count ?? 0);
+        }
+
+        const duplicateRows = rowsToInsert.length - insertedRows;
+
+        const updatedBatch = await importModel.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
-    });
-
-    let insertedRows = 0;
-
-    if (rowsToInsert.length > 0) {
-      const created = await responseModel.createMany({
-        data: rowsToInsert.map((item) => ({
-          id: this.makeId('bibpcr_'),
-          batchId: batch.id,
-          apiId: item.apiId ?? null,
-          submittedAt: item.submittedAt,
-          technicalRigorPerception: item.technicalRigorPerception,
-          preparednessToLeadMixedClass: item.preparednessToLeadMixedClass,
-          genderBiasImpact: item.genderBiasImpact,
-          interactionDifference: item.interactionDifference,
-          interactionDifferenceComment: item.interactionDifferenceComment,
-          supportNeedRecognition: item.supportNeedRecognition,
-          mainChallengeOptions: item.mainChallengeOptions,
-          identification: item.identification,
-          specialty: item.specialty,
-          rawPayload: item.rawPayload,
-          sourceRow: item.sourceRow,
-          sourceHash: item.sourceHash,
-        })),
-        skipDuplicates: true,
-      });
-      insertedRows = Number(created?.count ?? 0);
-    }
-
-    const duplicateRows = rowsToInsert.length - insertedRows;
-
-    const updatedBatch = await importModel.update({
-      where: { id: batch.id },
-      data: {
-        insertedRows,
-        duplicateRows,
-      },
-      include: {
-        importedBy: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
+      { timeout: 30_000 },
+    );
 
     await this.normalization.rebuild({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.BEST_PRACTICE_CYCLE,
@@ -497,7 +525,7 @@ export class BiBestPracticesCycleService {
       pageSize?: string;
     },
   ) {
-    const where = this.buildWhere(filters);
+    const where = await this.buildWhere(filters);
 
     const { page, pageSize, skip, take } = parsePagination(
       filters.page,
@@ -545,7 +573,7 @@ export class BiBestPracticesCycleService {
     const responseModel = (this.prisma as any).biBestPracticeCycleResponse;
 
     if (allFiltered) {
-      const where = this.buildWhere(payload);
+      const where = await this.buildWhere(payload);
       const deleted = await responseModel.deleteMany({ where });
       return {
         mode: 'FILTERED',
@@ -643,7 +671,10 @@ export class BiBestPracticesCycleService {
   }
 
   async dashboard(filters: BestPracticeCycleFilters) {
-    const where = this.buildWhere(filters);
+    const where = await this.buildWhere(filters);
+    const odgsaWhere = filters.odgsaId?.trim()
+      ? await this.buildWhere({ odgsaId: filters.odgsaId })
+      : {};
 
     const responseModel = (this.prisma as any).biBestPracticeCycleResponse;
     const importModel = (this.prisma as any).biBestPracticeCycleImportBatch;
@@ -669,6 +700,7 @@ export class BiBestPracticesCycleService {
           },
         }),
         responseModel.findMany({
+          where: odgsaWhere,
           select: {
             technicalRigorPerception: true,
             preparednessToLeadMixedClass: true,
@@ -680,7 +712,7 @@ export class BiBestPracticesCycleService {
             specialty: true,
           },
         }),
-        responseModel.count(),
+        responseModel.count({ where: odgsaWhere }),
         importModel.findFirst({
           orderBy: { importedAt: 'desc' },
           include: {
@@ -1104,7 +1136,17 @@ export class BiBestPracticesCycleService {
     };
   }
 
-  private buildWhere(filters: BestPracticeCycleFilters): any {
+  private async buildWhere(filters: BestPracticeCycleFilters) {
+    const baseWhere = this.buildBaseWhere(filters);
+    if (!filters.odgsaId?.trim()) return baseWhere;
+    const ids = await this.normalization.odgsaResponseIds(
+      BI_NORMALIZATION_SOURCE_TYPES.BEST_PRACTICE_CYCLE, filters.odgsaId,
+    );
+    // ODGSA always restricts the result, including when other filters use OR.
+    return { AND: [baseWhere, { id: { in: ids ?? [] } }] };
+  }
+
+  private buildBaseWhere(filters: BestPracticeCycleFilters): any {
     const mode = this.parseCombineMode(filters.combineMode);
     const conditions: any[] = [];
 
@@ -1280,58 +1322,13 @@ export class BiBestPracticesCycleService {
   private async fetchApiPage(
     sinceId: number,
   ): Promise<BestPracticeCycleApiPage> {
-    const url = this.buildApiUrl(sinceId);
-    const timeoutMs =
+    return fetchBiApiPage<BestPracticeCycleApiPage>(
+      this.buildApiUrl(sinceId),
+      'best_practices_cycle_api',
       this.parsePositiveInteger(
         process.env.BI_BEST_PRACTICES_CYCLE_API_TIMEOUT_MS,
-      ) ?? 30_000;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    let response: Response;
-    try {
-      response = await fetch(url, { signal: controller.signal });
-    } catch (error) {
-      throwError('VALIDATION_ERROR', {
-        reason:
-          error instanceof Error && error.name === 'AbortError'
-            ? 'best_practices_cycle_api_timeout'
-            : 'best_practices_cycle_api_request_failed',
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    if (!response.ok) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'best_practices_cycle_api_http_error',
-        status: response.status,
-      });
-    }
-
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      throwError('VALIDATION_ERROR', {
-        reason: 'best_practices_cycle_api_invalid_json',
-      });
-    }
-
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'best_practices_cycle_api_invalid_payload',
-      });
-    }
-
-    const page = payload as BestPracticeCycleApiPage;
-    if (page.ok !== true || !Array.isArray(page.dados)) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'best_practices_cycle_api_unsuccessful_payload',
-      });
-    }
-
-    return page;
+      ) ?? 30_000,
+    );
   }
 
   private buildApiUrl(sinceId: number) {
@@ -1689,8 +1686,8 @@ export class BiBestPracticesCycleService {
       this.parsePositiveInteger(raw.linha) ??
       this.parsePositiveInteger(raw.id) ??
       apiId;
-    const dataRow = BEST_PRACTICE_CYCLE_API_COLUMNS.map((column) =>
-      this.cleanApiCell(raw[column]) ?? '',
+    const dataRow = BEST_PRACTICE_CYCLE_API_COLUMNS.map(
+      (column) => this.cleanApiCell(raw[column]) ?? '',
     );
 
     const parsed = this.parseDataRow(

@@ -127,16 +127,27 @@ import {
   COMPLAINT_PROCEDURE_RESULT_OPTIONS as PROCEDURE_CURRENT_SITUATION_OPTIONS,
 } from "../features/complaintProcedureOptions";
 import { buildComplaintWorkflowParams } from "../features/complaintsNavigation";
+import { ComplaintVictimsFields } from "../components/complaints/ComplaintVictimsFields";
+import {
+  createComplaintVictim,
+  getNotifyingVictim,
+  readComplaintVictims,
+} from "../features/complaintVictims";
+import {
+  COMPLAINT_STATUS_OPTIONS,
+  getComplaintReportStatus,
+  getComplaintStatusLabel,
+} from "../features/complaintStatus";
 
-const STATUS_OPTIONS = [
+const WORKFLOW_STATUS_OPTIONS = [
   { value: "RECEIVED", label: "Recebida" },
   { value: "PROTECTION_MEASURES", label: "Acolhimento e proteção" },
   { value: "PRELIMINARY_ANALYSIS", label: "Análise preliminar" },
   { value: "PROCEDURE_DEFINED", label: "Procedimento instaurado" },
   { value: "INVESTIGATION", label: "Em apuração" },
-  { value: "CONCLUDED", label: "Concluída" },
-  { value: "ARCHIVED", label: "Arquivada" },
+  { value: "CONCLUDED", label: "Concluído" },
 ];
+const STATUS_OPTIONS = COMPLAINT_STATUS_OPTIONS;
 
 const CPCA_HISTORY_ACTION_OPTIONS = [
   { value: "create", label: "Criação" },
@@ -484,15 +495,6 @@ const RANK_SELECT_MENU_PROPS = {
     },
   },
 };
-const MULTI_SELECT_CHECKBOX_SX = {
-  p: 0,
-  mr: 1,
-  color: "text.secondary",
-  "&.Mui-checked": {
-    color: "primary.main",
-  },
-};
-
 const SELECTABLE_PROCEDURE_CURRENT_SITUATIONS = new Set<string>(
   PROCEDURE_CURRENT_SITUATION_OPTIONS.map((item) => item.value),
 );
@@ -515,7 +517,7 @@ const STEP_STATUS_OPTIONS: Record<number, string[]> = {
   0: ["RECEIVED", "PROTECTION_MEASURES"],
   1: ["PROTECTION_MEASURES", "PRELIMINARY_ANALYSIS"],
   2: ["PRELIMINARY_ANALYSIS", "PROCEDURE_DEFINED", "INVESTIGATION"],
-  3: ["INVESTIGATION", "CONCLUDED", "ARCHIVED"],
+  3: ["INVESTIGATION", "CONCLUDED"],
 };
 
 const SEPARATION_OPTIONS = [
@@ -615,9 +617,7 @@ function createDefaultForm() {
     aggressorRank: "",
     aggressorGender: "NAO_INFORMADO",
     aggressorAgeRange: "",
-    victimRank: "",
-    victimGender: "NAO_INFORMADO",
-    victimAgeRange: "",
+    victims: [createComplaintVictim(true)],
     victimIsNotifier: true,
     notifierRank: "",
     notifierGender: "NAO_INFORMADO",
@@ -625,9 +625,6 @@ function createDefaultForm() {
     detailedViolenceType: "",
     harassmentContext: "",
     occurrenceLocation: "",
-    incidentFrequency: "",
-    hierarchicalFunctionalRelation: "",
-    occurrenceForms: [] as string[],
     procedureCurrentSituation: "",
     evidenceSummary: "",
     confidentialityTermSigned: false,
@@ -757,6 +754,41 @@ function formatHistoryValue(value: unknown): string {
   }
   if (typeof value === "boolean") return value ? "Sim" : "Não";
   const raw = String(value);
+  if (raw.startsWith("{") || (typeof value === "object" && value !== null)) {
+    try {
+      const victim =
+        typeof value === "object" ? (value as any) : JSON.parse(raw);
+      if (
+        typeof victim.victimRank === "string" &&
+        Array.isArray(victim.occurrenceForms)
+      ) {
+        return [
+          victim.victimRank,
+          GENDER_OPTIONS.find((option) => option.value === victim.victimGender)
+            ?.label,
+          AGE_RANGE_OPTIONS.find(
+            (option) => option.value === victim.victimAgeRange,
+          )?.label,
+          INCIDENT_FREQUENCY_OPTIONS.find(
+            (option) => option.value === victim.incidentFrequency,
+          )?.label,
+          FUNCTIONAL_RELATION_OPTIONS.find(
+            (option) => option.value === victim.hierarchicalFunctionalRelation,
+          )?.label,
+          ...victim.occurrenceForms.map(
+            (form: string) =>
+              OCCURRENCE_FORM_OPTIONS.find((option) => option.value === form)
+                ?.label ?? form,
+          ),
+          victim.isNotifier ? "Vítima noticiante" : null,
+        ]
+          .filter(Boolean)
+          .join(" • ");
+      }
+    } catch {
+      /* Preserve historical text that is not structured data. */
+    }
+  }
   const parsedDate = /^\d{4}-\d{2}-\d{2}T/.test(raw) ? new Date(raw) : null;
   if (parsedDate && !Number.isNaN(parsedDate.getTime())) {
     return parsedDate.toLocaleString("pt-BR");
@@ -802,8 +834,8 @@ function getValidationTooltip(validation: any) {
 
 function statusOptionsForStep(step: number, currentStatus: string) {
   const allowed = new Set(STEP_STATUS_OPTIONS[step] ?? []);
-  if (currentStatus) allowed.add(currentStatus);
-  return STATUS_OPTIONS.filter((item) => allowed.has(item.value));
+  if (currentStatus && step !== 3) allowed.add(currentStatus);
+  return WORKFLOW_STATUS_OPTIONS.filter((item) => allowed.has(item.value));
 }
 
 const REPORT_KPI_CARD_SX = {
@@ -934,7 +966,9 @@ export function CpcaCasesPage({
 
   const q = params.get("q") ?? "";
   const localityId = params.get("localityId") ?? "";
-  const status = params.get("status") ?? "";
+  const status = params.get("status")
+    ? getComplaintReportStatus(params.get("status"))
+    : "";
   const detailedViolenceType = params.get("detailedViolenceType") ?? "";
   const procedureType = params.get("procedureType") ?? "";
   const validationStatus = isSmifWorkflow
@@ -1397,32 +1431,29 @@ export function CpcaCasesPage({
       ),
     [rankOptions],
   );
-  const occurrenceFormLabelByValue = useMemo(
-    () =>
-      new Map(
-        OCCURRENCE_FORM_OPTIONS.map(
-          (item) => [item.value, item.label] as const,
-        ),
-      ),
-    [],
-  );
   const notifierIsVictim = form.notifierType === "VITIMA";
+  const primaryVictim = form.victims[0];
+  const notifyingVictim = getNotifyingVictim(form.victims);
   const hasStep1Progress = Boolean(
     toNullable(form.incidentDate) ||
     toNullable(form.aggressorRank) ||
-    toNullable(form.victimRank) ||
+    form.victims.some((victim) =>
+      Boolean(
+        victim.victimRank.trim() ||
+        victim.victimAgeRange ||
+        victim.incidentFrequency ||
+        victim.hierarchicalFunctionalRelation ||
+        victim.occurrenceForms.length,
+      ),
+    ) ||
     toNullable(form.detailedViolenceType) ||
     toNullable(form.harassmentContext) ||
     toNullable(form.occurrenceLocation) ||
     toNullable(form.aggressorAgeRange) ||
-    toNullable(form.victimAgeRange) ||
     (!notifierIsVictim &&
       (toNullable(form.notifierRank) ||
         toNullable(form.notifierAgeRange) ||
         form.notifierGender !== "NAO_INFORMADO")) ||
-    toNullable(form.incidentFrequency) ||
-    toNullable(form.hierarchicalFunctionalRelation) ||
-    form.occurrenceForms.length > 0 ||
     toNullable(form.evidenceSummary),
   );
   const hasStep2Progress = Boolean(
@@ -1541,9 +1572,7 @@ export function CpcaCasesPage({
       aggressorRank: item.aggressorRank ?? "",
       aggressorGender: item.aggressorGender ?? "NAO_INFORMADO",
       aggressorAgeRange: item.aggressorAgeRange ?? "",
-      victimRank: item.victimRank ?? "",
-      victimGender: item.victimGender ?? "NAO_INFORMADO",
-      victimAgeRange: item.victimAgeRange ?? "",
+      victims: readComplaintVictims(item),
       victimIsNotifier: nextNotifierIsVictim,
       notifierRank: item.notifierRank ?? item.victimRank ?? "",
       notifierGender:
@@ -1552,14 +1581,6 @@ export function CpcaCasesPage({
       detailedViolenceType: item.detailedViolenceType ?? "",
       harassmentContext: item.harassmentContext ?? "",
       occurrenceLocation: item.occurrenceLocation ?? "",
-      incidentFrequency: item.incidentFrequency ?? "",
-      hierarchicalFunctionalRelation: item.hierarchicalFunctionalRelation ?? "",
-      occurrenceForms:
-        Array.isArray(item.occurrenceForms) && item.occurrenceForms.length > 0
-          ? item.occurrenceForms.map((value: any) => String(value))
-          : item.occurrenceForm
-            ? [String(item.occurrenceForm)]
-            : [],
       procedureCurrentSituation,
       evidenceSummary: item.evidenceSummary ?? "",
       confidentialityTermSigned: Boolean(item.confidentialityTermSigned),
@@ -1841,9 +1862,20 @@ export function CpcaCasesPage({
       });
       return;
     }
-    if (!form.aggressorRank || !form.victimRank) {
+    if (!form.aggressorRank) {
       toast.push({
-        message: "Informe posto/graduação do acusado e da vítima.",
+        message: "Informe o posto/graduação do acusado.",
+        severity: "warning",
+      });
+      return;
+    }
+    const incompleteVictim = form.victims.findIndex(
+      (victim) => !victim.victimRank.trim(),
+    );
+    if (incompleteVictim >= 0) {
+      setActiveStep(0);
+      toast.push({
+        message: `Informe o posto/graduação da vítima ${incompleteVictim + 1}.`,
         severity: "warning",
       });
       return;
@@ -1876,6 +1908,15 @@ export function CpcaCasesPage({
       setActiveStep(2);
       toast.push({
         message: "Selecione o procedimento apuratório aberto.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    if (form.processOpened === "SIM" && !toNullable(form.procedureStartDate)) {
+      setActiveStep(2);
+      toast.push({
+        message: "Informe a data de início do procedimento.",
         severity: "warning",
       });
       return;
@@ -2003,25 +2044,36 @@ export function CpcaCasesPage({
       aggressorRank: form.aggressorRank,
       aggressorGender: form.aggressorGender,
       aggressorAgeRange: toNullable(form.aggressorAgeRange),
-      victimRank: form.victimRank,
-      victimGender: form.victimGender,
-      victimAgeRange: toNullable(form.victimAgeRange),
+      victimRank: primaryVictim.victimRank,
+      victimGender: primaryVictim.victimGender,
+      victimAgeRange: toNullable(primaryVictim.victimAgeRange),
+      victims: form.victims.map((victim) => ({
+        ...victim,
+        victimAgeRange: toNullable(victim.victimAgeRange),
+        incidentFrequency: toNullable(victim.incidentFrequency),
+        hierarchicalFunctionalRelation: toNullable(
+          victim.hierarchicalFunctionalRelation,
+        ),
+        isNotifier: notifierIsVictim && victim.id === notifyingVictim.id,
+      })),
       victimIsNotifier: notifierIsVictim,
-      notifierRank: notifierIsVictim ? form.victimRank : form.notifierRank,
+      notifierRank: notifierIsVictim
+        ? notifyingVictim.victimRank
+        : form.notifierRank,
       notifierGender: notifierIsVictim
-        ? form.victimGender
+        ? notifyingVictim.victimGender
         : form.notifierGender,
       notifierAgeRange: notifierIsVictim
-        ? toNullable(form.victimAgeRange)
+        ? toNullable(notifyingVictim.victimAgeRange)
         : toNullable(form.notifierAgeRange),
       detailedViolenceType: toNullable(form.detailedViolenceType),
       harassmentContext: toNullable(form.harassmentContext),
       occurrenceLocation: toNullable(form.occurrenceLocation),
-      incidentFrequency: toNullable(form.incidentFrequency),
+      incidentFrequency: toNullable(primaryVictim.incidentFrequency),
       hierarchicalFunctionalRelation: toNullable(
-        form.hierarchicalFunctionalRelation,
+        primaryVictim.hierarchicalFunctionalRelation,
       ),
-      occurrenceForms: form.occurrenceForms,
+      occurrenceForms: primaryVictim.occurrenceForms,
       procedureCurrentSituation:
         form.processOpened === "NAO"
           ? null
@@ -2145,7 +2197,10 @@ export function CpcaCasesPage({
       }
     } catch (error) {
       const parsedError = parseApiError(error);
-      if (parsedError.details?.field === "archiveReason") {
+      if (
+        parsedError.details?.field === "archiveReason" ||
+        parsedError.details?.field === "procedureStartDate"
+      ) {
         setActiveStep(2);
       }
       const review = allowSummaryPrivacyOverride
@@ -2428,13 +2483,13 @@ export function CpcaCasesPage({
                   notifierType: nextNotifierType,
                   victimIsNotifier: nextNotifierIsVictim,
                   notifierRank: nextNotifierIsVictim
-                    ? prev.victimRank
+                    ? getNotifyingVictim(prev.victims).victimRank
                     : prev.notifierRank,
                   notifierGender: nextNotifierIsVictim
-                    ? prev.victimGender
+                    ? getNotifyingVictim(prev.victims).victimGender
                     : prev.notifierGender,
                   notifierAgeRange: nextNotifierIsVictim
-                    ? prev.victimAgeRange
+                    ? getNotifyingVictim(prev.victims).victimAgeRange
                     : prev.notifierAgeRange,
                 };
               })
@@ -2571,92 +2626,20 @@ export function CpcaCasesPage({
             ))}
           </TextField>
 
-          <Box sx={FORM_SECTION_HEADER_WITH_SPACING_SX}>
-            <Typography variant="subtitle2" fontWeight={700}>
-              Dados da vítima
-            </Typography>
-            <Divider />
-          </Box>
-
-          <TextField
-            select
-            size="small"
-            label="Posto/grad. vítima"
-            value={form.victimRank}
-            onChange={(e) =>
-              setForm((prev) => {
-                const nextVictimRank = e.target.value;
-                return {
-                  ...prev,
-                  victimRank: nextVictimRank,
-                  notifierRank:
-                    prev.notifierType === "VITIMA"
-                      ? nextVictimRank
-                      : prev.notifierRank,
-                };
-              })
-            }
-            SelectProps={{ MenuProps: RANK_SELECT_MENU_PROPS }}
-          >
-            {rankOptionsWithUnknown.map((rank: string) => (
-              <MenuItem key={rank} value={rank}>
-                {getRankOptionLabel(rank)}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            size="small"
-            label="Sexo da vítima"
-            value={form.victimGender}
-            onChange={(e) =>
-              setForm((prev) => {
-                const nextVictimGender = e.target.value;
-                return {
-                  ...prev,
-                  victimGender: nextVictimGender,
-                  notifierGender:
-                    prev.notifierType === "VITIMA"
-                      ? nextVictimGender
-                      : prev.notifierGender,
-                };
-              })
-            }
-          >
-            {GENDER_OPTIONS.map((item) => (
-              <MenuItem key={item.value} value={item.value}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            size="small"
-            label="Faixa etária da vítima"
-            value={form.victimAgeRange}
-            onChange={(e) =>
-              setForm((prev) => {
-                const nextVictimAgeRange = e.target.value;
-                return {
-                  ...prev,
-                  victimAgeRange: nextVictimAgeRange,
-                  notifierAgeRange:
-                    prev.notifierType === "VITIMA"
-                      ? nextVictimAgeRange
-                      : prev.notifierAgeRange,
-                };
-              })
-            }
-          >
-            <MenuItem value="">Selecionar</MenuItem>
-            {AGE_RANGE_OPTIONS.map((item) => (
-              <MenuItem key={item.value} value={item.value}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </TextField>
+          <ComplaintVictimsFields
+            victims={form.victims}
+            onChange={(victims) => setForm((prev) => ({ ...prev, victims }))}
+            notifierIsVictim={notifierIsVictim}
+            rankOptions={rankOptionsWithUnknown.map((rank) => ({
+              value: rank,
+              label: getRankOptionLabel(rank),
+            }))}
+            genderOptions={GENDER_OPTIONS}
+            ageOptions={AGE_RANGE_OPTIONS}
+            frequencyOptions={INCIDENT_FREQUENCY_OPTIONS}
+            relationOptions={FUNCTIONAL_RELATION_OPTIONS}
+            occurrenceOptions={OCCURRENCE_FORM_OPTIONS}
+          />
 
           {!notifierIsVictim && (
             <Box sx={FORM_SECTION_HEADER_WITH_SPACING_SX}>
@@ -2728,100 +2711,6 @@ export function CpcaCasesPage({
               ))}
             </TextField>
           )}
-
-          <Box sx={FORM_SECTION_HEADER_WITH_SPACING_SX}>
-            <Typography variant="subtitle2" fontWeight={700}>
-              Dados complementares da ocorrência
-            </Typography>
-            <Divider />
-          </Box>
-
-          <TextField
-            select
-            size="small"
-            label="Frequência dos fatos"
-            value={form.incidentFrequency}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                incidentFrequency: e.target.value,
-              }))
-            }
-          >
-            <MenuItem value="">Selecionar</MenuItem>
-            {INCIDENT_FREQUENCY_OPTIONS.map((item) => (
-              <MenuItem key={item.value} value={item.value}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            size="small"
-            label="Relação hierárquica/funcional"
-            value={form.hierarchicalFunctionalRelation}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                hierarchicalFunctionalRelation: e.target.value,
-              }))
-            }
-            sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
-          >
-            <MenuItem value="">Selecionar</MenuItem>
-            {FUNCTIONAL_RELATION_OPTIONS.map((item) => (
-              <MenuItem key={item.value} value={item.value}>
-                {item.label}
-              </MenuItem>
-            ))}
-          </TextField>
-
-          <TextField
-            select
-            size="small"
-            label="Forma de ocorrência"
-            InputLabelProps={{ shrink: true }}
-            value={form.occurrenceForms}
-            onChange={(e) => {
-              const value = e.target.value;
-              setForm((prev) => ({
-                ...prev,
-                occurrenceForms: Array.isArray(value)
-                  ? value.map((item) => String(item))
-                  : [String(value)],
-              }));
-            }}
-            sx={{ gridColumn: { xs: "1 / -1", md: "1 / -1" } }}
-            SelectProps={{
-              multiple: true,
-              displayEmpty: true,
-              MenuProps: LONG_SELECT_MENU_PROPS,
-              renderValue: (selected) => {
-                const selectedValues = Array.isArray(selected)
-                  ? selected.map((item) => String(item).trim()).filter(Boolean)
-                  : [];
-                if (!selectedValues.length) return "Selecionar";
-                return selectedValues
-                  .map(
-                    (value) => occurrenceFormLabelByValue.get(value) ?? value,
-                  )
-                  .join(", ");
-              },
-            }}
-          >
-            {OCCURRENCE_FORM_OPTIONS.map((item) => (
-              <MenuItem key={item.value} value={item.value}>
-                <Checkbox
-                  size="small"
-                  disableRipple
-                  checked={form.occurrenceForms.includes(item.value)}
-                  sx={MULTI_SELECT_CHECKBOX_SX}
-                />
-                {item.label}
-              </MenuItem>
-            ))}
-          </TextField>
 
           <Box sx={FORM_SECTION_HEADER_WITH_SPACING_SX}>
             <Typography variant="subtitle2" fontWeight={700}>
@@ -3152,8 +3041,15 @@ export function CpcaCasesPage({
                   size="small"
                   type="date"
                   label="Data de início do procedimento"
+                  required
                   InputLabelProps={{ shrink: true }}
                   value={form.procedureStartDate}
+                  error={!toNullable(form.procedureStartDate)}
+                  helperText={
+                    !toNullable(form.procedureStartDate)
+                      ? "Informe a data de início do procedimento."
+                      : " "
+                  }
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
@@ -3468,7 +3364,7 @@ export function CpcaCasesPage({
             select
             size="small"
             label="Status de conclusão"
-            value={form.status}
+            value={getComplaintReportStatus(form.status)}
             onChange={(e) =>
               setForm((prev) => ({
                 ...prev,
@@ -4065,6 +3961,14 @@ export function CpcaCasesPage({
                                   item.caseNumber,
                                 )}
                               </Typography>
+                              {Array.isArray(item.victims) &&
+                                item.victims.length > 1 && (
+                                  <Chip
+                                    size="small"
+                                    variant="outlined"
+                                    label={`${item.victims.length} vítimas`}
+                                  />
+                                )}
                               {!isSmifWorkflow && validation?.isValidated && (
                                 <Tooltip
                                   title={getValidationTooltip(validation)}
@@ -4192,23 +4096,22 @@ export function CpcaCasesPage({
                         <TableCell>
                           <Chip
                             size="small"
-                            label={
-                              STATUS_OPTIONS.find(
-                                (entry) => entry.value === item.status,
-                              )?.label ?? item.status
-                            }
+                            label={getComplaintStatusLabel(item.status)}
                             sx={{
                               fontWeight: 700,
                               bgcolor:
-                                STATUS_CHIP_STYLES[String(item.status)]
-                                  ?.bgcolor ?? "rgba(17, 24, 39, 0.08)",
+                                STATUS_CHIP_STYLES[
+                                  getComplaintReportStatus(item.status)
+                                ]?.bgcolor ?? "rgba(17, 24, 39, 0.08)",
                               color:
-                                STATUS_CHIP_STYLES[String(item.status)]
-                                  ?.color ?? "#111827",
+                                STATUS_CHIP_STYLES[
+                                  getComplaintReportStatus(item.status)
+                                ]?.color ?? "#111827",
                               border: "1px solid",
                               borderColor:
-                                STATUS_CHIP_STYLES[String(item.status)]
-                                  ?.borderColor ?? "rgba(17, 24, 39, 0.14)",
+                                STATUS_CHIP_STYLES[
+                                  getComplaintReportStatus(item.status)
+                                ]?.borderColor ?? "rgba(17, 24, 39, 0.14)",
                             }}
                           />
                         </TableCell>
@@ -4885,15 +4788,11 @@ export function CpcaCasesPage({
                               }}
                             >
                               <Typography variant="body2">
-                                {STATUS_OPTIONS.find(
-                                  (item) => item.value === entry.fromStatus,
-                                )?.label ??
-                                  entry.fromStatus ??
-                                  "Inicial"}
+                                {entry.fromStatus
+                                  ? getComplaintStatusLabel(entry.fromStatus)
+                                  : "Inicial"}
                                 {" -> "}
-                                {STATUS_OPTIONS.find(
-                                  (item) => item.value === entry.toStatus,
-                                )?.label ?? entry.toStatus}
+                                {getComplaintStatusLabel(entry.toStatus)}
                                 {" | "}
                                 {PROCEDURE_OPTIONS.find(
                                   (item) => item.value === entry.fromProcedure,
@@ -5701,7 +5600,7 @@ export function CpcaCasesPage({
 
             {archiveReasonDialog?.archivedAt ? (
               <Typography variant="body2" color="text.secondary">
-                Arquivada em{" "}
+                Concluído em{" "}
                 {new Date(archiveReasonDialog.archivedAt).toLocaleString(
                   "pt-BR",
                 )}
@@ -5810,11 +5709,7 @@ export function CpcaCasesPage({
                       <Stack direction="row" spacing={1} flexWrap="wrap">
                         <Chip
                           size="small"
-                          label={
-                            STATUS_OPTIONS.find(
-                              (entry) => entry.value === item.status,
-                            )?.label ?? item.status
-                          }
+                          label={getComplaintStatusLabel(item.status)}
                           sx={{ fontWeight: 700 }}
                         />
                         <Chip

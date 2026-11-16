@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useBiOdgsaId } from "../features/useBiOdgsaId";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -458,6 +459,15 @@ function DistributionCard({
 
 export function BiGsdEvaluationDashboardPage() {
   const toast = useToast();
+  const odgsaId = useBiOdgsaId();
+  const [importFeedback, setImportFeedback] = useState<{
+    message: string;
+    severity: "info" | "success" | "warning" | "error";
+  } | null>(null);
+  const notifyImport = (payload: NonNullable<typeof importFeedback>) => {
+    setImportFeedback(payload);
+    toast.push(payload);
+  };
   const { data: me } = useMe();
 
   const [metricMode, setMetricMode] = useState<MetricMode>("PERCENT");
@@ -486,12 +496,18 @@ export function BiGsdEvaluationDashboardPage() {
     columnFilters: {} as Record<string, string>,
   });
 
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds([]);
+  }, [odgsaId]);
+
   const dashboardFilters = useMemo(() => {
     const hasColumnFilters = Object.values(filters.columnFilters).some(
       (value) => Boolean(String(value ?? "").trim()),
     );
 
     return {
+      odgsaId,
       from: filters.from || undefined,
       to: filters.to || undefined,
       q: filters.q || undefined,
@@ -500,7 +516,7 @@ export function BiGsdEvaluationDashboardPage() {
         ? JSON.stringify(filters.columnFilters)
         : undefined,
     };
-  }, [filters]);
+  }, [filters, odgsaId]);
 
   const dashboardQuery = useBiGsdEvaluationDashboard(dashboardFilters);
   const responsesQuery = useBiGsdEvaluationResponses({
@@ -698,20 +714,24 @@ export function BiGsdEvaluationDashboardPage() {
 
   const handleImport = async () => {
     if (!file) {
-      toast.push({
+      notifyImport({
         message: "Selecione um CSV/XLSX para importar.",
         severity: "warning",
       });
       return;
     }
 
+    setImportFeedback({
+      severity: "info",
+      message: "Processando importação. Aguarde a conclusão...",
+    });
     try {
       const result = await importMutation.mutateAsync({
         file,
         replace: replaceOnImport,
       });
       setFile(null);
-      toast.push({
+      notifyImport({
         message:
           `Importação concluída. Inseridos: ${
             result?.batch?.insertedRows ?? 0
@@ -722,7 +742,7 @@ export function BiGsdEvaluationDashboardPage() {
       });
     } catch (error) {
       const payload = parseApiError(error);
-      toast.push({
+      notifyImport({
         message: payload.message ?? "Falha ao importar arquivo.",
         severity: "error",
       });
@@ -1033,7 +1053,7 @@ export function BiGsdEvaluationDashboardPage() {
             variant="outlined"
             component="label"
             startIcon={<UploadFileRoundedIcon />}
-            disabled={!canUpload}
+            disabled={!canUpload || importMutation.isPending}
             sx={{
               minWidth: 260,
               height: 40,
@@ -1063,12 +1083,17 @@ export function BiGsdEvaluationDashboardPage() {
               <Checkbox
                 checked={replaceOnImport}
                 onChange={(event) => setReplaceOnImport(event.target.checked)}
-                disabled={!canUpload}
+                disabled={!canUpload || importMutation.isPending}
               />
             }
             label="Substituir base atual"
           />
-          <Button
+          {importFeedback ? (
+                <Alert severity={importFeedback.severity} role="status">
+                  {importFeedback.message}
+                </Alert>
+              ) : null}
+              <Button
             variant="contained"
             size="small"
             onClick={handleImport}

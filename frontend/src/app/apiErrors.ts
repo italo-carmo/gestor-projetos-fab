@@ -7,6 +7,8 @@ export type ApiErrorPayload = {
 };
 
 const REASON_MESSAGES: Record<string, string> = {
+  bi_import_invalid_rows:
+    "A importação contém registros inválidos ou não possui respostas válidas. Revise a origem dos dados. A base existente foi preservada.",
   CONFIDENTIALITY_TERM_REQUIRED_FOR_SEXUAL:
     "Para assédio sexual, o Termo de Sigilo deve ser marcado na etapa 2 (Acolhimento e proteção) antes de salvar.",
   PRELIMINARY_REPORT_DATE_REQUIRES_FLAG:
@@ -15,6 +17,18 @@ const REASON_MESSAGES: Record<string, string> = {
     "Justifique o motivo de não ter sido aberto um processo.",
   PROCESS_OPENED_REQUIRES_DEFINED_PROCEDURE:
     "Selecione o procedimento apuratório aberto.",
+  PROCESS_OPENED_REQUIRES_START_DATE:
+    "Informe a data de início do procedimento.",
+  AT_LEAST_ONE_VICTIM_REQUIRED:
+    "O reporte deve conter pelo menos uma vítima.",
+  VICTIM_RANK_REQUIRED:
+    "Informe o posto/graduação de todas as vítimas.",
+  ONLY_ONE_NOTIFIER_VICTIM:
+    "Selecione apenas uma vítima como noticiante.",
+  DUPLICATE_VICTIM_ID:
+    "Existem vítimas repetidas no cadastro. Reabra o reporte e revise os dados.",
+  INVALID_VICTIM_RECORD:
+    "Revise os dados das vítimas do reporte.",
   DETAILED_VIOLENCE_TYPE_NOT_SELECTABLE:
     "Selecione uma das opções disponíveis em Natureza do Relato.",
   SEPARATION_APPLIED_REQUIRES_EVALUATION:
@@ -110,6 +124,20 @@ const REASON_MESSAGES: Record<string, string> = {
   INVALID_STATUS_TRANSITION: "Transição de status inválida.",
 };
 
+const BI_API_REASON_MESSAGES: Record<string, string> = {
+  timeout: "O Google Sheets demorou para responder. Tente buscar os novos registros novamente. As respostas existentes foram preservadas.",
+  request_failed: "Não foi possível acessar a API do Google Sheets. Tente novamente em alguns instantes.",
+  http_error: "A API do Google Sheets retornou um erro. Tente novamente em alguns instantes.",
+  url_not_configured: "A integração com o Google Sheets não está configurada no servidor.",
+  url_invalid: "O endereço da integração com o Google Sheets é inválido.",
+  invalid_json: "A API do Google Sheets retornou uma resposta inválida. Verifique a publicação e as permissões da integração.",
+  invalid_payload: "A resposta da API do Google Sheets não está no formato esperado. A importação não foi realizada.",
+  unsuccessful_payload: "A API do Google Sheets não autorizou ou não concluiu a consulta. Verifique a configuração da integração.",
+  sync_loop_detected: "A API do Google Sheets repetiu uma página. A importação foi interrompida para preservar a base.",
+  invalid_next_since_id: "A API do Google Sheets retornou uma paginação inválida. A importação não foi realizada.",
+  max_pages_exceeded: "A consulta excedeu o limite de páginas da integração. Solicite a revisão da configuração no servidor.",
+};
+
 export function parseApiError(error: unknown): ApiErrorPayload {
   const err = error as AxiosError<ApiErrorPayload>;
   if (err?.response?.data?.message) {
@@ -178,6 +206,12 @@ export function parseApiError(error: unknown): ApiErrorPayload {
           message: `${entityLabel} não pode ser excluída porque possui vínculos: ${labels}`,
         };
       }
+    }
+    const biApiReason = reason?.match(
+      /^(?:domestic_violence|recruits|best_practices_cycle|cpca_meeting)_api_(.+)$/,
+    )?.[1];
+    if (biApiReason && BI_API_REASON_MESSAGES[biApiReason]) {
+      return { ...data, message: BI_API_REASON_MESSAGES[biApiReason] };
     }
     if (reason && REASON_MESSAGES[reason]) {
       return { ...data, message: REASON_MESSAGES[reason] };

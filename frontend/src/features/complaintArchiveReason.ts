@@ -1,4 +1,4 @@
-import { syncCpcaWorkflowStatus } from "./cpcaCaseConsistency";
+import { CPCA_ARCHIVE_SITUATIONS } from "./cpcaCaseConsistency";
 
 function cleanOptionalText(value: unknown) {
   const normalized = String(value ?? "").trim();
@@ -10,10 +10,12 @@ export function isComplaintArchiveReasonRequired(input: {
   procedureCurrentSituation?: string | null;
 }) {
   return (
-    syncCpcaWorkflowStatus(
-      String(input.status ?? ""),
-      String(input.procedureCurrentSituation ?? ""),
-    ) === "ARCHIVED"
+    input.status === "ARCHIVED" ||
+    CPCA_ARCHIVE_SITUATIONS.has(
+      String(input.procedureCurrentSituation ?? "")
+        .trim()
+        .toUpperCase(),
+    )
   );
 }
 
@@ -22,8 +24,10 @@ export function getComplaintArchiveReasonMeta(input: {
   procedureCurrentSituation?: string | null;
   archiveReason?: string | null;
 }) {
-  const isArchived = isComplaintArchiveReasonRequired(input);
   const archiveReason = cleanOptionalText(input.archiveReason);
+  const isArchived =
+    isComplaintArchiveReasonRequired(input) ||
+    (input.status === "CONCLUDED" && Boolean(archiveReason));
 
   if (!isArchived) {
     return {

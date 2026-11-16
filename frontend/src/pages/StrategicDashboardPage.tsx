@@ -14,6 +14,7 @@ import {
   List,
   ListItem,
   ListItemText,
+  MenuItem,
   Stack,
   Tab,
   Table,
@@ -23,6 +24,7 @@ import {
   TableHead,
   TableRow,
   Tabs,
+  TextField,
   Tooltip,
   Typography,
   Accordion,
@@ -45,7 +47,6 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  LabelList,
   Legend,
   ResponsiveContainer,
   Tooltip as RechartsTooltip,
@@ -78,7 +79,10 @@ import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { ComgepStrategicTab } from "../components/strategic/ComgepStrategicTab";
 import { StrategicTabGuideCard } from "../components/strategic/StrategicTabGuideCard";
+import { HarassmentCasesDetail } from "../components/strategic/HarassmentCasesDetail";
+import type { StrategicComplaintDetailItem } from "../features/strategicComplaintDetails";
 import { formatStrategicProfileLabel } from "../features/strategicProfileLabels";
+import { getComplaintStatusLabel } from "../features/complaintStatus";
 
 const COLORS = [
   "#1A3C6E",
@@ -573,17 +577,7 @@ function formatComplaintTypeLabel(type: string) {
 }
 
 function formatComplaintStatusLabel(status: string) {
-  const normalized = String(status || "")
-    .trim()
-    .toUpperCase();
-  if (normalized === "RECEIVED") return "Recebida";
-  if (normalized === "PROTECTION_MEASURES") return "Medidas protetivas";
-  if (normalized === "PRELIMINARY_ANALYSIS") return "Análise preliminar";
-  if (normalized === "PROCEDURE_DEFINED") return "Procedimento definido";
-  if (normalized === "INVESTIGATION") return "Em apuração";
-  if (normalized === "CONCLUDED") return "Concluída";
-  if (normalized === "ARCHIVED") return "Arquivada";
-  return normalized || "—";
+  return status ? getComplaintStatusLabel(status) : "—";
 }
 
 function formatWorkflowScopeLabel(scope: string) {
@@ -2126,11 +2120,19 @@ function SituationalTab() {
 }
 
 function AggressorProfileTab() {
-  const { data, isLoading, error } = useAggressorProfile();
+  const [complaintType, setComplaintType] = useState<"" | "MORAL" | "SEXUAL">(
+    "",
+  );
+  const { data, isLoading, error } = useAggressorProfile(
+    complaintType || undefined,
+  );
   const { data: me, isLoading: meLoading } = useMe();
   const navigate = useNavigate();
   const [detailModal, setDetailModal] = useState<string | null>(null);
-  const procedureFilters = useMemo(() => ({}), []);
+  const procedureFilters = useMemo(
+    () => ({ complaintType: complaintType || undefined }),
+    [complaintType],
+  );
   const canViewCpcaProcedures = can(me, "cpca_cases", "view");
   const canViewSmifProcedures = can(me, "smif_complaints", "view");
   const cpcaProcedureQuery = useCpcaCaseProcedureSummary(
@@ -2191,10 +2193,43 @@ function AggressorProfileTab() {
     />
   );
 
+  const reportTypeFilter = (
+    <Stack
+      direction={{ xs: "column", sm: "row" }}
+      spacing={1.5}
+      alignItems={{ sm: "center" }}
+      justifyContent="space-between"
+      sx={{ mb: 3 }}
+    >
+      <Typography variant="body2" color="text.secondary">
+        Filtre os indicadores e gráficos de autores, vítimas e contexto.
+      </Typography>
+      <TextField
+        select
+        size="small"
+        label="Tipo de Reporte"
+        value={complaintType}
+        onChange={(event) =>
+          setComplaintType(event.target.value as "" | "MORAL" | "SEXUAL")
+        }
+        slotProps={{
+          select: { displayEmpty: true },
+          inputLabel: { shrink: true },
+        }}
+        sx={{ minWidth: 220 }}
+      >
+        <MenuItem value="">Todos</MenuItem>
+        <MenuItem value="MORAL">Moral</MenuItem>
+        <MenuItem value="SEXUAL">Sexual</MenuItem>
+      </TextField>
+    </Stack>
+  );
+
   if (isLoading)
     return (
       <Stack spacing={2}>
         {guideCard}
+        {reportTypeFilter}
         <SkeletonState />
       </Stack>
     );
@@ -2202,6 +2237,7 @@ function AggressorProfileTab() {
     return (
       <Stack spacing={2}>
         {guideCard}
+        {reportTypeFilter}
         <ErrorState message="Erro ao carregar perfil dos casos." />
       </Stack>
     );
@@ -2209,7 +2245,14 @@ function AggressorProfileTab() {
     return (
       <Stack spacing={2}>
         {guideCard}
-        <EmptyState message="Nenhum caso de assédio/violência registrado ainda. Os dados aparecerão aqui conforme casos forem inseridos." />
+        {reportTypeFilter}
+        <EmptyState
+          message={
+            complaintType
+              ? "Nenhum reporte encontrado para o tipo selecionado."
+              : "Nenhum caso de assédio/violência registrado ainda. Os dados aparecerão aqui conforme casos forem inseridos."
+          }
+        />
       </Stack>
     );
 
@@ -2221,6 +2264,7 @@ function AggressorProfileTab() {
   return (
     <Box>
       {guideCard}
+      {reportTypeFilter}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <KpiCard
@@ -2334,97 +2378,16 @@ function AggressorProfileTab() {
             </DetailAccordionSection>
           </Stack>
         )}
-        {detailModal === "moral" && (
-          <Stack spacing={1.25}>
-            <DetailMeaningBlock
-              title="O que este número significa"
-              meaning="Casos classificados como assédio moral. O detalhamento abaixo mostra quais registros foram enquadrados nessa tipologia."
-              source="Fonte: campo de Natureza do Relato nos módulos CPCA e SMIF."
-            />
-            <DetailAccordionSection
-              title="Resumo executivo"
-              subtitle="Peso relativo do assédio moral dentro do total"
-              defaultExpanded
-            >
-              <Stack spacing={1}>
-                <DetailRow
-                  label="Total de casos de assédio moral"
-                  value={data.byComplaintType.moral.count}
-                  color="#ED6C02"
-                />
-                <DetailRow
-                  label="Percentual do total"
-                  value={`${data.byComplaintType.moral.percent}%`}
-                />
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ lineHeight: 1.7 }}
-                >
-                  O assédio moral inclui humilhações, exclusão, ameaças,
-                  intimidações, críticas excessivas, injustiças e outras formas
-                  de violência psicológica no ambiente de trabalho.
-                </Typography>
-              </Stack>
-            </DetailAccordionSection>
-            <DetailAccordionSection
-              title="Itens classificados como assédio moral"
-              subtitle="Registros usados para compor este KPI"
-            >
-              <DetailItemList
-                items={
-                  Array.isArray(detailItems.moral) ? detailItems.moral : []
-                }
-                emptyMessage="Nenhum item classificado como assédio moral."
-              />
-            </DetailAccordionSection>
-          </Stack>
-        )}
-        {detailModal === "sexual" && (
-          <Stack spacing={1.25}>
-            <DetailMeaningBlock
-              title="O que este número significa"
-              meaning="Casos classificados como assédio sexual. A lista abaixo mostra os registros exatos por trás do KPI, com acesso direto ao fluxo correspondente."
-              source="Fonte: campo de Natureza do Relato nos módulos CPCA e SMIF."
-            />
-            <DetailAccordionSection
-              title="Resumo executivo"
-              subtitle="Peso relativo do assédio sexual dentro do total"
-              defaultExpanded
-            >
-              <Stack spacing={1}>
-                <DetailRow
-                  label="Total de casos de assédio sexual"
-                  value={data.byComplaintType.sexual.count}
-                  color="#D32F2F"
-                />
-                <DetailRow
-                  label="Percentual do total"
-                  value={`${data.byComplaintType.sexual.percent}%`}
-                />
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ lineHeight: 1.7 }}
-                >
-                  O assédio sexual inclui comentários sexistas, contato físico
-                  indesejado, chantagem por favores sexuais, exibição de
-                  material pornográfico e outras formas de violência sexual.
-                </Typography>
-              </Stack>
-            </DetailAccordionSection>
-            <DetailAccordionSection
-              title="Itens classificados como assédio sexual"
-              subtitle="Registros usados para compor este KPI"
-            >
-              <DetailItemList
-                items={
-                  Array.isArray(detailItems.sexual) ? detailItems.sexual : []
-                }
-                emptyMessage="Nenhum item classificado como assédio sexual."
-              />
-            </DetailAccordionSection>
-          </Stack>
+        {(detailModal === "moral" || detailModal === "sexual") && (
+          <HarassmentCasesDetail
+            key={detailModal}
+            items={
+              (Array.isArray(detailItems[detailModal])
+                ? detailItems[detailModal]
+                : []) as StrategicComplaintDetailItem[]
+            }
+            percent={data.byComplaintType[detailModal].percent}
+          />
         )}
         {detailModal === "hierarchical" && (
           <Stack spacing={1.25}>
@@ -2526,6 +2489,14 @@ function AggressorProfileTab() {
       <Typography variant="h6" sx={{ mb: 2, color: "#1A3C6E" }}>
         Perfil das possíveis vítimas
       </Typography>
+      {data.totalVictims != null && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Base: {data.totalVictims}{" "}
+          {data.totalVictims === 1 ? "vítima" : "vítimas"} em {data.totalCases}{" "}
+          reportes. Os gráficos de frequência e forma de ocorrência também
+          consideram cada vítima.
+        </Typography>
+      )}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, md: 4 }}>
           <HorizontalBarCard
@@ -2824,7 +2795,7 @@ function BrazilMap({
             key={uf}
             title={
               stateData[uf]
-                ? `${BR_STATES[uf].name} (${uf}): pressão ${stateData[uf].pressureScore} — CPCA ${stateData[uf].cpcaComplaints}, SMIF ${stateData[uf].smifComplaints}, pesquisas ${stateData[uf].researchSignals}, atividades ${stateData[uf].activities}, missões ${stateData[uf].missions}`
+                ? `${BR_STATES[uf].name} (${uf}): pressão ${stateData[uf].pressureScore} — CPCA ${stateData[uf].cpcaComplaints}, SMIF ${stateData[uf].smifComplaints}, VD 12m ${stateData[uf].researchSignals}, atividades ${stateData[uf].activities}, missões ${stateData[uf].missions}`
                 : `${BR_STATES[uf].name} (${uf}): sem dados`
             }
             arrow
@@ -2974,8 +2945,6 @@ function GeoMapTab() {
       smifOpenComplaints: Number(s.smifOpenComplaints ?? 0),
       activities: Number(s.activities ?? 0),
       missions: Number(s.missions ?? 0),
-      schoolSurveyTotal: Number(s.schoolSurveyTotal ?? 0),
-      schoolSurveyYes: Number(s.schoolSurveyYes ?? 0),
       domesticSurveyTotal: Number(s.domesticSurveyTotal ?? 0),
       domesticLast12MonthsYes: Number(s.domesticLast12MonthsYes ?? 0),
       researchSignals: Number(s.researchSignals ?? 0),
@@ -2995,9 +2964,7 @@ function GeoMapTab() {
       uf: s.uf,
       "Reportes CPCA": Number(s.cpcaComplaints ?? s.complaints ?? 0),
       "Reportes SMIF": Number(s.smifComplaints ?? 0),
-      "Pesq. escolas": Number(s.schoolSurveyYes ?? 0),
       "VD 12m": Number(s.domesticLast12MonthsYes ?? 0),
-      "Missões CIPAVD": Number(s.missions ?? 0),
     }));
 
   const openStateDetail = (ufRaw: string | null | undefined) => {
@@ -3038,7 +3005,7 @@ function GeoMapTab() {
           <KpiCard
             title="Lacuna territorial"
             value={statesWithComplaintsWithoutResearch.length}
-            subtitle="UFs com reporte formal e sem pesquisa normalizada"
+            subtitle="UFs com reporte formal e sem pesquisa de VD normalizada"
             color="#ED6C02"
             onClick={() => setGeoKpiModal("statesWithData")}
           />
@@ -3076,8 +3043,8 @@ function GeoMapTab() {
                 sx={{ mb: 1, display: "block" }}
               >
                 Clique em um estado para abrir o resumo territorial. A
-                intensidade do azul usa reportes e sinais de pesquisa; missões
-                entram como resposta, não como pressão.
+                intensidade do azul usa reportes CPCA/SMIF e sinais de violência
+                doméstica nos últimos 12 meses.
               </Typography>
               <BrazilMap
                 stateData={stateDataMap}
@@ -3097,9 +3064,8 @@ function GeoMapTab() {
                 color="text.secondary"
                 sx={{ mb: 1, display: "block" }}
               >
-                Barras separam reportes CPCA/SMIF e sinais positivos das
-                pesquisas. Missões aparecem como resposta separada e não entram
-                no cálculo da pressão.
+                Barras separam reportes CPCA/SMIF e sinais de violência
+                doméstica nos últimos 12 meses.
               </Typography>
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={400}>
@@ -3140,13 +3106,6 @@ function GeoMapTab() {
                       onClick={(entry: any) => openStateDetail(entry?.uf)}
                     />
                     <Bar
-                      dataKey="Pesq. escolas"
-                      stackId="a"
-                      fill="#ED6C02"
-                      barSize={16}
-                      onClick={(entry: any) => openStateDetail(entry?.uf)}
-                    />
-                    <Bar
                       dataKey="VD 12m"
                       stackId="a"
                       fill="#C2185B"
@@ -3154,22 +3113,6 @@ function GeoMapTab() {
                       radius={[0, 4, 4, 0]}
                       onClick={(entry: any) => openStateDetail(entry?.uf)}
                     />
-                    <Bar
-                      dataKey="Missões CIPAVD"
-                      fill="#2E7D32"
-                      barSize={8}
-                      radius={[0, 4, 4, 0]}
-                      onClick={(entry: any) => openStateDetail(entry?.uf)}
-                    >
-                      <LabelList
-                        dataKey="Missões CIPAVD"
-                        position="right"
-                        formatter={(value: any) =>
-                          Number(value ?? 0) > 0 ? String(value) : ""
-                        }
-                        style={{ fontSize: 11, fill: "#2E7D32" }}
-                      />
-                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -3207,9 +3150,6 @@ function GeoMapTab() {
                     </TableCell>
                     <TableCell align="right">
                       <strong>SMIF</strong>
-                    </TableCell>
-                    <TableCell align="right">
-                      <strong>Escolas</strong>
                     </TableCell>
                     <TableCell align="right">
                       <strong>VD 12m</strong>
@@ -3251,9 +3191,6 @@ function GeoMapTab() {
                       </TableCell>
                       <TableCell align="right">
                         {s.smifComplaints ?? 0}
-                      </TableCell>
-                      <TableCell align="right">
-                        {s.schoolSurveyYes ?? 0}/{s.schoolSurveyTotal ?? 0}
                       </TableCell>
                       <TableCell align="right">
                         {s.domesticLast12MonthsYes ?? 0}/
@@ -3470,8 +3407,8 @@ function GeoMapTab() {
           <Stack spacing={1.25}>
             <DetailMeaningBlock
               title="O que este número significa"
-              meaning="Este KPI mostra em quantos estados existe pressão territorial mensurável: reporte formal CPCA/SMIF ou sinal positivo em pesquisa normalizada por UF. Atividades e missões aparecem como resposta institucional, não como pressão."
-              source="Fonte: consolidação por UF de reportes CPCA/SMIF, pesquisas de escolas e pesquisa de violência doméstica."
+              meaning="Este KPI mostra em quantos estados existe pressão territorial mensurável: reporte formal CPCA/SMIF ou sinal de violência doméstica nos últimos 12 meses em pesquisa normalizada por UF. Atividades e missões aparecem como resposta institucional."
+              source="Fonte: consolidação por UF de reportes CPCA/SMIF e pesquisa de violência doméstica."
             />
             <DetailAccordionSection
               title="Resumo executivo"
@@ -3485,7 +3422,7 @@ function GeoMapTab() {
                   color="#ED6C02"
                 />
                 <DetailRow
-                  label="Estados com reporte sem pesquisa"
+                  label="Estados com reporte sem pesquisa de VD"
                   value={statesWithComplaintsWithoutResearch.length}
                   color="#4E342E"
                 />
@@ -3495,7 +3432,7 @@ function GeoMapTab() {
                   sx={{ lineHeight: 1.7 }}
                 >
                   A tabela separa origem formal, origem amostral e resposta.
-                  Estados com reporte e sem pesquisa não são tratados como
+                  Estados com reporte e sem pesquisa de VD não são tratados como
                   ausência de problema; ficam marcados como lacuna de evidência.
                 </Typography>
               </Stack>
@@ -3519,9 +3456,6 @@ function GeoMapTab() {
                       </TableCell>
                       <TableCell align="right">
                         <strong>SMIF</strong>
-                      </TableCell>
-                      <TableCell align="right">
-                        <strong>Escolas</strong>
                       </TableCell>
                       <TableCell align="right">
                         <strong>VD 12m</strong>
@@ -3550,9 +3484,6 @@ function GeoMapTab() {
                         </TableCell>
                         <TableCell align="right">
                           {s.smifComplaints ?? 0}
-                        </TableCell>
-                        <TableCell align="right">
-                          {s.schoolSurveyYes ?? 0}/{s.schoolSurveyTotal ?? 0}
                         </TableCell>
                         <TableCell align="right">
                           {s.domesticLast12MonthsYes ?? 0}/
@@ -3623,8 +3554,8 @@ function GeoMapTab() {
             <Stack spacing={1.5} sx={{ mt: 1 }}>
               <DetailMeaningBlock
                 title="O que este detalhamento mostra"
-                meaning="Este modal concentra a leitura territorial do estado selecionado. A pressão é formada por reportes formais e sinais de pesquisa; atividades e missões aparecem como resposta/cobertura para evitar inferência causal indevida."
-                source="Fonte: consolidação territorial por UF do Painel Estratégico, separando CPCA, SMIF, pesquisas, atividades e missões."
+                meaning="Este modal concentra a leitura territorial do estado selecionado. A pressão é formada por reportes CPCA/SMIF e sinais de violência doméstica nos últimos 12 meses; atividades e missões representam resposta e cobertura institucional."
+                source="Fonte: consolidação territorial por UF de CPCA, SMIF, pesquisa de violência doméstica, atividades e missões."
               />
               <AiCopilotCtaRow
                 title="Levar este estado para a IA"
@@ -3634,7 +3565,7 @@ function GeoMapTab() {
                     ? `${BR_STATES[selectedState.uf]?.name ?? selectedState.uf} (${selectedState.uf})`
                     : "Estado selecionado",
                   description: selectedState?.data
-                    ? `Pressão ${selectedState.data.pressureScore ?? 0}: CPCA ${selectedState.data.cpcaComplaints ?? 0}, SMIF ${selectedState.data.smifComplaints ?? 0}, pesquisas ${selectedState.data.researchSignals ?? 0}, atividades ${selectedState.data.activities ?? 0}, missões ${selectedState.data.missions ?? 0}.`
+                    ? `Pressão ${selectedState.data.pressureScore ?? 0}: CPCA ${selectedState.data.cpcaComplaints ?? 0}, SMIF ${selectedState.data.smifComplaints ?? 0}, VD 12m ${selectedState.data.researchSignals ?? 0}, atividades ${selectedState.data.activities ?? 0}, missões ${selectedState.data.missions ?? 0}.`
                     : "Leitura territorial do estado selecionado.",
                   focus: selectedState
                     ? {
@@ -3676,11 +3607,10 @@ function GeoMapTab() {
                     sx={{ textAlign: "center", p: 1, borderColor: "#1A3C6E" }}
                   >
                     <Typography variant="h5" fontWeight={700} color="#1A3C6E">
-                      {selectedState.data.schoolSurveyYes ?? 0}/
-                      {selectedState.data.schoolSurveyTotal ?? 0}
+                      {selectedState.data.smifComplaints ?? 0}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Pesquisa escolas
+                      Reportes SMIF
                     </Typography>
                   </Card>
                 </Grid>

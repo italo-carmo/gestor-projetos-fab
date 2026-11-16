@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { BiNormalizationService } from '../bi/bi-normalization.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ActivityScope } from '@prisma/client';
+import { ActivityScope, CpcComplaintType } from '@prisma/client';
 import {
   AI_KNOWLEDGE_SOURCE_IDS,
   ALL_KNOWLEDGE_SOURCE_IDS,
@@ -22,6 +22,8 @@ import {
 import PDFDocument from 'pdfkit';
 import type { RbacUser } from '../rbac/rbac.types';
 import { SettingsService } from '../settings/settings.service';
+import { getComplaintReportStatus } from '../cpca/cpca-workflow';
+import { readComplaintVictims } from '../cpca/complaint-victims';
 
 const PT_STOPWORDS = new Set([
   'a',
@@ -424,6 +426,19 @@ type StrategicKpiDetailItem = {
   date?: string;
   badge?: string;
   link: string;
+};
+
+type StrategicComplaintDetailItem = StrategicKpiDetailItem & {
+  caseNumber: string;
+  complaintType: string;
+  workflowScope: string;
+  status: string;
+  omId: string;
+  omLabel: string;
+  processOpened: boolean | null;
+  procedureType: string;
+  subsequentProcedureOpened: boolean;
+  subsequentProcedureType: string | null;
 };
 
 type StrategicGeoOmRow = {
@@ -1010,13 +1025,6 @@ export class StrategicService {
     const lookbackStart = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
     const comgepWeights = await this.settings.getComgepScoringWeights();
     const missionMaturityFactor = 0.25;
-    const openStatuses = new Set([
-      'RECEIVED',
-      'PROTECTION_MEASURES',
-      'PRELIMINARY_ANALYSIS',
-      'PROCEDURE_DEFINED',
-      'INVESTIGATION',
-    ]);
     const normalizeText = (value: string | null | undefined) =>
       String(value ?? '')
         .trim()
@@ -1091,6 +1099,7 @@ export class StrategicService {
           reportedAt: true,
           updatedAt: true,
           archivedAt: true,
+          procedureCurrentSituation: true,
           om: {
             select: {
               id: true,
@@ -1340,7 +1349,7 @@ export class StrategicService {
       const omUf = ensureUf(item?.om?.uf);
       if (!omId || !omUf) continue;
 
-      const isOpen = openStatuses.has(String(item?.status ?? '').trim());
+      const isOpen = getComplaintReportStatus(item) === 'INVESTIGATION';
       const openDays = isOpen
         ? Math.max(
             0,
@@ -2255,6 +2264,7 @@ export class StrategicService {
               omId: true,
               caseNumber: true,
               complaintType: true,
+              procedureCurrentSituation: true,
               status: true,
               reportedAt: true,
               workflowScope: true,
@@ -2505,14 +2515,6 @@ export class StrategicService {
       }
     }
 
-    const openStatuses = new Set([
-      'RECEIVED',
-      'PROTECTION_MEASURES',
-      'PRELIMINARY_ANALYSIS',
-      'PROCEDURE_DEFINED',
-      'INVESTIGATION',
-    ]);
-
     for (const c of complaints) {
       const uf = c.omId ? omUfMap.get(c.omId) : null;
       if (uf) {
@@ -2520,7 +2522,7 @@ export class StrategicService {
         const scope = String(c.workflowScope ?? 'CPCA')
           .trim()
           .toUpperCase();
-        const isOpen = openStatuses.has(String(c.status ?? '').trim());
+        const isOpen = getComplaintReportStatus(c) === 'INVESTIGATION';
         entry.complaints++;
         if (scope === 'SMIF') {
           entry.smifComplaints++;
@@ -2533,7 +2535,7 @@ export class StrategicService {
         entry.complaintDetails.push({
           caseNumber: c.caseNumber,
           type: c.complaintType,
-          status: c.status,
+          status: getComplaintReportStatus(c),
           date: c.reportedAt?.toISOString?.() ?? '',
           locality: this.formatOmDisplayLabel(c.om?.code, c.om?.name),
           scope: c.workflowScope ?? '',
@@ -2570,14 +2572,8 @@ export class StrategicService {
     }
 
     for (const entry of ufMap.values()) {
-      entry.researchSignals =
-        entry.schoolSurveyYes + entry.domesticLast12MonthsYes;
-      entry.hasResearch =
-        entry.schoolSurveyTotal + entry.domesticSurveyTotal > 0;
-      const schoolEvidence = this.buildEvidenceSummary(
-        entry.schoolSurveyTotal,
-        entry.schoolSurveyYes,
-      );
+      entry.researchSignals = entry.domesticLast12MonthsYes;
+      entry.hasResearch = entry.domesticSurveyTotal > 0;
       const domesticEvidence = this.buildEvidenceSummary(
         entry.domesticSurveyTotal,
         entry.domesticLast12MonthsYes,
@@ -2587,9 +2583,7 @@ export class StrategicService {
         entry.smifOpenComplaints * 3 +
         Math.max(entry.complaints - entry.openComplaints, 0) * 0.75;
       const researchPressure =
-        schoolEvidence.adjustedRate * 0.35 +
-        domesticEvidence.adjustedRate * 0.45 +
-        entry.researchSignals * 0.8;
+        domesticEvidence.adjustedRate * 0.45 + entry.researchSignals * 0.8;
       entry.pressureScore = Number(
         (complaintPressure + researchPressure).toFixed(1),
       );
@@ -2635,7 +2629,9 @@ export class StrategicService {
     };
   }
 
-  async aggressorProfile(filters?: StrategicSourceFilter) {
+  async aggressorProfile(
+    filters?: StrategicSourceFilter & { complaintType?: CpcComplaintType },
+  ) {
     const sourceSet = this.resolveSourceSet(filters?.sources);
     if (!this.hasComplaintSources(sourceSet)) {
       return {
@@ -2646,17 +2642,16 @@ export class StrategicService {
 
     const complaintModel = (this.prisma as any).cpcComplaintCase;
     const complaintScopes = this.buildComplaintScopeFilter(sourceSet);
-    const where =
-      complaintScopes.length > 0
-        ? {
-            workflowScope: {
-              in: complaintScopes,
-            },
-          }
-        : {};
+    const where = {
+      ...(complaintScopes.length > 0
+        ? { workflowScope: { in: complaintScopes } }
+        : {}),
+      ...(filters?.complaintType ? { complaintType: filters.complaintType } : {}),
+    };
 
     const cases = await complaintModel.findMany({
       where,
+      orderBy: [{ reportedAt: 'desc' }, { createdAt: 'desc' }],
       select: {
         id: true,
         caseNumber: true,
@@ -2665,6 +2660,7 @@ export class StrategicService {
         aggressorGender: true,
         aggressorAgeRange: true,
         victimRank: true,
+        victims: true,
         victimGender: true,
         victimAgeRange: true,
         detailedViolenceType: true,
@@ -2676,6 +2672,11 @@ export class StrategicService {
         occurrenceForms: true,
         workflowScope: true,
         status: true,
+        processOpened: true,
+        procedureType: true,
+        subsequentProcedureOpened: true,
+        subsequentProcedureType: true,
+        procedureCurrentSituation: true,
         reportedAt: true,
         omId: true,
         om: { select: { code: true, name: true } },
@@ -2686,6 +2687,8 @@ export class StrategicService {
 
     const casesWithResolvedLocality = cases.map((row: any) => ({
       ...row,
+      status: getComplaintReportStatus(row),
+      victims: readComplaintVictims(row),
       resolvedOccurrenceForms:
         Array.isArray(row?.occurrenceForms) && row.occurrenceForms.length > 0
           ? row.occurrenceForms
@@ -2698,6 +2701,9 @@ export class StrategicService {
     }));
 
     const totalCases = casesWithResolvedLocality.length;
+    const victimRows = casesWithResolvedLocality.flatMap(
+      (row: any) => row.victims,
+    );
     if (totalCases === 0) {
       return { totalCases: 0, message: 'Nenhum caso registrado.' };
     }
@@ -2711,15 +2717,16 @@ export class StrategicService {
 
     const hierarchicalCount = casesWithResolvedLocality.filter(
       (c: any) =>
-        c.hierarchicalFunctionalRelation &&
-        /superior|chefia|comando|hierarq/i.test(
-          c.hierarchicalFunctionalRelation,
+        c.victims.some((victim: any) =>
+          /superior|chefia|comando|hierarq/i.test(
+            victim.hierarchicalFunctionalRelation ?? '',
+          ),
         ),
     ).length;
 
     const byScope = countByField(casesWithResolvedLocality, 'workflowScope');
 
-    const toCaseDetail = (row: any): StrategicKpiDetailItem => {
+    const toCaseDetail = (row: any): StrategicComplaintDetailItem => {
       const id = String(row?.id ?? '').trim();
       const caseNumber = String(row?.caseNumber ?? '').trim();
       const scope = String(row?.workflowScope ?? 'CPCA')
@@ -2731,6 +2738,16 @@ export class StrategicService {
       );
       return {
         id: id || `aggressor-${caseNumber || 'case'}`,
+        caseNumber,
+        complaintType: String(row?.complaintType ?? ''),
+        workflowScope: scope,
+        status: String(row?.status ?? ''),
+        omId: row.resolvedLocalityId,
+        omLabel: localityLabel,
+        processOpened: row.processOpened ?? null,
+        procedureType: String(row.procedureType ?? 'NOT_DEFINED'),
+        subsequentProcedureOpened: row.subsequentProcedureOpened === true,
+        subsequentProcedureType: row.subsequentProcedureType ?? null,
         title: caseNumber ? `Reporte ${caseNumber}` : 'Reporte',
         subtitle: [
           scope,
@@ -2763,9 +2780,10 @@ export class StrategicService {
     const hierarchicalDetails = casesWithResolvedLocality
       .filter(
         (c: any) =>
-          c.hierarchicalFunctionalRelation &&
-          /superior|chefia|comando|hierarq/i.test(
-            c.hierarchicalFunctionalRelation,
+          c.victims.some((victim: any) =>
+            /superior|chefia|comando|hierarq/i.test(
+              victim.hierarchicalFunctionalRelation ?? '',
+            ),
           ),
       )
       .map((row: any) => toCaseDetail(row));
@@ -2778,8 +2796,10 @@ export class StrategicService {
     }[] = [];
     const crossMap = new Map<string, number>();
     for (const c of casesWithResolvedLocality) {
-      const key = `${c.complaintType ?? '?'}|${c.aggressorGender ?? '?'}|${c.victimGender ?? '?'}`;
-      crossMap.set(key, (crossMap.get(key) ?? 0) + 1);
+      for (const victim of c.victims) {
+        const key = `${c.complaintType ?? '?'}|${c.aggressorGender ?? '?'}|${victim.victimGender ?? '?'}`;
+        crossMap.set(key, (crossMap.get(key) ?? 0) + 1);
+      }
     }
     for (const [key, count] of crossMap) {
       const [complaintType, aggressorGender, victimGender] = key.split('|');
@@ -2790,6 +2810,7 @@ export class StrategicService {
     return {
       generatedAt: new Date().toISOString(),
       totalCases,
+      totalVictims: victimRows.length,
       byComplaintType: {
         moral: {
           count: moralCases.length,
@@ -2814,9 +2835,9 @@ export class StrategicService {
         ),
       },
       victimProfile: {
-        byRank: countByField(casesWithResolvedLocality, 'victimRank'),
-        byGender: countByField(casesWithResolvedLocality, 'victimGender'),
-        byAgeRange: countByField(casesWithResolvedLocality, 'victimAgeRange'),
+        byRank: countByField(victimRows, 'victimRank'),
+        byGender: countByField(victimRows, 'victimGender'),
+        byAgeRange: countByField(victimRows, 'victimAgeRange'),
       },
       context: {
         byViolenceType: countByField(
@@ -2831,14 +2852,8 @@ export class StrategicService {
           casesWithResolvedLocality,
           'occurrenceLocation',
         ),
-        byFrequency: countByField(
-          casesWithResolvedLocality,
-          'incidentFrequency',
-        ),
-        byForm: countByField(
-          casesWithResolvedLocality,
-          'resolvedOccurrenceForms',
-        ),
+        byFrequency: countByField(victimRows, 'incidentFrequency'),
+        byForm: countByField(victimRows, 'occurrenceForms'),
       },
       crossTabulation: crossTab,
       byScope,
@@ -4334,7 +4349,6 @@ export class StrategicService {
           'UF',
           'CPCA',
           'SMIF',
-          'Escolas',
           'VD 12m',
           'Atividades',
           'Missões',
@@ -4361,7 +4375,6 @@ export class StrategicService {
             s.uf,
             String(s.cpcaComplaints ?? s.complaints ?? 0),
             String(s.smifComplaints ?? 0),
-            `${s.schoolSurveyYes ?? 0}/${s.schoolSurveyTotal ?? 0}`,
             `${s.domesticLast12MonthsYes ?? 0}/${s.domesticSurveyTotal ?? 0}`,
             String(s.activities),
             String(s.missions),
@@ -4860,7 +4873,7 @@ export class StrategicService {
         : {};
     try {
       const model = (this.prisma as any).cpcComplaintCase;
-      const rows = await model.findMany({
+      const rawRows = await model.findMany({
         where,
         orderBy: [{ reportedAt: 'desc' }, { createdAt: 'desc' }],
         select: {
@@ -4869,10 +4882,15 @@ export class StrategicService {
           workflowScope: true,
           status: true,
           complaintType: true,
+          procedureCurrentSituation: true,
           reportedAt: true,
           locality: { select: { name: true } },
         },
       });
+      const rows = rawRows.map((row: any) => ({
+        ...row,
+        status: getComplaintReportStatus(row),
+      }));
       const openStatuses = new Set([
         'RECEIVED',
         'PROTECTION_MEASURES',

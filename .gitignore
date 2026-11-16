@@ -15,3 +15,7 @@ coverage/
 **/.env.*
 !**/.env.example
 !**/.env.sample
+
+/.codex
+/test-results/
+/playwright-report/

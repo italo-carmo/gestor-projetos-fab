@@ -2443,7 +2443,7 @@ export class AiService {
 
   private buildCpcaChatHighlights(context: CpcaAiContext) {
     const lines = [
-      `- Casos CPCA: ${this.formatInt(context.summary.totalCases)} total, ${this.formatInt(context.summary.openCases)} em aberto, ${this.formatInt(context.summary.archivedCases)} arquivado(s) e ${this.formatInt(context.summary.concludedCases)} concluído(s).`,
+      `- Casos CPCA: ${this.formatInt(context.summary.totalCases)} total, ${this.formatInt(context.summary.openCases)} em apuração e ${this.formatInt(context.summary.concludedCases)} concluído(s).`,
       `- Tipologias: ${this.formatInt(context.summary.moralCases)} moral(is) e ${this.formatInt(context.summary.sexualCases)} sexual(is).`,
     ];
 

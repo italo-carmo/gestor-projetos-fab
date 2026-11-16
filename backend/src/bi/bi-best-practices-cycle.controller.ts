@@ -74,6 +74,7 @@ export class BiBestPracticesCycleController {
   @Get('dashboard')
   @RequirePermission('bi', 'view')
   dashboard(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('technicalRigorPerception')
@@ -91,6 +92,7 @@ export class BiBestPracticesCycleController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.biBestPracticesCycle.dashboard({
+      odgsaId,
       from,
       to,
       technicalRigorPerception,
@@ -109,6 +111,7 @@ export class BiBestPracticesCycleController {
   @Get('dashboard/pdf')
   @RequirePermission('bi', 'view')
   async dashboardPdf(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('technicalRigorPerception')
@@ -126,6 +129,7 @@ export class BiBestPracticesCycleController {
     @Res() res: Response,
   ) {
     const buffer = await this.biPdf.bestPracticesCycleDashboardPdf({
+      odgsaId,
       from,
       to,
       technicalRigorPerception,
@@ -151,6 +155,7 @@ export class BiBestPracticesCycleController {
   @Get('responses')
   @RequirePermission('bi', 'view')
   listResponses(
+    @Query('odgsaId') odgsaId: string | undefined,
     @Query('from') from: string | undefined,
     @Query('to') to: string | undefined,
     @Query('technicalRigorPerception')
@@ -170,6 +175,7 @@ export class BiBestPracticesCycleController {
     @CurrentUser() user: RbacUser,
   ) {
     return this.biBestPracticesCycle.listResponses({
+      odgsaId,
       from,
       to,
       technicalRigorPerception,
@@ -270,6 +276,7 @@ export class BiBestPracticesCycleController {
     body: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       technicalRigorPerception?: string;

@@ -24,6 +24,7 @@ import {
   getComplaintProcedureResultLabel,
 } from "../../features/complaintProcedureOptions";
 import { formatComplaintCaseNumberForDisplay } from "../../features/cpcaCipavdThreads";
+import { getComplaintReportStatus } from "../../features/complaintStatus";
 
 type ProcedureSummaryLocality = {
   id?: string | null;
@@ -65,8 +66,8 @@ const STATUS_LABELS: Record<string, string> = {
   PRELIMINARY_ANALYSIS: "Análise preliminar",
   PROCEDURE_DEFINED: "Procedimento instaurado",
   INVESTIGATION: "Em apuração",
-  CONCLUDED: "Concluída",
-  ARCHIVED: "Arquivada",
+  CONCLUDED: "Concluído",
+  ARCHIVED: "Concluído",
 };
 
 const STATUS_CHIP_STYLES: Record<
@@ -369,15 +370,15 @@ export function ProcedureSummaryDialog({
                 ) : (
                   <Stack spacing={1}>
                     {filteredItems.map((item) => {
-                      const status = String(item.status ?? "").trim();
+                      const status = getComplaintReportStatus(item.status);
                       const statusStyle =
                         STATUS_CHIP_STYLES[status] ?? DEFAULT_STATUS_STYLE;
                       const scope = String(item.workflowScope ?? "")
                         .trim()
                         .toUpperCase();
-                      const subsequentStatus = String(
-                        item.subsequentProcedureStatus ?? "",
-                      ).trim();
+                      const subsequentStatus = getComplaintReportStatus(
+                        item.subsequentProcedureStatus,
+                      );
                       const subsequentStatusStyle =
                         STATUS_CHIP_STYLES[subsequentStatus] ??
                         DEFAULT_STATUS_STYLE;

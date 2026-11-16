@@ -9,6 +9,7 @@ export type CpcaCaseInconsistency = {
 };
 
 type MinimalCpcaCase = {
+  victims?: unknown;
   complaintType?: string | null;
   detailedViolenceType?: string | null;
   incidentFrequency?: string | null;
@@ -45,17 +46,58 @@ export function getCpcaCaseInconsistencies(
   item: MinimalCpcaCase,
   referenceNow = new Date(),
 ): CpcaCaseInconsistency[] {
+  if (Array.isArray(item.victims) && item.victims.length) {
+    const common = getCpcaCaseInconsistencies(
+      {
+        ...item,
+        victims: undefined,
+        incidentFrequency: null,
+        hierarchicalFunctionalRelation: null,
+      },
+      referenceNow,
+    );
+    const groups = new Map<
+      string,
+      { finding: CpcaCaseInconsistency; victims: number[] }
+    >();
+    item.victims.forEach((victim, index) => {
+      for (const finding of getCpcaCaseInconsistencies(
+        {
+          ...item,
+          ...victim,
+          victims: undefined,
+          reportedAt: null,
+          incidentDate: null,
+        },
+        referenceNow,
+      )) {
+        const group = groups.get(finding.code) ?? { finding, victims: [] };
+        group.victims.push(index + 1);
+        groups.set(finding.code, group);
+      }
+    });
+    return [
+      ...common,
+      ...Array.from(groups.values(), ({ finding, victims }) => ({
+        ...finding,
+        summary:
+          item.victims instanceof Array && item.victims.length > 1
+            ? `${victims.length === 1 ? 'Vítima' : 'Vítimas'} ${victims.join(', ')}: ${finding.summary}`
+            : finding.summary,
+      })),
+    ];
+  }
   const inconsistencies: CpcaCaseInconsistency[] = [];
-  const complaintType = String(item.complaintType ?? '').trim().toUpperCase();
+  const complaintType = String(item.complaintType ?? '')
+    .trim()
+    .toUpperCase();
   const detailedViolenceType = String(item.detailedViolenceType ?? '')
     .trim()
     .toUpperCase();
   const incidentFrequency = String(item.incidentFrequency ?? '')
     .trim()
     .toUpperCase();
-  const hierarchicalRelation = String(
-    item.hierarchicalFunctionalRelation ?? '',
-  )
+  const hierarchicalRelation = String(item.hierarchicalFunctionalRelation ?? '')
     .trim()
     .toUpperCase();
   const todayKey = toDateKey(referenceNow);

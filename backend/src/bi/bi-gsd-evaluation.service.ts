@@ -12,6 +12,7 @@ import {
 } from './bi-normalization.service';
 
 type GsdEvaluationFilters = {
+  odgsaId?: string;
   from?: string;
   to?: string;
   q?: string;
@@ -59,6 +60,7 @@ type ColumnMeta = {
 };
 
 type CompiledFilters = {
+  odgsaIds: Set<string> | null;
   from: Date | null;
   to: Date | null;
   query: string | null;
@@ -155,72 +157,85 @@ export class BiGsdEvaluationService {
       parsed.push(row.value);
     }
 
-    const responseModel = (this.prisma as any).biGsdEvaluationResponse;
-    const importModel = (this.prisma as any).biGsdEvaluationImportBatch;
-
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        responseModel.deleteMany(),
-        importModel.deleteMany(),
-      ]);
-    }
-
-    const columnsJson: ColumnSettingsJson = {
-      order: headerDefs.map((item) => item.key),
-      labels: headerDefs.reduce<Record<string, string>>((acc, item) => {
-        acc[item.key] = item.label;
-        return acc;
-      }, {}),
-      submittedAtKey,
-    };
-
-    const batch = await importModel.create({
-      data: {
-        id: this.makeId('bigsdib_'),
-        fileName: file.originalname,
-        format,
-        sheetName,
-        columnsJson,
-        totalRows: parsed.length,
-        insertedRows: 0,
-        duplicateRows: 0,
+    if (parsed.length === 0 || (replaceAll && invalidRows > 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
         invalidRows,
-        importedById: user?.id ?? null,
-      },
-    });
-
-    let insertedRows = 0;
-
-    if (parsed.length > 0) {
-      const created = await responseModel.createMany({
-        data: parsed.map((row) => ({
-          id: this.makeId('bigsdr_'),
-          batchId: batch.id,
-          submittedAt: row.submittedAt,
-          answersJson: row.answers,
-          rawPayload: row.rawPayload,
-          sourceRow: row.sourceRow,
-          sourceHash: row.sourceHash,
-        })),
-        skipDuplicates: true,
+        validRows: parsed.length,
       });
-      insertedRows = Number(created?.count ?? 0);
     }
 
-    const duplicateRows = parsed.length - insertedRows;
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        const responseModel = (tx as any).biGsdEvaluationResponse;
+        const importModel = (tx as any).biGsdEvaluationImportBatch;
 
-    const updatedBatch = await importModel.update({
-      where: { id: batch.id },
-      data: {
-        insertedRows,
-        duplicateRows,
+        if (replaceAll) {
+          await responseModel.deleteMany();
+          await importModel.deleteMany();
+        }
+
+        const columnsJson: ColumnSettingsJson = {
+          order: headerDefs.map((item) => item.key),
+          labels: headerDefs.reduce<Record<string, string>>((acc, item) => {
+            acc[item.key] = item.label;
+            return acc;
+          }, {}),
+          submittedAtKey,
+        };
+
+        const batch = await importModel.create({
+          data: {
+            id: this.makeId('bigsdib_'),
+            fileName: file.originalname,
+            format,
+            sheetName,
+            columnsJson,
+            totalRows: parsed.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
+          },
+        });
+
+        let insertedRows = 0;
+
+        if (parsed.length > 0) {
+          const created = await responseModel.createMany({
+            data: parsed.map((row) => ({
+              id: this.makeId('bigsdr_'),
+              batchId: batch.id,
+              submittedAt: row.submittedAt,
+              answersJson: row.answers,
+              rawPayload: row.rawPayload,
+              sourceRow: row.sourceRow,
+              sourceHash: row.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+          insertedRows = Number(created?.count ?? 0);
+        }
+
+        const duplicateRows = parsed.length - insertedRows;
+
+        const updatedBatch = await importModel.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
-      include: {
-        importedBy: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
+      { timeout: 30_000 },
+    );
 
     await this.normalization.rebuild({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.GSD_EVALUATION,
@@ -271,7 +286,7 @@ export class BiGsdEvaluationService {
       pageSize?: string;
     },
   ) {
-    const compiled = this.compileFilters(filters);
+    const compiled = await this.compileFilters(filters);
     const allRows = await this.fetchRows();
     const filteredRows = allRows.filter((row) =>
       this.matchesFilters(row, compiled),
@@ -335,7 +350,7 @@ export class BiGsdEvaluationService {
       };
     }
 
-    const compiled = this.compileFilters(payload);
+    const compiled = await this.compileFilters(payload);
     const allRows = await this.fetchRows();
     const filteredIds = allRows
       .filter((row) => this.matchesFilters(row, compiled))
@@ -431,7 +446,7 @@ export class BiGsdEvaluationService {
   }
 
   async dashboard(filters: GsdEvaluationFilters) {
-    const compiled = this.compileFilters(filters);
+    const compiled = await this.compileFilters(filters);
     const responseModel = (this.prisma as any).biGsdEvaluationResponse;
     const importModel = (this.prisma as any).biGsdEvaluationImportBatch;
     const cardSettingModel = (this.prisma as any).biGsdEvaluationCardSetting;
@@ -471,7 +486,7 @@ export class BiGsdEvaluationService {
 
     const allRows: MeetingRow[] = (allRowsRaw as any[]).map((row: any) =>
       this.mapRow(row),
-    );
+    ).filter((row) => !compiled.odgsaIds || compiled.odgsaIds.has(row.id));
     const filteredRows: MeetingRow[] = allRows.filter((row: MeetingRow) =>
       this.matchesFilters(row, compiled),
     );
@@ -939,7 +954,10 @@ export class BiGsdEvaluationService {
       .map(([label]) => label);
   }
 
-  private compileFilters(filters: GsdEvaluationFilters): CompiledFilters {
+  private async compileFilters(filters: GsdEvaluationFilters): Promise<CompiledFilters> {
+    const ids = filters.odgsaId?.trim()
+      ? await this.normalization.odgsaResponseIds(BI_NORMALIZATION_SOURCE_TYPES.GSD_EVALUATION, filters.odgsaId)
+      : null;
     const from = this.parseDate(filters.from);
     const to = this.parseDate(filters.to);
     const query = this.cleanCell(filters.q);
@@ -947,6 +965,7 @@ export class BiGsdEvaluationService {
     const columnFilters = this.parseColumnFilters(filters.columnFilters);
 
     return {
+      odgsaIds: ids === null ? null : new Set(ids),
       from,
       to,
       query,
@@ -956,6 +975,7 @@ export class BiGsdEvaluationService {
   }
 
   private matchesFilters(row: MeetingRow, filters: CompiledFilters) {
+    if (filters.odgsaIds && !filters.odgsaIds.has(row.id)) return false;
     if (filters.from || filters.to) {
       if (!row.submittedAt) return false;
       if (filters.from && row.submittedAt < filters.from) return false;

@@ -1,3 +1,4 @@
+import { fetchBiApiPage } from './bi-api-fetch';
 import crypto from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { BiImportFormat, Prisma } from '@prisma/client';
@@ -13,6 +14,7 @@ import {
 } from './bi-normalization.service';
 
 type DomesticViolenceFilters = {
+  odgsaId?: string;
   from?: string;
   to?: string;
   organization?: string;
@@ -285,6 +287,14 @@ export class BiDomesticViolenceService {
       parsed.push(parsedRow.value);
     }
 
+    if (parsed.length === 0 || (replaceAll && invalidRows > 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
+        invalidRows,
+        validRows: parsed.length,
+      });
+    }
+
     const normalizationPreview = await this.normalization.previewImportRows({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.DOMESTIC_VIOLENCE,
       rows: parsed.map((item) => ({
@@ -330,85 +340,88 @@ export class BiDomesticViolenceService {
     );
     const rowsToInsert = normalizedImport.rows;
 
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        this.prisma.biDomesticViolenceResponse.deleteMany(),
-        this.prisma.biDomesticViolenceImportBatch.deleteMany(),
-      ]);
-    }
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        if (replaceAll) {
+          await tx.biDomesticViolenceResponse.deleteMany();
+          await tx.biDomesticViolenceImportBatch.deleteMany();
+        }
 
-    const batch = await this.prisma.biDomesticViolenceImportBatch.create({
-      data: {
-        fileName: file.originalname,
-        format,
-        sheetName,
-        totalRows: rowsToInsert.length,
-        insertedRows: 0,
-        duplicateRows: 0,
-        invalidRows,
-        importedById: user?.id ?? null,
-      },
-    });
-
-    let insertedRows = 0;
-
-    if (rowsToInsert.length > 0) {
-      const created = await this.prisma.biDomesticViolenceResponse.createMany({
-        data: rowsToInsert.map((item) => ({
-          batchId: batch.id,
-          apiId: item.apiId,
-          submittedAt: item.submittedAt,
-          age: item.age,
-          organization: item.organization,
-          maritalStatus: item.maritalStatus,
-          education: item.education,
-          naturality: item.naturality,
-          fabBond: item.fabBond,
-          rank: item.rank,
-          situationScope: item.situationScope,
-          sufferedLifetimeRaw: item.sufferedLifetimeRaw,
-          sufferedLifetime: item.sufferedLifetime,
-          sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
-          sufferedLast12Months: item.sufferedLast12Months,
-          frequency: item.frequency,
-          affectiveBond: item.affectiveBond,
-          violenceTypes: item.violenceTypes,
-          authorRelation: item.authorRelation,
-          authorMilitaryLink: item.authorMilitaryLink,
-          occurrencePlace: item.occurrencePlace,
-          witnessesRaw: item.witnessesRaw,
-          witnesses: item.witnesses,
-          impactIntensity: item.impactIntensity,
-          impactAreas: item.impactAreas,
-          soughtHelpRaw: item.soughtHelpRaw,
-          soughtHelp: item.soughtHelp,
-          complaintChannels: item.complaintChannels,
-          noComplaintReasons: item.noComplaintReasons,
-          rawPayload: item.rawPayload,
-          sourceRow: item.sourceRow,
-          sourceHash: item.sourceHash,
-        })),
-        skipDuplicates: true,
-      });
-
-      insertedRows = created.count;
-    }
-
-    const duplicateRows = rowsToInsert.length - insertedRows;
-
-    const updatedBatch = await this.prisma.biDomesticViolenceImportBatch.update(
-      {
-        where: { id: batch.id },
-        data: {
-          insertedRows,
-          duplicateRows,
-        },
-        include: {
-          importedBy: {
-            select: { id: true, name: true, email: true },
+        const batch = await tx.biDomesticViolenceImportBatch.create({
+          data: {
+            fileName: file.originalname,
+            format,
+            sheetName,
+            totalRows: rowsToInsert.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
           },
-        },
+        });
+
+        let insertedRows = 0;
+
+        if (rowsToInsert.length > 0) {
+          const created = await tx.biDomesticViolenceResponse.createMany({
+            data: rowsToInsert.map((item) => ({
+              batchId: batch.id,
+              apiId: item.apiId,
+              submittedAt: item.submittedAt,
+              age: item.age,
+              organization: item.organization,
+              maritalStatus: item.maritalStatus,
+              education: item.education,
+              naturality: item.naturality,
+              fabBond: item.fabBond,
+              rank: item.rank,
+              situationScope: item.situationScope,
+              sufferedLifetimeRaw: item.sufferedLifetimeRaw,
+              sufferedLifetime: item.sufferedLifetime,
+              sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
+              sufferedLast12Months: item.sufferedLast12Months,
+              frequency: item.frequency,
+              affectiveBond: item.affectiveBond,
+              violenceTypes: item.violenceTypes,
+              authorRelation: item.authorRelation,
+              authorMilitaryLink: item.authorMilitaryLink,
+              occurrencePlace: item.occurrencePlace,
+              witnessesRaw: item.witnessesRaw,
+              witnesses: item.witnesses,
+              impactIntensity: item.impactIntensity,
+              impactAreas: item.impactAreas,
+              soughtHelpRaw: item.soughtHelpRaw,
+              soughtHelp: item.soughtHelp,
+              complaintChannels: item.complaintChannels,
+              noComplaintReasons: item.noComplaintReasons,
+              rawPayload: item.rawPayload,
+              sourceRow: item.sourceRow,
+              sourceHash: item.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+
+          insertedRows = created.count;
+        }
+
+        const duplicateRows = rowsToInsert.length - insertedRows;
+
+        const updatedBatch = await tx.biDomesticViolenceImportBatch.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
+      { timeout: 30_000 },
     );
 
     await this.normalization.rebuild({
@@ -450,6 +463,14 @@ export class BiDomesticViolenceService {
     const sinceId = replaceAll ? 0 : await this.resolveLastImportedApiId();
     const apiResult = await this.fetchApiRecords(sinceId);
     const { parsed, invalidRows } = this.parseApiRecords(apiResult.records);
+    // Never advance the saved cursor past rows we could not interpret.
+    if (invalidRows > 0 || (replaceAll && parsed.length === 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
+        invalidRows,
+        validRows: parsed.length,
+      });
+    }
 
     const normalizationPreview = await this.normalization.previewImportRows({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.DOMESTIC_VIOLENCE,
@@ -498,92 +519,95 @@ export class BiDomesticViolenceService {
     );
     const rowsToInsert = normalizedImport.rows;
 
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        this.prisma.biDomesticViolenceResponse.deleteMany(),
-        this.prisma.biDomesticViolenceImportBatch.deleteMany(),
-      ]);
-    }
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        if (replaceAll) {
+          await tx.biDomesticViolenceResponse.deleteMany();
+          await tx.biDomesticViolenceImportBatch.deleteMany();
+        }
 
-    const batch = await this.prisma.biDomesticViolenceImportBatch.create({
-      data: {
-        fileName: 'Google Sheets API - Violência Doméstica',
-        format: BiImportFormat.API,
-        sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
-        totalRows: rowsToInsert.length,
-        insertedRows: 0,
-        duplicateRows: 0,
-        invalidRows,
-        importedById: user?.id ?? null,
-        apiSinceId: apiResult.sync.sinceId,
-        apiNextSinceId: apiResult.sync.nextSinceId,
-        apiLastIdAvailable: apiResult.sync.lastIdAvailable,
-        apiHasMore: apiResult.sync.hasMore,
-        apiUpdatedAt: apiResult.sync.updatedAt
-          ? new Date(apiResult.sync.updatedAt)
-          : null,
-      },
-    });
-
-    let insertedRows = 0;
-
-    if (rowsToInsert.length > 0) {
-      const created = await this.prisma.biDomesticViolenceResponse.createMany({
-        data: rowsToInsert.map((item) => ({
-          batchId: batch.id,
-          apiId: item.apiId,
-          submittedAt: item.submittedAt,
-          age: item.age,
-          organization: item.organization,
-          maritalStatus: item.maritalStatus,
-          education: item.education,
-          naturality: item.naturality,
-          fabBond: item.fabBond,
-          rank: item.rank,
-          situationScope: item.situationScope,
-          sufferedLifetimeRaw: item.sufferedLifetimeRaw,
-          sufferedLifetime: item.sufferedLifetime,
-          sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
-          sufferedLast12Months: item.sufferedLast12Months,
-          frequency: item.frequency,
-          affectiveBond: item.affectiveBond,
-          violenceTypes: item.violenceTypes,
-          authorRelation: item.authorRelation,
-          authorMilitaryLink: item.authorMilitaryLink,
-          occurrencePlace: item.occurrencePlace,
-          witnessesRaw: item.witnessesRaw,
-          witnesses: item.witnesses,
-          impactIntensity: item.impactIntensity,
-          impactAreas: item.impactAreas,
-          soughtHelpRaw: item.soughtHelpRaw,
-          soughtHelp: item.soughtHelp,
-          complaintChannels: item.complaintChannels,
-          noComplaintReasons: item.noComplaintReasons,
-          rawPayload: item.rawPayload,
-          sourceRow: item.sourceRow,
-          sourceHash: item.sourceHash,
-        })),
-        skipDuplicates: true,
-      });
-
-      insertedRows = created.count;
-    }
-
-    const duplicateRows = rowsToInsert.length - insertedRows;
-
-    const updatedBatch = await this.prisma.biDomesticViolenceImportBatch.update(
-      {
-        where: { id: batch.id },
-        data: {
-          insertedRows,
-          duplicateRows,
-        },
-        include: {
-          importedBy: {
-            select: { id: true, name: true, email: true },
+        const batch = await tx.biDomesticViolenceImportBatch.create({
+          data: {
+            fileName: 'Google Sheets API - Violência Doméstica',
+            format: BiImportFormat.API,
+            sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
+            totalRows: rowsToInsert.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
+            apiSinceId: apiResult.sync.sinceId,
+            apiNextSinceId: apiResult.sync.nextSinceId,
+            apiLastIdAvailable: apiResult.sync.lastIdAvailable,
+            apiHasMore: apiResult.sync.hasMore,
+            apiUpdatedAt: apiResult.sync.updatedAt
+              ? new Date(apiResult.sync.updatedAt)
+              : null,
           },
-        },
+        });
+
+        let insertedRows = 0;
+
+        if (rowsToInsert.length > 0) {
+          const created = await tx.biDomesticViolenceResponse.createMany({
+            data: rowsToInsert.map((item) => ({
+              batchId: batch.id,
+              apiId: item.apiId,
+              submittedAt: item.submittedAt,
+              age: item.age,
+              organization: item.organization,
+              maritalStatus: item.maritalStatus,
+              education: item.education,
+              naturality: item.naturality,
+              fabBond: item.fabBond,
+              rank: item.rank,
+              situationScope: item.situationScope,
+              sufferedLifetimeRaw: item.sufferedLifetimeRaw,
+              sufferedLifetime: item.sufferedLifetime,
+              sufferedLast12MonthsRaw: item.sufferedLast12MonthsRaw,
+              sufferedLast12Months: item.sufferedLast12Months,
+              frequency: item.frequency,
+              affectiveBond: item.affectiveBond,
+              violenceTypes: item.violenceTypes,
+              authorRelation: item.authorRelation,
+              authorMilitaryLink: item.authorMilitaryLink,
+              occurrencePlace: item.occurrencePlace,
+              witnessesRaw: item.witnessesRaw,
+              witnesses: item.witnesses,
+              impactIntensity: item.impactIntensity,
+              impactAreas: item.impactAreas,
+              soughtHelpRaw: item.soughtHelpRaw,
+              soughtHelp: item.soughtHelp,
+              complaintChannels: item.complaintChannels,
+              noComplaintReasons: item.noComplaintReasons,
+              rawPayload: item.rawPayload,
+              sourceRow: item.sourceRow,
+              sourceHash: item.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+
+          insertedRows = created.count;
+        }
+
+        const duplicateRows = rowsToInsert.length - insertedRows;
+
+        const updatedBatch = await tx.biDomesticViolenceImportBatch.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
+      { timeout: 30_000 },
     );
 
     await this.normalization.rebuild({
@@ -652,7 +676,7 @@ export class BiDomesticViolenceService {
       pageSize?: string;
     },
   ) {
-    const where = this.buildWhere(filters);
+    const where = await this.buildWhere(filters);
 
     const { page, pageSize, skip, take } = parsePagination(
       filters.page,
@@ -696,7 +720,7 @@ export class BiDomesticViolenceService {
     }
 
     if (allFiltered) {
-      const where = this.buildWhere(payload);
+      const where = await this.buildWhere(payload);
       const deleted = await this.prisma.biDomesticViolenceResponse.deleteMany({
         where,
       });
@@ -795,7 +819,10 @@ export class BiDomesticViolenceService {
   }
 
   async dashboard(filters: DomesticViolenceFilters) {
-    const where = this.buildWhere(filters);
+    const where = await this.buildWhere(filters);
+    const odgsaWhere = filters.odgsaId?.trim()
+      ? await this.buildWhere({ odgsaId: filters.odgsaId })
+      : {};
     const cardSettingModel = (this.prisma as any).biDomesticViolenceCardSetting;
 
     const [rows, allRowsForFilters, totalRowsInDb, latestImport, cardSettings] =
@@ -830,6 +857,7 @@ export class BiDomesticViolenceService {
           },
         }),
         this.prisma.biDomesticViolenceResponse.findMany({
+          where: odgsaWhere,
           select: {
             organization: true,
             rank: true,
@@ -854,7 +882,7 @@ export class BiDomesticViolenceService {
             witnesses: true,
           },
         }),
-        this.prisma.biDomesticViolenceResponse.count(),
+        this.prisma.biDomesticViolenceResponse.count({ where: odgsaWhere }),
         this.prisma.biDomesticViolenceImportBatch.findFirst({
           orderBy: { importedAt: 'desc' },
           include: {
@@ -1511,7 +1539,17 @@ export class BiDomesticViolenceService {
       });
   }
 
-  private buildWhere(
+  private async buildWhere(filters: DomesticViolenceFilters) {
+    const baseWhere = this.buildBaseWhere(filters);
+    if (!filters.odgsaId?.trim()) return baseWhere;
+    const ids = await this.normalization.odgsaResponseIds(
+      BI_NORMALIZATION_SOURCE_TYPES.DOMESTIC_VIOLENCE, filters.odgsaId,
+    );
+    // ODGSA always restricts the result, including when other filters use OR.
+    return { AND: [baseWhere, { id: { in: ids ?? [] } }] };
+  }
+
+  private buildBaseWhere(
     filters: DomesticViolenceFilters,
   ): Prisma.BiDomesticViolenceResponseWhereInput {
     const mode = this.parseCombineMode(filters.combineMode);
@@ -1785,58 +1823,13 @@ export class BiDomesticViolenceService {
   private async fetchApiPage(
     sinceId: number,
   ): Promise<DomesticViolenceApiPage> {
-    const url = this.buildApiUrl(sinceId);
-    const timeoutMs =
+    return fetchBiApiPage<DomesticViolenceApiPage>(
+      this.buildApiUrl(sinceId),
+      'domestic_violence_api',
       this.parsePositiveInteger(
         process.env.BI_DOMESTIC_VIOLENCE_API_TIMEOUT_MS,
-      ) ?? 30_000;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    let response: Response;
-    try {
-      response = await fetch(url, { signal: controller.signal });
-    } catch (error) {
-      throwError('VALIDATION_ERROR', {
-        reason:
-          error instanceof Error && error.name === 'AbortError'
-            ? 'domestic_violence_api_timeout'
-            : 'domestic_violence_api_request_failed',
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    if (!response.ok) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'domestic_violence_api_http_error',
-        status: response.status,
-      });
-    }
-
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      throwError('VALIDATION_ERROR', {
-        reason: 'domestic_violence_api_invalid_json',
-      });
-    }
-
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'domestic_violence_api_invalid_payload',
-      });
-    }
-
-    const page = payload as DomesticViolenceApiPage;
-    if (page.ok !== true || !Array.isArray(page.dados)) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'domestic_violence_api_unsuccessful_payload',
-      });
-    }
-
-    return page;
+      ) ?? 30_000,
+    );
   }
 
   private buildApiUrl(sinceId: number) {
@@ -1861,7 +1854,7 @@ export class BiDomesticViolenceService {
     const token = String(
       process.env.BI_DOMESTIC_VIOLENCE_API_TOKEN ?? '',
     ).trim();
-    if (token && !url.searchParams.has('token')) {
+    if (token) {
       url.searchParams.set('token', token);
     }
     url.searchParams.set('since_id', String(Math.max(0, sinceId)));

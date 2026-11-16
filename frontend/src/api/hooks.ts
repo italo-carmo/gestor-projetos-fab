@@ -5421,6 +5421,15 @@ export function useKpiDashboard(filters: Record<string, any>) {
   });
 }
 
+export function useBiOdgsaOptions() {
+  return useQuery({
+    queryKey: ["bi", "odgsas"],
+    queryFn: async (): Promise<Array<{ id: string; code: string; name: string }>> =>
+      (await api.get("/bi/odgsas")).data,
+    staleTime: 30_000,
+  });
+}
+
 export function useBiSurveyDashboard(filters: Record<string, any>) {
   return useQuery({
     queryKey: qk.biSurveyDashboard(filters),
@@ -5580,6 +5589,7 @@ export function useDeleteBiSurveyResponses() {
     mutationFn: async (payload: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       mission?: string;
@@ -5728,6 +5738,7 @@ export function useDeleteBiDomesticViolenceResponses() {
     mutationFn: async (payload: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       organization?: string;
@@ -5868,6 +5879,7 @@ export function useDeleteBiRecruitsResponses() {
     mutationFn: async (payload: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       education?: string;
@@ -6027,6 +6039,7 @@ export function useDeleteBiBestPracticesCycleResponses() {
     mutationFn: async (payload: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       technicalRigorPerception?: string;
@@ -6176,6 +6189,7 @@ export function useDeleteBiCpcaMeetingResponses() {
     mutationFn: async (payload: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       q?: string;
@@ -6267,6 +6281,7 @@ export function useDeleteBiGsdEvaluationResponses() {
     mutationFn: async (payload: {
       ids?: string[];
       allFiltered?: boolean;
+      odgsaId?: string;
       from?: string;
       to?: string;
       q?: string;
@@ -6328,10 +6343,17 @@ export function useComgepRecommendations(limit = 8, enabled = true) {
   });
 }
 
-export function useAggressorProfile() {
+export function useAggressorProfile(complaintType?: "MORAL" | "SEXUAL") {
   return useQuery({
-    queryKey: ["strategic", "aggressorProfile"],
-    queryFn: async () => (await api.get("/strategic/aggressor-profile")).data,
+    queryKey: complaintType
+      ? ["strategic", "aggressorProfile", complaintType]
+      : ["strategic", "aggressorProfile"],
+    queryFn: async () =>
+      (
+        await api.get("/strategic/aggressor-profile", {
+          params: { complaintType },
+        })
+      ).data,
   });
 }
 

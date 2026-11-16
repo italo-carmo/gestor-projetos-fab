@@ -45,15 +45,19 @@ import {
 import { EmptyState } from "../components/states/EmptyState";
 import { ErrorState } from "../components/states/ErrorState";
 import { SkeletonState } from "../components/states/SkeletonState";
+import {
+  getComplaintReportStatus,
+  getComplaintStatusLabel,
+} from "../features/complaintStatus";
 
 const STATUS_LABELS: Record<string, string> = {
-  RECEIVED: "Recebida",
-  PROTECTION_MEASURES: "Acolhimento",
-  PRELIMINARY_ANALYSIS: "Triagem",
-  PROCEDURE_DEFINED: "Procedimento",
-  INVESTIGATION: "Apuração",
-  CONCLUDED: "Concluída",
-  ARCHIVED: "Arquivada",
+  RECEIVED: "Em apuração",
+  PROTECTION_MEASURES: "Em apuração",
+  PRELIMINARY_ANALYSIS: "Em apuração",
+  PROCEDURE_DEFINED: "Em apuração",
+  INVESTIGATION: "Em apuração",
+  CONCLUDED: "Concluído",
+  ARCHIVED: "Concluído",
 };
 
 const PROCEDURE_LABELS: Record<string, string> = {
@@ -208,7 +212,7 @@ type CpcaKpiDetailKind =
   | "closureRate"
   | "averageClosureTime"
   | "triageOver7Days"
-  | "investigationOver30Days";
+  | "followUpOver30Days";
 
 type CpcaKpiDetailState = {
   kind: CpcaKpiDetailKind;
@@ -244,8 +248,8 @@ function translateMetricName(name: string | number) {
   if (normalized === "open") return "Abertos";
   if (normalized === "moral") return "Moral";
   if (normalized === "sexual") return "Sexual";
-  if (normalized === "concluded") return "Concluídas";
-  if (normalized === "archived") return "Arquivadas";
+  if (normalized === "concluded" || normalized === "archived")
+    return "Concluídos";
   return String(name ?? "");
 }
 
@@ -257,9 +261,7 @@ export function CpcaStatsPage() {
   const [cardStyles, setCardStyles] = useState<
     Record<string, EditableCardStyle>
   >(() => loadCpcaCardStyles());
-  const [cardEditorState, setCardEditorState] = useState<CardEditorState>(
-    null,
-  );
+  const [cardEditorState, setCardEditorState] = useState<CardEditorState>(null);
   const [editingCardDraft, setEditingCardDraft] = useState<EditableCardStyle>({
     backgroundColor: "#FFFFFF",
     textColor: "#111827",
@@ -315,11 +317,21 @@ export function CpcaStatsPage() {
     id?: string;
     name?: string;
   }>;
-  const statusDistribution = (
-    (data.statusDistribution ?? []) as Array<{ status: string; count: number }>
-  ).map((item) => ({
-    ...item,
-    label: STATUS_LABELS[item.status] ?? item.status,
+  const statusCounts = new Map<string, number>([
+    ["INVESTIGATION", 0],
+    ["CONCLUDED", 0],
+  ]);
+  for (const item of data.statusDistribution ?? []) {
+    const status = getComplaintReportStatus(item.status);
+    statusCounts.set(
+      status,
+      (statusCounts.get(status) ?? 0) + Number(item.count),
+    );
+  }
+  const statusDistribution = Array.from(statusCounts, ([status, count]) => ({
+    status,
+    count,
+    label: getComplaintStatusLabel(status),
   }));
   const procedureDistribution = (
     (data.procedureDistribution ?? []) as Array<{
@@ -411,10 +423,9 @@ export function CpcaStatsPage() {
         String(item?.status ?? ""),
       ),
     ),
-    investigationOver30Days: criticalOpenCases.filter((item: any) =>
-      ["PROCEDURE_DEFINED", "INVESTIGATION"].includes(
-        String(item?.status ?? ""),
-      ),
+    followUpOver30Days: criticalOpenCases.filter(
+      (item: any) =>
+        item.status === "INVESTIGATION" && Number(item.followUpDays ?? 0) > 30,
     ),
   }) as Record<CpcaKpiDetailKind, any[]>;
 
@@ -442,25 +453,25 @@ export function CpcaStatsPage() {
       id: "closureRate" as const,
       label: "Taxa de conclusão",
       value: formatPercent(summary.closureRatePercent ?? 0),
-      hint: `${summary.concludedCases ?? 0} concluídas + ${summary.archivedCases ?? 0} arquivadas`,
+      hint: `${Number(summary.concludedCases ?? 0) + Number(summary.archivedCases ?? 0)} casos concluídos`,
     },
     {
       id: "averageClosureTime" as const,
       label: "Tempo médio até fechamento",
       value: `${summary.averageDaysToClosure ?? 0} dias`,
-      hint: "Concluídas + Arquivadas",
+      hint: "Casos concluídos",
     },
     {
       id: "triageOver7Days" as const,
-      label: "Triagem > 7 dias",
+      label: "Triagem e Apuração > 7 dias",
       value: String(summary.triageOver7Days ?? 0),
       hint: "Alertas de tempo no item 3 da ICA",
     },
     {
-      id: "investigationOver30Days" as const,
-      label: "Apuração > 30 dias",
-      value: String(summary.investigationOver30Days ?? 0),
-      hint: "Procedimento definido/apuração sem fechamento",
+      id: "followUpOver30Days" as const,
+      label: "Acompanhamento > 30 dias",
+      value: String(summary.followUpOver30Days ?? 0),
+      hint: `Desde a entrada em acompanhamento${summary.followUpWithoutStartDate ? ` • ${summary.followUpWithoutStartDate} sem data de entrada` : ""}`,
     },
   ];
 
@@ -497,7 +508,8 @@ export function CpcaStatsPage() {
       backgroundColor:
         editingCardDraft.backgroundColor ||
         cardEditorState.defaults.backgroundColor,
-      textColor: editingCardDraft.textColor || cardEditorState.defaults.textColor,
+      textColor:
+        editingCardDraft.textColor || cardEditorState.defaults.textColor,
     };
     if (cardEditorState.allowTextEditing) {
       normalized.title =
@@ -545,14 +557,14 @@ export function CpcaStatsPage() {
           "Casos encerrados usados para calcular a média de dias até fechamento.",
       },
       triageOver7Days: {
-        title: "Triagem > 7 dias",
+        title: "Triagem e Apuração > 7 dias",
         subtitle:
           "Casos em etapas iniciais com tempo em aberto acima de 7 dias.",
       },
-      investigationOver30Days: {
-        title: "Apuração > 30 dias",
+      followUpOver30Days: {
+        title: "Acompanhamento > 30 dias",
         subtitle:
-          "Casos em procedimento/apuração com tempo em aberto acima de 30 dias.",
+          "Casos ainda em acompanhamento há mais de 30 dias, contados desde a última entrada nessa etapa registrada no histórico. Casos sem data de entrada não entram na contagem.",
       },
     };
     setKpiDetail({
@@ -591,7 +603,7 @@ export function CpcaStatsPage() {
     navigate(`/cpca-cases${next.toString() ? `?${next.toString()}` : ""}`);
   };
   const getStatusLabel = (status: string | null | undefined) =>
-    STATUS_LABELS[String(status ?? "")] ?? String(status ?? "-");
+    getComplaintStatusLabel(status);
   const getProcedureLabel = (procedure: string | null | undefined) =>
     PROCEDURE_LABELS[String(procedure ?? "")] ?? String(procedure ?? "-");
   const getTypeLabel = (item: any) =>
@@ -626,7 +638,7 @@ export function CpcaStatsPage() {
     aggressorAge:
       "Este item simboliza quantos reportes possuem acusado nesta faixa etária no recorte atual.",
     victimAge:
-      "Este item simboliza quantos reportes possuem vítima/noticiante nesta faixa etária no recorte atual.",
+      "Este item mostra quantas vítimas estão nesta faixa etária no recorte atual. Um reporte pode ter mais de uma vítima.",
   };
   const chartDetailLabel =
     chartDetail?.item?.label ??
@@ -649,7 +661,10 @@ export function CpcaStatsPage() {
     : criticalOpenCases
         .filter((item) => {
           if (chartDetail.kind === "status") {
-            return String(item.status) === String(chartDetail.item?.status);
+            return (
+              getComplaintReportStatus(item.status) ===
+              getComplaintReportStatus(chartDetail.item?.status)
+            );
           }
           if (chartDetail.kind === "violenceType") {
             return (
@@ -1627,7 +1642,8 @@ export function CpcaStatsPage() {
                         color="text.secondary"
                         sx={{ mb: 0.7, display: "block" }}
                       >
-                        Clique em uma barra para detalhar a faixa etária.
+                        Todas as vítimas dos reportes são consideradas. Clique
+                        em uma barra para detalhar a faixa etária.
                       </Typography>
                       <ResponsiveContainer width="100%" height={280}>
                         <BarChart data={victimAgeRangeDistribution}>
@@ -1846,6 +1862,16 @@ export function CpcaStatsPage() {
                         >
                           Procedimento: {getProcedureLabel(item.procedureType)}
                         </Typography>
+                        {kpiDetail?.kind === "followUpOver30Days" &&
+                        item.followUpDays != null ? (
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            display="block"
+                          >
+                            Em acompanhamento: {item.followUpDays} dias
+                          </Typography>
+                        ) : null}
                         {Number(item.openDays ?? 0) > 0 ? (
                           <Typography
                             variant="caption"

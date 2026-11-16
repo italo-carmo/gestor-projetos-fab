@@ -4,6 +4,7 @@ import { config } from 'dotenv';
 import * as XLSX from 'xlsx';
 import type { CreateCpcaCaseDto } from '../src/cpca/dto/create-cpca-case.dto';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { resolveComplaintVictims } from '../src/cpca/complaint-victims';
 
 config({ path: path.join(__dirname, '..', '.env') });
 
@@ -1112,6 +1113,7 @@ async function main() {
                 ? item.targetArchivedAt ?? item.reportedAt ?? null
                 : null,
             ...caseData,
+            victims: resolveComplaintVictims(caseData),
           },
           select: { id: true, caseNumber: true },
         });

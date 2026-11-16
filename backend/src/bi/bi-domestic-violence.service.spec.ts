@@ -61,7 +61,7 @@ function makePrismaMock() {
   const responseDeleteMany = jest.fn().mockResolvedValue({ count: 0 });
   const batchDeleteMany = jest.fn().mockResolvedValue({ count: 0 });
 
-  return {
+  const prisma = {
     biDomesticViolenceResponse: {
       findFirst: jest.fn().mockResolvedValue(null),
       createMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -77,10 +77,11 @@ function makePrismaMock() {
       }),
       deleteMany: batchDeleteMany,
     },
-    $transaction: jest.fn((items: Array<Promise<unknown>>) =>
-      Promise.all(items),
+    $transaction: jest.fn(async (items: any) =>
+      typeof items === 'function' ? items(prisma) : Promise.all(items),
     ),
   };
+  return prisma;
 }
 
 function makeNormalizationMock() {
@@ -275,5 +276,99 @@ describe('BiDomesticViolenceService API import', () => {
       normalization: { suggestionsApplied: 1, updatedFields: 1 },
       batch: { insertedRows: 1 },
     });
+  });
+
+  it('repete a página após timeout e percorre todas as páginas pendentes', async () => {
+    const prisma = makePrismaMock();
+    prisma.biDomesticViolenceResponse.findFirst.mockResolvedValue({
+      apiId: 923,
+    });
+    const normalization = makeNormalizationMock();
+    const abort = new Error('timeout');
+    abort.name = 'AbortError';
+    const records = (start: number, count: number) =>
+      Array.from({ length: count }, (_, i) => ({
+        ...baseRecord,
+        api_id: start + i,
+        id: start + i,
+      }));
+    (global.fetch as jest.Mock)
+      .mockRejectedValueOnce(abort)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () =>
+          apiPayload(records(924, 200), {
+            has_more: true,
+            next_since_id: 1123,
+            last_id_available: 1443,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () =>
+          apiPayload(records(1124, 200), {
+            has_more: true,
+            next_since_id: 1323,
+            last_id_available: 1443,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () =>
+          apiPayload(records(1324, 120), {
+            has_more: false,
+            next_since_id: 1443,
+            last_id_available: 1443,
+          }),
+      });
+    const service = new BiDomesticViolenceService(
+      prisma as any,
+      normalization as any,
+    );
+    const result = await service.importResponsesFromApi(undefined, {
+      previewOnly: true,
+    });
+    expect(
+      (global.fetch as jest.Mock).mock.calls.map(([url]) =>
+        new URL(url).searchParams.get('since_id'),
+      ),
+    ).toEqual(['923', '923', '1123', '1323']);
+    expect(result.sync).toMatchObject({
+      fetchedRows: 520,
+      pageCount: 3,
+      nextSinceId: 1443,
+      hasMore: false,
+    });
+    expect(prisma.biDomesticViolenceResponse.createMany).not.toHaveBeenCalled();
+  });
+
+  it('encerra após duas falhas temporárias sem alterar a base', async () => {
+    const prisma = makePrismaMock();
+    const abort = new Error('timeout');
+    abort.name = 'AbortError';
+    (global.fetch as jest.Mock).mockRejectedValue(abort);
+    const service = new BiDomesticViolenceService(
+      prisma as any,
+      makeNormalizationMock() as any,
+    );
+    await expect(service.importResponsesFromApi()).rejects.toMatchObject({
+      response: { details: { reason: 'domestic_violence_api_timeout' } },
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(prisma.biDomesticViolenceImportBatch.create).not.toHaveBeenCalled();
+    expect(prisma.biDomesticViolenceResponse.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('não repete erros de autorização da API', async () => {
+    const prisma = makePrismaMock();
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 403 });
+    const service = new BiDomesticViolenceService(
+      prisma as any,
+      makeNormalizationMock() as any,
+    );
+    await expect(service.importResponsesFromApi()).rejects.toMatchObject({
+      response: { details: { status: 403 } },
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 });

@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  ParseEnumPipe,
   Post,
   Query,
   Res,
@@ -13,7 +14,7 @@ import { CurrentUser } from '../common/current-user.decorator';
 import { RbacGuard } from '../rbac/rbac.guard';
 import { RequirePermission } from '../rbac/require-permission.decorator';
 import type { RbacUser } from '../rbac/rbac.types';
-import { PermissionScope } from '@prisma/client';
+import { CpcComplaintType, PermissionScope } from '@prisma/client';
 import { StrategicService } from './strategic.service';
 
 @Controller('strategic')
@@ -62,8 +63,14 @@ export class StrategicController {
 
   @Get('aggressor-profile')
   @RequirePermission('strategic_dashboard', 'view', PermissionScope.NATIONAL)
-  aggressorProfile() {
-    return this.service.aggressorProfile();
+  aggressorProfile(
+    @Query(
+      'complaintType',
+      new ParseEnumPipe(CpcComplaintType, { optional: true }),
+    )
+    complaintType?: CpcComplaintType,
+  ) {
+    return this.service.aggressorProfile({ complaintType });
   }
 
   @Get('text-analysis')

@@ -404,8 +404,7 @@ export function CalendarPage() {
           .join(' • ');
         return { id, name, details };
       })
-      .filter((item): item is ParticipantOption => Boolean(item))
-      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      .filter((item): item is ParticipantOption => Boolean(item));
   }, [meetingParticipantOptionsQuery.data?.items]);
 
   const meetingParticipantOptionIds = useMemo(

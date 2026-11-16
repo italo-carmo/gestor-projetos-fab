@@ -13,6 +13,7 @@ import {
 } from './bi-normalization.service';
 
 type SurveyFilters = {
+  odgsaId?: string;
   from?: string;
   to?: string;
   mission?: string;
@@ -157,6 +158,10 @@ export class BiService {
     private readonly normalization: BiNormalizationService,
   ) {}
 
+  listOdgsaFilterOptions() {
+    return this.normalization.listOdgsaFilterOptions();
+  }
+
   async importSurvey(
     file: Express.Multer.File,
     user?: RbacUser,
@@ -191,6 +196,14 @@ export class BiService {
         continue;
       }
       parsed.push(parsedRow.value);
+    }
+
+    if (parsed.length === 0 || (replaceAll && invalidRows > 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
+        invalidRows,
+        validRows: parsed.length,
+      });
     }
 
     const normalizationPreview = await this.normalization.previewImportRows({
@@ -232,64 +245,69 @@ export class BiService {
     );
     const rowsToInsert = normalizedImport.rows;
 
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        this.prisma.biSurveyResponse.deleteMany(),
-        this.prisma.biSurveyImportBatch.deleteMany(),
-      ]);
-    }
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        if (replaceAll) {
+          await tx.biSurveyResponse.deleteMany();
+          await tx.biSurveyImportBatch.deleteMany();
+        }
 
-    const batch = await this.prisma.biSurveyImportBatch.create({
-      data: {
-        fileName: file.originalname,
-        format,
-        sheetName,
-        totalRows: rowsToInsert.length,
-        insertedRows: 0,
-        duplicateRows: 0,
-        invalidRows,
-        importedById: user?.id ?? null,
+        const batch = await tx.biSurveyImportBatch.create({
+          data: {
+            fileName: file.originalname,
+            format,
+            sheetName,
+            totalRows: rowsToInsert.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
+          },
+        });
+
+        let insertedRows = 0;
+
+        if (rowsToInsert.length > 0) {
+          const created = await tx.biSurveyResponse.createMany({
+            data: rowsToInsert.map((item) => ({
+              batchId: batch.id,
+              submittedAt: item.submittedAt,
+              sufferedViolenceRaw: item.sufferedViolenceRaw,
+              sufferedViolence: item.sufferedViolence,
+              violenceTypes: item.violenceTypes,
+              postoGraduacao: item.postoGraduacao,
+              om: item.om,
+              posto: item.posto,
+              autodeclara: item.autodeclara,
+              extraColumn: item.extraColumn,
+              rawPayload: item.rawPayload,
+              sourceRow: item.sourceRow,
+              sourceHash: item.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+          insertedRows = created.count;
+        }
+
+        const duplicateRows = rowsToInsert.length - insertedRows;
+
+        const updatedBatch = await tx.biSurveyImportBatch.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
-    });
-
-    let insertedRows = 0;
-
-    if (rowsToInsert.length > 0) {
-      const created = await this.prisma.biSurveyResponse.createMany({
-        data: rowsToInsert.map((item) => ({
-          batchId: batch.id,
-          submittedAt: item.submittedAt,
-          sufferedViolenceRaw: item.sufferedViolenceRaw,
-          sufferedViolence: item.sufferedViolence,
-          violenceTypes: item.violenceTypes,
-          postoGraduacao: item.postoGraduacao,
-          om: item.om,
-          posto: item.posto,
-          autodeclara: item.autodeclara,
-          extraColumn: item.extraColumn,
-          rawPayload: item.rawPayload,
-          sourceRow: item.sourceRow,
-          sourceHash: item.sourceHash,
-        })),
-        skipDuplicates: true,
-      });
-      insertedRows = created.count;
-    }
-
-    const duplicateRows = rowsToInsert.length - insertedRows;
-
-    const updatedBatch = await this.prisma.biSurveyImportBatch.update({
-      where: { id: batch.id },
-      data: {
-        insertedRows,
-        duplicateRows,
-      },
-      include: {
-        importedBy: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
+      { timeout: 30_000 },
+    );
 
     await this.normalization.rebuild({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.SURVEY_SCHOOLS,
@@ -350,7 +368,7 @@ export class BiService {
       pageSize?: string;
     },
   ) {
-    const where = this.buildWhere(filters);
+    const where = await this.buildWhere(filters);
 
     const { page, pageSize, skip, take } = parsePagination(
       filters.page,
@@ -377,7 +395,7 @@ export class BiService {
 
   async listQuestions(filters: SurveyFilters) {
     const mission = filters.mission?.trim() || filters.om?.trim() || null;
-    const baseWhere = this.buildWhere(filters);
+    const baseWhere = await this.buildWhere(filters);
     const where: Prisma.BiSurveyResponseWhereInput = mission
       ? Object.keys(baseWhere).length > 0
         ? { AND: [baseWhere, { om: mission }] }
@@ -474,7 +492,7 @@ export class BiService {
     }
 
     if (allFiltered) {
-      const where = this.buildWhere(payload);
+      const where = await this.buildWhere(payload);
       const deleted = await this.prisma.biSurveyResponse.deleteMany({ where });
       return {
         mode: 'FILTERED',
@@ -571,7 +589,10 @@ export class BiService {
   }
 
   async dashboard(filters: SurveyFilters) {
-    const where = this.buildWhere(filters);
+    const where = await this.buildWhere(filters);
+    const odgsaWhere = filters.odgsaId?.trim()
+      ? await this.buildWhere({ odgsaId: filters.odgsaId })
+      : {};
     const cardSettingModel = (this.prisma as any).biSurveyCardSetting;
 
     const [rows, allRowsForFilters, totalRowsInDb, latestImport, cardSettings] =
@@ -591,6 +612,7 @@ export class BiService {
           },
         }),
         this.prisma.biSurveyResponse.findMany({
+          where: odgsaWhere,
           select: {
             sufferedViolence: true,
             violenceTypes: true,
@@ -600,7 +622,7 @@ export class BiService {
             autodeclara: true,
           },
         }),
-        this.prisma.biSurveyResponse.count(),
+        this.prisma.biSurveyResponse.count({ where: odgsaWhere }),
         this.prisma.biSurveyImportBatch.findFirst({
           orderBy: { importedAt: 'desc' },
           include: {
@@ -1073,7 +1095,17 @@ export class BiService {
     return a.localeCompare(b, 'pt-BR');
   }
 
-  private buildWhere(
+  private async buildWhere(filters: SurveyFilters) {
+    const baseWhere = this.buildBaseWhere(filters);
+    if (!filters.odgsaId?.trim()) return baseWhere;
+    const ids = await this.normalization.odgsaResponseIds(
+      BI_NORMALIZATION_SOURCE_TYPES.SURVEY_SCHOOLS, filters.odgsaId,
+    );
+    // ODGSA always restricts the result, including when other filters use OR.
+    return { AND: [baseWhere, { id: { in: ids ?? [] } }] };
+  }
+
+  private buildBaseWhere(
     filters: SurveyFilters,
   ): Prisma.BiSurveyResponseWhereInput {
     const mode = this.parseCombineMode(filters.combineMode);
@@ -1170,7 +1202,7 @@ export class BiService {
   }
 
   private extractRows(buffer: Buffer, format: BiImportFormat) {
-    const workbook = this.readWorkbook(buffer);
+    const workbook = this.readWorkbook(buffer, format);
     const sheetNames = workbook.SheetNames ?? [];
 
     if (sheetNames.length === 0) {
@@ -1200,8 +1232,15 @@ export class BiService {
     };
   }
 
-  private readWorkbook(buffer: Buffer): XLSX.WorkBook {
+  private readWorkbook(buffer: Buffer, format: BiImportFormat): XLSX.WorkBook {
     try {
+      if (format === BiImportFormat.CSV) {
+        return XLSX.read(buffer.toString('utf8').replace(/^\uFEFF/, ''), {
+          type: 'string',
+          cellDates: false,
+          raw: false,
+        });
+      }
       return XLSX.read(buffer, {
         type: 'buffer',
         cellDates: false,

@@ -1,9 +1,10 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import * as http from 'http';
 import * as https from 'https';
+import * as OTPAuth from 'otpauth';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { JwtPayload, JwtRefreshPayload, Jwt2faPayload } from './auth.types';
@@ -27,9 +28,13 @@ import {
 
 const REFRESH_TOKEN_SALT_ROUNDS = 10;
 const SIGPES_FOTO_TIMEOUT_MS = 8_000;
+const TOTP_DIAGNOSTIC_WINDOW = 20;
+const TOTP_PERIOD_SECONDS = 30;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly users: UsersService,
     private readonly prisma: PrismaService,
@@ -397,9 +402,25 @@ export class AuthService {
     const normalizedCode = code.replace(/[-\s]/g, '').trim();
 
     if (/^\d{6}$/.test(normalizedCode)) {
+      const diagnostic = this.getTotpDiagnostic(
+        secretBase32,
+        normalizedCode,
+      );
       if (!verifyTotpCode(secretBase32, normalizedCode)) {
+        this.logger.warn(
+          `2FA_TOTP_REJECTED ${JSON.stringify({
+            userId: user.id,
+            ...diagnostic,
+          })}`,
+        );
         throwError('AUTH_2FA_INVALID_CODE');
       }
+      this.logger.log(
+        `2FA_TOTP_ACCEPTED ${JSON.stringify({
+          userId: user.id,
+          ...diagnostic,
+        })}`,
+      );
     } else {
       const idx = await verifyBackupCode(normalizedCode, user.totpBackupCodes);
       if (idx < 0) throwError('AUTH_2FA_INVALID_CODE');
@@ -413,6 +434,34 @@ export class AuthService {
 
     const tokens = await this.issueTokens(user.id, user.email);
     return { ...tokens };
+  }
+
+  private getTotpDiagnostic(secretBase32: string, code: string) {
+    const observedAt = Date.now();
+    const totp = new OTPAuth.TOTP({
+      issuer: 'INTEGRA',
+      algorithm: 'SHA1',
+      digits: 6,
+      period: TOTP_PERIOD_SECONDS,
+      secret: OTPAuth.Secret.fromBase32(secretBase32),
+    });
+    const deltaIntervals = totp.validate({
+      token: code,
+      timestamp: observedAt,
+      window: TOTP_DIAGNOSTIC_WINDOW,
+    });
+
+    return {
+      serverTimeUtc: new Date(observedAt).toISOString(),
+      secondsIntoPeriod:
+        Math.floor(observedAt / 1000) % TOTP_PERIOD_SECONDS,
+      deltaIntervals,
+      estimatedClockOffsetSeconds:
+        deltaIntervals === null
+          ? null
+          : deltaIntervals * TOTP_PERIOD_SECONDS,
+      diagnosticWindowIntervals: TOTP_DIAGNOSTIC_WINDOW,
+    };
   }
 
   async resetTwoFactor(targetUserId: string) {

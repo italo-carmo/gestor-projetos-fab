@@ -1,3 +1,4 @@
+import { fetchBiApiPage } from './bi-api-fetch';
 import crypto from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { BiImportFormat, Prisma } from '@prisma/client';
@@ -12,6 +13,7 @@ import {
 } from './bi-normalization.service';
 
 type RecruitsFilters = {
+  odgsaId?: string;
   from?: string;
   to?: string;
   education?: string;
@@ -193,6 +195,14 @@ export class BiRecruitsService {
       parsed.push(parsedRow.value);
     }
 
+    if (parsed.length === 0 || (replaceAll && invalidRows > 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
+        invalidRows,
+        validRows: parsed.length,
+      });
+    }
+
     if (previewOnly) {
       return {
         previewOnly: true,
@@ -201,68 +211,74 @@ export class BiRecruitsService {
       };
     }
 
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        this.prisma.biRecruitsResponse.deleteMany(),
-        this.prisma.biRecruitsImportBatch.deleteMany(),
-      ]);
-    }
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        if (replaceAll) {
+          await tx.biRecruitsResponse.deleteMany();
+          await tx.biRecruitsImportBatch.deleteMany();
+        }
 
-    const batch = await this.prisma.biRecruitsImportBatch.create({
-      data: {
-        fileName: file.originalname,
-        format,
-        sheetName,
-        totalRows: parsed.length,
-        insertedRows: 0,
-        duplicateRows: 0,
-        invalidRows,
-        importedById: user?.id ?? null,
+        const batch = await tx.biRecruitsImportBatch.create({
+          data: {
+            fileName: file.originalname,
+            format,
+            sheetName,
+            totalRows: parsed.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
+          },
+        });
+
+        let insertedRows = 0;
+
+        if (parsed.length > 0) {
+          const created = await tx.biRecruitsResponse.createMany({
+            data: parsed.map((item) => ({
+              batchId: batch.id,
+              apiId: item.apiId,
+              submittedAt: item.submittedAt,
+              education: item.education,
+              gender: item.gender,
+              identifyHarassment: item.identifyHarassment,
+              conductLimits: item.conductLimits,
+              knowOrientation: item.knowOrientation,
+              knowReportProcess: item.knowReportProcess,
+              willingnessOrientation: item.willingnessOrientation,
+              willingnessReport: item.willingnessReport,
+              enlistmentDecisionInfluenceText:
+                item.enlistmentDecisionInfluenceText,
+              suggestionComment: item.suggestionComment,
+              rawPayload: item.rawPayload,
+              sourceRow: item.sourceRow,
+              sourceHash: item.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+
+          insertedRows = created.count;
+        }
+
+        const duplicateRows = parsed.length - insertedRows;
+
+        const updatedBatch = await tx.biRecruitsImportBatch.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
-    });
-
-    let insertedRows = 0;
-
-    if (parsed.length > 0) {
-      const created = await this.prisma.biRecruitsResponse.createMany({
-        data: parsed.map((item) => ({
-          batchId: batch.id,
-          apiId: item.apiId,
-          submittedAt: item.submittedAt,
-          education: item.education,
-          gender: item.gender,
-          identifyHarassment: item.identifyHarassment,
-          conductLimits: item.conductLimits,
-          knowOrientation: item.knowOrientation,
-          knowReportProcess: item.knowReportProcess,
-          willingnessOrientation: item.willingnessOrientation,
-          willingnessReport: item.willingnessReport,
-          enlistmentDecisionInfluenceText: item.enlistmentDecisionInfluenceText,
-          suggestionComment: item.suggestionComment,
-          rawPayload: item.rawPayload,
-          sourceRow: item.sourceRow,
-          sourceHash: item.sourceHash,
-        })),
-        skipDuplicates: true,
-      });
-
-      insertedRows = created.count;
-    }
-
-    const duplicateRows = parsed.length - insertedRows;
-
-    const updatedBatch = await this.prisma.biRecruitsImportBatch.update({
-      where: { id: batch.id },
-      data: {
-        insertedRows,
-        duplicateRows,
-      },
-      include: {
-        importedBy: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
+      { timeout: 30_000 },
+    );
 
     await this.normalization.rebuild({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.RECRUITS,
@@ -284,6 +300,14 @@ export class BiRecruitsService {
     const sinceId = replaceAll ? 0 : await this.resolveLastImportedApiId();
     const apiResult = await this.fetchApiRecords(sinceId);
     const { parsed, invalidRows } = this.parseApiRecords(apiResult.records);
+    // Never advance the saved cursor past rows we could not interpret.
+    if (invalidRows > 0 || (replaceAll && parsed.length === 0)) {
+      throwError('VALIDATION_ERROR', {
+        reason: 'bi_import_invalid_rows',
+        invalidRows,
+        validRows: parsed.length,
+      });
+    }
 
     if (previewOnly) {
       return {
@@ -294,78 +318,84 @@ export class BiRecruitsService {
       };
     }
 
-    if (replaceAll) {
-      await this.prisma.$transaction([
-        this.prisma.biRecruitsResponse.deleteMany(),
-        this.prisma.biRecruitsImportBatch.deleteMany(),
-      ]);
-    }
+    const updatedBatch = await this.prisma.$transaction(
+      async (tx) => {
+        if (replaceAll) {
+          await tx.biRecruitsResponse.deleteMany();
+          await tx.biRecruitsImportBatch.deleteMany();
+        }
 
-    const importModel = (this.prisma as any).biRecruitsImportBatch;
-    const responseModel = (this.prisma as any).biRecruitsResponse;
+        const importModel = (tx as any).biRecruitsImportBatch;
+        const responseModel = (tx as any).biRecruitsResponse;
 
-    const batch = await importModel.create({
-      data: {
-        fileName: 'Google Sheets API - Recrutas',
-        format: BiImportFormat.API,
-        sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
-        totalRows: parsed.length,
-        insertedRows: 0,
-        duplicateRows: 0,
-        invalidRows,
-        importedById: user?.id ?? null,
-        apiSinceId: apiResult.sync.sinceId,
-        apiNextSinceId: apiResult.sync.nextSinceId,
-        apiLastIdAvailable: apiResult.sync.lastIdAvailable,
-        apiHasMore: apiResult.sync.hasMore,
-        apiUpdatedAt: apiResult.sync.updatedAt
-          ? new Date(apiResult.sync.updatedAt)
-          : null,
+        const batch = await importModel.create({
+          data: {
+            fileName: 'Google Sheets API - Recrutas',
+            format: BiImportFormat.API,
+            sheetName: apiResult.sync.sheets.join(', ') || 'Google Sheets API',
+            totalRows: parsed.length,
+            insertedRows: 0,
+            duplicateRows: 0,
+            invalidRows,
+            importedById: user?.id ?? null,
+            apiSinceId: apiResult.sync.sinceId,
+            apiNextSinceId: apiResult.sync.nextSinceId,
+            apiLastIdAvailable: apiResult.sync.lastIdAvailable,
+            apiHasMore: apiResult.sync.hasMore,
+            apiUpdatedAt: apiResult.sync.updatedAt
+              ? new Date(apiResult.sync.updatedAt)
+              : null,
+          },
+        });
+
+        let insertedRows = 0;
+
+        if (parsed.length > 0) {
+          const created = await responseModel.createMany({
+            data: parsed.map((item) => ({
+              batchId: batch.id,
+              apiId: item.apiId,
+              submittedAt: item.submittedAt,
+              education: item.education,
+              gender: item.gender,
+              identifyHarassment: item.identifyHarassment,
+              conductLimits: item.conductLimits,
+              knowOrientation: item.knowOrientation,
+              knowReportProcess: item.knowReportProcess,
+              willingnessOrientation: item.willingnessOrientation,
+              willingnessReport: item.willingnessReport,
+              enlistmentDecisionInfluenceText:
+                item.enlistmentDecisionInfluenceText,
+              suggestionComment: item.suggestionComment,
+              rawPayload: item.rawPayload,
+              sourceRow: item.sourceRow,
+              sourceHash: item.sourceHash,
+            })),
+            skipDuplicates: true,
+          });
+
+          insertedRows = created.count;
+        }
+
+        const duplicateRows = parsed.length - insertedRows;
+
+        const updatedBatch = await importModel.update({
+          where: { id: batch.id },
+          data: {
+            insertedRows,
+            duplicateRows,
+          },
+          include: {
+            importedBy: {
+              select: { id: true, name: true, email: true },
+            },
+          },
+        });
+
+        return updatedBatch;
       },
-    });
-
-    let insertedRows = 0;
-
-    if (parsed.length > 0) {
-      const created = await responseModel.createMany({
-        data: parsed.map((item) => ({
-          batchId: batch.id,
-          apiId: item.apiId,
-          submittedAt: item.submittedAt,
-          education: item.education,
-          gender: item.gender,
-          identifyHarassment: item.identifyHarassment,
-          conductLimits: item.conductLimits,
-          knowOrientation: item.knowOrientation,
-          knowReportProcess: item.knowReportProcess,
-          willingnessOrientation: item.willingnessOrientation,
-          willingnessReport: item.willingnessReport,
-          enlistmentDecisionInfluenceText: item.enlistmentDecisionInfluenceText,
-          suggestionComment: item.suggestionComment,
-          rawPayload: item.rawPayload,
-          sourceRow: item.sourceRow,
-          sourceHash: item.sourceHash,
-        })),
-        skipDuplicates: true,
-      });
-
-      insertedRows = created.count;
-    }
-
-    const duplicateRows = parsed.length - insertedRows;
-
-    const updatedBatch = await importModel.update({
-      where: { id: batch.id },
-      data: {
-        insertedRows,
-        duplicateRows,
-      },
-      include: {
-        importedBy: {
-          select: { id: true, name: true, email: true },
-        },
-      },
-    });
+      { timeout: 30_000 },
+    );
 
     await this.normalization.rebuild({
       sourceType: BI_NORMALIZATION_SOURCE_TYPES.RECRUITS,
@@ -413,7 +443,7 @@ export class BiRecruitsService {
       pageSize?: string;
     },
   ) {
-    const where = this.buildWhere(filters);
+    const where = await this.buildWhere(filters);
 
     const { page, pageSize, skip, take } = parsePagination(
       filters.page,
@@ -457,7 +487,7 @@ export class BiRecruitsService {
     }
 
     if (allFiltered) {
-      const where = this.buildWhere(payload);
+      const where = await this.buildWhere(payload);
       const deleted = await this.prisma.biRecruitsResponse.deleteMany({
         where,
       });
@@ -554,7 +584,10 @@ export class BiRecruitsService {
   }
 
   async dashboard(filters: RecruitsFilters) {
-    const where = this.buildWhere(filters);
+    const where = await this.buildWhere(filters);
+    const odgsaWhere = filters.odgsaId?.trim()
+      ? await this.buildWhere({ odgsaId: filters.odgsaId })
+      : {};
     const cardSettingModel = (this.prisma as any).biRecruitsCardSetting;
 
     const [rows, allRowsForFilters, totalRowsInDb, latestImport, cardSettings] =
@@ -577,6 +610,7 @@ export class BiRecruitsService {
           },
         }),
         this.prisma.biRecruitsResponse.findMany({
+          where: odgsaWhere,
           select: {
             education: true,
             gender: true,
@@ -589,7 +623,7 @@ export class BiRecruitsService {
             enlistmentDecisionInfluenceText: true,
           },
         }),
-        this.prisma.biRecruitsResponse.count(),
+        this.prisma.biRecruitsResponse.count({ where: odgsaWhere }),
         this.prisma.biRecruitsImportBatch.findFirst({
           orderBy: { importedAt: 'desc' },
           include: {
@@ -1001,7 +1035,17 @@ export class BiRecruitsService {
     };
   }
 
-  private buildWhere(
+  private async buildWhere(filters: RecruitsFilters) {
+    const baseWhere = this.buildBaseWhere(filters);
+    if (!filters.odgsaId?.trim()) return baseWhere;
+    const ids = await this.normalization.odgsaResponseIds(
+      BI_NORMALIZATION_SOURCE_TYPES.RECRUITS, filters.odgsaId,
+    );
+    // ODGSA always restricts the result, including when other filters use OR.
+    return { AND: [baseWhere, { id: { in: ids ?? [] } }] };
+  }
+
+  private buildBaseWhere(
     filters: RecruitsFilters,
   ): Prisma.BiRecruitsResponseWhereInput {
     const mode = this.parseCombineMode(filters.combineMode);
@@ -1194,57 +1238,12 @@ export class BiRecruitsService {
   }
 
   private async fetchApiPage(sinceId: number): Promise<RecruitsApiPage> {
-    const url = this.buildApiUrl(sinceId);
-    const timeoutMs =
+    return fetchBiApiPage<RecruitsApiPage>(
+      this.buildApiUrl(sinceId),
+      'recruits_api',
       this.parsePositiveInteger(process.env.BI_RECRUITS_API_TIMEOUT_MS) ??
-      30_000;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    let response: Response;
-    try {
-      response = await fetch(url, { signal: controller.signal });
-    } catch (error) {
-      throwError('VALIDATION_ERROR', {
-        reason:
-          error instanceof Error && error.name === 'AbortError'
-            ? 'recruits_api_timeout'
-            : 'recruits_api_request_failed',
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    if (!response.ok) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'recruits_api_http_error',
-        status: response.status,
-      });
-    }
-
-    let payload: unknown;
-    try {
-      payload = await response.json();
-    } catch {
-      throwError('VALIDATION_ERROR', {
-        reason: 'recruits_api_invalid_json',
-      });
-    }
-
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'recruits_api_invalid_payload',
-      });
-    }
-
-    const page = payload as RecruitsApiPage;
-    if (page.ok !== true || !Array.isArray(page.dados)) {
-      throwError('VALIDATION_ERROR', {
-        reason: 'recruits_api_unsuccessful_payload',
-      });
-    }
-
-    return page;
+        30_000,
+    );
   }
 
   private buildApiUrl(sinceId: number) {
@@ -1321,9 +1320,7 @@ export class BiRecruitsService {
       this.cleanApiCell(row[RECRUITS_API_KEYS.knowReportProcess]),
       this.cleanApiCell(row[RECRUITS_API_KEYS.willingnessOrientation]),
       this.cleanApiCell(row[RECRUITS_API_KEYS.willingnessReport]),
-      this.cleanApiCell(
-        row[RECRUITS_API_KEYS.enlistmentDecisionInfluenceText],
-      ),
+      this.cleanApiCell(row[RECRUITS_API_KEYS.enlistmentDecisionInfluenceText]),
       this.cleanApiCell(row[RECRUITS_API_KEYS.suggestionComment]),
     ];
 
